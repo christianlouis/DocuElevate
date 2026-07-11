@@ -28,7 +28,7 @@ def test_imap_connection(host: str, port: int, username: str, password: str, use
         return {"success": True, "message": "Connection successful"}
     except OSError as exc:
         logger.warning("IMAP network error for %s@%s: %s", username, host, exc)
-        return {"success": False, "message": f"Connection error: {exc}"}
+        return {"success": False, "message": "Connection failed. Check the server address, port, and network access."}
     except Exception as exc:  # noqa: BLE001
         logger.warning("IMAP error for %s@%s: %s", username, host, exc)
-        return {"success": False, "message": f"IMAP error: {exc}"}
+        return {"success": False, "message": "Authentication failed. Check the username, password, and TLS settings."}

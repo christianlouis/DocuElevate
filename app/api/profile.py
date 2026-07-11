@@ -15,14 +15,13 @@ from __future__ import annotations
 
 import base64
 import logging
-from hashlib import md5
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_gravatar_url, require_login
 from app.database import get_db
 from app.models import LocalUser, UserProfile
 from app.utils.i18n import SUPPORTED_LANGUAGE_CODES
@@ -63,12 +62,8 @@ def _get_user_id(request: Request) -> str:
 
 
 def _gravatar_url(email: str | None) -> str:
-    """Generate a Gravatar URL for *email*, falling back to identicon."""
-    if not email:
-        return "https://www.gravatar.com/avatar/?d=identicon"
-    # MD5 used for Gravatar URL generation only — not for security
-    h = md5(email.strip().lower().encode(), usedforsecurity=False).hexdigest()
-    return f"https://www.gravatar.com/avatar/{h}?d=identicon"
+    """Generate a Gravatar URL through the application's canonical helper."""
+    return get_gravatar_url(email or "")
 
 
 def _get_or_create_profile(db: Session, user_id: str) -> UserProfile:

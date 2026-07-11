@@ -23,7 +23,8 @@ def upgrade() -> None:
         return
 
     existing_indexes = {index["name"] for index in inspector.get_indexes("pipelines")}
-    if "uq_pipelines_owner_name" not in existing_indexes:
+    existing_constraints = {constraint["name"] for constraint in inspector.get_unique_constraints("pipelines")}
+    if "uq_pipelines_owner_name" not in existing_indexes | existing_constraints:
         op.create_index("uq_pipelines_owner_name", "pipelines", ["owner_id", "name"], unique=True)
 
 
@@ -35,5 +36,8 @@ def downgrade() -> None:
         return
 
     existing_indexes = {index["name"] for index in inspector.get_indexes("pipelines")}
+    existing_constraints = {constraint["name"] for constraint in inspector.get_unique_constraints("pipelines")}
     if "uq_pipelines_owner_name" in existing_indexes:
         op.drop_index("uq_pipelines_owner_name", table_name="pipelines")
+    elif "uq_pipelines_owner_name" in existing_constraints:
+        op.drop_constraint("uq_pipelines_owner_name", "pipelines", type_="unique")

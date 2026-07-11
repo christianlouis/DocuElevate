@@ -293,34 +293,34 @@
     <!-- Summary -->
     <div id="search-summary" class="search-summary" style="display:none;" aria-live="polite"></div>
     <div id="search-bulk-bar" class="search-bulk-bar" aria-live="polite">
-      <strong><span id="search-selected-count">0</span> selected</strong>
+      <strong><span id="search-selected-count">0</span> {{ _("search.bulk_selected") }}</strong>
       <button type="button" onclick="selectVisibleSearchResults()">
-        <i class="fas fa-check-double" aria-hidden="true"></i> Select visible
+        <i class="fas fa-check-double" aria-hidden="true"></i> {{ _("search.bulk_select_visible") }}
       </button>
       <button type="button" onclick="clearSearchSelection()">
-        <i class="fas fa-times" aria-hidden="true"></i> Clear
+        <i class="fas fa-times" aria-hidden="true"></i> {{ _("search.bulk_clear") }}
       </button>
       <button type="button" onclick="bulkDownloadSearchResults()">
-        <i class="fas fa-download" aria-hidden="true"></i> Download
+        <i class="fas fa-download" aria-hidden="true"></i> {{ _("search.bulk_download") }}
       </button>
       <button type="button" onclick="bulkExportSearchResults()">
-        <i class="fas fa-file-export" aria-hidden="true"></i> Export
+        <i class="fas fa-file-export" aria-hidden="true"></i> {{ _("search.bulk_export") }}
       </button>
       <button type="button" onclick="bulkTagSearchResults()">
-        <i class="fas fa-tags" aria-hidden="true"></i> Tag
+        <i class="fas fa-tags" aria-hidden="true"></i> {{ _("search.bulk_tag") }}
       </button>
-      <label class="sr-only" for="bulk-route-pipeline">Route destination</label>
-      <select id="bulk-route-pipeline" aria-label="Route destination">
-        <option value="">Default route</option>
+      <label class="sr-only" for="bulk-route-pipeline">{{ _("search.bulk_route_destination") }}</label>
+      <select id="bulk-route-pipeline" aria-label="{{ _('search.bulk_route_destination') }}">
+        <option value="">{{ _("search.bulk_default_route") }}</option>
       </select>
       <button type="button" onclick="bulkRouteSearchResults()">
-        <i class="fas fa-route" aria-hidden="true"></i> Route
+        <i class="fas fa-route" aria-hidden="true"></i> {{ _("search.bulk_route") }}
       </button>
       <button type="button" onclick="bulkReprocessSearchResults()">
-        <i class="fas fa-sync-alt" aria-hidden="true"></i> Reprocess
+        <i class="fas fa-sync-alt" aria-hidden="true"></i> {{ _("search.bulk_reprocess") }}
       </button>
       <button type="button" class="danger" onclick="bulkDeleteSearchResults()">
-        <i class="fas fa-trash" aria-hidden="true"></i> Delete
+        <i class="fas fa-trash" aria-hidden="true"></i> {{ _("search.bulk_delete") }}
       </button>
       <span id="search-bulk-status" class="search-bulk-status"></span>
     </div>
@@ -334,15 +334,15 @@
         <div id="search-pagination" class="search-pagination" style="display:none;"></div>
       </div>
 
-      <aside id="search-preview-panel" class="search-preview-panel" aria-live="polite" aria-label="Document preview">
+      <aside id="search-preview-panel" class="search-preview-panel" aria-live="polite" aria-label="{{ _('search.preview_title') }}">
         <div class="search-preview-header">
-          <h2 id="search-preview-title">Preview</h2>
-          <button type="button" class="search-preview-close" onclick="closeSearchPreview()" aria-label="Close preview">
+          <h2 id="search-preview-title">{{ _("search.preview_title") }}</h2>
+          <button type="button" class="search-preview-close" onclick="closeSearchPreview()" aria-label="{{ _('search.preview_close') }}">
             <i class="fas fa-times" aria-hidden="true"></i>
           </button>
         </div>
         <div id="search-preview-body" class="search-preview-body">
-          <div class="search-preview-state">Select a result to preview it here.</div>
+          <div class="search-preview-state">{{ _("search.preview_select") }}</div>
         </div>
         <div id="search-preview-footer" class="search-preview-footer"></div>
       </aside>
@@ -351,6 +351,36 @@
 </div>
 
 <script>
+  const searchI18n = {
+    loadingPreview: {{ _("search.preview_loading") | tojson }},
+    previewUnavailable: {{ _("search.preview_unavailable") | tojson }},
+    previewSelect: {{ _("search.preview_select") | tojson }},
+    selectedVisible: {{ _("search.bulk_selected_visible") | tojson }},
+    selectFirst: {{ _("search.bulk_select_first") | tojson }},
+    creatingArchive: {{ _("search.bulk_creating_archive") | tojson }},
+    archiveCreated: {{ _("search.bulk_archive_created") | tojson }},
+    exporting: {{ _("search.bulk_exported") | tojson }},
+    confirmReprocess: {{ _("search.bulk_confirm_reprocess") | tojson }},
+    queueing: {{ _("search.bulk_queueing") | tojson }},
+    confirmRoute: {{ _("search.bulk_confirm_route") | tojson }},
+    updatingRoutes: {{ _("search.bulk_updating_routes") | tojson }},
+    defaultRoute: {{ _("search.bulk_default_route") | tojson }},
+    promptTags: {{ _("search.bulk_prompt_tags") | tojson }},
+    enterTag: {{ _("search.bulk_enter_tag") | tojson }},
+    confirmTags: {{ _("search.bulk_confirm_tags") | tojson }},
+    updatingTags: {{ _("search.bulk_updating_tags") | tojson }},
+    confirmDelete: {{ _("search.bulk_confirm_delete") | tojson }},
+    deleting: {{ _("search.bulk_deleting") | tojson }},
+    routeAction: {{ _("search.bulk_route_action") | tojson }},
+    clearRouteAction: {{ _("search.bulk_clear_route_action") | tojson }},
+    open: {{ _("search.preview_open") | tojson }},
+    download: {{ _("search.bulk_download") | tojson }}
+  };
+  function formatSearchMessage(template, values) {
+    return Object.keys(values).reduce(function(message, key) {
+      return message.replaceAll('{' + key + '}', String(values[key]));
+    }, template);
+  }
   const searchInput  = document.getElementById('search-input');
   const searchBtn    = document.getElementById('search-btn');
   const resultsDiv   = document.getElementById('search-results');
@@ -574,18 +604,18 @@
     searchContainer.classList.add('preview-active');
     previewPanel.classList.add('active');
     previewTitle.textContent = safeFilename;
-    previewBody.innerHTML = '<div class="search-preview-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p style="margin-top:0.5rem;">Loading preview…</p></div>' +
+    previewBody.innerHTML = '<div class="search-preview-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p style="margin-top:0.5rem;">' + escapeHtml(searchI18n.loadingPreview) + '</p></div>' +
       '<object data="' + previewUrl + '" type="application/pdf">' +
-      '<div class="search-preview-state">Preview unavailable. Open the document or download it instead.</div>' +
+      '<div class="search-preview-state">' + escapeHtml(searchI18n.previewUnavailable) + '</div>' +
       '</object>';
-    previewFooter.innerHTML = '<a href="' + fileUrl + '"><i class="fas fa-external-link-alt" aria-hidden="true"></i> Open</a>' +
-      '<a href="' + downloadUrl + '"><i class="fas fa-download" aria-hidden="true"></i> Download</a>';
+    previewFooter.innerHTML = '<a href="' + fileUrl + '"><i class="fas fa-external-link-alt" aria-hidden="true"></i> ' + escapeHtml(searchI18n.open) + '</a>' +
+      '<a href="' + downloadUrl + '"><i class="fas fa-download" aria-hidden="true"></i> ' + escapeHtml(searchI18n.download) + '</a>';
   }
 
   function closeSearchPreview() {
     previewPanel.classList.remove('active');
     searchContainer.classList.remove('preview-active');
-    previewBody.innerHTML = '<div class="search-preview-state">Select a result to preview it here.</div>';
+    previewBody.innerHTML = '<div class="search-preview-state">' + escapeHtml(searchI18n.previewSelect) + '</div>';
     previewFooter.innerHTML = '';
   }
 
@@ -630,7 +660,7 @@
     visibleSearchResultIds.forEach(function(fileId) {
       selectedSearchResults.add(Number(fileId));
     });
-    setBulkStatus('Selected all visible results. Use a saved search to repeat this action later.', false);
+    setBulkStatus(searchI18n.selectedVisible, false);
     syncSearchSelectionUI();
   }
 
@@ -642,7 +672,7 @@
   function requireBulkSelection() {
     const fileIds = selectedSearchResultIds();
     if (fileIds.length === 0) {
-      setBulkStatus('Select at least one result first.', true);
+      setBulkStatus(searchI18n.selectFirst, true);
       return null;
     }
     return fileIds;
@@ -651,7 +681,7 @@
   function bulkDownloadSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    setBulkStatus('Creating download archive…', false);
+    setBulkStatus(searchI18n.creatingArchive, false);
     fetch('/api/files/bulk-download', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -670,7 +700,7 @@
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      setBulkStatus('Download archive created for ' + fileIds.length + ' result' + (fileIds.length !== 1 ? 's' : '') + '.', false);
+      setBulkStatus(formatSearchMessage(searchI18n.archiveCreated, {count: fileIds.length}), false);
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -694,14 +724,14 @@
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    setBulkStatus('Exported metadata for ' + fileIds.length + ' selected result' + (fileIds.length !== 1 ? 's' : '') + '.', false);
+    setBulkStatus(formatSearchMessage(searchI18n.exporting, {count: fileIds.length}), false);
   }
 
   function bulkReprocessSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    if (!confirm('Queue ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + ' for reprocessing? This may replace extracted text and metadata.')) return;
-    setBulkStatus('Queueing reprocessing jobs…', false);
+    if (!confirm(formatSearchMessage(searchI18n.confirmReprocess, {count: fileIds.length}))) return;
+    setBulkStatus(searchI18n.queueing, false);
     fetch('/api/files/bulk-reprocess', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -722,10 +752,10 @@
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
     const pipelineId = bulkRoutePipeline && bulkRoutePipeline.value ? Number(bulkRoutePipeline.value) : null;
-    const routeLabel = bulkRoutePipeline && bulkRoutePipeline.selectedOptions.length ? bulkRoutePipeline.selectedOptions[0].textContent.trim() : 'Default route';
-    const action = pipelineId === null ? 'clear routing for' : 'route';
-    if (!confirm('Bulk ' + action + ' ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + ' using "' + routeLabel + '"?')) return;
-    setBulkStatus('Updating selected routes…', false);
+    const routeLabel = bulkRoutePipeline && bulkRoutePipeline.selectedOptions.length ? bulkRoutePipeline.selectedOptions[0].textContent.trim() : searchI18n.defaultRoute;
+    const action = pipelineId === null ? searchI18n.clearRouteAction : searchI18n.routeAction;
+    if (!confirm(formatSearchMessage(searchI18n.confirmRoute, {action: action, count: fileIds.length, route: routeLabel}))) return;
+    setBulkStatus(searchI18n.updatingRoutes, false);
     fetch('/api/files/bulk-assign-pipeline', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -765,15 +795,15 @@
   function bulkTagSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    const tagText = prompt('Add tags to ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '. Separate tags with commas.');
+    const tagText = prompt(formatSearchMessage(searchI18n.promptTags, {count: fileIds.length}));
     if (tagText === null) return;
     const tags = tagText.split(',').map(function(tag) { return tag.trim(); }).filter(Boolean);
     if (!tags.length) {
-      setBulkStatus('Enter at least one tag.', true);
+      setBulkStatus(searchI18n.enterTag, true);
       return;
     }
-    if (!confirm('Add ' + tags.length + ' tag' + (tags.length !== 1 ? 's' : '') + ' to ' + fileIds.length + ' selected document' + (fileIds.length !== 1 ? 's' : '') + '?')) return;
-    setBulkStatus('Updating selected tags…', false);
+    if (!confirm(formatSearchMessage(searchI18n.confirmTags, {tags: tags.length, count: fileIds.length}))) return;
+    setBulkStatus(searchI18n.updatingTags, false);
     fetch('/api/files/bulk-tag', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -792,9 +822,9 @@
   function bulkDeleteSearchResults() {
     const fileIds = requireBulkSelection();
     if (!fileIds) return;
-    const warning = 'Delete ' + fileIds.length + ' selected document record' + (fileIds.length !== 1 ? 's' : '') + '? This cannot be undone from search results.';
+    const warning = formatSearchMessage(searchI18n.confirmDelete, {count: fileIds.length});
     if (!confirm(warning)) return;
-    setBulkStatus('Deleting selected records…', false);
+    setBulkStatus(searchI18n.deleting, false);
     fetch('/api/files/bulk-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

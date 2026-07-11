@@ -659,7 +659,7 @@ def bulk_assign_pipeline_to_files(request: Request, body: BulkPipelineAssignment
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
 
         if not is_admin:
-            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+            non_owner_ids = [f.id for f in file_records if f.owner_id != owner_id]
             if non_owner_ids:
                 raise HTTPException(
                     status_code=403,
@@ -722,7 +722,7 @@ def bulk_tag_files(request: Request, body: BulkTagRequest, db: DbSession):
             raise HTTPException(status_code=404, detail="No files found with the provided IDs")
 
         if not is_admin:
-            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+            non_owner_ids = [f.id for f in file_records if f.owner_id != owner_id]
             if non_owner_ids:
                 raise HTTPException(
                     status_code=403,

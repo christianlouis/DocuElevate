@@ -700,7 +700,7 @@ class TestDeliverWebhookTask:
 
     def test_success_returns_status_dict(self, mocker, db_session):
         """Task returns a dict on successful delivery."""
-        mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=True)
+        mocker.patch("app.tasks.webhook_tasks.deliver_webhook_with_status", return_value=(True, 204))
         mocker.patch("app.tasks.webhook_tasks.SessionLocal", return_value=db_session)
 
         from app.tasks.webhook_tasks import deliver_webhook_task
@@ -717,10 +717,11 @@ class TestDeliverWebhookTask:
         assert attempt.webhook_config_id == 123
         assert attempt.status == "delivered"
         assert attempt.event == "test"
+        assert attempt.response_status == 204
 
     def test_failure_raises_for_retry(self, mocker, db_session):
         """Task raises RuntimeError on delivery failure to trigger retry."""
-        mocker.patch("app.tasks.webhook_tasks.deliver_webhook", return_value=False)
+        mocker.patch("app.tasks.webhook_tasks.deliver_webhook_with_status", return_value=(False, 503))
         mocker.patch("app.tasks.webhook_tasks.SessionLocal", return_value=db_session)
 
         from app.tasks.webhook_tasks import deliver_webhook_task
@@ -734,6 +735,7 @@ class TestDeliverWebhookTask:
         assert attempt.task_id == "task-failure"
         assert attempt.status == "failed"
         assert "failed" in attempt.error
+        assert attempt.response_status == 503
 
     def test_final_failure_logs_dead_letter_context(self, mocker):
         """After retry exhaustion, webhook failures are logged with dead-letter context."""
