@@ -352,6 +352,11 @@ For a more focused content-finding experience, use the **Search** page accessibl
    - **Content preview** with highlighted matching terms
 5. Use pagination to browse through large result sets
 
+API clients can choose `mode=keyword`, `mode=semantic`, or `mode=hybrid` on
+`GET /api/search`. Hybrid mode combines Meilisearch relevance with cached
+document-embedding similarity. Administrators can request `debug_ranking=true`
+to inspect the keyword and semantic rank components behind each result.
+
 Search results also support bulk actions. Select individual documents on the current page, or use **Select all matching** to select every document returned by the current query and filters across all result pages. You can then reprocess or delete the selection in one action. Reprocessing progress is saved in the browser and restored when you return to or reload the Search page, so a long-running operation is not lost when the page is closed.
 
 ### Saved Searches
@@ -582,6 +587,20 @@ Other step entries, ordering, and enabled flags determine the saved status/retry
 2. Click **New Pipeline** to create a profile, give it a name and optional description.
 3. Expand the profile card and add an OCR setting when you need per-profile OCR behavior.
 4. Mark a profile as **Default** so new documents use it automatically.
+
+Profiles begin as drafts. Publishing validates the enabled steps and saves an
+immutable numbered version. Later edits return the profile to draft without
+changing files already using a saved execution plan. Published versions can be
+restored when a configuration change needs to be rolled back.
+
+### Confidence review
+
+AI metadata includes an extraction confidence score. Documents below
+`CONFIDENCE_REVIEW_THRESHOLD` (70 by default) are queued once for human review.
+The review API lets an authorized user correct metadata, approve or dismiss the
+item, record a note, and prevents an already resolved item from being queued or
+resolved twice. See `docs/ExtractionEvaluation.md` for the CI-friendly quality
+dataset and baseline metrics.
 
 ### Available step types
 

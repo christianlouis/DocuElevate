@@ -430,3 +430,18 @@ class TestSearchAPIEndpoint:
 
         assert response.status_code == 200
         assert mock_search.call_args[1]["text_quality"] == "high"
+
+    def test_search_endpoint_hybrid_mode_returns_fused_results(self, client):
+        keyword = {"results": [{"file_id": 1, "ranking_score": 0.8}], "total": 1, "page": 1, "pages": 1, "query": "car"}
+        semantic = [{"file_id": 1, "semantic_score": 0.9}, {"file_id": 2, "semantic_score": 0.85}]
+        with (
+            patch("app.api.search.search_documents", return_value=keyword),
+            patch("app.api.search.semantic_candidates", return_value=semantic),
+        ):
+            response = client.get("/api/search?q=car&mode=hybrid&debug_ranking=true")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["mode"] == "hybrid"
+        assert data["results"][0]["file_id"] == 1
+        assert set(data["results"][0]["ranking_components"]) == {"keyword", "semantic"}

@@ -11,9 +11,12 @@ for RAG (Retrieval Augmented Generation) chatbot workflows.
 import logging
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy.orm import Session
 
 from app.auth import require_login
+from app.database import get_db
+from app.utils.hybrid_search import hybrid_rank, semantic_candidates
 from app.utils.meilisearch_client import search_documents
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,9 @@ def search_api(
     sort_order: Literal["asc", "desc"] = Query("desc", description="Result sort direction"),
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     per_page: int = Query(20, ge=1, le=100, description="Results per page"),
+    mode: Literal["keyword", "semantic", "hybrid"] = Query("keyword", description="Ranking strategy"),
+    debug_ranking: bool = Query(False, description="Include ranking score components"),
+    db: Session = Depends(get_db),
 ):
     """Search documents by full text, metadata, and tags.
 
@@ -114,4 +120,20 @@ def search_api(
         per_page=per_page,
     )
 
-    return result
+    if mode == "keyword":
+        return result
+
+    semantic = semantic_candidates(db, request, q, mime_type=mime_type)
+    ranked = semantic if mode == "semantic" else hybrid_rank(result["results"], semantic)
+    start = (page - 1) * per_page
+    page_results = ranked[start : start + per_page]
+    if not debug_ranking:
+        for item in page_results:
+            item.pop("ranking_components", None)
+    return {
+        **result,
+        "results": page_results,
+        "total": len(ranked),
+        "pages": (len(ranked) + per_page - 1) // per_page,
+        "mode": mode,
+    }

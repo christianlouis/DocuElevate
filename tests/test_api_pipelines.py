@@ -964,3 +964,25 @@ class TestSeedDefaultPipeline:
         default_pipelines = [p for p in r.json() if p["name"] == DEFAULT_PIPELINE_NAME]
         assert len(default_pipelines) == 1
         assert default_pipelines[0]["is_default"] is True
+
+
+class TestPipelinePublishing:
+    def test_publish_versions_and_rollback_restore_steps(self, client, db_session):
+        pipeline = client.post("/api/pipelines", json={"name": "Versioned workflow"}).json()
+        pipeline_id = pipeline["id"]
+        client.post(f"/api/pipelines/{pipeline_id}/steps", json={"step_type": "ocr", "label": "Original OCR"})
+
+        published = client.post(f"/api/pipelines/{pipeline_id}/publish")
+
+        assert published.status_code == 200
+        assert published.json()["version"] == 1
+        versions = client.get(f"/api/pipelines/{pipeline_id}/versions").json()
+        assert versions[0]["is_current"] is True
+
+        pipeline_data = client.get(f"/api/pipelines/{pipeline_id}").json()
+        step_id = pipeline_data["steps"][0]["id"]
+        client.put(f"/api/pipelines/{pipeline_id}/steps/{step_id}", json={"label": "Changed OCR"})
+        restored = client.post(f"/api/pipelines/{pipeline_id}/versions/1/rollback")
+
+        assert restored.status_code == 200
+        assert client.get(f"/api/pipelines/{pipeline_id}").json()["steps"][0]["label"] == "Original OCR"
