@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user, get_current_user_id, require_login
 from app.config import settings
 from app.database import get_db
-from app.models import Pipeline, PipelineStep
+from app.models import Pipeline, PipelineStep, PipelineVersion
 from app.pipeline_templates import (
     export_pipeline_template,
     get_builtin_template,
@@ -272,6 +272,8 @@ def _serialize_pipeline(
         "description": pipeline.description,
         "is_default": pipeline.is_default,
         "is_active": pipeline.is_active,
+        "lifecycle_state": pipeline.lifecycle_state,
+        "published_version": pipeline.published_version,
         "created_at": pipeline.created_at.isoformat() if pipeline.created_at else None,
         "updated_at": pipeline.updated_at.isoformat() if pipeline.updated_at else None,
     }
@@ -795,6 +797,7 @@ def update_pipeline(pipeline_id: int, request: Request, db: DbSession, body: Pip
         pipeline.is_default = body.is_default
 
     try:
+        pipeline.lifecycle_state = "draft"
         db.commit()
         db.refresh(pipeline)
     except IntegrityError:
@@ -992,6 +995,7 @@ def add_step(pipeline_id: int, request: Request, db: DbSession, body: PipelineSt
     )
     try:
         db.add(step)
+        pipeline.lifecycle_state = "draft"
         db.commit()
         db.refresh(step)
     except Exception as exc:
@@ -1053,6 +1057,7 @@ def reorder_steps(
         step_map[sid].position = pos
 
     try:
+        pipeline.lifecycle_state = "draft"
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -1135,6 +1140,7 @@ def update_step(
         step.position = new_pos
 
     try:
+        pipeline.lifecycle_state = "draft"
         db.commit()
         db.refresh(step)
     except Exception as exc:
@@ -1179,6 +1185,7 @@ def delete_step(pipeline_id: int, step_id: int, request: Request, db: DbSession)
             PipelineStep.pipeline_id == pipeline_id,
             PipelineStep.position > deleted_pos,
         ).update({"position": PipelineStep.position - 1})
+        pipeline.lifecycle_state = "draft"
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -1206,6 +1213,110 @@ def _unset_default(db: Session, owner_id: str | None) -> None:
         db.query(Pipeline).filter(Pipeline.owner_id == owner_id, Pipeline.is_default.is_(True)).update(
             {"is_default": False}
         )
+
+
+def _version_snapshot(pipeline: Pipeline, steps: list[PipelineStep]) -> dict[str, Any]:
+    return {
+        "name": pipeline.name,
+        "description": pipeline.description,
+        "is_active": pipeline.is_active,
+        "steps": [_serialize_step(step) for step in steps],
+    }
+
+
+@router.get("/{pipeline_id}/versions", summary="List published workflow versions")
+@require_login
+def list_pipeline_versions(pipeline_id: int, request: Request, db: DbSession) -> list[dict[str, Any]]:
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline or not _can_access_pipeline(pipeline, _get_user_id(request), _is_admin(request)):
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    versions = (
+        db.query(PipelineVersion)
+        .filter(PipelineVersion.pipeline_id == pipeline_id)
+        .order_by(PipelineVersion.version.desc())
+        .all()
+    )
+    return [
+        {
+            "version": item.version,
+            "published_by": item.published_by,
+            "created_at": item.created_at,
+            "is_current": pipeline.published_version == item.version,
+        }
+        for item in versions
+    ]
+
+
+@router.post("/{pipeline_id}/publish", summary="Validate and publish a workflow version")
+@require_login
+def publish_pipeline(pipeline_id: int, request: Request, db: DbSession) -> dict[str, Any]:
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline or not _can_write_pipeline(pipeline, _get_user_id(request), _is_admin(request)):
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    steps = (
+        db.query(PipelineStep)
+        .filter(PipelineStep.pipeline_id == pipeline_id, PipelineStep.enabled.is_(True))
+        .order_by(PipelineStep.position, PipelineStep.id)
+        .all()
+    )
+    if not steps:
+        raise HTTPException(status_code=422, detail="A workflow must contain at least one enabled step")
+    unknown = sorted({step.step_type for step in steps if step.step_type not in PIPELINE_STEP_TYPES})
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown workflow step types: {', '.join(unknown)}")
+    latest = (
+        db.query(PipelineVersion)
+        .filter(PipelineVersion.pipeline_id == pipeline_id)
+        .order_by(PipelineVersion.version.desc())
+        .first()
+    )
+    version_number = (latest.version if latest else 0) + 1
+    db.add(
+        PipelineVersion(
+            pipeline_id=pipeline_id,
+            version=version_number,
+            snapshot=json.dumps(_version_snapshot(pipeline, steps), ensure_ascii=False),
+            published_by=_get_user_id(request),
+        )
+    )
+    pipeline.lifecycle_state = "published"
+    pipeline.published_version = version_number
+    db.commit()
+    return {"pipeline_id": pipeline_id, "state": "published", "version": version_number}
+
+
+@router.post("/{pipeline_id}/versions/{version_number}/rollback", summary="Restore a published workflow version")
+@require_login
+def rollback_pipeline_version(pipeline_id: int, version_number: int, request: Request, db: DbSession) -> dict[str, Any]:
+    pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
+    if not pipeline or not _can_write_pipeline(pipeline, _get_user_id(request), _is_admin(request)):
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    version = (
+        db.query(PipelineVersion)
+        .filter(PipelineVersion.pipeline_id == pipeline_id, PipelineVersion.version == version_number)
+        .first()
+    )
+    if not version:
+        raise HTTPException(status_code=404, detail="Pipeline version not found")
+    snapshot = json.loads(version.snapshot)
+    pipeline.name = snapshot["name"]
+    pipeline.description = snapshot.get("description")
+    pipeline.is_active = snapshot.get("is_active", True)
+    db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline_id).delete(synchronize_session=False)
+    for position, step in enumerate(snapshot["steps"]):
+        db.add(
+            PipelineStep(
+                pipeline_id=pipeline_id,
+                position=position,
+                step_type=step["step_type"],
+                label=step.get("label"),
+                config=json.dumps(step.get("config") or {}),
+                enabled=step.get("enabled", True),
+            )
+        )
+    pipeline.lifecycle_state = "draft"
+    db.commit()
+    return {"pipeline_id": pipeline_id, "state": "draft", "restored_from_version": version_number}
 
 
 # ---------------------------------------------------------------------------

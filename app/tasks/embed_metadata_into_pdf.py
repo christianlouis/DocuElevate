@@ -228,6 +228,14 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                         file_record.document_title = (
                             metadata.get("title") or metadata.get("filename") or file_record.original_filename
                         )
+                        from app.api.review_queue import enqueue_low_confidence_review
+
+                        enqueue_low_confidence_review(
+                            db,
+                            file_record,
+                            metadata,
+                            settings.confidence_review_threshold,
+                        )
                     db.commit()
                     logger.info(f"[{task_id}] Updated database with processed_file_path and search fields")
 

@@ -2702,6 +2702,17 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "confidence_review_threshold": {
+        "category": "AI Services",
+        "description": "Queue extracted documents below this confidence score for human review. Default: 70.",
+        "type": "slider",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+    },
     # File upload size limits
     "max_upload_size": {
         "category": "Core",

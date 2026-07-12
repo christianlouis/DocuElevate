@@ -489,6 +489,8 @@ class Pipeline(Base):
 
     # Soft-disable without deleting
     is_active = Column(Boolean, nullable=False, default=True)
+    lifecycle_state = Column(String(20), nullable=False, default="draft", server_default="draft")
+    published_version = Column(Integer, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -524,6 +526,20 @@ class PipelineStep(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class PipelineVersion(Base):
+    """Immutable published snapshot of a processing profile."""
+
+    __tablename__ = "pipeline_versions"
+    __table_args__ = (UniqueConstraint("pipeline_id", "version", name="uq_pipeline_versions_number"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    pipeline_id = Column(Integer, ForeignKey(_PIPELINES_ID_FK), nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    snapshot = Column(Text, nullable=False)
+    published_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class ImapIngestionProfile(Base):

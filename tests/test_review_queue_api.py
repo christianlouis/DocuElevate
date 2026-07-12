@@ -68,3 +68,28 @@ class TestReviewQueueAPI:
         assert data["total"] == 1
         assert data["status"] == "all"
         assert data["items"][0]["status"] == "resolved"
+
+    def test_resolve_review_updates_metadata_and_prevents_second_resolution(self, client: TestClient, db_session):
+        file_record = FileRecord(
+            filehash="review-edit",
+            original_filename="edit.pdf",
+            local_filename="/tmp/edit.pdf",
+            file_size=10,
+            mime_type="application/pdf",
+            ai_metadata='{"sender":"Old"}',
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        item = DocumentReviewItem(file_id=file_record.id, reason="Low confidence", confidence_score=30)
+        db_session.add(item)
+        db_session.commit()
+
+        response = client.post(
+            f"/api/review-queue/{item.id}/resolve", json={"metadata": {"sender": "Correct"}, "note": "Checked"}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "resolved"
+        db_session.refresh(file_record)
+        assert "Correct" in file_record.ai_metadata
+        assert client.post(f"/api/review-queue/{item.id}/resolve", json={}).status_code == 409

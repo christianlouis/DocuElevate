@@ -1990,6 +1990,12 @@ Current runtime contract:
 - Step order and non-OCR step entries do not currently orchestrate the worker chain.
 - The system-managed processing flow still controls conversion, duplicate handling, metadata extraction, embedding, storage uploads, and classification.
 
+Workflow profiles support a draft/publish lifecycle. `POST /api/pipelines/{id}/publish`
+validates enabled step types and creates an immutable numbered snapshot. Published
+versions are listed at `GET /api/pipelines/{id}/versions`; restore one into a new
+draft with `POST /api/pipelines/{id}/versions/{version}/rollback`. Editing a profile
+after publication automatically returns it to draft state.
+
 ### Step-types catalogue
 
 ```bash

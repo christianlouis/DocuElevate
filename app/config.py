@@ -1070,6 +1070,12 @@ class Settings(BaseSettings):
             "backfill run.  Keeps the worker and embedding API load bounded."
         ),
     )
+    confidence_review_threshold: int = Field(
+        default=70,
+        ge=0,
+        le=100,
+        description="Queue extracted documents below this confidence score for human review.",
+    )
 
     # Text quality check - AI-based assessment of embedded PDF text
     enable_text_quality_check: bool = Field(
