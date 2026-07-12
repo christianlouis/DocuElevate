@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.178.0 (2026-07-12)
+
+### Features
+
+- Add durable bulk actions and workflow plans
+  ([#1020](https://github.com/christianlouis/DocuElevate/pull/1020),
+  [`6b50ed2`](https://github.com/christianlouis/DocuElevate/commit/6b50ed29951ad48dd55b3ff74ad72f8f132bada2))
+
+
 ## v0.177.3 (2026-07-11)
 
 ### Bug Fixes
