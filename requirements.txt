@@ -52,7 +52,7 @@ apprise>=1.12.0
 litellm>=1.90.0,<2.0.0
 
 # Transitive async HTTP client used by several integrations; pin minimum to patched line
-aiohttp>=3.14.0,<4.0.0
+aiohttp>=3.14.1,<4.0.0
 
 # Self-hosted OCR engines (optional – only required when the provider is enabled)
 pytesseract>=0.3.13  # Python wrapper for Tesseract OCR
