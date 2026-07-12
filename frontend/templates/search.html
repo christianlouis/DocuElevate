@@ -307,6 +307,9 @@
       <button type="button" onclick="selectVisibleSearchResults()">
         <i class="fas fa-check-double" aria-hidden="true"></i> {{ _("search.bulk_select_visible") }}
       </button>
+      <button type="button" onclick="selectAllMatchingSearchResults()">
+        <i class="fas fa-list-check" aria-hidden="true"></i> {{ _("search.bulk_select_all_matching") }}
+      </button>
       <button type="button" onclick="clearSearchSelection()">
         <i class="fas fa-times" aria-hidden="true"></i> {{ _("search.bulk_clear") }}
       </button>
@@ -385,6 +388,10 @@
     clearRouteAction: {{ _("search.bulk_clear_route_action") | tojson }},
     open: {{ _("search.preview_open") | tojson }},
     download: {{ _("search.bulk_download") | tojson }},
+    selectingAll: {{ _("search.bulk_selecting_all") | tojson }},
+    selectedAllMatching: {{ _("search.bulk_selected_all_matching") | tojson }},
+    selectAllFailed: {{ _("search.bulk_select_all_failed") | tojson }},
+    operationProgress: {{ _("search.bulk_operation_progress") | tojson }},
     renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }}
   };
   function formatSearchMessage(template, values) {
@@ -668,6 +675,7 @@
   }
 
   function setBulkActionStatus(data, fallbackMessage) {
+    trackBulkOperation(data && data.bulk_action);
     if (data && data.bulk_action && data.bulk_action.state === 'completed') {
       const count = Number(data.bulk_action.updated_count || 0);
       setBulkStatus((data.message || fallbackMessage) + ' Completed: ' + count + '.', false);
@@ -701,6 +709,72 @@
     });
     setBulkStatus(searchI18n.selectedVisible, false);
     syncSearchSelectionUI();
+  }
+
+  async function selectAllMatchingSearchResults() {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    setBulkStatus(searchI18n.selectingAll, false);
+    try {
+      const filters = getActiveFilters();
+      let page = 1;
+      let pages = 1;
+      do {
+        const params = new URLSearchParams({q: query, page: page, per_page: 100});
+        Object.keys(filters).forEach(function(key) { params.set(key, filters[key]); });
+        const response = await fetch('/api/search?' + params.toString());
+        if (!response.ok) throw new Error(searchI18n.selectAllFailed);
+        const data = await response.json();
+        (data.results || []).forEach(function(hit) { selectedSearchResults.add(Number(hit.file_id)); });
+        pages = Number(data.pages || 1);
+        page += 1;
+      } while (page <= pages);
+      syncSearchSelectionUI();
+      setBulkStatus(formatSearchMessage(searchI18n.selectedAllMatching, {count: selectedSearchResults.size}), false);
+    } catch (error) {
+      setBulkStatus(error.message || searchI18n.selectAllFailed, true);
+    }
+  }
+
+  function trackBulkOperation(operation) {
+    if (!operation || !operation.operation_id) return;
+    try {
+      localStorage.setItem('docuelevate.search.bulkOperation', operation.operation_id);
+    } catch (_error) {
+      // Progress remains visible for this page even if storage is unavailable.
+    }
+    pollBulkOperation(operation.operation_id);
+  }
+
+  function pollBulkOperation(operationId) {
+    fetch('/api/bulk-operations/' + encodeURIComponent(operationId))
+      .then(function(response) {
+        if (!response.ok) throw new Error('Bulk operation status unavailable');
+        return response.json();
+      })
+      .then(function(operation) {
+        setBulkStatus(formatSearchMessage(searchI18n.operationProgress, {
+          action: operation.action,
+          completed: operation.completed_items,
+          total: operation.total_items,
+          failed: operation.failed_items
+        }), operation.failed_items > 0);
+        if (operation.state === 'queued' || operation.state === 'running') {
+          window.setTimeout(function() { pollBulkOperation(operationId); }, 2000);
+        } else {
+          try { localStorage.removeItem('docuelevate.search.bulkOperation'); } catch (_error) {}
+        }
+      })
+      .catch(function(error) { setBulkStatus(error.message, true); });
+  }
+
+  function restoreBulkOperation() {
+    try {
+      const operationId = localStorage.getItem('docuelevate.search.bulkOperation');
+      if (operationId) pollBulkOperation(operationId);
+    } catch (_error) {
+      // Browser storage can be disabled without disabling bulk actions.
+    }
   }
 
   function clearSearchSelection() {
@@ -783,6 +857,7 @@
     .then(function(data) {
       const errors = Array.isArray(data.errors) ? data.errors.length : 0;
       setBulkStatus((data.message || 'Reprocessing queued.') + (errors ? ' ' + errors + ' error(s) returned.' : ''), errors > 0);
+      trackBulkOperation(data.bulk_action);
     })
     .catch(function(error) { setBulkStatus(error.message, true); });
   }
@@ -875,6 +950,7 @@
     })
     .then(function(data) {
       setBulkStatus(data.message || 'Selected records deleted.', false);
+      trackBulkOperation(data.bulk_action);
       fileIds.forEach(function(fileId) { selectedSearchResults.delete(Number(fileId)); });
       doSearch(_currentPage);
     })
@@ -1063,6 +1139,7 @@
     // Load saved searches
     loadSavedSearches();
     loadBulkRoutePipelines();
+    restoreBulkOperation();
 
     // If q was provided via URL, search immediately
     if (searchInput.value.trim().length >= 2) {

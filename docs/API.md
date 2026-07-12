@@ -622,7 +622,14 @@ curl -X POST "http://<your-instance>/api/files/bulk-delete" \
 {
   "status": "success",
   "message": "Successfully deleted 3 file records",
-  "deleted_ids": [1, 2, 3]
+  "deleted_ids": [1, 2, 3],
+  "bulk_action": {
+    "operation_id": "270df38f-225e-43bb-8070-7b88676bd8f0",
+    "action": "delete",
+    "state": "completed",
+    "updated_count": 3,
+    "updated_ids": [1, 2, 3]
+  }
 }
 ```
 
@@ -648,7 +655,33 @@ Queue multiple files for full reprocessing.
     {"file_id": 2, "filename": "b.pdf", "task_id": "def456"}
   ],
   "errors": [],
-  "task_ids": ["abc123", "def456"]
+  "task_ids": ["abc123", "def456"],
+  "bulk_action": {
+    "operation_id": "c890a789-0318-4979-b92f-34d917d821be",
+    "action": "reprocess",
+    "state": "queued",
+    "updated_count": 2,
+    "updated_ids": [1, 2]
+  }
+}
+```
+
+The `operation_id` is durable and can be used to recover progress after navigation or a page reload.
+
+**GET** `/api/bulk-operations/{operation_id}`
+
+Return the latest state of a bulk operation owned by the current user. Admins may inspect any operation.
+
+```json
+{
+  "operation_id": "c890a789-0318-4979-b92f-34d917d821be",
+  "action": "reprocess",
+  "state": "running",
+  "total_items": 2,
+  "completed_items": 1,
+  "failed_items": 0,
+  "created_at": "2026-07-12T10:15:00+00:00",
+  "updated_at": "2026-07-12T10:15:05+00:00"
 }
 ```
 
@@ -1953,7 +1986,8 @@ The pipeline API manages processing profiles. Each profile is owned by a single 
 Current runtime contract:
 
 - OCR step config is applied at runtime. `ocr_language` and `force_cloud_ocr` affect document processing.
-- Step order, non-OCR step entries, and enabled flags are stored as profile metadata. They do not currently orchestrate the worker chain.
+- After routing, enabled steps and their order are copied to an immutable per-file execution plan. File status and retry validation use that snapshot, so later profile edits only affect future documents.
+- Step order and non-OCR step entries do not currently orchestrate the worker chain.
 - The system-managed processing flow still controls conversion, duplicate handling, metadata extraction, embedding, storage uploads, and classification.
 
 ### Step-types catalogue

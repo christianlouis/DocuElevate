@@ -43,7 +43,12 @@ if settings.enable_deduplication:
 MAIN_PROCESSING_STEPS.extend(BASE_MAIN_PROCESSING_STEPS)
 
 
-def initialize_file_steps(db: Session, file_id: int, include_uploads: bool = False) -> None:
+def initialize_file_steps(
+    db: Session,
+    file_id: int,
+    include_uploads: bool = False,
+    workflow_stages: Iterable[str] | None = None,
+) -> None:
     """
     Initialize processing steps for a file with 'pending' status.
 
@@ -52,10 +57,14 @@ def initialize_file_steps(db: Session, file_id: int, include_uploads: bool = Fal
         file_id: ID of the file
         include_uploads: Whether to include upload destination steps (set after destinations are known)
     """
-    # Initialize main processing steps
-    for step_name in MAIN_PROCESSING_STEPS:
-        step = FileProcessingStep(file_id=file_id, step_name=step_name, status="pending")
-        db.add(step)
+    del include_uploads  # retained for API compatibility
+    step_names = list(workflow_stages) if workflow_stages is not None else MAIN_PROCESSING_STEPS
+    existing = {
+        row[0] for row in db.query(FileProcessingStep.step_name).filter(FileProcessingStep.file_id == file_id).all()
+    }
+    for step_name in step_names:
+        if step_name not in existing:
+            db.add(FileProcessingStep(file_id=file_id, step_name=step_name, status="pending"))
 
     db.commit()
 
@@ -226,6 +235,13 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     # Add check_for_duplicates if deduplication is enabled
     if settings.enable_deduplication:
         REAL_MAIN_STEPS.add("check_for_duplicates")
+
+    if file_record:
+        from app.utils.workflow_plan import workflow_stage_keys
+
+        planned_stages = workflow_stage_keys(file_record)
+        if planned_stages is not None:
+            REAL_MAIN_STEPS = set(planned_stages)
 
     all_steps = db.query(FileProcessingStep).filter(FileProcessingStep.file_id == file_id).all()
 

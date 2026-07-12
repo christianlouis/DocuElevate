@@ -2,7 +2,9 @@
 File management views for displaying and managing files.
 """
 
+import json
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -657,7 +659,24 @@ def _resolve_pipeline(db: Session, file_record) -> dict | None:
     if pipeline is None:
         return None
 
-    steps = db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).order_by(PipelineStep.position).all()
+    from app.utils.workflow_plan import load_workflow_plan
+
+    execution_plan = load_workflow_plan(file_record)
+    if execution_plan and execution_plan.get("pipeline_id") == pipeline.id:
+        steps = [
+            SimpleNamespace(
+                step_type=step["step_type"],
+                label=step.get("label"),
+                position=step.get("position", 0),
+                config=json.dumps(step.get("config", {})),
+                enabled=True,
+            )
+            for step in execution_plan["steps"]
+        ]
+    else:
+        steps = (
+            db.query(PipelineStep).filter(PipelineStep.pipeline_id == pipeline.id).order_by(PipelineStep.position).all()
+        )
     selection = _pipeline_selection_details(file_record, pipeline)
 
     return {
@@ -669,6 +688,7 @@ def _resolve_pipeline(db: Session, file_record) -> dict | None:
         # True when the file has a pipeline explicitly assigned (not inferred default)
         "is_explicit": bool(file_record.pipeline_id),
         "steps": steps,
+        "execution_plan": execution_plan,
         **selection,
     }
 

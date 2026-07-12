@@ -23,7 +23,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
-from app.models import FileProcessingStep, FileRecord, ProcessingLog
+from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
@@ -57,14 +57,93 @@ class BulkTagRequest(BaseModel):
     mode: Literal["add", "replace"] = "add"
 
 
-def _bulk_action_status(action: str, updated_count: int, updated_ids: list[int]) -> dict:
+def _bulk_action_status(
+    action: str,
+    updated_count: int,
+    updated_ids: list[int],
+    operation_id: str | None = None,
+) -> dict:
     """Build a consistent status object for bulk file operations."""
-    return {
+    status_payload = {
         "action": action,
         "state": "completed",
         "updated_count": updated_count,
         "updated_ids": updated_ids,
     }
+    if operation_id:
+        status_payload["operation_id"] = operation_id
+    return status_payload
+
+
+def _record_bulk_operation(
+    db: Session,
+    request: Request,
+    action: str,
+    total_items: int,
+    *,
+    state: str,
+    completed_items: int = 0,
+    failed_items: int = 0,
+    task_ids: list[str] | None = None,
+    result: dict | None = None,
+) -> BulkOperation:
+    operation = BulkOperation(
+        id=str(uuid.uuid4()),
+        owner_id=get_current_owner_id(request),
+        action=action,
+        state=state,
+        total_items=total_items,
+        completed_items=completed_items,
+        failed_items=failed_items,
+        task_ids=json.dumps(task_ids or []),
+        result=json.dumps(result or {}, ensure_ascii=False),
+    )
+    db.add(operation)
+    return operation
+
+
+def _serialize_bulk_operation(operation: BulkOperation) -> dict:
+    return {
+        "operation_id": operation.id,
+        "action": operation.action,
+        "state": operation.state,
+        "total_items": operation.total_items,
+        "completed_items": operation.completed_items,
+        "failed_items": operation.failed_items,
+        "created_at": operation.created_at.isoformat() if operation.created_at else None,
+        "updated_at": operation.updated_at.isoformat() if operation.updated_at else None,
+    }
+
+
+@router.get("/bulk-operations/{operation_id}")
+@require_login
+def get_bulk_operation(request: Request, operation_id: str, db: DbSession):
+    """Return recoverable progress for a previously initiated bulk action."""
+    operation = db.query(BulkOperation).filter(BulkOperation.id == operation_id).first()
+    if not operation:
+        raise HTTPException(status_code=404, detail="Bulk operation not found")
+
+    owner_id = get_current_owner_id(request)
+    user = request.session.get("user")
+    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+    if not is_admin and operation.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Bulk operation not found")
+
+    task_ids = json.loads(operation.task_ids or "[]")
+    if operation.state in {"queued", "running"} and task_ids:
+        from app.celery_app import celery
+
+        results = [celery.AsyncResult(task_id) for task_id in task_ids]
+        recorded_result = json.loads(operation.result or "{}")
+        enqueue_failures = len(recorded_result.get("errors", []))
+        operation.completed_items = sum(result.successful() for result in results)
+        operation.failed_items = enqueue_failures + sum(result.failed() for result in results)
+        ready_items = sum(result.ready() for result in results)
+        operation.state = "completed" if ready_items == len(results) else "running"
+        db.commit()
+        db.refresh(operation)
+
+    return _serialize_bulk_operation(operation)
 
 
 def _normalize_tags(tags: list[str]) -> list[str]:
@@ -462,6 +541,15 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
         deleted_count = len(file_records)
         deleted_ids = [f.id for f in file_records]
+        operation = _record_bulk_operation(
+            db,
+            request,
+            "delete",
+            deleted_count,
+            state="completed",
+            completed_items=deleted_count,
+            result={"deleted_ids": deleted_ids},
+        )
 
         # Log the deletion
         logger.info(f"Bulk deleting {deleted_count} file records: IDs={deleted_ids}")
@@ -475,6 +563,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
             "status": "success",
             "message": f"Successfully deleted {deleted_count} file records",
             "deleted_ids": deleted_ids,
+            "bulk_action": _bulk_action_status("delete", deleted_count, deleted_ids, operation.id),
         }
 
     except HTTPException:
@@ -543,12 +632,30 @@ def bulk_reprocess_files(request: Request, file_ids: List[int], db: DbSession):
                     }
                 )
 
+        operation = _record_bulk_operation(
+            db,
+            request,
+            "reprocess",
+            len(file_records),
+            state="queued" if task_ids else "completed",
+            completed_items=0,
+            failed_items=len(errors),
+            task_ids=task_ids,
+            result={"processed_files": processed_files, "errors": errors},
+        )
+        db.commit()
+
         return {
             "status": "success" if processed_files else "error",
             "message": f"Successfully queued {len(processed_files)} files for reprocessing",
             "processed_files": processed_files,
             "errors": errors,
             "task_ids": task_ids,
+            "bulk_action": {
+                **_serialize_bulk_operation(operation),
+                "updated_count": len(processed_files),
+                "updated_ids": [item["file_id"] for item in processed_files],
+            },
         }
 
     except HTTPException:
@@ -674,6 +781,15 @@ def bulk_assign_pipeline_to_files(request: Request, body: BulkPipelineAssignment
                 raise HTTPException(status_code=404, detail="Pipeline not found")
 
         updated_ids = [file_record.id for file_record in file_records]
+        operation = _record_bulk_operation(
+            db,
+            request,
+            "route",
+            len(updated_ids),
+            state="completed",
+            completed_items=len(updated_ids),
+            result={"updated_ids": updated_ids, "pipeline_id": body.pipeline_id},
+        )
         for file_record in file_records:
             file_record.pipeline_id = body.pipeline_id
             file_record.pipeline_routing_rule_id = None
@@ -690,7 +806,7 @@ def bulk_assign_pipeline_to_files(request: Request, body: BulkPipelineAssignment
         return {
             "status": "success",
             "message": f"Updated routing for {len(updated_ids)} selected document(s)",
-            "bulk_action": _bulk_action_status("route", len(updated_ids), updated_ids),
+            "bulk_action": _bulk_action_status("route", len(updated_ids), updated_ids, operation.id),
             "updated_count": len(updated_ids),
             "updated_ids": updated_ids,
             "pipeline_id": body.pipeline_id,
@@ -730,6 +846,15 @@ def bulk_tag_files(request: Request, body: BulkTagRequest, db: DbSession):
                 )
 
         updated_ids = [file_record.id for file_record in file_records]
+        operation = _record_bulk_operation(
+            db,
+            request,
+            "tag",
+            len(updated_ids),
+            state="completed",
+            completed_items=len(updated_ids),
+            result={"updated_ids": updated_ids, "tags": tags, "mode": body.mode},
+        )
         for file_record in file_records:
             metadata = _metadata_with_tags(file_record, tags, body.mode)
             file_record.ai_metadata = json.dumps(metadata, ensure_ascii=False)
@@ -756,7 +881,7 @@ def bulk_tag_files(request: Request, body: BulkTagRequest, db: DbSession):
         return {
             "status": "success",
             "message": f"Updated tags for {len(updated_ids)} selected document(s)",
-            "bulk_action": _bulk_action_status("tag", len(updated_ids), updated_ids),
+            "bulk_action": _bulk_action_status("tag", len(updated_ids), updated_ids, operation.id),
             "updated_count": len(updated_ids),
             "updated_ids": updated_ids,
             "tags": tags,
@@ -1012,6 +1137,18 @@ def _retry_pipeline_step(file_record: FileRecord, step_name: str, db: Session) -
         Dict with task ID and status information
     """
     file_id = file_record.id
+
+    if step_name != "process_document":
+        from app.utils.pipeline_stages import normalize_stage_name
+        from app.utils.workflow_plan import workflow_stage_keys
+
+        planned_stages = workflow_stage_keys(file_record)
+        normalized_step = normalize_stage_name(step_name)
+        if planned_stages is not None and normalized_step not in planned_stages:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Step {step_name} is not part of this file's recorded workflow plan",
+            )
 
     if step_name == "process_document":
         # Full reprocessing with duplicate check bypass

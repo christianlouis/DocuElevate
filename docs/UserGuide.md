@@ -352,6 +352,8 @@ For a more focused content-finding experience, use the **Search** page accessibl
    - **Content preview** with highlighted matching terms
 5. Use pagination to browse through large result sets
 
+Search results also support bulk actions. Select individual documents on the current page, or use **Select all matching** to select every document returned by the current query and filters across all result pages. You can then reprocess or delete the selection in one action. Reprocessing progress is saved in the browser and restored when you return to or reload the Search page, so a long-running operation is not lost when the page is closed.
+
 ### Saved Searches
 
 Both the **Files** and **Search** pages support **saved searches** — named filter presets you can create and reuse:
@@ -555,19 +557,21 @@ PAPERLESS_CUSTOM_FIELDS_MAPPING='{"absender": "Sender", "empfaenger": "Recipient
 
 Processing profiles let you select defaults and OCR behavior for uploaded documents. The current processor still uses DocuElevate's system-managed execution flow; profiles do not yet act as an ordered workflow engine.
 
+After routing selects a profile, DocuElevate stores an immutable execution-plan snapshot on the file. The processing-status view and per-step retry controls use this saved plan rather than the current profile definition. Editing a profile therefore affects future documents without rewriting the history or expected stages of documents already in progress.
+
 At runtime, profile OCR settings are honored:
 
 - `ocr_language`
 - `force_cloud_ocr`
 
-Other step entries, ordering, and enabled flags are saved as profile metadata for planning and future workflow automation.
+Other step entries, ordering, and enabled flags determine the saved status/retry plan for each new document and remain profile metadata for future worker-chain automation.
 
 ### Key concepts
 
 | Term | Meaning |
 |------|---------|
 | **Pipeline / profile** | A named processing profile used for defaults and OCR behavior |
-| **Step** | A profile setting entry. OCR step config is applied at runtime; other entries are metadata today |
+| **Step** | A profile setting entry. OCR config is applied at runtime; all enabled entries contribute to the file's immutable status/retry plan |
 | **System pipeline** | Created by an admin; visible to all users as a shared default |
 | **User pipeline** | Created by a regular user; private to that user |
 | **Default pipeline** | Marked `is_default=true`; used automatically for new uploads |
