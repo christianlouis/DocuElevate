@@ -16,7 +16,7 @@ boto3>=1.43.40  # For S3 integration tests
 
 # Code quality
 ruff>=0.15.20
-mypy>=2.1.0
+mypy>=2.2.0
 djlint>=1.36.0  # HTML template linter for accessibility and best practices
 
 # Documentation (builds the embedded /help site via MkDocs Material)
