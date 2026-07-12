@@ -14,6 +14,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if "pipelines" not in sa.inspect(op.get_bind()).get_table_names():
+        return
     op.add_column("pipelines", sa.Column("lifecycle_state", sa.String(20), nullable=False, server_default="draft"))
     op.add_column("pipelines", sa.Column("published_version", sa.Integer(), nullable=True))
     op.create_table(
@@ -30,6 +32,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if "pipelines" not in sa.inspect(op.get_bind()).get_table_names():
+        return
     op.drop_index("ix_pipeline_versions_pipeline_id", table_name="pipeline_versions")
     op.drop_table("pipeline_versions")
     op.drop_column("pipelines", "published_version")
