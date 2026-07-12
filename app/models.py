@@ -92,6 +92,12 @@ class FileRecord(Base):
     pipeline_routing_rule_id = Column(Integer, ForeignKey(f"{_ROUTING_RULES_TABLE}.id"), nullable=True, index=True)
     pipeline_assignment_reason = Column(Text, nullable=True)
 
+    # Immutable snapshot of the ordered, enabled processing-profile steps that
+    # applied when processing started.  Status and retry behavior use this
+    # snapshot rather than a pipeline that may later be edited.
+    workflow_plan = Column(Text, nullable=True)
+    workflow_plan_version = Column(Integer, nullable=False, default=1, server_default="1")
+
     # Detected document language (ISO 639-1 code, e.g. "de", "en", "fr")
     # Extracted from AI metadata during processing; cached here for fast access.
     detected_language = Column(String(10), nullable=True)
@@ -128,6 +134,24 @@ class FileProcessingStep(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("file_id", "step_name", name="unique_file_step"),)
+
+
+class BulkOperation(Base):
+    """Recoverable status for a bulk action initiated from search results."""
+
+    __tablename__ = "bulk_operations"
+
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String, nullable=True, index=True)
+    action = Column(String(50), nullable=False, index=True)
+    state = Column(String(20), nullable=False, default="queued", index=True)
+    total_items = Column(Integer, nullable=False, default=0)
+    completed_items = Column(Integer, nullable=False, default=0)
+    failed_items = Column(Integer, nullable=False, default=0)
+    task_ids = Column(Text, nullable=True)
+    result = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class ProcessingLog(Base):

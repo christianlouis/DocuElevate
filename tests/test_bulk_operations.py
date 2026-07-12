@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models import FileProcessingStep, FileRecord
+from app.models import BulkOperation, FileProcessingStep, FileRecord
 
 
 @pytest.mark.integration
@@ -78,6 +78,9 @@ class TestBulkOperations:
         data = response.json()
         assert data["status"] == "success"
         assert len(data["deleted_ids"]) == 3
+        assert data["bulk_action"]["operation_id"]
+        operation = db_session.query(BulkOperation).filter_by(id=data["bulk_action"]["operation_id"]).one()
+        assert operation.state == "completed"
 
         # Verify files are deleted
         for file_id in file_ids:
@@ -128,6 +131,14 @@ class TestBulkOperations:
         assert data["status"] == "success"
         assert len(data["processed_files"]) == 2
         assert len(data["task_ids"]) == 2
+        assert data["bulk_action"]["state"] == "queued"
+        with patch("app.celery_app.celery.AsyncResult") as async_result:
+            async_result.return_value.ready.return_value = False
+            async_result.return_value.successful.return_value = False
+            async_result.return_value.failed.return_value = False
+            status_response = client.get(f"/api/bulk-operations/{data['bulk_action']['operation_id']}")
+        assert status_response.status_code == 200
+        assert status_response.json()["total_items"] == 2
 
         # Verify that file_id was passed to skip duplicate check
         for call_args in mock_process_document.delay.call_args_list:

@@ -104,7 +104,10 @@ class TestSearchPage:
         assert 'id="search-bulk-bar"' in text
         assert "search-result-checkbox" in text
         assert "selectVisibleSearchResults" in text
+        assert "selectAllMatchingSearchResults" in text
         assert "clearSearchSelection" in text
+        assert "docuelevate.search.bulkOperation" in text
+        assert "/api/bulk-operations/" in text
 
     def test_search_page_supports_sortable_deep_links(self, client):
         """Sort choice is represented in the UI and restored from URL parameters."""

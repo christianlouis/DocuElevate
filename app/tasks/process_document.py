@@ -24,6 +24,7 @@ from app.utils import get_unique_filepath_with_counter, hash_file, log_task_prog
 from app.utils.routing_engine import evaluate_pre_processing_routing_rules
 from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
+from app.utils.workflow_plan import snapshot_workflow_plan, workflow_stage_keys
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -367,9 +368,6 @@ def process_document(
             db.commit()
             db.refresh(new_record)
             logger.info(f"[{task_id}] File record created with ID: {new_record.id}")
-            # Pre-initialize all expected processing steps as "pending" so that
-            # status tracking reflects the complete pipeline from the start.
-            initialize_file_steps(db, new_record.id)
             log_task_progress(
                 task_id,
                 "create_file_record",
@@ -461,6 +459,8 @@ def process_document(
         # Update the DB with local_filename
         new_record.local_filename = new_local_path
         _apply_pre_processing_routing(db, new_record, owner_id, task_id)
+        snapshot_workflow_plan(db, new_record)
+        initialize_file_steps(db, new_record.id, workflow_stages=workflow_stage_keys(new_record))
         db.commit()
 
         if new_record.pipeline_assignment_source == "routing_rule":
