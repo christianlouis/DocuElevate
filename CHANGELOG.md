@@ -10,6 +10,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.179.0 (2026-07-12)
+
+### Bug Fixes
+
+- Preserve settings and legacy migration contracts
+  ([#1022](https://github.com/christianlouis/DocuElevate/pull/1022),
+  [`c52d348`](https://github.com/christianlouis/DocuElevate/commit/c52d348b15ea2e02064a4eea828a818bd37a48b6))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f6a008c`](https://github.com/christianlouis/DocuElevate/commit/f6a008cc87e94381348e726b7d00f6b221fb0a2b))
+
+### Features
+
+- Add semantic workflow and review foundations
+  ([#1022](https://github.com/christianlouis/DocuElevate/pull/1022),
+  [`c52d348`](https://github.com/christianlouis/DocuElevate/commit/c52d348b15ea2e02064a4eea828a818bd37a48b6))
+
+### Testing
+
+- Align bulk operation response contracts
+  ([#1021](https://github.com/christianlouis/DocuElevate/pull/1021),
+  [`52255fc`](https://github.com/christianlouis/DocuElevate/commit/52255fccac65d7baf849eb76b236835dfabdaf75))
+
+
 ## Unreleased
 
 ### Testing
