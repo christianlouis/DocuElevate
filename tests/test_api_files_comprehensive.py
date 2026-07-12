@@ -2993,7 +2993,9 @@ class TestBulkAssignPipelineToFiles:
             "state": "completed",
             "updated_count": 2,
             "updated_ids": [file.id for file in files],
+            "operation_id": data["bulk_action"]["operation_id"],
         }
+        assert data["bulk_action"]["operation_id"]
         assert data["pipeline_id"] == pipeline.id
         for file in files:
             db_session.refresh(file)
@@ -3079,7 +3081,9 @@ class TestBulkTagFiles:
             "state": "completed",
             "updated_count": 2,
             "updated_ids": [file.id for file in files],
+            "operation_id": data["bulk_action"]["operation_id"],
         }
+        assert data["bulk_action"]["operation_id"]
         assert data["tags"] == ["Finance", "urgent"]
         for file in files:
             db_session.refresh(file)
