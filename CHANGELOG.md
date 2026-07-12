@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Align bulk operation response contracts
+  ([#1021](https://github.com/christianlouis/DocuElevate/pull/1021),
+  [`52255fc`](https://github.com/christianlouis/DocuElevate/commit/52255fccac65d7baf849eb76b236835dfabdaf75))
+
+
 ## v0.178.0 (2026-07-12)
 
 ### Features
