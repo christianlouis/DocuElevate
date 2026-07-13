@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Build System
+
+- **deps**: Update tiktoken requirement from >=0.7.0 to >=0.13.0
+  ([#1032](https://github.com/christianlouis/DocuElevate/pull/1032),
+  [`35612b1`](https://github.com/christianlouis/DocuElevate/commit/35612b16b406d02589384fbe5adfbbb9a268ba73))
+
+
 ## v0.179.0 (2026-07-12)
 
 ### Bug Fixes
