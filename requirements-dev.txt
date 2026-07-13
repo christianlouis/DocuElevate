@@ -25,7 +25,7 @@ mkdocs-material>=9.7.6  # MkDocs Material theme – same package used in docs/re
 # Type stubs for mypy
 types-aiofiles>=25.1.0.20260518
 types-requests>=2.31.0
-types-paramiko>=3.0.0
+types-paramiko>=5.0.0.20260617
 
 # Security scanning (Ruff includes most security checks from bandit)
 pip-audit>=2.10.0  # Dependency vulnerability scanning against OSV/PyPA advisory databases
