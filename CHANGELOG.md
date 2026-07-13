@@ -14,6 +14,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Build System
 
+- **deps**: Update aiohttp requirement
+  ([#1030](https://github.com/christianlouis/DocuElevate/pull/1030),
+  [`72d3e34`](https://github.com/christianlouis/DocuElevate/commit/72d3e3408d2a63813a4808c393c80e8630bc93f6))
+
+- **deps**: Update paramiko requirement from >=3.4.0 to >=5.0.0
+  ([#1028](https://github.com/christianlouis/DocuElevate/pull/1028),
+  [`589886a`](https://github.com/christianlouis/DocuElevate/commit/589886a0b410ce454d65330df118123112e4e235))
+
+- **deps**: Update psycopg requirement from <4.0,>=3.2 to >=3.3.4,<4.0
+  ([#1025](https://github.com/christianlouis/DocuElevate/pull/1025),
+  [`ac87840`](https://github.com/christianlouis/DocuElevate/commit/ac878407c1cd1f59f8b1e000266d9832b4c8f727))
+
+- **deps**: Update puremagic requirement
+  ([#1031](https://github.com/christianlouis/DocuElevate/pull/1031),
+  [`07a34a2`](https://github.com/christianlouis/DocuElevate/commit/07a34a24881a05db495dbc0fb3278f7f316bd9e1))
+
+- **deps**: Update strawberry-graphql requirement
+  ([#1026](https://github.com/christianlouis/DocuElevate/pull/1026),
+  [`cc2a8e4`](https://github.com/christianlouis/DocuElevate/commit/cc2a8e45f7b16cad33b22a514fbeb57bb82f8ae0))
+
+- **deps**: Update tiktoken requirement from >=0.7.0 to >=0.13.0
+  ([#1032](https://github.com/christianlouis/DocuElevate/pull/1032),
+  [`35612b1`](https://github.com/christianlouis/DocuElevate/commit/35612b16b406d02589384fbe5adfbbb9a268ba73))
+
+- **deps-dev**: Update mypy requirement from >=2.1.0 to >=2.2.0
+  ([#1029](https://github.com/christianlouis/DocuElevate/pull/1029),
+  [`ffa7b86`](https://github.com/christianlouis/DocuElevate/commit/ffa7b86238bf0d4b9212e1a465be99ea97e6eb57))
+
+- **deps-dev**: Update types-paramiko requirement
+  ([#1027](https://github.com/christianlouis/DocuElevate/pull/1027),
+  [`84f266b`](https://github.com/christianlouis/DocuElevate/commit/84f266b0b3d08a293f1793c7922ff71746059b6f))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f42ac9d`](https://github.com/christianlouis/DocuElevate/commit/f42ac9df8b195b40e56c9098c74488a946221794))
+
+
+## Unreleased
+
+### Build System
+
 - **deps**: Update tiktoken requirement from >=0.7.0 to >=0.13.0
   ([#1032](https://github.com/christianlouis/DocuElevate/pull/1032),
   [`35612b1`](https://github.com/christianlouis/DocuElevate/commit/35612b16b406d02589384fbe5adfbbb9a268ba73))
