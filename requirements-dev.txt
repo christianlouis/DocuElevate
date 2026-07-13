@@ -37,6 +37,6 @@ pre-commit>=3.6.0
 pip-licenses==5.5.5  # For license compliance checking
 
 # Release automation
-python-semantic-release>=10.6.0
+python-semantic-release>=10.6.1
 
 types-aiofiles>=24.1.0.20240311  # Type stubs for aiofiles
