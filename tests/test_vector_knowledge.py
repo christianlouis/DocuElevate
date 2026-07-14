@@ -1,8 +1,10 @@
 """Tests for chunk-level vector indexing and authorized retrieval."""
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import call, patch
 
+import pytest
+import requests
 from starlette.requests import Request
 
 from app.models import FileRecord
@@ -56,6 +58,106 @@ def test_index_replaces_document_after_embeddings_are_ready():
     upsert = request.call_args_list[1].args[2]
     assert [point["payload"]["text"] for point in upsert["points"]] == ["first", "second"]
     assert all(point["payload"]["document_id"] == 7 for point in upsert["points"])
+
+
+def test_qdrant_request_wraps_transport_and_http_errors():
+    from app.utils.vector_index import QdrantVectorIndex, VectorIndexError
+
+    index = QdrantVectorIndex()
+    response = SimpleNamespace(status_code=201, text="", json=lambda: {})
+    with patch("app.utils.vector_index.requests.request", return_value=response) as request:
+        assert index._request("PUT", "/collections/test", {"value": 1}, expected=(201,)) is response
+    request.assert_called_once_with(
+        "PUT",
+        f"{index.base_url}/collections/test",
+        headers=index.headers,
+        json={"value": 1},
+        timeout=index.timeout,
+    )
+
+    with patch(
+        "app.utils.vector_index.requests.request",
+        side_effect=requests.ConnectionError("offline"),
+    ):
+        with pytest.raises(VectorIndexError, match="request failed"):
+            index._request("GET", "/collections/test")
+
+    failure = SimpleNamespace(status_code=503, text="unavailable", json=lambda: {})
+    with patch("app.utils.vector_index.requests.request", return_value=failure):
+        with pytest.raises(VectorIndexError, match="returned 503"):
+            index._request("GET", "/collections/test")
+
+
+def test_qdrant_collection_creation_and_dimension_guard():
+    from app.utils.vector_index import QdrantVectorIndex, VectorIndexError
+
+    missing = SimpleNamespace(status_code=404)
+    with patch.object(
+        QdrantVectorIndex, "_request", side_effect=[missing, SimpleNamespace(status_code=201)]
+    ) as request:
+        QdrantVectorIndex().ensure_collection(1536)
+    assert request.call_args_list == [
+        call("GET", "/collections/docuelevate_documents", expected=(200, 404)),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents",
+            {"vectors": {"size": 1536, "distance": "Cosine"}},
+            expected=(200, 201),
+        ),
+    ]
+
+    existing = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"result": {"config": {"params": {"vectors": {"size": 768}}}}},
+    )
+    with patch.object(QdrantVectorIndex, "_request", return_value=existing):
+        with pytest.raises(VectorIndexError, match="uses 768 dimensions"):
+            QdrantVectorIndex().ensure_collection(1536)
+
+
+def test_qdrant_search_uses_legacy_fallback_and_normalizes_results():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    missing = SimpleNamespace(status_code=404, json=lambda: {})
+    legacy = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"result": {"points": [{"id": "point-1", "score": 0.9}]}},
+    )
+    with (
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[0.1, 0.2]]),
+        patch.object(QdrantVectorIndex, "_request", side_effect=[missing, legacy]) as request,
+    ):
+        result = QdrantVectorIndex().search("query", limit=3, score_threshold=0.4)
+
+    assert result == [{"id": "point-1", "score": 0.9}]
+    assert request.call_args_list[0].args[2]["query"] == [0.1, 0.2]
+    assert request.call_args_list[0].args[2]["score_threshold"] == 0.4
+    assert request.call_args_list[1].args[2]["vector"] == [0.1, 0.2]
+    assert "query" not in request.call_args_list[1].args[2]
+
+
+def test_qdrant_status_handles_missing_and_existing_collection():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    missing = SimpleNamespace(status_code=404)
+    with patch.object(QdrantVectorIndex, "_request", return_value=missing):
+        assert QdrantVectorIndex().status() == {
+            "available": True,
+            "collection_exists": False,
+            "points_count": 0,
+        }
+
+    existing = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"result": {"points_count": 12, "status": "green"}},
+    )
+    with patch.object(QdrantVectorIndex, "_request", return_value=existing):
+        assert QdrantVectorIndex().status() == {
+            "available": True,
+            "collection_exists": True,
+            "points_count": 12,
+            "status": "green",
+        }
 
 
 def test_owner_filter_removes_unauthorized_vector_hits(db_session):
