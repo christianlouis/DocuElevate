@@ -11,6 +11,7 @@ from app.database import SessionLocal
 from app.models import DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.allowed_types import ALLOWED_EXTENSIONS
+from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value
 from app.utils.filename_utils import sanitize_filename
 
@@ -32,13 +33,14 @@ def _dropbox_client(integration: UserIntegration):
     import dropbox
 
     credentials = _decode(integration.credentials)
-    required = ("refresh_token", "app_key", "app_secret")
-    if not all(credentials.get(key) for key in required):
-        raise RuntimeError("Dropbox source credentials are incomplete")
+    try:
+        app_key, app_secret, refresh_token = resolve_dropbox_oauth_credentials(credentials)
+    except ValueError as exc:
+        raise RuntimeError("Dropbox source credentials are incomplete") from exc
     return dropbox.Dropbox(
-        oauth2_refresh_token=credentials["refresh_token"],
-        app_key=credentials["app_key"],
-        app_secret=credentials["app_secret"],
+        oauth2_refresh_token=refresh_token,
+        app_key=app_key,
+        app_secret=app_secret,
     )
 
 

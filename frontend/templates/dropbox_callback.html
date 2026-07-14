@@ -187,9 +187,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (integrationId) {
           const creds = {
             refresh_token: data.refresh_token,
-            // Store public app_key with the integration (no secret stored browser-side)
-            app_key: resolvedAppKey,
-            // Flag so the backend knows to use global app_secret for future operations
+            // The user's encrypted record contains only their renewable grant.
+            // Operator app credentials remain outside the user record.
             use_global_app_secret: true,
           };
 

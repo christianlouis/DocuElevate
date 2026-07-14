@@ -63,6 +63,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import IntegrationType, UserIntegration
 from app.tasks.retry_config import UploadTaskWithRetry
+from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value
 from app.utils.logging import log_task_progress
 
@@ -81,12 +82,7 @@ def _upload_dropbox(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], 
     """Upload *file_path* to Dropbox using per-user OAuth credentials."""
     import dropbox
 
-    app_key = creds.get("app_key") or ""
-    app_secret = creds.get("app_secret") or ""
-    refresh_token = creds.get("refresh_token") or ""
-
-    if not (app_key and app_secret and refresh_token):
-        raise ValueError("Dropbox integration is missing app_key, app_secret or refresh_token in credentials")
+    app_key, app_secret, refresh_token = resolve_dropbox_oauth_credentials(creds)
 
     dbx = dropbox.Dropbox(app_key=app_key, app_secret=app_secret, oauth2_refresh_token=refresh_token)
 

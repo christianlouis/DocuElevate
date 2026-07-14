@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import IntegrationDirection, IntegrationType, UserIntegration
+from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value, encrypt_value
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
@@ -555,14 +556,10 @@ def _test_dropbox_connection(config: dict[str, Any] | None, credentials: dict[st
         return {"success": False, "message": "dropbox package is not installed"}  # pragma: no cover
 
     creds = credentials or {}
-    app_key = creds.get("app_key", "")
-    app_secret = creds.get("app_secret", "")
-    refresh_token = creds.get("refresh_token", "")
-
-    if not refresh_token:
-        return {"success": False, "message": "Missing required credential: refresh_token"}
-    if not app_key or not app_secret:
-        return {"success": False, "message": "Missing required credentials: app_key and app_secret"}
+    try:
+        app_key, app_secret, refresh_token = resolve_dropbox_oauth_credentials(creds)
+    except ValueError as exc:
+        return {"success": False, "message": str(exc)}
 
     try:
         dbx = dbx_lib.Dropbox(
