@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import FileRecord
+from app.models import FileRecord, IntegrationDirection, IntegrationType, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.step_manager import update_step_status
@@ -22,6 +22,25 @@ logger = logging.getLogger(__name__)
 def _queue_vector_index(file_id: int) -> None:
     if not settings.vector_index_enabled:
         return
+    # When a user configured Qdrant as a destination, that destination owns
+    # indexing and its visible processing status. Keep the legacy automatic
+    # index path only as a backwards-compatible fallback.
+    with SessionLocal() as db:
+        record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        if record and record.owner_id:
+            has_vector_destination = (
+                db.query(UserIntegration.id)
+                .filter(
+                    UserIntegration.owner_id == record.owner_id,
+                    UserIntegration.direction == IntegrationDirection.DESTINATION,
+                    UserIntegration.integration_type == IntegrationType.VECTOR_DATABASE,
+                    UserIntegration.is_active.is_(True),
+                )
+                .first()
+                is not None
+            )
+            if has_vector_destination:
+                return
     from app.tasks.vector_index import index_document_vectors
 
     index_document_vectors.delay(file_id)

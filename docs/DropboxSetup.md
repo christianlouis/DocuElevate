@@ -26,13 +26,21 @@ DocuElevate supports two distinct Dropbox OAuth flows:
 
 End users authorize their own Dropbox integration from the **Integrations** dashboard:
 
-1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
-2. Create a Dropbox destination integration (or a Watch Folder with `source_type = dropbox`).
-3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
+1. Navigate to `/integrations` and add a Dropbox destination (or a Watch Folder with `source_type = dropbox`).
+2. Enter the non-secret integration settings and choose **Save & connect Dropbox**.
 4. If the administrator has configured system-wide Dropbox app credentials (`DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET`) and enabled `DROPBOX_ALLOW_GLOBAL_CREDENTIALS_FOR_INTEGRATIONS`, the wizard uses that app — no need to register a Dropbox app per user.
-5. Click **Start Authentication Flow**, authorize access in Dropbox, and the refresh token is automatically saved to your personal integration record.
-6. After authorization, an interactive **folder browser** lets you select the target folder directly from your Dropbox — no need to manually type folder paths.
-7. The page redirects to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
+5. Authorize access in Dropbox; the refresh token is automatically saved to your personal integration record.
+6. Use the interactive **folder browser** to navigate through any subpath and select the source or target folder. You can create a new folder in the currently open location and select it immediately; no path memorization is required.
+7. Save the folder selection to return to `/integrations`. Re-authorization remains available via **Re-Authorize**.
+
+For an existing archive, enable **True up existing corpus** on the Dropbox-backed
+Watch Folder. DocuElevate performs one recursive import of the selected folder and
+all subfolders, records Dropbox file IDs and revisions, then reuses Dropbox's change
+cursor for later watch cycles. Watch Folder sources fail closed: source deletion is
+possible only when `preserve_source_files=false` **and**
+`delete_after_process=true`. Missing `preserve_source_files` is treated as protected.
+The UI defaults to **Quelldateien NICHT LÖSCHEN!** and shows a prominent red alarm
+on every source card where deletion is actually enabled.
 
 > **Note:** The renewable user grant is stored encrypted per integration. In shared-app mode, the operator App Key and App Secret remain in operator configuration and are not copied into the user's database record. Workers resolve both parts at execution time, so authorization changes do not require a restart.
 

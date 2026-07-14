@@ -1571,10 +1571,11 @@ def _scan_user_dropbox_folder(
         logger.error("User Dropbox watch folder: dropbox SDK not installed: %s", exc)
         return 0
 
-    refresh_token = creds.get("refresh_token", "")
-    app_key = creds.get("app_key", "")
-    app_secret = creds.get("app_secret", "")
-    if not (refresh_token and app_key and app_secret):
+    from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
+
+    try:
+        app_key, app_secret, refresh_token = resolve_dropbox_oauth_credentials(creds)
+    except ValueError:
         logger.warning("User Dropbox watch folder: credentials incomplete.")
         return 0
 
@@ -1595,7 +1596,7 @@ def _scan_user_dropbox_folder(
 
     count = 0
     try:
-        result = dbx.files_list_folder(folder_path)
+        result = dbx.files_list_folder(folder_path, recursive=bool(cfg.get("recursive", False)))
         entries = list(result.entries)
         while result.has_more:
             result = dbx.files_list_folder_continue(result.cursor)
@@ -2172,6 +2173,15 @@ _USER_WF_CLOUD_HANDLERS.update(
 )
 
 
+def _watch_source_delete_enabled(config: dict) -> bool:
+    """Require an explicit two-step opt-in before deleting source files.
+
+    Missing ``preserve_source_files`` is treated as protected so older or
+    hand-written integrations fail closed after this safety feature ships.
+    """
+    return config.get("preserve_source_files", True) is False and config.get("delete_after_process", False) is True
+
+
 def _pull_user_integration_watch_folders() -> dict:
     """Iterate over all active WATCH_FOLDER UserIntegrations and scan their sources.
 
@@ -2213,7 +2223,7 @@ def _pull_user_integration_watch_folders() -> dict:
             for integ in integrations:
                 try:
                     cfg = _json.loads(integ.config) if integ.config else {}
-                    delete_after = cfg.get("delete_after_process", False)
+                    delete_after = _watch_source_delete_enabled(cfg)
                     source_type = cfg.get("source_type", "local")
 
                     cache_file = f"{_USER_WF_CACHE_PREFIX}{integ.id}.json"
@@ -2243,6 +2253,14 @@ def _pull_user_integration_watch_folders() -> dict:
                             continue
 
                         n = _scan_user_watch_folder(folder_path, cache, delete_after, integ.owner_id)
+                    elif source_type == "dropbox" and cfg.get("true_up_existing"):
+                        # The durable corpus importer performs the initial
+                        # recursive true-up and then reuses Dropbox's cursor
+                        # for cheap incremental watch cycles.
+                        from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
+
+                        queue_dropbox_watch_sync(integ.id, db)
+                        n = 0
                     elif source_type in _USER_WF_CLOUD_HANDLERS:
                         # Cloud source — decrypt per-user credentials and delegate
                         raw_creds = decrypt_value(integ.credentials) if integ.credentials else None

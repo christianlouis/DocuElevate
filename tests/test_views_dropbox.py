@@ -31,6 +31,11 @@ class TestDropboxViews:
         """Test the Dropbox OAuth callback with auth code."""
         response = client.get("/dropbox-callback?code=test_code")
         assert response.status_code == 200
+        body = response.text
+        assert "Select Folder" in body
+        assert "New folder here" in body
+        assert "/api/dropbox/create-folder" in body
+        assert "initFolderBrowser(data.access_token, integrationId)" in body
 
     def test_dropbox_setup_page_with_integration_id(self, client):
         """Test the Dropbox setup page accepts integration_id query param."""

@@ -37,6 +37,38 @@ def test_dropbox_import_start_queues_owned_source(client, db_session):
     delay.assert_called_once()
 
 
+def test_watch_true_up_reuses_completed_cursor(db_session):
+    integration = _integration(db_session)
+    integration.config = json.dumps(
+        {
+            "source_type": "dropbox",
+            "folder_path": "/Posteingang",
+            "true_up_existing": True,
+            "recursive": True,
+        }
+    )
+    previous = DropboxImportJob(
+        id="completed-job",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Posteingang",
+        cursor="cursor-after-true-up",
+        state="completed",
+    )
+    db_session.add(previous)
+    db_session.commit()
+
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.delay") as delay:
+        from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
+
+        result = queue_dropbox_watch_sync(integration.id, db_session)
+
+    queued = db_session.query(DropboxImportJob).filter(DropboxImportJob.id == result["job_id"]).one()
+    assert result["mode"] == "incremental"
+    assert queued.cursor == "cursor-after-true-up"
+    delay.assert_called_once_with(queued.id)
+
+
 @pytest.mark.integration
 def test_dropbox_import_rejects_invalid_integration_config(client, db_session):
     integration = _integration(db_session)

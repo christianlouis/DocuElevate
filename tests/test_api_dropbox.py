@@ -571,6 +571,60 @@ class TestListDropboxFolders:
         assert names == ["Alpha", "middle", "Zebra"]
 
 
+@pytest.mark.unit
+class TestCreateDropboxFolder:
+    """Tests for creating a folder from the OAuth folder picker."""
+
+    @patch("httpx.AsyncClient.post")
+    def test_create_folder_in_selected_subpath(self, mock_post, client):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "metadata": {
+                "name": "DocuElevate Preprod",
+                "path_display": "/Posteingang/DocuElevate Preprod",
+                "id": "id:new",
+            }
+        }
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/create-folder",
+            data={
+                "access_token": "test-token",
+                "parent_path": "/Posteingang",
+                "name": "DocuElevate Preprod",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["path"] == "/Posteingang/DocuElevate Preprod"
+        assert mock_post.call_args.kwargs["json"] == {
+            "path": "/Posteingang/DocuElevate Preprod",
+            "autorename": False,
+        }
+
+    @pytest.mark.parametrize("name", ["", ".", "..", "child/name", "child\\name"])
+    def test_rejects_invalid_folder_names(self, name, client):
+        response = client.post(
+            "/api/dropbox/create-folder",
+            data={"access_token": "test-token", "parent_path": "/Posteingang", "name": name},
+        )
+        assert response.status_code == 422
+
+    @patch("httpx.AsyncClient.post")
+    def test_existing_folder_returns_conflict(self, mock_post, client):
+        mock_response = Mock()
+        mock_response.status_code = 409
+        mock_post.return_value = mock_response
+
+        response = client.post(
+            "/api/dropbox/create-folder",
+            data={"access_token": "test-token", "parent_path": "/", "name": "Existing"},
+        )
+        assert response.status_code == 409
+
+
 class TestBuildDropboxRedirectUri:
     """Tests for the _build_dropbox_redirect_uri helper."""
 

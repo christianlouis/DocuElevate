@@ -781,6 +781,7 @@ class IntegrationType:
     RCLONE = "RCLONE"
     SHAREPOINT = "SHAREPOINT"
     ICLOUD = "ICLOUD"
+    VECTOR_DATABASE = "VECTOR_DATABASE"
 
     ALL = {
         IMAP,
@@ -799,6 +800,7 @@ class IntegrationType:
         RCLONE,
         SHAREPOINT,
         ICLOUD,
+        VECTOR_DATABASE,
     }
 
 
@@ -884,6 +886,10 @@ class UserIntegration(Base):
     GOOGLE_DRIVE:
       config      = {"folder_id": "1abc…"}
       credentials = {"credentials_json": "{…service-account or OAuth…}"}
+
+    VECTOR_DATABASE:
+      config      = {"provider": "qdrant"}
+      credentials = null  # operator-managed Qdrant connection
 
     WEBDAV / NEXTCLOUD:
       config      = {"url": "https://cloud.example.com/dav/",

@@ -395,6 +395,76 @@ async def list_dropbox_folders(
         )
 
 
+@router.post("/dropbox/create-folder")
+@require_login
+async def create_dropbox_folder(
+    request: Request,
+    access_token: Annotated[str, Form(...)],
+    parent_path: Annotated[str, Form()] = "",
+    name: Annotated[str, Form()] = "",
+):
+    """Create a Dropbox folder below the currently browsed parent path."""
+    folder_name = name.strip()
+    if not folder_name or folder_name in {".", ".."} or any(char in folder_name for char in ("/", "\\", "\x00")):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Folder name must not be empty or contain path separators",
+        )
+
+    parent = parent_path.strip().rstrip("/")
+    if parent == "/":
+        parent = ""
+    elif parent and not parent.startswith("/"):
+        parent = f"/{parent}"
+    path = f"{parent}/{folder_name}"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {"path": path, "autorename": False}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://api.dropboxapi.com/2/files/create_folder_v2",
+                headers=headers,
+                json=payload,
+                timeout=settings.http_request_timeout,
+            )
+        if response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Access token is invalid or expired. Please re-authorize.",
+            )
+        if response.status_code == 409:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A folder with this name already exists at the selected location",
+            )
+        if response.status_code != 200:
+            logger.warning("Dropbox create_folder failed with status %s", response.status_code)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Dropbox could not create the folder",
+            )
+
+        metadata = response.json().get("metadata", {})
+        return {
+            "name": metadata.get("name", folder_name),
+            "path": metadata.get("path_display", path),
+            "id": metadata.get("id", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error creating Dropbox folder: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create Dropbox folder",
+        ) from exc
+
+
 @router.post("/dropbox/save-settings")
 async def save_dropbox_settings(
     request: Request,
