@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.182.1 (2026-07-14)
+
+### Bug Fixes
+
+- Defer Dropbox true-up until folder selection
+  ([`7207807`](https://github.com/christianlouis/DocuElevate/commit/7207807d7b7e99bbf1cd49fe9c5385d466e6726a))
+
+
 ## v0.182.0 (2026-07-14)
 
 ### Bug Fixes
