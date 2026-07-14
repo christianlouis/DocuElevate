@@ -8,8 +8,9 @@ This guide explains how to set up the Dropbox integration for DocuElevate.
 |-------------------------|--------------------------------------------------|
 | `DROPBOX_APP_KEY`       | Dropbox API app key                              |
 | `DROPBOX_APP_SECRET`    | Dropbox API app secret                           |
-| `DROPBOX_REFRESH_TOKEN` | OAuth2 refresh token for Dropbox                 |
+| `DROPBOX_REFRESH_TOKEN` | Optional OAuth2 grant for the system-level connection |
 | `DROPBOX_FOLDER`        | Default folder path for Dropbox uploads          |
+| `DROPBOX_ALLOW_GLOBAL_CREDENTIALS_FOR_INTEGRATIONS` | Let users authorize against the operator-managed Dropbox app |
 
 For a complete list of configuration options, see the [Configuration Guide](ConfigurationGuide.md).
 
@@ -28,12 +29,12 @@ End users authorize their own Dropbox integration from the **Integrations** dash
 1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
 2. Create a Dropbox destination integration (or a Watch Folder with `source_type = dropbox`).
 3. Click the **Authorize** button next to the integration — it links directly to the OAuth wizard pre-loaded with your integration's configuration.
-4. If the administrator has configured system-wide Dropbox app credentials (`DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET`), the wizard defaults to using them — no need to register your own Dropbox app. Uncheck the toggle to use custom credentials if needed.
+4. If the administrator has configured system-wide Dropbox app credentials (`DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET`) and enabled `DROPBOX_ALLOW_GLOBAL_CREDENTIALS_FOR_INTEGRATIONS`, the wizard uses that app — no need to register a Dropbox app per user.
 5. Click **Start Authentication Flow**, authorize access in Dropbox, and the refresh token is automatically saved to your personal integration record.
 6. After authorization, an interactive **folder browser** lets you select the target folder directly from your Dropbox — no need to manually type folder paths.
 7. The page redirects to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
 
-> **Note:** Your credentials are stored encrypted per-integration and are never mixed with other users' data. Each user can have multiple Dropbox integrations with independent tokens.
+> **Note:** The renewable user grant is stored encrypted per integration. In shared-app mode, the operator App Key and App Secret remain in operator configuration and are not copied into the user's database record. Workers resolve both parts at execution time, so authorization changes do not require a restart.
 
 ## Using the System-Level Setup Wizard (Admin)
 
