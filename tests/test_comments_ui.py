@@ -1,5 +1,7 @@
 """Tests for the comments and annotations UI on the file annotations page."""
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -27,6 +29,11 @@ def _create_file(db_session, tmp_path) -> FileRecord:
 @pytest.mark.unit
 class TestCommentsUIRendering:
     """Verify the file annotations page includes the comments panel HTML."""
+
+    def test_comments_use_shared_html_escaper_for_mentions(self):
+        """Mention rendering must escape quotes as well as tag delimiters."""
+        source = (Path(__file__).parents[1] / "frontend/static/js/comments.js").read_text()
+        assert "var escaped = window.escapeHtml(text);" in source
 
     def test_annotations_page_contains_comments_section(self, client: TestClient, db_session, tmp_path):
         """The annotations page should render the comments panel container."""
