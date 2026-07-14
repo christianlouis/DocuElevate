@@ -27,6 +27,8 @@ from app.tasks.classify_document import classify_document_task  # noqa: F401
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.convert_to_pdfa import convert_to_pdfa  # noqa: F401
+from app.tasks.document_bridge import deliver_document_bridge  # noqa: F401
+from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import  # noqa: F401
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F401
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
 from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
@@ -60,6 +62,7 @@ from app.tasks.upload_to_user_integration import upload_to_user_integration  # n
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
 from app.tasks.upload_with_rclone import send_to_all_rclone_destinations, upload_with_rclone  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
+from app.tasks.vector_index import index_document_vectors, reindex_document_vectors  # noqa: F401
 from app.tasks.watch_folder_tasks import scan_all_watch_folders  # noqa: F401
 from app.tasks.webhook_tasks import deliver_webhook_task  # noqa: F401
 

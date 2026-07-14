@@ -1,6 +1,6 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-07-11
+**Last Updated:** 2026-07-14
 **Version:** 2.1
 
 ## Vision
@@ -42,6 +42,49 @@ order, not in numeric-anchor order:
 GitHub issues and milestones are the source of truth for executable scope. This
 document explains sequencing and product intent; it should not duplicate a sprint
 backlog.
+
+## Preprod Pilot: DearConcierge Knowledge Bridge
+
+The first agent-facing document retrieval pilot is deliberately isolated in the
+new DocuElevate preprod line. Production remains pinned to the Evergreen legacy
+release. Delivery is split into independently reversible slices:
+
+1. **P0 — Authenticated document intake**
+   - Accept a multipart document plus source metadata through a dedicated intake endpoint.
+   - Reuse DocuElevate API Bearer tokens and OAuth sessions; optionally accept a
+     separately configured shared intake secret for machine-to-machine migration.
+   - Write to the existing work directory and enqueue the normal processing pipeline.
+   - Make an idempotency key mandatory for automated senders so retries cannot create duplicates.
+2. **P0 — Legacy document bridge**
+   - Add an optional outbound destination that sends the completed document bytes and
+     provenance metadata to the preprod intake endpoint.
+   - Keep the bridge disabled by default and isolated from processing success: delivery
+     failures are retryable and observable but never invalidate the legacy document.
+   - Retrofit only this bounded sender into Evergreen after it passes preprod contract tests.
+3. **P0 — Dropbox collection import**
+   - Import an existing Dropbox tree recursively without deleting source files.
+   - Persist a cursor/checkpoint and Dropbox revision per source object so the import is
+     resumable and re-runs only changed content.
+   - Route every downloaded file through the same authenticated intake/processing contract.
+4. **P0 — Chunk-level vector index**
+   - Split complete OCR text into overlapping token-aware chunks and store source-backed
+     payloads in a private Qdrant collection.
+   - Keep the existing whole-document embedding for duplicate detection; vector export is
+     optional and idempotent.
+   - Provide explicit backfill and health/status operations for the existing corpus.
+5. **P0 — DearConcierge retrieval contract**
+   - Expose authenticated semantic search and cited full-text retrieval with DocuElevate's
+     existing owner/share checks applied to every result.
+   - Support OAuth browser sessions and personal Bearer tokens first; add an MCP adapter as
+     a thin client over the same API rather than duplicating authorization logic.
+6. **P0 — Preprod acceptance and promotion gate**
+   - Prove retry/idempotency, owner isolation, Dropbox resume, vector backfill, citation
+     retrieval, and end-to-end DearConcierge queries in preprod.
+   - Do not change the production image or enable the Evergreen sender without a separate,
+     explicit production approval.
+
+The detailed contract, security boundaries, rollout order, and acceptance evidence are
+maintained in [docs/DearConciergeKnowledgeBridge.md](docs/DearConciergeKnowledgeBridge.md).
 
 ## Release Naming
 

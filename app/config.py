@@ -1070,6 +1070,78 @@ class Settings(BaseSettings):
             "backfill run.  Keeps the worker and embedding API load bounded."
         ),
     )
+    vector_index_enabled: bool = Field(
+        default=False,
+        description=(
+            "Export token-sized OCR text chunks to an external Qdrant index. "
+            "Disabled by default so existing installations keep their current behaviour."
+        ),
+    )
+    vector_index_url: str = Field(
+        default="http://qdrant:6333",
+        description="Base URL of the private Qdrant service used for document retrieval.",
+    )
+    vector_index_api_key: Optional[str] = Field(
+        default=None,
+        description="Optional Qdrant API key. Keep this value in an external secret store.",
+    )
+    vector_index_collection: str = Field(
+        default="docuelevate_documents",
+        min_length=1,
+        description="Qdrant collection containing searchable document chunks.",
+    )
+    vector_chunk_tokens: int = Field(
+        default=600,
+        ge=100,
+        le=4000,
+        description="Maximum number of embedding tokens per searchable document chunk.",
+    )
+    vector_chunk_overlap_tokens: int = Field(
+        default=80,
+        ge=0,
+        le=1000,
+        description="Number of tokens repeated between adjacent chunks to preserve context.",
+    )
+    vector_index_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0,
+        le=300,
+        description="Timeout for Qdrant HTTP requests.",
+    )
+    document_intake_shared_secret: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional dedicated shared secret accepted by the document intake endpoint. "
+            "Prefer personal API tokens for normal clients and reserve this for a controlled legacy bridge."
+        ),
+    )
+    document_intake_shared_owner_id: str = Field(
+        default="legacy-bridge",
+        min_length=1,
+        description="Owner/principal assigned to documents received with the shared intake secret.",
+    )
+    document_bridge_enabled: bool = Field(
+        default=False,
+        description="Send completed documents to another DocuElevate intake endpoint.",
+    )
+    document_bridge_url: Optional[str] = Field(
+        default=None,
+        description="HTTPS URL of the receiving /api/intake/documents endpoint.",
+    )
+    document_bridge_bearer_token: Optional[str] = Field(
+        default=None,
+        description="Dedicated receiving DocuElevate API token for the document bridge.",
+    )
+    document_bridge_shared_secret: Optional[str] = Field(
+        default=None,
+        description="Dedicated intake shared secret when a Bearer token is not used.",
+    )
+    document_bridge_source: str = Field(
+        default="docuelevate-legacy",
+        min_length=1,
+        max_length=100,
+        description="Stable source identifier included in bridge deliveries and idempotency keys.",
+    )
     confidence_review_threshold: int = Field(
         default=70,
         ge=0,

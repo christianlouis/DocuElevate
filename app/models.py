@@ -115,6 +115,64 @@ class FileRecord(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
+class DocumentIntake(Base):
+    """Durable idempotency and task ledger for machine document intake."""
+
+    __tablename__ = "document_intakes"
+    __table_args__ = (UniqueConstraint("principal_id", "idempotency_key", name="uq_document_intake_principal_key"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    principal_id = Column(String, nullable=False, index=True)
+    idempotency_key = Column(String(255), nullable=False)
+    source = Column(String(100), nullable=False, index=True)
+    original_filename = Column(String, nullable=False)
+    metadata_json = Column(Text, nullable=True)
+    local_path = Column(String, nullable=True)
+    task_id = Column(String, nullable=True, index=True)
+    state = Column(String(20), nullable=False, default="pending", server_default="pending", index=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DropboxImportJob(Base):
+    """Progress ledger for a resumable recursive Dropbox corpus import."""
+
+    __tablename__ = "dropbox_import_jobs"
+
+    id = Column(String(36), primary_key=True)
+    integration_id = Column(Integer, ForeignKey("user_integrations.id"), nullable=False, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    root_path = Column(String, nullable=False)
+    cursor = Column(Text, nullable=True)
+    state = Column(String(20), nullable=False, default="queued", server_default="queued", index=True)
+    discovered = Column(Integer, nullable=False, default=0, server_default="0")
+    downloaded = Column(Integer, nullable=False, default=0, server_default="0")
+    skipped = Column(Integer, nullable=False, default=0, server_default="0")
+    queued = Column(Integer, nullable=False, default=0, server_default="0")
+    failed = Column(Integer, nullable=False, default=0, server_default="0")
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class DropboxImportObject(Base):
+    """Last imported Dropbox revision for cross-run deduplication."""
+
+    __tablename__ = "dropbox_import_objects"
+    __table_args__ = (UniqueConstraint("integration_id", "dropbox_file_id", name="uq_dropbox_import_integration_file"),)
+
+    id = Column(Integer, primary_key=True)
+    integration_id = Column(Integer, ForeignKey("user_integrations.id"), nullable=False, index=True)
+    dropbox_file_id = Column(String, nullable=False)
+    revision = Column(String, nullable=False)
+    remote_path = Column(Text, nullable=False)
+    intake_id = Column(Integer, ForeignKey("document_intakes.id"), nullable=True)
+    task_id = Column(String, nullable=True)
+    state = Column(String(20), nullable=False, default="queued", server_default="queued")
+    imported_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class FileProcessingStep(Base):
     """
     Tracks the current status of each processing step for a file.

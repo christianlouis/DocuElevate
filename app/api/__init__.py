@@ -19,13 +19,16 @@ from app.api.compliance import router as compliance_router
 from app.api.database import router as database_router
 from app.api.diagnostic import router as diagnostic_router
 from app.api.dropbox import router as dropbox_router
+from app.api.dropbox_imports import router as dropbox_imports_router
 from app.api.duplicates import router as duplicates_router
 from app.api.files import router as files_router
 from app.api.google_drive import router as google_drive_router
 from app.api.i18n import router as i18n_router
 from app.api.imap_accounts import router as imap_accounts_router
 from app.api.imap_profiles import router as imap_profiles_router
+from app.api.intake import router as intake_router
 from app.api.integrations import router as integrations_router
+from app.api.knowledge import router as knowledge_router
 from app.api.logs import router as logs_router
 from app.api.mobile import router as mobile_router
 from app.api.notifications import router as notifications_router
@@ -74,10 +77,12 @@ router.include_router(process_router)
 router.include_router(diagnostic_router)
 router.include_router(onedrive_router)
 router.include_router(dropbox_router)
+router.include_router(dropbox_imports_router)
 router.include_router(openai_router)
 router.include_router(azure_router)
 router.include_router(google_drive_router)
 router.include_router(logs_router)
+router.include_router(knowledge_router)
 router.include_router(settings_router)
 router.include_router(url_upload_router)
 router.include_router(search_router)
@@ -100,6 +105,7 @@ router.include_router(routing_rules_router)
 router.include_router(imap_accounts_router)
 router.include_router(imap_profiles_router)
 router.include_router(integrations_router)
+router.include_router(intake_router)
 router.include_router(notifications_router)
 router.include_router(scheduled_jobs_router)
 router.include_router(audit_logs_router)
