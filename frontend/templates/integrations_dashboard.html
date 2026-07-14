@@ -1251,7 +1251,7 @@ function integrationsDashboard() {
         this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', delete_after_process: dap };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
-        this.form.config = { source_type: st, folder_path: '/Posteingang', delete_after_process: dap, true_up_existing: true, recursive: true };
+        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap, true_up_existing: false, recursive: true };
         this.form.credentials = {};
       } else if (st === 'google_drive') {
         this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
