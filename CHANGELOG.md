@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.181.0 (2026-07-14)
+
+### Bug Fixes
+
+- **oauth**: Enforce operator credentials and scopes
+  ([`cbbcc95`](https://github.com/christianlouis/DocuElevate/commit/cbbcc959798d840c11fcc105971db570821cceac))
+
+- **onboarding**: Handle legacy schemas and bootstrap tests
+  ([`53593f6`](https://github.com/christianlouis/DocuElevate/commit/53593f69a22bc114e8265784aa5895b3d18d95f7))
+
+### Features
+
+- **oauth**: Persist user tokens in database
+  ([`5a6c3b9`](https://github.com/christianlouis/DocuElevate/commit/5a6c3b9d23e835ae186cd76452a7f268ed4d3331))
+
+- **onboarding**: Add live multiuser setup journey
+  ([`4471431`](https://github.com/christianlouis/DocuElevate/commit/4471431094e284e3ccb89eed653bb65c50047b69))
+
+
 ## v0.180.0 (2026-07-14)
 
 ### Documentation
