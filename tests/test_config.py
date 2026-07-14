@@ -80,6 +80,29 @@ class TestConfigurationValidation:
         assert config.auth_enabled is False
         assert config.session_secret is None
 
+    def test_minimal_bootstrap_uses_service_defaults(self, monkeypatch):
+        """A fresh install can start with only DB and the stable encryption secret."""
+        for key in (
+            "REDIS_URL",
+            "WORKDIR",
+            "GOTENBERG_URL",
+            "OPENAI_API_KEY",
+            "AZURE_AI_KEY",
+            "AZURE_REGION",
+            "AZURE_ENDPOINT",
+        ):
+            monkeypatch.delenv(key, raising=False)
+        config = Settings(
+            database_url="postgresql://docuelevate:secret@database/docuelevate",
+            auth_enabled=True,
+            session_secret="b" * 32,
+        )
+
+        assert config.redis_url == "redis://redis:6379/0"
+        assert config.workdir == "/workdir"
+        assert config.gotenberg_url == "http://gotenberg:3000"
+        assert config.openai_api_key == ""
+
 
 @pytest.mark.unit
 class TestBuildMetadataConfiguration:

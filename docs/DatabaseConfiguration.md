@@ -21,6 +21,8 @@ DocuElevate uses [SQLAlchemy](https://www.sqlalchemy.org/) as its ORM and [Alemb
 
 ## Database Configuration Wizard
 
+`DATABASE_URL` is the unavoidable bootstrap setting: DocuElevate must know which database to open before it can read any other configuration from that database. Keep it in the deployment secret/environment together with the stable `SESSION_SECRET`. The first-run `/setup` wizard shows this boundary explicitly and stores the remaining operator/user configuration in the database.
+
 DocuElevate includes a guided **Database Configuration Wizard** accessible at `/database-wizard`.  The wizard walks you through building a connection string step by step — no need to remember the exact URL format.
 
 ### How to Access

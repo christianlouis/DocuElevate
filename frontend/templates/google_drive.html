@@ -281,13 +281,9 @@
   <div class="bg-white shadow-md rounded-lg p-6 mb-8">
     <h2 class="text-2xl font-semibold mb-4">OAuth Wizard</h2>
     <div class="space-y-4">
-      <div>
-        <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
-        <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your OAuth Client ID" value="{{ client_id_value }}">
-      </div>
-      <div>
-        <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
-        <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your OAuth Client Secret" value="{{ client_secret_value }}">
+      <div class="bg-green-50 border border-green-200 rounded-md p-4">
+        <p class="text-sm font-medium text-green-800">DocuElevate app credentials are configured</p>
+        <p class="text-xs text-green-700 mt-1">Only your Google authorization is saved to your encrypted integration record. The application secret never enters your browser or user settings.</p>
       </div>
       {% if folder_id %}
       <div class="bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
@@ -296,9 +292,9 @@
       </div>
       {% endif %}
       <div>
-        <button id="start-oauth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <a id="start-oauth-flow" href="/google-drive-auth-start?integration_id={{ integration_id }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Start Authentication Flow
-        </button>
+        </a>
       </div>
     </div>
   </div>
@@ -449,13 +445,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const userMode = {{ 'true' if user_mode else 'false' }};
   const hasSystemCredentials = {{ 'true' if (user_mode and has_system_credentials) else 'false' }};
   const systemClientId = {{ (client_id_value or '') | tojson }};
-  const systemClientSecret = {{ (client_secret_value or '') | tojson }};
 
-  // Store integration_id if provided (for per-user OAuth flow)
+  // The integration ID remains in the server-side OAuth session.  Do not put
+  // per-user OAuth state or provider secrets into browser storage.
   const integrationId = "{{ integration_id or '' }}";
-  if (integrationId) {
-    sessionStorage.setItem('oauth_integration_id', integrationId);
-  }
 
   // System credentials toggle
   const useSystemCredsCheckbox = document.getElementById('use-system-creds');
@@ -752,10 +745,16 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
   // Start OAuth flow button
   if (startOauthFlowBtn) {
     startOauthFlowBtn.addEventListener('click', function() {
+      if (userMode) {
+        // Per-user OAuth is an entirely server-side flow.  The link target
+        // contains only the integration ID; no app secret or user token is
+        // placed in browser storage.
+        return;
+      }
       // Determine which credentials to use
       const useSystemCreds = hasSystemCredentials && useSystemCredsCheckbox && useSystemCredsCheckbox.checked;
       const clientId = useSystemCreds ? systemClientId : clientIdInput.value.trim();
-      const clientSecret = useSystemCreds ? systemClientSecret : clientSecretInput.value.trim();
+      const clientSecret = clientSecretInput.value.trim();
       const folderId = folderIdInput ? folderIdInput.value.trim() : '';
 
       if (!clientId) {

@@ -470,31 +470,6 @@ def delete_integration(
     logger.info("User %s deleted integration %d", owner_id, integration_id)
 
 
-@router.get("/{integration_id}/credentials", summary="Retrieve decrypted credentials for an integration")
-def get_integration_credentials(
-    integration_id: int,
-    request: Request,
-    db: DbSession,
-    owner_id: CurrentOwner,
-) -> dict[str, Any]:
-    """Return the decrypted credentials dict for a saved integration.
-
-    This endpoint is intended for internal use by background tasks that need
-    to authenticate with a third-party service.  Treat the response as
-    sensitive — it contains plaintext secrets.
-    """
-    integration = (
-        db.query(UserIntegration)
-        .filter(UserIntegration.id == integration_id, UserIntegration.owner_id == owner_id)
-        .first()
-    )
-    if not integration:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
-
-    credentials = _decode_credentials(integration.credentials)
-    return {"credentials": credentials or {}}
-
-
 # ---------------------------------------------------------------------------
 # Connection test helpers
 # ---------------------------------------------------------------------------
@@ -657,13 +632,94 @@ def _test_webdav_connection(config: dict[str, Any] | None, credentials: dict[str
         return {"success": False, "message": "WebDAV connection failed — check URL and credentials"}
 
 
+def _test_google_drive_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
+    """Refresh a per-user Google token and make a minimal Drive API call."""
+    try:
+        from google.auth.transport.requests import Request as GoogleRequest
+        from google.oauth2.credentials import Credentials as GoogleCredentials
+        from googleapiclient.discovery import build
+
+        from app.config import settings
+    except ImportError:
+        return {"success": False, "message": "Google Drive SDK is not installed"}
+
+    creds = credentials or {}
+    refresh_token = creds.get("refresh_token") or ""
+    client_id = creds.get("client_id") or settings.google_drive_client_id or ""
+    client_secret = creds.get("client_secret") or settings.google_drive_client_secret or ""
+    scope = creds.get("scope") or "https://www.googleapis.com/auth/drive.file"
+    if not (refresh_token and client_id and client_secret):
+        return {"success": False, "message": "Google Drive authorization is incomplete"}
+
+    try:
+        google_credentials = GoogleCredentials(
+            None,
+            refresh_token=refresh_token,
+            token_uri=creds.get("token_uri") or "https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=[scope],
+        )
+        google_credentials.refresh(GoogleRequest())
+        service = build("drive", "v3", credentials=google_credentials, cache_discovery=False)
+        account = service.about().get(fields="user(emailAddress)").execute().get("user", {}).get("emailAddress")
+        return {
+            "success": True,
+            "message": f"Google Drive connection successful{f' for {account}' if account else ''}",
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Google Drive integration test failed: %s", exc)
+        return {"success": False, "message": "Google Drive connection failed — re-authorize the integration"}
+
+
 _CONNECTION_TESTERS: dict[str, Any] = {
     IntegrationType.DROPBOX: _test_dropbox_connection,
     IntegrationType.IMAP: _test_imap_connection,
     IntegrationType.S3: _test_s3_connection,
+    IntegrationType.GOOGLE_DRIVE: _test_google_drive_connection,
     IntegrationType.WEBDAV: _test_webdav_connection,
     IntegrationType.NEXTCLOUD: _test_webdav_connection,
 }
+
+
+@router.post("/{integration_id}/test", summary="Test a saved integration server-side")
+def test_saved_integration(
+    integration_id: int,
+    request: Request,
+    db: DbSession,
+    owner_id: CurrentOwner,
+) -> dict[str, Any]:
+    """Test stored credentials without ever returning them to the browser."""
+    integration = (
+        db.query(UserIntegration)
+        .filter(UserIntegration.id == integration_id, UserIntegration.owner_id == owner_id)
+        .first()
+    )
+    if not integration:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+
+    tester = _CONNECTION_TESTERS.get(integration.integration_type)
+    if tester is None and integration.integration_type == IntegrationType.WATCH_FOLDER:
+        config = json.loads(integration.config or "{}")
+        source_type = str(config.get("source_type", "")).upper()
+        tester = _CONNECTION_TESTERS.get(source_type)
+    else:
+        config = json.loads(integration.config or "{}") if integration.config else None
+
+    if tester is None:
+        return {
+            "success": False,
+            "message": f"Connection testing is not yet supported for '{integration.integration_type}'.",
+        }
+
+    result = tester(config, _decode_credentials(integration.credentials))
+    integration.last_error = None if result.get("success") else result.get("message")
+    if result.get("success"):
+        from datetime import datetime, timezone
+
+        integration.last_used_at = datetime.now(timezone.utc)
+    db.commit()
+    return result
 
 
 # ---------------------------------------------------------------------------

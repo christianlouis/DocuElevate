@@ -1379,21 +1379,10 @@ function integrationsDashboard() {
     async testSavedIntegration(intg) {
       this.testingId = intg.id;
       try {
-        // Retrieve saved credentials to test
-        const credsResp = await fetch(`/api/integrations/${intg.id}/credentials`);
-        if (!credsResp.ok) {
-          this.showAlert('error', 'Test Failed', 'Could not retrieve saved credentials for testing.');
-          return;
-        }
-        const creds = await credsResp.json();
-        const resp = await fetch('/api/integrations/test', {
+        // Stored credentials stay server-side throughout the test.
+        const resp = await fetch(`/api/integrations/${intg.id}/test`, {
           method: 'POST',
-          headers: authHeaders(true),
-          body: JSON.stringify({
-            integration_type: intg.integration_type,
-            config: intg.config,
-            credentials: creds,
-          }),
+          headers: authHeaders(false),
         });
         const data = await resp.json();
         if (data.success) {

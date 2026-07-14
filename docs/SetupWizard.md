@@ -23,7 +23,9 @@ The wizard is shown automatically when DocuElevate detects that critical setting
 - `SESSION_SECRET` is still the built-in insecure placeholder
 - `ADMIN_PASSWORD` is absent or set to a common placeholder value (`changeme`, `admin`, etc.)
 
-Once both values have been configured — whether through the wizard or through environment variables — the wizard will no longer be shown on the home page.
+`DATABASE_URL` and `SESSION_SECRET` are bootstrap settings. They must be present in the deployment environment before the app starts; the wizard displays their status but deliberately does not copy either value into the database.
+
+Once `SESSION_SECRET` is supplied by the deployment and the admin password has been configured in the database, the wizard will no longer be shown on the home page.
 
 > **Tip:** If you pre-populate all settings via environment variables before the first launch, the wizard will be skipped automatically.
 
@@ -39,7 +41,7 @@ Configure the services that DocuElevate depends on at the infrastructure level.
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `DATABASE_URL` | Database connection string. SQLite is fine for development; PostgreSQL is recommended for production. | `sqlite:///./app/database.db` |
+| `DATABASE_URL` | Bootstrap database connection string. SQLite is fine for development; PostgreSQL is recommended for production. Read-only in the wizard because the app needs it before it can read settings. | Required deployment setting |
 | `REDIS_URL` | Redis connection URL used by the Celery task queue. | `redis://localhost:6379/0` |
 | `WORKDIR` | Filesystem path where documents are staged during processing. Must be writable by the API and Worker containers. | `/workdir` |
 | `GOTENBERG_URL` | URL of the Gotenberg service used for document-to-PDF conversion. | `http://gotenberg:3000` |
@@ -52,11 +54,11 @@ Configure authentication and session security.
 
 | Setting | Description | Notes |
 |---------|-------------|-------|
-| `SESSION_SECRET` | Secret key used to sign and encrypt session cookies. Minimum 32 characters. | Click **Auto-generate** to let the wizard create a cryptographically secure value for you. |
+| `SESSION_SECRET` | Stable deployment secret used for sessions and encryption of sensitive database settings. Minimum 32 characters. | Required deployment setting; read-only in the wizard. |
 | `ADMIN_USERNAME` | Username for the built-in admin account. | Defaults to `admin`. |
 | `ADMIN_PASSWORD` | Password for the built-in admin account. | Required. Must not be a placeholder value. |
 
-> **Security note:** The auto-generated session secret is a 64-character hex string (32 bytes of entropy).  Store it somewhere safe — it cannot be recovered if lost. If you rotate the secret, all existing sessions will be invalidated.
+> **Security note:** Keep `SESSION_SECRET` in your deployment secret manager and inject it into every API and worker process. If it changes, active sessions are invalidated and previously encrypted settings and OAuth tokens cannot be decrypted.
 
 ### Step 3 – AI Services
 
@@ -133,8 +135,8 @@ These pages are accessed **after** the main Setup Wizard is complete and are ind
 
 ## Advanced: Settings Management
 
-All settings — including those configured through the wizard — can be updated at any time through the Settings page (`/settings`).  Settings saved via the wizard are stored in the database and take precedence over the corresponding environment variables.
+All non-bootstrap settings configured through the wizard can be updated at any time through the Settings page (`/settings`). They are stored in the database and take precedence over corresponding environment values. `DATABASE_URL`, `SESSION_SECRET`, and provider-wide OAuth app credentials remain deployment-managed bootstrap values.
 
 For the full list of every available configuration parameter, see the [Configuration Guide](ConfigurationGuide.md).
 
-> **Precedence order:** Database value → Environment variable → Default
+> **Precedence order for non-bootstrap settings:** Database value → Environment variable → Default

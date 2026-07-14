@@ -1653,11 +1653,11 @@ def _scan_user_google_drive_folder(
     delete_after: bool,
     owner_id: str,
 ) -> int:
-    """Scan a Google Drive folder using per-user service-account credentials.
+    """Scan a Google Drive folder using per-user OAuth or service-account credentials.
 
     Args:
         cfg: Integration config with ``folder_id``.
-        creds: Decrypted credentials with ``credentials_json``.
+        creds: Decrypted credentials with ``refresh_token`` or ``credentials_json``.
         cache: In-memory dict of already-processed file keys.
         delete_after: Whether to remove the source file after ingestion.
         owner_id: The user to attribute ingested documents to.
@@ -1666,15 +1666,18 @@ def _scan_user_google_drive_folder(
         Number of files newly enqueued.
     """
     try:
+        from google.auth.transport.requests import Request
         from google.oauth2 import service_account
+        from google.oauth2.credentials import Credentials as OAuthCredentials
         from googleapiclient.discovery import build
     except ImportError as exc:
         logger.error("User Google Drive watch folder: SDK not installed: %s", exc)
         return 0
 
+    refresh_token = creds.get("refresh_token", "")
     creds_json = creds.get("credentials_json", "")
-    if not creds_json:
-        logger.warning("User Google Drive watch folder: credentials_json not provided.")
+    if not refresh_token and not creds_json:
+        logger.warning("User Google Drive watch folder: OAuth or service-account credentials not provided.")
         return 0
 
     folder_id = cfg.get("folder_id", "")
@@ -1683,13 +1686,30 @@ def _scan_user_google_drive_folder(
         return 0
 
     try:
-        import json as _json
+        if refresh_token:
+            client_id = creds.get("client_id") or settings.google_drive_client_id or ""
+            client_secret = creds.get("client_secret") or settings.google_drive_client_secret or ""
+            if not client_id or not client_secret:
+                logger.warning("User Google Drive watch folder: operator app credentials are missing.")
+                return 0
+            scope = creds.get("scope") or "https://www.googleapis.com/auth/drive.readonly"
+            credentials = OAuthCredentials(
+                None,
+                refresh_token=refresh_token,
+                token_uri=creds.get("token_uri") or "https://oauth2.googleapis.com/token",
+                client_id=client_id,
+                client_secret=client_secret,
+                scopes=[scope],
+            )
+            credentials.refresh(Request())
+        else:
+            import json as _json
 
-        info = _json.loads(creds_json) if isinstance(creds_json, str) else creds_json
-        credentials = service_account.Credentials.from_service_account_info(
-            info,
-            scopes=["https://www.googleapis.com/auth/drive"],
-        )
+            info = _json.loads(creds_json) if isinstance(creds_json, str) else creds_json
+            credentials = service_account.Credentials.from_service_account_info(
+                info,
+                scopes=["https://www.googleapis.com/auth/drive"],
+            )
         service = build("drive", "v3", credentials=credentials)
     except Exception as exc:
         logger.error("User Google Drive watch folder: auth failed: %s", exc)
