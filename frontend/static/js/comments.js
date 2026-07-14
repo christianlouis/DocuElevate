@@ -202,8 +202,8 @@
 
   function _renderMentions(text) {
     if (!text) return '';
-    // Escape HTML first
-    var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Use the shared sanitizer so quotes are escaped before HTML insertion.
+    var escaped = window.escapeHtml(text);
     // Highlight @mentions
     return escaped.replace(/@([\w.\-]+)/g, '<span class="comment-mention">@$1</span>');
   }
