@@ -1,6 +1,7 @@
 """Tests for app/views/dropbox.py module."""
 
 import json
+import re
 from unittest.mock import patch
 
 import pytest
@@ -36,6 +37,15 @@ class TestDropboxViews:
         assert "New folder here" in body
         assert "/api/dropbox/create-folder" in body
         assert "initFolderBrowser(data.access_token, integrationId)" in body
+
+    def test_dropbox_watch_folder_path_is_optional_before_oauth(self, client):
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        tag = re.search(r'<input id="wf-dbx-folder"[^>]+>', response.text)
+        assert tag is not None
+        assert " required" not in tag.group(0)
+        assert 'aria-required="true"' not in tag.group(0)
+        assert "Optional before sign-in" in response.text
 
     def test_dropbox_setup_page_with_integration_id(self, client):
         """Test the Dropbox setup page accepts integration_id query param."""

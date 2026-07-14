@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from app.models import DropboxImportJob, IntegrationDirection, IntegrationType, UserIntegration
+from app.utils.encryption import encrypt_value
 
 
 def _integration(db_session) -> UserIntegration:
@@ -16,7 +17,9 @@ def _integration(db_session) -> UserIntegration:
         integration_type=IntegrationType.WATCH_FOLDER,
         name="Dropbox archive",
         config=json.dumps({"source_type": "dropbox", "folder_path": "/Documents"}),
-        credentials="{}",
+        credentials=encrypt_value(
+            json.dumps({"app_key": "app-key", "app_secret": "app-secret", "refresh_token": "refresh-token"})
+        ),
         is_active=True,
     )
     db_session.add(integration)
@@ -67,6 +70,39 @@ def test_watch_true_up_reuses_completed_cursor(db_session):
     assert result["mode"] == "incremental"
     assert queued.cursor == "cursor-after-true-up"
     delay.assert_called_once_with(queued.id)
+
+
+def test_watch_true_up_waits_for_folder_selection(db_session):
+    integration = _integration(db_session)
+    integration.config = json.dumps(
+        {"source_type": "dropbox", "folder_path": "", "true_up_existing": True, "recursive": True}
+    )
+    db_session.commit()
+
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.delay") as delay:
+        from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
+
+        result = queue_dropbox_watch_sync(integration.id, db_session)
+
+    assert result == {"status": "skipped", "detail": "Dropbox folder has not been selected"}
+    delay.assert_not_called()
+
+
+def test_watch_true_up_waits_for_oauth_grant(db_session):
+    integration = _integration(db_session)
+    integration.config = json.dumps(
+        {"source_type": "dropbox", "folder_path": "/Posteingang", "true_up_existing": True, "recursive": True}
+    )
+    integration.credentials = None
+    db_session.commit()
+
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.delay") as delay:
+        from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
+
+        result = queue_dropbox_watch_sync(integration.id, db_session)
+
+    assert result == {"status": "skipped", "detail": "Dropbox authorization is incomplete"}
+    delay.assert_not_called()
 
 
 @pytest.mark.integration
