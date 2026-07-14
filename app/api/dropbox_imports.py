@@ -62,7 +62,18 @@ def start_dropbox_import(request: Request, body: DropboxImportCreate, db: DbSess
     if not integration or not integration.is_active or integration.direction != IntegrationDirection.SOURCE:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dropbox source integration not found")
 
-    config = json.loads(integration.config or "{}")
+    try:
+        config = json.loads(integration.config or "{}")
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Integration configuration is invalid",
+        ) from exc
+    if not isinstance(config, dict):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Integration configuration is invalid",
+        )
     is_dropbox = integration.integration_type == IntegrationType.DROPBOX or (
         integration.integration_type == IntegrationType.WATCH_FOLDER and config.get("source_type") == "dropbox"
     )

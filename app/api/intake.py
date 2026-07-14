@@ -108,7 +108,10 @@ async def intake_document(
     safe_filename = sanitize_filename(os.path.basename(file.filename or "document")) or "document"
     extension = os.path.splitext(safe_filename)[1].lower()
     content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
-    if extension not in ALLOWED_EXTENSIONS and content_type not in ALLOWED_MIME_TYPES:
+    supported_type = (
+        extension in ALLOWED_EXTENSIONS if extension else content_type in ALLOWED_MIME_TYPES
+    )
+    if not supported_type:
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported document type")
     if metadata_json:
         try:

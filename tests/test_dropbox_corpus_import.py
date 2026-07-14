@@ -35,6 +35,19 @@ def test_dropbox_import_start_queues_owned_source(client, db_session):
     delay.assert_called_once()
 
 
+def test_dropbox_import_rejects_invalid_integration_config(client, db_session):
+    integration = _integration(db_session)
+    integration.config = "not-json"
+    db_session.commit()
+
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.delay") as delay:
+        response = client.post("/api/dropbox-imports/", json={"integration_id": integration.id})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Integration configuration is invalid"
+    delay.assert_not_called()
+
+
 def test_dropbox_file_revision_is_idempotent(db_session, tmp_path):
     integration = _integration(db_session)
     job = DropboxImportJob(
@@ -73,3 +86,39 @@ def test_dropbox_file_revision_is_idempotent(db_session, tmp_path):
         db_session.commit()
 
     assert delay.call_count == 2
+
+
+def test_dropbox_import_removes_download_when_queueing_fails(db_session, tmp_path):
+    integration = _integration(db_session)
+    job = DropboxImportJob(
+        id="job-cleanup",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+    )
+    db_session.add(job)
+    db_session.commit()
+    entry = SimpleNamespace(
+        id="id:cleanup",
+        rev="rev-1",
+        name="invoice.pdf",
+        size=8,
+        path_lower="/documents/invoice.pdf",
+        path_display="/Documents/invoice.pdf",
+    )
+    client = SimpleNamespace(files_download=lambda _path: (None, SimpleNamespace(content=b"%PDF-1")))
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.workdir", str(tmp_path)),
+        patch("app.api.intake._queue_document", side_effect=RuntimeError("queue unavailable")),
+    ):
+        from app.tasks.dropbox_corpus_import import _import_file
+
+        try:
+            _import_file(db_session, job, integration, client, entry)
+        except RuntimeError as exc:
+            assert str(exc) == "queue unavailable"
+        else:
+            raise AssertionError("queue failure was not propagated")
+
+    assert not list(tmp_path.glob("dropbox_*"))

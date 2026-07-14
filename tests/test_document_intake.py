@@ -39,6 +39,15 @@ def test_intake_rejects_unsupported_type(client):
     assert response.status_code == 415
 
 
+def test_intake_rejects_disallowed_extension_with_allowed_mime_type(client):
+    response = client.post(
+        "/api/intake/documents",
+        data={"source": "legacy", "idempotency_key": "legacy:43:mime-spoof"},
+        files={"file": ("malware.exe", b"MZ", "application/pdf")},
+    )
+    assert response.status_code == 415
+
+
 def test_intake_shared_secret_authentication(client, tmp_path):
     with (
         patch("app.api.intake.settings.auth_enabled", True),

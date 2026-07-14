@@ -87,6 +87,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
 
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
+    queued = False
     try:
         _metadata, response = client.files_download(entry.path_lower)
         content = response.content
@@ -134,10 +135,13 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
         imported.task_id = task.id
         imported.state = "queued"
         db.flush()
+        queued = True
         return "queued"
     finally:
         if os.path.exists(temporary_path):
             os.remove(temporary_path)
+        if not queued and os.path.exists(target_path):
+            os.remove(target_path)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_import")
