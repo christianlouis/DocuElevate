@@ -11,10 +11,10 @@ for RAG (Retrieval Augmented Generation) chatbot workflows.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.auth import require_login
-from app.utils.meilisearch_client import search_documents
+from app.utils.meilisearch_client import SearchUnavailableError, search_documents
 
 logger = logging.getLogger(__name__)
 
@@ -94,18 +94,21 @@ def search_api(
     """
     logger.info(f"Search request: q={q!r}, mime_type={mime_type}, page={page}, per_page={per_page}")
 
-    result = search_documents(
-        q,
-        mime_type=mime_type,
-        document_type=document_type,
-        language=language,
-        tags=tags,
-        sender=sender,
-        text_quality=text_quality,
-        date_from=date_from,
-        date_to=date_to,
-        page=page,
-        per_page=per_page,
-    )
-
-    return result
+    try:
+        result = search_documents(
+            q,
+            mime_type=mime_type,
+            document_type=document_type,
+            language=language,
+            tags=tags,
+            sender=sender,
+            text_quality=text_quality,
+            date_from=date_from,
+            date_to=date_to,
+            page=page,
+            per_page=per_page,
+        )
+        return result
+    except SearchUnavailableError as exc:
+        logger.error(f"Search unavailable: {exc}")
+        raise HTTPException(status_code=503, detail="Search temporarily unavailable")

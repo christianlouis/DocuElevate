@@ -142,6 +142,13 @@ api:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: api
 
   podSecurityContext:
     runAsNonRoot: true
@@ -178,12 +185,45 @@ worker:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: worker
 
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 1000
     fsGroup: 1000
 
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+# ---------------------------------------------------------------------------
+# Celery beat deployment
+# ---------------------------------------------------------------------------
+beat:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: false
@@ -206,10 +246,18 @@ workdir:
 # ---------------------------------------------------------------------------
 gotenberg:
   enabled: true
+  replicaCount: 2
   image:
     repository: gotenberg/gotenberg
     tag: latest
     pullPolicy: IfNotPresent
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: gotenberg
   service:
     port: 3000
   resources:

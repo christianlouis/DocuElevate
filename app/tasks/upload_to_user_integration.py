@@ -59,7 +59,7 @@ from urllib.parse import urljoin
 
 from app.celery_app import celery
 from app.database import SessionLocal
-from app.models import IntegrationType, UserIntegration
+from app.models import FileProcessingStep, IntegrationType, UserIntegration
 from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils.encryption import decrypt_value
 from app.utils.logging import log_task_progress
@@ -773,6 +773,19 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         raise FileNotFoundError(error_msg)
 
     with SessionLocal() as db:
+        if file_id is not None:
+            # Idempotency check: if already successful, skip upload.
+            step_name = f"upload_to_user_integration_{integration_id}"
+            step = db.query(FileProcessingStep).filter_by(file_id=file_id, step_name=step_name).first()
+            if step and step.status == "success":
+                logger.info(
+                    "[%s] Upload to integration %d already succeeded for file_id %d. Skipping.",
+                    task_id,
+                    integration_id,
+                    file_id,
+                )
+                return {"status": "Completed", "reason": "Already successful"}
+
         integration: UserIntegration | None = (
             db.query(UserIntegration).filter(UserIntegration.id == integration_id).first()
         )

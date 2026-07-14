@@ -17,8 +17,16 @@ celery = Celery(
 )
 
 
-# Optionally add this line to retain connection retry behavior at startup:
 celery.conf.broker_connection_retry_on_startup = True
+
+# Task retry and idempotency configuration (Phase 2)
+celery.conf.task_acks_late = True
+celery.conf.task_reject_on_worker_lost = True
+celery.conf.worker_prefetch_multiplier = 1
+
+# RedBeat configuration (Phase 1)
+celery.conf.redbeat_redis_url = settings.redis_url
+celery.conf.redbeat_lock_key = "redbeat:lock"
 
 # Set the default queue and routing so that tasks are enqueued on "document_processor"
 celery.conf.task_default_queue = "document_processor"

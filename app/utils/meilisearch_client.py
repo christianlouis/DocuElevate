@@ -11,6 +11,13 @@ metadata fields.
 import logging
 from typing import TYPE_CHECKING, Any, Optional
 
+
+class SearchUnavailableError(Exception):
+    """Raised when Meilisearch is unreachable."""
+
+    pass
+
+
 if TYPE_CHECKING:
     from app.models import FileRecord
 
@@ -99,7 +106,7 @@ def get_meilisearch_client() -> Any | None:
         return None
     except Exception as exc:
         logger.warning(f"Could not connect to Meilisearch: {exc}")
-        return None
+        raise SearchUnavailableError(f"Could not connect to Meilisearch: {exc}")
 
 
 def _get_or_create_index(client: Any) -> Any:
@@ -250,9 +257,12 @@ def search_documents(
     """
     empty: dict = {"results": [], "total": 0, "page": page, "pages": 0, "query": query}
 
-    client = get_meilisearch_client()
-    if client is None:
-        return empty
+    try:
+        client = get_meilisearch_client()
+        if client is None:
+            return empty
+    except SearchUnavailableError:
+        raise
 
     try:
         index = _get_or_create_index(client)
@@ -336,6 +346,8 @@ def search_documents(
             "query": query,
         }
 
+    except SearchUnavailableError:
+        raise
     except Exception as exc:
         logger.warning(f"Meilisearch search failed for query '{query}': {exc}")
-        return empty
+        raise SearchUnavailableError(f"Search failed: {exc}")

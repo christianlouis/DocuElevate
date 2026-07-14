@@ -1,0 +1,50 @@
+{{- if .Values.api.enabled | default true }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-api-pdb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+{{- end }}
+---
+{{- if .Values.worker.enabled | default true }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-worker-pdb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+{{- end }}
+---
+{{- if .Values.gotenberg.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-gotenberg-pdb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gotenberg
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gotenberg
+{{- end }}

@@ -7,11 +7,13 @@ import logging
 import mimetypes
 import os
 import shutil
+import struct
 import uuid
 from typing import TYPE_CHECKING
 
 import pypdf
 from pypdf.errors import PdfReadError
+from sqlalchemy import text
 
 from app.celery_app import celery
 from app.config import settings
@@ -267,6 +269,11 @@ def process_document(
     # Profile OCR overrides resolved inside DB session.
     ocr_language: str | None = None
     with SessionLocal() as db:
+        # Acquire transaction-level advisory lock based on filehash to prevent concurrent duplicate processing
+        if filehash:
+            lock_id = struct.unpack("<q", bytes.fromhex(filehash[:16]))[0]
+            db.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": lock_id})
+
         # When file_id is provided, we are reprocessing an existing file.
         # Skip the duplicate check and reuse the existing record.
         if file_id is not None:
@@ -448,8 +455,10 @@ def process_document(
             f"Copying file to {new_filename}",
             file_id=new_record.id,
         )
-        # Copy the file instead of moving it
-        shutil.copy(original_local_file, new_local_path)
+        # Atomic copy: write to a .tmp file then rename
+        tmp_copy_path = f"{new_local_path}.tmp"
+        shutil.copy(original_local_file, tmp_copy_path)
+        os.rename(tmp_copy_path, new_local_path)
         log_task_progress(
             task_id,
             "copy_file",

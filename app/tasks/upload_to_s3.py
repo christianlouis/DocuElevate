@@ -8,6 +8,8 @@ from botocore.exceptions import ClientError
 
 from app.celery_app import celery
 from app.config import settings
+from app.database import SessionLocal
+from app.models import FileProcessingStep
 from app.tasks.retry_config import UploadTaskWithRetry
 from app.utils import log_task_progress
 
@@ -34,6 +36,13 @@ def upload_to_s3(self, file_path: str, file_id: int = None, folder_override: str
         logger.error(f"[{task_id}] {error_msg}")
         log_task_progress(task_id, "upload_to_s3", "failure", error_msg, file_id=file_id)
         raise FileNotFoundError(error_msg)
+
+    if file_id is not None:
+        with SessionLocal() as db:
+            step = db.query(FileProcessingStep).filter_by(file_id=file_id, step_name="upload_to_s3").first()
+            if step and step.status == "success":
+                logger.info(f"[{task_id}] Upload to S3 already succeeded for file_id {file_id}. Skipping.")
+                return {"status": "Completed", "reason": "Already successful"}
 
     # Extract filename
     filename = os.path.basename(file_path)
