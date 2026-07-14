@@ -599,7 +599,7 @@
             </div>
             <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
               <i class="fas fa-info-circle mr-1" aria-hidden="true"></i>
-              {{ _("integrations.oauth_hint") }}
+              Saving opens Dropbox so you can authorize this integration with your own account. The renewable grant is stored in your personal integration record; app credentials remain operator-managed.
             </div>
           </div>
         </template>
@@ -701,7 +701,7 @@
                 </label>
                 <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
                   <i class="fas fa-key mr-1" aria-hidden="true"></i>
-                  Save this source, then use <strong>Authorize</strong> on its card. Only your renewable Dropbox grant is stored; App Key and App Secret remain operator-managed.
+                  Saving opens Dropbox so you can authorize this source with your own account. Only your renewable grant is stored; App Key and App Secret remain operator-managed.
                 </div>
               </div>
             </template>
@@ -950,6 +950,7 @@ print(response.json())</code></pre>
         <!-- Actions -->
         <div class="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
           <button
+            x-show="!needsDropboxAuthorization()"
             type="button"
             @click="testFromForm()"
             :disabled="testing || !form.integration_type"
@@ -982,7 +983,7 @@ print(response.json())</code></pre>
               <template x-if="saving">
                 <i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>
               </template>
-              <span x-text="editingIntegration ? '{{ _('common.update') }}' : '{{ _('common.save') }}'"></span>
+              <span x-text="needsDropboxAuthorization() ? 'Save & connect Dropbox' : (editingIntegration ? '{{ _('common.update') }}' : '{{ _('common.save') }}')"></span>
             </button>
           </div>
         </div>
@@ -1154,6 +1155,17 @@ function integrationsDashboard() {
       if (OAUTH_TYPES.has(intg.integration_type)) return true;
       // WATCH_FOLDER with an OAuth-backed source type
       return this._watchFolderOAuthSource(intg) !== null;
+    },
+
+    isDropboxBackedForm() {
+      return this.form.integration_type === 'DROPBOX' || (
+        this.form.integration_type === 'WATCH_FOLDER' &&
+        ((this.form.config || {}).source_type || '').toLowerCase() === 'dropbox'
+      );
+    },
+
+    needsDropboxAuthorization() {
+      return this.isDropboxBackedForm() && !(this.editingIntegration && this.editingIntegration.has_credentials);
     },
 
     oauthLink(intg) {
@@ -1356,6 +1368,7 @@ function integrationsDashboard() {
           this.formError = data.detail || 'Failed to save integration.';
           return;
         }
+        const shouldAuthorizeDropbox = this.needsDropboxAuthorization();
         // Update local list
         if (this.editingIntegration) {
           const idx = this.integrations.findIndex(i => i.id === data.id);
@@ -1364,8 +1377,13 @@ function integrationsDashboard() {
           this.integrations.push(data);
           this._recalcQuota();
         }
+        if (shouldAuthorizeDropbox) {
+          window.location.href = `/dropbox-setup?integration_id=${encodeURIComponent(data.id)}`;
+          return;
+        }
+        const wasEditing = Boolean(this.editingIntegration);
         this.closeModal();
-        this.showAlert('success', 'Saved', this.editingIntegration ? 'Integration updated.' : 'Integration added successfully.');
+        this.showAlert('success', 'Saved', wasEditing ? 'Integration updated.' : 'Integration added successfully.');
       } catch (err) {
         this.formError = `Network error: ${err.message || 'Unknown error'}. Please try again.`;
       } finally {

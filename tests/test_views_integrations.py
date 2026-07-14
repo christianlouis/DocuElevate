@@ -96,11 +96,14 @@ class TestIntegrationsDashboardView:
         assert "'ONEDRIVE'" in body
 
     def test_integrations_page_modal_info_box_per_user(self, client):
-        """The create modal info box instructs to save first then authorize."""
+        """Dropbox forms continue directly into personal OAuth after saving."""
         response = client.get("/integrations")
         assert response.status_code == 200
         body = response.text
-        assert "Save this integration first" in body
+        assert "Save & connect Dropbox" in body
+        assert "needsDropboxAuthorization" in body
+        assert "/dropbox-setup?integration_id=" in body
+        assert "app credentials remain operator-managed" in body
         assert "personal integration record" in body
 
     def test_integrations_page_contains_quota_indicators(self, client):
