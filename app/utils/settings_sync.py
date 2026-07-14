@@ -13,7 +13,9 @@ This module provides two complementary mechanisms to propagate the change:
    a Celery ``task_prerun`` signal handler.  Before each task begins the handler
    reads the Redis version key; if it has changed since the last reload it calls
    :func:`~app.utils.config_loader.reload_settings_from_db` so the worker picks
-   up the new values *before* executing the task body.
+   up the new values *before* executing the task body.  If Redis is unavailable,
+   the worker reloads from the database defensively; Redis is an optimisation,
+   never the source of truth.
 
 The Redis key used is ``docuelevate:settings_version``.  Workers cache the last
 seen version in a module-level variable to avoid redundant DB round-trips when
@@ -125,6 +127,21 @@ def register_settings_reload_signal() -> None:
                 except Exception as lang_exc:
                     logger.warning(f"Could not schedule OCR language check on worker: {lang_exc}")
         except Exception as exc:
-            logger.debug(f"Settings version check skipped: {exc}")
+            # The database remains authoritative.  A Redis outage must not pin
+            # a long-running worker to stale configuration until it restarts.
+            # Reloading once per task is deliberately more expensive, but only
+            # happens while the invalidation channel is unavailable.
+            try:
+                from app.config import settings
+                from app.utils.config_loader import reload_settings_from_db
+
+                reload_settings_from_db(settings)
+                logger.warning("Settings version check failed; reloaded worker settings from the database: %s", exc)
+            except Exception as reload_exc:
+                logger.warning(
+                    "Settings version check and database fallback reload failed: %s; %s",
+                    exc,
+                    reload_exc,
+                )
 
     logger.info("Settings reload signal handler registered on task_prerun")

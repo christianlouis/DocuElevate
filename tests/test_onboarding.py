@@ -143,13 +143,33 @@ class TestOnboardingAPI:
         assert data["profile"]["display_name"] == "Alice"
 
     def test_status_returns_completed_when_done(self, ob_client_authed, ob_session):
-        """A user with onboarding_completed=True → completed=True and step=5."""
+        """A user with onboarding_completed=True → completed=True and final journey step."""
         _make_profile(ob_session, _TEST_USER["sub"], onboarding_completed=True)
         resp = ob_client_authed.get("/api/onboarding/status")
         assert resp.status_code == 200
         data = resp.json()
         assert data["completed"] is True
-        assert data["step"] == 5
+        assert data["step"] == 8
+
+    def test_progress_persists_resume_and_skipped_topic(self, ob_client_authed, ob_session):
+        resp = ob_client_authed.post(
+            "/api/onboarding/progress",
+            json={"current_step": 6, "skipped_topic": "sources"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["step"] == 6
+        assert resp.json()["journey"]["skipped"] == ["sources"]
+
+        status_response = ob_client_authed.get("/api/onboarding/status")
+        assert status_response.json()["step"] == 6
+        assert status_response.json()["profile"]["onboarding_journey"]["skipped"] == ["sources"]
+
+    def test_progress_rejects_unknown_topic(self, ob_client_authed):
+        resp = ob_client_authed.post(
+            "/api/onboarding/progress",
+            json={"current_step": 2, "completed_topic": "credentials"},
+        )
+        assert resp.status_code == 422
 
     # ------------------------------------------------------------------
     # POST /api/onboarding/profile
@@ -287,6 +307,7 @@ class TestOnboardingAPI:
         profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
         assert profile.onboarding_completed is True
         assert profile.onboarding_completed_at is not None
+        assert profile.onboarding_current_step == 8
 
     def test_complete_uses_session_redirect_url(self, ob_client_authed, ob_session):
         """POST /complete should return the redirect_url from the session."""

@@ -5,6 +5,7 @@ authenticated users to set their profile, choose a subscription plan,
 select a storage destination, and mark onboarding as complete.
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import UserProfile
+from app.models import UserIntegration, UserProfile
 from app.utils.subscription import TIERS
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,17 @@ class StorageBody(BaseModel):
     preferred_destination: str | None = Field(default=None, max_length=50)
 
 
+_JOURNEY_TOPICS = {"welcome", "profile", "plan", "processing", "sources", "destinations", "automation", "review"}
+
+
+class ProgressBody(BaseModel):
+    """Persist a safe resume point and optional completed/skipped topic."""
+
+    current_step: int = Field(ge=1, le=8)
+    completed_topic: str | None = None
+    skipped_topic: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -77,6 +89,10 @@ class StorageBody(BaseModel):
 
 def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
     """Serialize a UserProfile to a plain dict for API responses."""
+    try:
+        journey = json.loads(profile.onboarding_journey_state or "{}")
+    except (TypeError, json.JSONDecodeError):
+        journey = {}
     return {
         "user_id": profile.user_id,
         "display_name": profile.display_name,
@@ -88,6 +104,8 @@ def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
         "onboarding_completed_at": profile.onboarding_completed_at.isoformat()
         if profile.onboarding_completed_at
         else None,
+        "onboarding_current_step": profile.onboarding_current_step or 1,
+        "onboarding_journey": journey,
     }
 
 
@@ -117,23 +135,58 @@ def get_onboarding_status(request: Request, db: DbSession) -> dict[str, Any]:
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
 
     if profile is None:
-        return {"completed": False, "step": 1, "profile": None}
+        return {"completed": False, "step": 1, "profile": None, "integrations": {"sources": 0, "destinations": 0}}
 
     # Derive a sensible current step from saved data so the wizard can resume.
-    step = 1
-    if profile.display_name or profile.contact_email:
-        step = 2
-    if profile.subscription_tier and profile.subscription_tier != "free":
-        step = 3
-    if profile.preferred_destination:
-        step = 4
+    step = profile.onboarding_current_step or 1
     if profile.onboarding_completed:
-        step = 5
+        step = 8
+
+    integrations = db.query(UserIntegration.direction).filter(UserIntegration.owner_id == user_id).all()
 
     return {
         "completed": bool(profile.onboarding_completed),
         "step": step,
         "profile": _profile_to_dict(profile),
+        "integrations": {
+            "sources": sum(1 for (direction,) in integrations if direction == "SOURCE"),
+            "destinations": sum(1 for (direction,) in integrations if direction == "DESTINATION"),
+        },
+    }
+
+
+@router.post("/progress", summary="Persist onboarding journey progress")
+def save_progress(request: Request, body: ProgressBody, db: DbSession) -> dict[str, Any]:
+    """Save a per-user resume point without accepting credentials or arbitrary settings."""
+    user_id = _get_current_user_id(request)
+    profile = _get_or_create_profile(db, user_id)
+    try:
+        journey = json.loads(profile.onboarding_journey_state or "{}")
+    except (TypeError, json.JSONDecodeError):
+        journey = {}
+
+    completed = set(journey.get("completed", []))
+    skipped = set(journey.get("skipped", []))
+    for topic, target in ((body.completed_topic, completed), (body.skipped_topic, skipped)):
+        if topic is not None:
+            if topic not in _JOURNEY_TOPICS:
+                raise HTTPException(status_code=422, detail="Unknown onboarding topic")
+            target.add(topic)
+
+    profile.onboarding_current_step = body.current_step
+    profile.onboarding_journey_state = json.dumps(
+        {"completed": sorted(completed), "skipped": sorted(skipped)}, separators=(",", ":")
+    )
+    try:
+        db.commit()
+        db.refresh(profile)
+    except Exception:
+        db.rollback()
+        raise
+    return {
+        "success": True,
+        "step": profile.onboarding_current_step,
+        "journey": _profile_to_dict(profile)["onboarding_journey"],
     }
 
 
@@ -241,6 +294,7 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
     profile = _get_or_create_profile(db, user_id)
     profile.onboarding_completed = True
     profile.onboarding_completed_at = datetime.now(tz=timezone.utc)
+    profile.onboarding_current_step = 8
 
     try:
         db.commit()

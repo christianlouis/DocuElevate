@@ -104,6 +104,7 @@ async def integrations_dashboard(request: Request, db: Session = Depends(get_db)
                 "can_add_source": can_add_source,
                 "tier_id": tier_id,
                 "tier_name": tier_name,
+                "is_preprod": bool(request.url.hostname and "preprod" in request.url.hostname.lower()),
             },
         )
     except HTTPException:

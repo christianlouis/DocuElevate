@@ -177,8 +177,8 @@ def test_reload_if_stale_redis_error(mock_reload, mock_redis, mock_connect, rese
     callback(sender="test")
 
     # Verification
-    mock_reload.assert_not_called()
-    assert "Settings version check skipped: Redis error" in caplog.text
+    mock_reload.assert_called_once()
+    assert "reloaded worker settings from the database: Redis error" in caplog.text
 
 
 @patch("app.utils.settings_sync.task_prerun.connect")

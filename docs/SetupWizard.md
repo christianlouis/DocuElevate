@@ -115,6 +115,12 @@ Once all three steps are complete you are redirected to the home page with a `?s
 3. **Harden for production** — Follow the production readiness checklist:
    - [Production Readiness Guide](ProductionReadiness.md)
 
+### The per-user onboarding journey
+
+After the operator bootstrap, each user gets a separate, resumable eight-step journey at `/onboarding`: profile, plan, processing, document sources, destinations, automation/notifications, and review. Optional integration steps can be skipped and resumed later. Progress belongs to the user profile in the database, so two users can be at different steps and no API or worker restart is required.
+
+The journey links to the personal Integrations dashboard. OAuth refresh tokens and other user credentials are encrypted in `user_integrations`; they are never written to environment variables or browser storage. On a preprod hostname, names and suggested folders created by the journey use the `DocuElevate Preprod` / `/DocuElevate Preprod` label to prevent accidental overlap with production resources.
+
 ---
 
 ## Integration-Specific Setup Pages
@@ -140,3 +146,12 @@ All non-bootstrap settings configured through the wizard can be updated at any t
 For the full list of every available configuration parameter, see the [Configuration Guide](ConfigurationGuide.md).
 
 > **Precedence order for non-bootstrap settings:** Database value → Environment variable → Default
+
+### Live configuration contract for workers
+
+- The database is authoritative for settings and personal integrations.
+- Saving a global setting updates the database and bumps `docuelevate:settings_version` in Redis.
+- Before every Celery task, a worker compares that version and reloads global settings when it changed.
+- If Redis is unavailable, the worker reloads directly from the database before the task. Redis is only an invalidation accelerator.
+- Personal integrations are loaded by ID from the database at the beginning of every job; credentials are decrypted only inside the worker process. A reauthorization or edited folder therefore affects the next job without restarting any process.
+- Adding a completely new configuration field still requires a code/schema deployment so API and worker agree on its meaning. Changing its value after deployment does not require a restart.

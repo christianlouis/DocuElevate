@@ -83,10 +83,12 @@ The OAuth method is preferred as it:
 DocuElevate includes a built-in OAuth setup wizard that makes configuration simple:
 
 1. Store `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` in the deployment secret manager.
-2. Restart or roll the API and workers so both processes receive the same app credentials.
+2. Deploy the operator app credentials to API and workers once. They are bootstrap credentials, not user configuration.
 3. Each user creates a Google Drive destination or Google Drive Watch Folder source under `/integrations`.
 4. The user clicks **Authorize**, signs into their own Google account, and grants consent.
 5. DocuElevate exchanges the code server-side and immediately saves the refresh token encrypted in the database. No application restart or refresh-token environment variable is required.
+
+Reauthorization, scope changes and folder changes take effect for the next queued job. Workers fetch the integration record at task start and refresh short-lived access tokens themselves. Global database-backed settings are version-invalidated through Redis; during a Redis outage workers fall back to a direct database reload.
 
 ### 5. Legacy system-level OAuth configuration
 

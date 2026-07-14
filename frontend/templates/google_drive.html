@@ -343,14 +343,13 @@
     <div id="oauth-env-section" class="mt-6 p-4 bg-gray-100 rounded-md {{ 'hidden' if not use_oauth else '' }}">
       <h3 class="font-medium text-lg mb-2">OAuth Configuration for Worker Nodes</h3>
       <p class="text-sm text-gray-600 mb-3">
-        Copy these environment variables to configure all worker nodes:
+        Operator app credentials are configured once. User authorizations and refresh tokens are stored encrypted in the database and workers load them at task start.
       </p>
 
       <div class="relative">
         <pre id="oauth-env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code>GOOGLE_DRIVE_USE_OAUTH=true
-GOOGLE_DRIVE_CLIENT_ID={{ client_id_value }}
-GOOGLE_DRIVE_CLIENT_SECRET={{ client_secret_value|default('YOUR_CLIENT_SECRET', true) }}
-GOOGLE_DRIVE_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
+GOOGLE_DRIVE_CLIENT_ID=YOUR_OPERATOR_CLIENT_ID
+GOOGLE_DRIVE_CLIENT_SECRET=YOUR_OPERATOR_CLIENT_SECRET
 GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}</code></pre>
 
         <button id="copy-oauth-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
@@ -359,7 +358,7 @@ GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}</code></p
       </div>
 
       <p class="text-xs text-gray-500 mt-2">
-        Add these variables to your .env file or environment configuration.
+        Do not copy user tokens into environment variables.
       </p>
     </div>
 
@@ -603,15 +602,6 @@ document.addEventListener('DOMContentLoaded', function() {
     formData.append('folder_id', folderId);
     formData.append('use_oauth', isOauthActive ? 'true' : 'false');
 
-    // If using OAuth, also include client credentials if available
-    if (isOauthActive && clientIdInput) {
-      const clientId = clientIdInput.value.trim();
-      const clientSecret = clientSecretInput ? clientSecretInput.value.trim() : '';
-
-      if (clientId) formData.append('client_id', clientId);
-      if (clientSecret) formData.append('client_secret', clientSecret);
-    }
-
     // Send the folder ID to be saved server-side
     fetch('/api/google-drive/save-settings', {
       method: 'POST',
@@ -751,40 +741,11 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         // placed in browser storage.
         return;
       }
-      // Determine which credentials to use
-      const useSystemCreds = hasSystemCredentials && useSystemCredsCheckbox && useSystemCredsCheckbox.checked;
-      const clientId = useSystemCreds ? systemClientId : clientIdInput.value.trim();
-      const clientSecret = clientSecretInput.value.trim();
-      const folderId = folderIdInput ? folderIdInput.value.trim() : '';
-
-      if (!clientId) {
-        showModal('error', 'Validation Error', 'Please enter your Client ID');
-        return;
-      }
-
-      if (!clientSecret) {
-        showModal('error', 'Validation Error', 'Please enter your Client Secret');
-        return;
-      }
-
-      // Save values to session storage for use after redirect
-      sessionStorage.setItem('google_drive_client_id', clientId);
-      sessionStorage.setItem('google_drive_client_secret', clientSecret);
-      if (useSystemCreds) {
-        sessionStorage.setItem('google_drive_use_system_creds', 'true');
-      }
-
-      // In admin mode store folder_id; in user mode the config is already set
-      if (!userMode && folderId) {
-        sessionStorage.setItem('google_drive_folder_id', folderId);
-      }
-      sessionStorage.setItem('google_drive_use_oauth', 'true');
-
-      // Create redirect URI
-      const redirectUri = `${window.location.origin}/google-drive-callback`;
-
-      // Redirect to auth start endpoint
-      window.location.href = `/google-drive-auth-start?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+      showModal(
+        'error',
+        'Create a user integration',
+        'Global browser-based OAuth setup has been retired. Create a Google Drive source or destination under Integrations and authorize it there.'
+      );
     });
   }
 
