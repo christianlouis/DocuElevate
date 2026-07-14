@@ -1687,12 +1687,22 @@ def _scan_user_google_drive_folder(
 
     try:
         if refresh_token:
-            client_id = creds.get("client_id") or settings.google_drive_client_id or ""
-            client_secret = creds.get("client_secret") or settings.google_drive_client_secret or ""
+            client_id = settings.google_drive_client_id or ""
+            client_secret = settings.google_drive_client_secret or ""
             if not client_id or not client_secret:
                 logger.warning("User Google Drive watch folder: operator app credentials are missing.")
                 return 0
-            scope = creds.get("scope") or "https://www.googleapis.com/auth/drive.readonly"
+            default_scope = (
+                "https://www.googleapis.com/auth/drive"
+                if delete_after
+                else "https://www.googleapis.com/auth/drive.readonly"
+            )
+            scope = creds.get("scope") or default_scope
+            if delete_after and "https://www.googleapis.com/auth/drive" not in scope.split():
+                logger.error(
+                    "User Google Drive watch folder: delete-after requires re-authorization with write access."
+                )
+                return 0
             credentials = OAuthCredentials(
                 None,
                 refresh_token=refresh_token,

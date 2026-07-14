@@ -34,7 +34,7 @@ End users can authorize their own Google Drive integration directly from the **I
 
 > **Note:** Only the user's refresh token, granted scope, and token endpoint are stored in the encrypted integration record. Provider app credentials remain deployment-managed. Access tokens are short-lived and are refreshed automatically in the API/worker when needed.
 
-Destination integrations request `drive.file`. Google Drive corpus sources request `drive.readonly`, allowing the selected source folder to be imported without granting write/delete access.
+Destination integrations request `drive.file`. Google Drive corpus sources request `drive.readonly`; a source explicitly configured to delete originals after successful intake requests full `drive` access because Google requires write permission for deletion.
 
 ## Method 1: OAuth Authentication Setup (System-Level)
 

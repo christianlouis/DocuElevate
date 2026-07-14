@@ -266,6 +266,7 @@ class TestGoogleDriveViews:
             mock_exchange.return_value = {
                 "refresh_token": "user-refresh-token",
                 "access_token": "short-lived-access-token",
+                "scope": "https://www.googleapis.com/auth/drive.file granted-by-google",
             }
             callback = client.get(
                 f"/google-drive-callback?code=authorization-code&state={query['state'][0]}",
@@ -279,6 +280,7 @@ class TestGoogleDriveViews:
         assert stored.credentials.startswith("enc:")
         decoded = json.loads(decrypt_value(stored.credentials))
         assert decoded["refresh_token"] == "user-refresh-token"
+        assert decoded["scope"] == "https://www.googleapis.com/auth/drive.file granted-by-google"
         assert "client_secret" not in decoded
         assert "access_token" not in decoded
 
@@ -308,3 +310,30 @@ class TestGoogleDriveViews:
 
         query = urllib.parse.parse_qs(urllib.parse.urlparse(response.headers["location"]).query)
         assert query["scope"] == ["https://www.googleapis.com/auth/drive.readonly"]
+
+    def test_delete_after_source_oauth_requests_write_scope(self, client, db_session):
+        owner_id = "oauth-delete-source@example.com"
+        integration = UserIntegration(
+            owner_id=owner_id,
+            direction="SOURCE",
+            integration_type="WATCH_FOLDER",
+            name="Drive cleanup corpus",
+            config=json.dumps({"source_type": "google_drive", "folder_id": "folder-4", "delete_after_process": True}),
+            is_active=True,
+        )
+        db_session.add(integration)
+        db_session.commit()
+
+        with (
+            patch("app.views.google_drive.get_current_owner_id", return_value=owner_id),
+            patch("app.views.google_drive.settings") as mock_settings,
+        ):
+            mock_settings.google_drive_client_id = "operator-client-id"
+            mock_settings.google_drive_client_secret = "operator-client-secret"
+            response = client.get(
+                f"/google-drive-auth-start?integration_id={integration.id}",
+                follow_redirects=False,
+            )
+
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(response.headers["location"]).query)
+        assert query["scope"] == ["https://www.googleapis.com/auth/drive"]

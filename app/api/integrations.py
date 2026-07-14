@@ -645,22 +645,34 @@ def _test_google_drive_connection(config: dict[str, Any] | None, credentials: di
 
     creds = credentials or {}
     refresh_token = creds.get("refresh_token") or ""
-    client_id = creds.get("client_id") or settings.google_drive_client_id or ""
-    client_secret = creds.get("client_secret") or settings.google_drive_client_secret or ""
+    client_id = settings.google_drive_client_id or ""
+    client_secret = settings.google_drive_client_secret or ""
     scope = creds.get("scope") or "https://www.googleapis.com/auth/drive.file"
-    if not (refresh_token and client_id and client_secret):
+    credentials_json = creds.get("credentials_json") or ""
+    if not (refresh_token and client_id and client_secret) and not credentials_json:
         return {"success": False, "message": "Google Drive authorization is incomplete"}
 
     try:
-        google_credentials = GoogleCredentials(
-            None,
-            refresh_token=refresh_token,
-            token_uri=creds.get("token_uri") or "https://oauth2.googleapis.com/token",
-            client_id=client_id,
-            client_secret=client_secret,
-            scopes=[scope],
-        )
-        google_credentials.refresh(GoogleRequest())
+        if refresh_token and client_id and client_secret:
+            google_credentials = GoogleCredentials(
+                None,
+                refresh_token=refresh_token,
+                token_uri=creds.get("token_uri") or "https://oauth2.googleapis.com/token",
+                client_id=client_id,
+                client_secret=client_secret,
+                scopes=[scope],
+            )
+            google_credentials.refresh(GoogleRequest())
+        else:
+            from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+
+            service_account_info = (
+                json.loads(credentials_json) if isinstance(credentials_json, str) else credentials_json
+            )
+            google_credentials = ServiceAccountCredentials.from_service_account_info(
+                service_account_info,
+                scopes=["https://www.googleapis.com/auth/drive.readonly"],
+            )
         service = build("drive", "v3", credentials=google_credentials, cache_discovery=False)
         account = service.about().get(fields="user(emailAddress)").execute().get("user", {}).get("emailAddress")
         return {

@@ -42,7 +42,7 @@ Configure the services that DocuElevate depends on at the infrastructure level.
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `DATABASE_URL` | Bootstrap database connection string. SQLite is fine for development; PostgreSQL is recommended for production. Read-only in the wizard because the app needs it before it can read settings. | Required deployment setting |
-| `REDIS_URL` | Redis connection URL used by the Celery task queue. | `redis://localhost:6379/0` |
+| `REDIS_URL` | Redis connection URL used by the Celery task queue. | `redis://redis:6379/0` |
 | `WORKDIR` | Filesystem path where documents are staged during processing. Must be writable by the API and Worker containers. | `/workdir` |
 | `GOTENBERG_URL` | URL of the Gotenberg service used for document-to-PDF conversion. | `http://gotenberg:3000` |
 

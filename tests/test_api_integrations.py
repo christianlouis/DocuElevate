@@ -1,5 +1,6 @@
 """Tests for the per-user integrations API (app/api/integrations.py)."""
 
+import json
 import unittest.mock
 
 import pytest
@@ -1136,6 +1137,33 @@ class TestConnectionTestEndpoint:
         data = resp.json()
         assert data["success"] is False
         assert "failed" in data["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Quota endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGoogleDriveConnectionTester:
+    def test_service_account_credentials_are_supported(self):
+        from app.api.integrations import _test_google_drive_connection
+
+        service = unittest.mock.MagicMock()
+        service.about.return_value.get.return_value.execute.return_value = {
+            "user": {"emailAddress": "service@example.com"}
+        }
+        with (
+            unittest.mock.patch("google.oauth2.service_account.Credentials.from_service_account_info") as from_info,
+            unittest.mock.patch("googleapiclient.discovery.build", return_value=service),
+        ):
+            result = _test_google_drive_connection(
+                {},
+                {"credentials_json": json.dumps({"type": "service_account", "client_email": "service@example.com"})},
+            )
+
+        assert result["success"] is True
+        from_info.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

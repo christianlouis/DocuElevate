@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 GOOGLE_DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 GOOGLE_DRIVE_READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+GOOGLE_DRIVE_FULL_SCOPE = "https://www.googleapis.com/auth/drive"
 
 
 @router.get("/google-drive-setup")
@@ -196,7 +197,9 @@ async def google_drive_callback(
         )
         credentials = {
             "refresh_token": token_data["refresh_token"],
-            "scope": pending["scope"],
+            # Persist Google's actual grant when returned; it may be narrower
+            # than the requested scope.
+            "scope": token_data.get("scope") or pending["scope"],
             "token_uri": "https://oauth2.googleapis.com/token",
         }
         integration.credentials = encrypt_value(json.dumps(credentials))
@@ -261,7 +264,14 @@ async def google_drive_auth_start(
 
     cfg = json.loads(integration.config or "{}")
     is_source = integration.direction == "SOURCE" or cfg.get("source_type") == "google_drive"
-    scope = GOOGLE_DRIVE_READONLY_SCOPE if is_source else GOOGLE_DRIVE_FILE_SCOPE
+    delete_after = bool(cfg.get("delete_after_process"))
+    scope = (
+        GOOGLE_DRIVE_FULL_SCOPE
+        if is_source and delete_after
+        else GOOGLE_DRIVE_READONLY_SCOPE
+        if is_source
+        else GOOGLE_DRIVE_FILE_SCOPE
+    )
     state = secrets.token_urlsafe(32)
     request.session["google_drive_oauth"] = {
         "integration_id": integration.id,

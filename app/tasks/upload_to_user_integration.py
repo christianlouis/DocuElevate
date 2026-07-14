@@ -169,8 +169,8 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     filename = os.path.basename(file_path)
 
     # Prefer OAuth credentials (client_id + client_secret + refresh_token)
-    client_id = creds.get("client_id") or settings.google_drive_client_id or ""
-    client_secret = creds.get("client_secret") or settings.google_drive_client_secret or ""
+    client_id = settings.google_drive_client_id or ""
+    client_secret = settings.google_drive_client_secret or ""
     refresh_token = creds.get("refresh_token") or ""
     scope = creds.get("scope") or "https://www.googleapis.com/auth/drive.file"
     credentials_json = creds.get("credentials_json") or ""
