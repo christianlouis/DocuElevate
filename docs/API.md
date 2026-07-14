@@ -136,6 +136,87 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 ## Common Endpoints
 
+### DearConcierge knowledge bridge
+
+The preproduction knowledge bridge provides one ingestion path and one
+authorization-aware retrieval contract. Interactive clients may use an existing
+OAuth session; services should use a personal API token. A dedicated shared secret
+is supported only for the controlled legacy migration sender.
+
+#### Idempotent document intake
+
+`POST /api/intake/documents` accepts a multipart document and queues the normal
+DocuElevate OCR pipeline. `idempotency_key` is scoped to the authenticated principal;
+repeating it returns the original intake instead of creating a duplicate.
+
+```bash
+curl -X POST "https://<preprod-host>/api/intake/documents" \
+  -H "Authorization: Bearer <your-api-token>" \
+  -F "file=@/path/to/document.pdf" \
+  -F "source=dearconcierge" \
+  -F "idempotency_key=dearconcierge:document:42:v1" \
+  -F 'metadata_json={"external_id":"42","folder":"Projects"}'
+```
+
+The accepted response contains `intake_id`, `state`, and `task_id`. Poll
+`GET /api/intake/documents/{intake_id}` with the same identity for durable status.
+The legacy bridge may send `X-DocuElevate-Intake-Secret` instead of a Bearer token
+when the dedicated intake secret is configured.
+
+#### Resumable Dropbox corpus import
+
+An existing, active Dropbox source integration supplies OAuth credentials. Starting
+an import is non-destructive and recursively walks the selected root. Dropbox file
+ID and revision are recorded so a restart or later run skips unchanged files.
+
+```bash
+curl -X POST "https://<preprod-host>/api/dropbox-imports/" \
+  -H "Authorization: Bearer <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"integration_id":7,"root_path":"/DocuElevate"}'
+```
+
+Poll `GET /api/dropbox-imports/{job_id}` for `discovered`, `downloaded`, `queued`,
+`skipped`, `failed`, and checkpoint state.
+
+#### Source-backed semantic retrieval
+
+Vector retrieval is available only when `VECTOR_INDEX_ENABLED=true`. Qdrant results
+are always checked against DocuElevate's authoritative owner/share rules before any
+passage is returned.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/knowledge/search` | Return ranked, cited passages visible to the caller |
+| `GET` | `/api/knowledge/documents/{file_id}` | Return authoritative OCR text and metadata for a cited document |
+| `POST` | `/api/knowledge/documents/{file_id}/index` | Rebuild one accessible document's chunks |
+| `POST` | `/api/knowledge/reindex?limit=1000` | Queue an idempotent accessible-corpus backfill |
+| `GET` | `/api/knowledge/status` | Return index health without exposing credentials |
+
+```bash
+curl -X POST "https://<preprod-host>/api/knowledge/search" \
+  -H "Authorization: Bearer <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"When does the insurance contract renew?","limit":5,"score_threshold":0.25}'
+```
+
+Each result contains a `document_id`, score, cited `text`, chunk position, source
+filename/title, and `source_url`. Use the cited-document endpoint only when the full
+OCR text is needed.
+
+#### MCP adapter contract
+
+An MCP server does not need direct database or Qdrant access. It can be a stateless
+adapter holding a scoped DocuElevate API token and expose exactly these tools:
+
+| MCP tool | DocuElevate operation | Inputs |
+|----------|------------------------|--------|
+| `search_documents` | `POST /api/knowledge/search` | `query`, optional `limit`, optional `score_threshold` |
+| `get_document` | `GET /api/knowledge/documents/{document_id}` | `document_id` |
+
+The adapter must pass through the Bearer token, preserve citations, and treat 401,
+403/404, 429, and 502 as tool errors. Authorization remains in DocuElevate.
+
 ### Pipeline Template Library
 
 Versioned processing-profile templates can be listed, validated, imported, and

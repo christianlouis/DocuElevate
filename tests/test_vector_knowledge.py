@@ -1,0 +1,248 @@
+"""Tests for chunk-level vector indexing and authorized retrieval."""
+
+from types import SimpleNamespace
+from unittest.mock import call, patch
+
+import pytest
+import requests
+from starlette.requests import Request
+
+from app.models import FileRecord
+
+
+def _file(file_id: int = 7, owner_id: str | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=file_id,
+        owner_id=owner_id,
+        filehash="file-hash",
+        original_filename="project-plan.pdf",
+        document_title="Project plan",
+        mime_type="application/pdf",
+        created_at=None,
+        ocr_text="alpha beta gamma delta epsilon zeta eta theta",
+    )
+
+
+def test_chunk_fallback_preserves_overlap():
+    from app.utils.vector_index import chunk_text
+
+    text = "0123456789" * 5
+    with patch("app.utils.vector_index._token_chunks", side_effect=RuntimeError("no tokenizer")):
+        chunks = chunk_text(text, size=5, overlap=2)
+
+    assert len(chunks) == 4
+    assert chunks[0].text[-8:] == chunks[1].text[:8]
+    assert chunks[0].token_end == 5
+    assert chunks[1].token_start == 3
+
+
+def test_index_replaces_document_after_embeddings_are_ready():
+    record = _file()
+    vectors = [[1.0, 0.0], [0.0, 1.0]]
+    with (
+        patch("app.utils.vector_index.chunk_text") as chunker,
+        patch("app.utils.vector_index.generate_embeddings", return_value=vectors),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection") as ensure,
+        patch("app.utils.vector_index.QdrantVectorIndex._request") as request,
+    ):
+        from app.utils.vector_index import QdrantVectorIndex, TextChunk
+
+        chunker.return_value = [TextChunk(0, "first", 0, 5), TextChunk(1, "second", 4, 9)]
+        assert QdrantVectorIndex().index_document(record) == 2
+
+    ensure.assert_called_once_with(2)
+    assert request.call_args_list[0].args[0:2] == (
+        "POST",
+        "/collections/docuelevate_documents/points/delete?wait=true",
+    )
+    upsert = request.call_args_list[1].args[2]
+    assert [point["payload"]["text"] for point in upsert["points"]] == ["first", "second"]
+    assert all(point["payload"]["document_id"] == 7 for point in upsert["points"])
+
+
+def test_index_skips_empty_text_and_rejects_incomplete_embedding_batches():
+    from app.utils.vector_index import QdrantVectorIndex, TextChunk, VectorIndexError
+
+    empty = _file()
+    empty.ocr_text = "  "
+    assert QdrantVectorIndex().index_document(empty) == 0
+
+    with (
+        patch(
+            "app.utils.vector_index.chunk_text",
+            return_value=[TextChunk(0, "first", 0, 5), TextChunk(1, "second", 4, 9)],
+        ),
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[1.0, 0.0]]),
+    ):
+        with pytest.raises(VectorIndexError, match="unexpected number"):
+            QdrantVectorIndex().index_document(_file())
+
+
+def test_qdrant_request_wraps_transport_and_http_errors():
+    from app.utils.vector_index import QdrantVectorIndex, VectorIndexError
+
+    index = QdrantVectorIndex()
+    response = SimpleNamespace(status_code=201, text="", json=lambda: {})
+    with patch("app.utils.vector_index.requests.request", return_value=response) as request:
+        assert index._request("PUT", "/collections/test", {"value": 1}, expected=(201,)) is response
+    request.assert_called_once_with(
+        "PUT",
+        f"{index.base_url}/collections/test",
+        headers=index.headers,
+        json={"value": 1},
+        timeout=index.timeout,
+    )
+
+    with patch(
+        "app.utils.vector_index.requests.request",
+        side_effect=requests.ConnectionError("offline"),
+    ):
+        with pytest.raises(VectorIndexError, match="request failed"):
+            index._request("GET", "/collections/test")
+
+    failure = SimpleNamespace(status_code=503, text="unavailable", json=lambda: {})
+    with patch("app.utils.vector_index.requests.request", return_value=failure):
+        with pytest.raises(VectorIndexError, match="returned 503"):
+            index._request("GET", "/collections/test")
+
+
+def test_qdrant_collection_creation_and_dimension_guard():
+    from app.utils.vector_index import QdrantVectorIndex, VectorIndexError
+
+    missing = SimpleNamespace(status_code=404)
+    with patch.object(
+        QdrantVectorIndex, "_request", side_effect=[missing, SimpleNamespace(status_code=201)]
+    ) as request:
+        QdrantVectorIndex().ensure_collection(1536)
+    assert request.call_args_list == [
+        call("GET", "/collections/docuelevate_documents", expected=(200, 404)),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents",
+            {"vectors": {"size": 1536, "distance": "Cosine"}},
+            expected=(200, 201),
+        ),
+    ]
+
+    existing = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"result": {"config": {"params": {"vectors": {"size": 768}}}}},
+    )
+    with patch.object(QdrantVectorIndex, "_request", return_value=existing):
+        with pytest.raises(VectorIndexError, match="uses 768 dimensions"):
+            QdrantVectorIndex().ensure_collection(1536)
+
+
+def test_qdrant_search_uses_legacy_fallback_and_normalizes_results():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    missing = SimpleNamespace(status_code=404, json=lambda: {})
+    legacy = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"result": {"points": [{"id": "point-1", "score": 0.9}]}},
+    )
+    with (
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[0.1, 0.2]]),
+        patch.object(QdrantVectorIndex, "_request", side_effect=[missing, legacy]) as request,
+    ):
+        result = QdrantVectorIndex().search("query", limit=3, score_threshold=0.4)
+
+    assert result == [{"id": "point-1", "score": 0.9}]
+    assert request.call_args_list[0].args[2]["query"] == [0.1, 0.2]
+    assert request.call_args_list[0].args[2]["score_threshold"] == 0.4
+    assert request.call_args_list[1].args[2]["vector"] == [0.1, 0.2]
+    assert "query" not in request.call_args_list[1].args[2]
+
+
+def test_qdrant_status_handles_missing_and_existing_collection():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    missing = SimpleNamespace(status_code=404)
+    with patch.object(QdrantVectorIndex, "_request", return_value=missing):
+        assert QdrantVectorIndex().status() == {
+            "available": True,
+            "collection_exists": False,
+            "points_count": 0,
+        }
+
+    existing = SimpleNamespace(
+        status_code=200,
+        json=lambda: {"result": {"points_count": 12, "status": "green"}},
+    )
+    with patch.object(QdrantVectorIndex, "_request", return_value=existing):
+        assert QdrantVectorIndex().status() == {
+            "available": True,
+            "collection_exists": True,
+            "points_count": 12,
+            "status": "green",
+        }
+
+
+def test_owner_filter_removes_unauthorized_vector_hits(db_session):
+    own = FileRecord(
+        id=1,
+        owner_id="alice@example.com",
+        filehash="a",
+        original_filename="own.pdf",
+        local_filename="/tmp/own.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+    )
+    other = FileRecord(
+        id=2,
+        owner_id="bob@example.com",
+        filehash="b",
+        original_filename="other.pdf",
+        local_filename="/tmp/other.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+    )
+    db_session.add_all([own, other])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {"user": {"email": "alice@example.com"}}
+
+    with patch("app.utils.user_scope.settings.multi_user_enabled", True):
+        from app.api.knowledge import _accessible_records
+
+        accessible = _accessible_records(db_session, request, [1, 2])
+
+    assert list(accessible) == [1]
+
+
+def test_search_returns_cited_authoritative_document(client, db_session):
+    record = FileRecord(
+        id=3,
+        owner_id=None,
+        filehash="c",
+        original_filename="calendar.pdf",
+        document_title="Calendar constraints",
+        local_filename="/tmp/calendar.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="The appointment is Tuesday at 10.",
+    )
+    db_session.add(record)
+    db_session.commit()
+    hits = [
+        {
+            "score": 0.91,
+            "payload": {
+                "document_id": 3,
+                "text": "The appointment is Tuesday at 10.",
+                "chunk_index": 0,
+                "chunk_count": 1,
+            },
+        }
+    ]
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits),
+    ):
+        response = client.post("/api/knowledge/search", json={"query": "When is the appointment?"})
+
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert result["document_id"] == 3
+    assert result["title"] == "Calendar constraints"
+    assert result["source_url"] == "/files/3"

@@ -129,6 +129,18 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
         except Exception as e:
             logger.warning(f"[{task_id}] Could not queue embedding task: {e}")
 
+    # 4c. Optionally mirror the completed document to a newer DocuElevate
+    # intake. Queueing is deliberately non-blocking: the legacy document stays
+    # complete even when bridge delivery later needs retries.
+    if file_id is not None and settings.document_bridge_enabled:
+        try:
+            from app.tasks.document_bridge import deliver_document_bridge
+
+            deliver_document_bridge.delay(file_id)
+            logger.info("[%s] Queued document bridge delivery for file %s", task_id, file_id)
+        except Exception as e:
+            logger.warning("[%s] Could not queue document bridge delivery: %s", task_id, e)
+
     # 5. Send Notification
     try:
         file_size = os.path.getsize(processed_file) if os.path.exists(processed_file) else 0

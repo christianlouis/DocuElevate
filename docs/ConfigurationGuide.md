@@ -25,6 +25,44 @@ Configuration is primarily done through environment variables specified in a `.e
 | `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
 | `ENABLE_FACTORY_RESET` | Show the System Reset page in the admin UI.         | `false` |
 
+### DearConcierge knowledge bridge (preproduction pilot)
+
+These settings are disabled by default. Enable them first in preproduction and keep
+Qdrant private to the cluster. Inject all tokens and secrets from the deployment's
+secret manager; do not store them in `.env` files committed to source control.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VECTOR_INDEX_ENABLED` | Enable chunk indexing and the knowledge search API. | `false` |
+| `VECTOR_INDEX_URL` | Internal Qdrant base URL. | `http://qdrant:6333` |
+| `VECTOR_INDEX_API_KEY` | Qdrant API key sent only to the internal service. | unset |
+| `VECTOR_INDEX_COLLECTION` | Qdrant collection for document chunks. | `docuelevate_documents` |
+| `VECTOR_CHUNK_TOKENS` | Target token count per chunk. | `600` |
+| `VECTOR_CHUNK_OVERLAP_TOKENS` | Token overlap between adjacent chunks. | `80` |
+| `VECTOR_INDEX_TIMEOUT_SECONDS` | Qdrant request timeout. | `30` |
+| `DOCUMENT_INTAKE_SHARED_SECRET` | Optional dedicated secret for the controlled legacy sender. | unset |
+| `DOCUMENT_INTAKE_SHARED_OWNER_ID` | Owner/principal assigned to shared-secret intake. | `legacy-bridge` |
+| `DOCUMENT_BRIDGE_ENABLED` | Send completed documents to another DocuElevate intake. | `false` |
+| `DOCUMENT_BRIDGE_URL` | Full HTTPS URL of the destination `/api/intake/documents`. | unset |
+| `DOCUMENT_BRIDGE_BEARER_TOKEN` | Preferred destination personal API token. | unset |
+| `DOCUMENT_BRIDGE_SHARED_SECRET` | Dedicated intake-secret fallback when no Bearer token is used. | unset |
+| `DOCUMENT_BRIDGE_SOURCE` | Provenance label included in deliveries. | `docuelevate-legacy` |
+
+Example preproduction service configuration (secret values omitted):
+
+```dotenv
+VECTOR_INDEX_ENABLED=true
+VECTOR_INDEX_URL=http://docuelevate-qdrant:6333
+VECTOR_INDEX_COLLECTION=docuelevate_documents
+VECTOR_CHUNK_TOKENS=600
+VECTOR_CHUNK_OVERLAP_TOKENS=80
+```
+
+The vector collection is derived state. PostgreSQL and the document work directory
+remain authoritative, so the collection can be recreated and repopulated with
+`POST /api/knowledge/reindex`. The Qdrant API key, intake secret, and bridge token
+must each be distinct from database, session, OpenAI, and OAuth client secrets.
+
 ### Batch Processing Settings
 
 Control how the `/processall` endpoint handles large batches of files to prevent overwhelming downstream APIs.

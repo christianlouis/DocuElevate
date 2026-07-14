@@ -19,6 +19,14 @@ from app.utils.step_manager import update_step_status
 logger = logging.getLogger(__name__)
 
 
+def _queue_vector_index(file_id: int) -> None:
+    if not settings.vector_index_enabled:
+        return
+    from app.tasks.vector_index import index_document_vectors
+
+    index_document_vectors.delay(file_id)
+
+
 @celery.task(base=BaseTaskWithRetry, bind=True, name="compute_document_embedding")
 def compute_document_embedding(self, file_id: int) -> dict:
     """Compute and cache the text embedding for a single document.
@@ -64,6 +72,7 @@ def compute_document_embedding(self, file_id: int) -> dict:
                 file_id=file_id,
             )
             update_step_status(db, file_id, "compute_embedding", "success", completed_at=now)
+            _queue_vector_index(file_id)
             return {"status": "skipped", "detail": "Embedding already cached"}
 
         if not file_record.ocr_text or not file_record.ocr_text.strip():
@@ -92,6 +101,7 @@ def compute_document_embedding(self, file_id: int) -> dict:
                     file_id=file_id,
                 )
                 update_step_status(db, file_id, "compute_embedding", "success", completed_at=completed)
+                _queue_vector_index(file_id)
                 return {
                     "status": "success",
                     "detail": f"Embedding computed ({len(embedding)} dimensions)",

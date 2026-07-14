@@ -120,12 +120,27 @@ def generate_embedding(text: str, model: str | None = None) -> list[float]:
     if model is None:
         model = settings.embedding_model
 
-    text = _truncate_text_for_embedding(text, model, settings.embedding_max_tokens)
-
+    model = model or settings.embedding_model
+    truncated = _truncate_text_for_embedding(text, model, settings.embedding_max_tokens)
     client = _get_embedding_client()
-    logger.debug("Generating embedding for %d chars using model=%s", len(text), model)
-    response = client.embeddings.create(input=text, model=model)
+    logger.debug("Generating embedding for %d chars using model=%s", len(truncated), model)
+    response = client.embeddings.create(input=truncated, model=model)
     return response.data[0].embedding
+
+
+def generate_embeddings(texts: list[str], model: str | None = None) -> list[list[float]]:
+    """Generate embeddings for a batch while preserving input order."""
+    if not texts:
+        return []
+    model = model or settings.embedding_model
+    truncated = [_truncate_text_for_embedding(text, model, settings.embedding_max_tokens) for text in texts]
+    client = _get_embedding_client()
+    logger.debug("Generating %d embeddings using model=%s", len(truncated), model)
+    response = client.embeddings.create(input=truncated, model=model)
+    rows = list(response.data)
+    if all(isinstance(getattr(row, "index", None), int) for row in rows):
+        rows.sort(key=lambda row: row.index)
+    return [row.embedding for row in rows]
 
 
 def cosine_similarity(vec_a: list[float], vec_b: list[float]) -> float:
