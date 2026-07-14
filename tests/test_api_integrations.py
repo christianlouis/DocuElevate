@@ -335,6 +335,32 @@ class TestUpdateIntegration:
         assert resp.status_code == 200
         assert resp.json()["config"]["host"] == "imap.new.com"
 
+    def test_selecting_dropbox_watch_folder_schedules_true_up(self, int_client):
+        source = {
+            "direction": "SOURCE",
+            "integration_type": "WATCH_FOLDER",
+            "name": "Preprod Dropbox",
+            "config": {
+                "source_type": "dropbox",
+                "folder_path": "",
+                "true_up_existing": True,
+                "preserve_source_files": True,
+            },
+            "is_active": True,
+        }
+        created = int_client.post("/api/integrations/", json=source).json()
+        selected = dict(source["config"], folder_path="/Posteingang")
+
+        with unittest.mock.patch(
+            "app.tasks.dropbox_corpus_import.queue_dropbox_watch_sync",
+            return_value={"status": "queued", "job_id": "job-1", "mode": "true-up"},
+        ) as queue:
+            response = int_client.put(f"/api/integrations/{created['id']}", json={"config": selected})
+
+        assert response.status_code == 200
+        queue.assert_called_once()
+        assert queue.call_args.args[0] == created["id"]
+
     def test_update_credentials_re_encrypts(self, int_client, int_session):
         """Updating credentials stores the new value encrypted."""
         created = int_client.post("/api/integrations/", json=_IMAP_SOURCE).json()

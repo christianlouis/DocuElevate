@@ -422,6 +422,15 @@ def update_integration(
     if not integration:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
 
+    try:
+        previous_config = json.loads(integration.config or "{}")
+    except (json.JSONDecodeError, TypeError):
+        previous_config = {}
+    if not isinstance(previous_config, dict):
+        previous_config = {}
+    previous_folder_path = str(previous_config.get("folder_path") or "").strip()
+    credentials_changed = body.credentials is not None
+
     if body.name is not None:
         integration.name = body.name
     if body.config is not None:
@@ -442,7 +451,24 @@ def update_integration(
         raise
 
     logger.info("User %s updated integration %d", owner_id, integration_id)
-    return _to_response(integration)
+    response = _to_response(integration)
+
+    current_config = response.get("config") or {}
+    current_folder_path = str(current_config.get("folder_path") or "").strip()
+    is_dropbox_true_up = (
+        integration.direction == IntegrationDirection.SOURCE
+        and integration.integration_type == IntegrationType.WATCH_FOLDER
+        and current_config.get("source_type") == "dropbox"
+        and bool(current_config.get("true_up_existing"))
+    )
+    folder_selected_now = current_folder_path and current_folder_path != previous_folder_path
+    if is_dropbox_true_up and (folder_selected_now or credentials_changed):
+        from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
+
+        queue_result = queue_dropbox_watch_sync(integration.id, db)
+        logger.info("Dropbox true-up scheduling result for integration %d: %s", integration.id, queue_result)
+
+    return response
 
 
 @router.delete("/{integration_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete an integration")

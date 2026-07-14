@@ -33,6 +33,16 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
         if config.get("source_type") != "dropbox" or not config.get("true_up_existing"):
             return {"status": "skipped", "detail": "Dropbox true-up is disabled"}
 
+        root_path = str(config.get("folder_path") or "").strip()
+        if not root_path:
+            return {"status": "skipped", "detail": "Dropbox folder has not been selected"}
+
+        credentials = _decode(integration.credentials)
+        try:
+            resolve_dropbox_oauth_credentials(credentials)
+        except ValueError:
+            return {"status": "skipped", "detail": "Dropbox authorization is incomplete"}
+
         active = (
             db.query(DropboxImportJob)
             .filter(
@@ -44,7 +54,6 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
         if active:
             return {"status": "running", "job_id": active.id}
 
-        root_path = str(config.get("folder_path") or "")
         previous = (
             db.query(DropboxImportJob)
             .filter(
