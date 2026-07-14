@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.181.1 (2026-07-14)
+
+### Bug Fixes
+
+- **dropbox**: Resolve operator OAuth credentials at runtime
+  ([`b3eced9`](https://github.com/christianlouis/DocuElevate/commit/b3eced9d69a3cd362b2070bf13df8b11559952a2))
+
+
 ## v0.181.0 (2026-07-14)
 
 ### Bug Fixes
