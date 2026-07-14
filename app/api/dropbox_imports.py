@@ -91,9 +91,9 @@ def start_dropbox_import(request: Request, body: DropboxImportCreate, db: DbSess
     db.commit()
     db.refresh(job)
 
-    from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
+    from app.tasks.dropbox_corpus_import import schedule_dropbox_corpus_import
 
-    task = run_dropbox_corpus_import.delay(job.id)
+    task = schedule_dropbox_corpus_import(job.id)
     response = _job_response(job)
     response["task_id"] = task.id
     return response

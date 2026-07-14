@@ -60,6 +60,51 @@ def test_index_replaces_document_after_embeddings_are_ready():
     assert all(point["payload"]["document_id"] == 7 for point in upsert["points"])
 
 
+def test_index_batches_large_embedding_requests_without_reordering_chunks():
+    from app.utils.vector_index import QdrantVectorIndex, TextChunk
+
+    record = _file()
+    chunks = [
+        TextChunk(0, "first", 0, 600),
+        TextChunk(1, "second", 520, 1120),
+        TextChunk(2, "third", 1040, 1640),
+    ]
+    with (
+        patch("app.utils.vector_index.chunk_text", return_value=chunks),
+        patch(
+            "app.utils.vector_index.generate_embeddings",
+            side_effect=[[[1.0, 0.0], [2.0, 0.0]], [[3.0, 0.0]]],
+        ) as embed,
+        patch("app.utils.vector_index.settings.vector_embedding_batch_tokens", 1200),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection"),
+        patch("app.utils.vector_index.QdrantVectorIndex._request") as request,
+    ):
+        assert QdrantVectorIndex().index_document(record) == 3
+
+    assert embed.call_args_list == [call(["first", "second"]), call(["third"])]
+    points = request.call_args_list[1].args[2]["points"]
+    assert [point["vector"] for point in points] == [[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]]
+
+
+def test_index_keeps_old_points_when_a_later_embedding_batch_fails():
+    from app.utils.vector_index import QdrantVectorIndex, TextChunk
+
+    chunks = [TextChunk(0, "first", 0, 600), TextChunk(1, "second", 600, 1200)]
+    with (
+        patch("app.utils.vector_index.chunk_text", return_value=chunks),
+        patch(
+            "app.utils.vector_index.generate_embeddings",
+            side_effect=[[[1.0, 0.0]], RuntimeError("provider unavailable")],
+        ),
+        patch("app.utils.vector_index.settings.vector_embedding_batch_tokens", 600),
+        patch("app.utils.vector_index.QdrantVectorIndex._request") as request,
+    ):
+        with pytest.raises(RuntimeError, match="provider unavailable"):
+            QdrantVectorIndex().index_document(_file())
+
+    request.assert_not_called()
+
+
 def test_index_skips_empty_text_and_rejects_incomplete_embedding_batches():
     from app.utils.vector_index import QdrantVectorIndex, TextChunk, VectorIndexError
 

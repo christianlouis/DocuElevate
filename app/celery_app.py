@@ -20,6 +20,14 @@ celery = Celery(
 # Optionally add this line to retain connection retry behavior at startup:
 celery.conf.broker_connection_retry_on_startup = True
 
+# Redis emulates priorities with separate lists.  Explicitly enable priority
+# ordering so normal priority-0 uploads are consumed before priority-9 corpus
+# backfills on the shared document queue.
+celery.conf.broker_transport_options = {
+    "queue_order_strategy": "priority",
+    "priority_steps": list(range(10)),
+}
+
 # Set the default queue and routing so that tasks are enqueued on "document_processor"
 celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {

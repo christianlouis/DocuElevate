@@ -1,11 +1,56 @@
 """Comprehensive unit tests for app/tasks/extract_metadata_with_gpt.py module."""
 
 import json
+import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.tasks.extract_metadata_with_gpt import extract_json_from_text, extract_metadata_with_gpt
+from app.tasks.extract_metadata_with_gpt import (
+    _sample_text_for_metadata,
+    extract_json_from_text,
+    extract_metadata_with_gpt,
+)
+
+
+@pytest.mark.unit
+def test_metadata_input_sampling_keeps_front_and_short_ending():
+    text = "DOCUMENT_START " + " ".join(f"item-{index}" for index in range(10000)) + " DOCUMENT_END"
+
+    sampled, original_tokens, sampled_tokens = _sample_text_for_metadata(text, "gpt-4o-mini", 1000)
+
+    assert original_tokens > sampled_tokens
+    assert sampled_tokens <= 1000
+    assert sampled.startswith("DOCUMENT_START")
+    assert "[Document ending]" in sampled
+    assert sampled.endswith("DOCUMENT_END")
+
+
+@pytest.mark.unit
+def test_metadata_input_sampling_leaves_small_document_unchanged():
+    text = "A short invoice"
+
+    sampled, original_tokens, sampled_tokens = _sample_text_for_metadata(text, "gpt-4o-mini", 1000)
+
+    assert sampled == text
+    assert original_tokens == sampled_tokens
+
+
+@pytest.mark.unit
+def test_metadata_input_character_fallback_preserves_exact_document_tail():
+    text = "A" * 3500 + "EXACT_DOCUMENT_END"
+
+    with patch.dict(sys.modules, {"tiktoken": None}):
+        sampled, original_tokens, sampled_tokens = _sample_text_for_metadata(
+            text,
+            "unknown-model",
+            1000,
+        )
+
+    assert len(sampled) == 3000
+    assert sampled.endswith("EXACT_DOCUMENT_END")
+    assert "[Document ending]" in sampled
+    assert original_tokens > sampled_tokens
 
 
 @pytest.mark.unit

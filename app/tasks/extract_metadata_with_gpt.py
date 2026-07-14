@@ -19,6 +19,45 @@ from app.utils.filename_utils import VALID_FILENAME_RE
 logger = logging.getLogger(__name__)
 
 
+def _sample_text_for_metadata(text: str, model: str, max_tokens: int) -> tuple[str, int, int]:
+    """Fit long documents into the metadata prompt while retaining coverage."""
+    if not text:
+        return text, 0, 0
+    max_tokens = max(1000, int(max_tokens))
+    try:
+        import tiktoken
+
+        try:
+            encoding = tiktoken.encoding_for_model(model)
+        except KeyError:
+            encoding = tiktoken.get_encoding("cl100k_base")
+        tokens = encoding.encode(text)
+        original_count = len(tokens)
+        if original_count <= max_tokens:
+            return text, original_count, original_count
+
+        marker_budget = 32
+        content_budget = max_tokens - marker_budget
+        head_size = int(content_budget * 0.88)
+        tail_size = content_budget - head_size
+        parts = [encoding.decode(tokens[:head_size])]
+        parts.append("\n\n[Document ending]\n" + encoding.decode(tokens[-tail_size:]))
+        sampled_tokens = encoding.encode("".join(parts))[:max_tokens]
+        return encoding.decode(sampled_tokens), original_count, len(sampled_tokens)
+    except Exception:  # noqa: BLE001
+        # A conservative character fallback keeps the LLM request bounded even
+        # when the optional tokenizer is unavailable.
+        char_limit = max_tokens * 3
+        if len(text) <= char_limit:
+            estimated = (len(text) + 2) // 3
+            return text, estimated, estimated
+        tail_size = char_limit // 8
+        marker = "\n\n[Document ending]\n"
+        head_size = char_limit - tail_size - len(marker)
+        sampled = text[:head_size] + marker + text[-tail_size:]
+        return sampled, (len(text) + 2) // 3, (len(sampled) + 2) // 3
+
+
 def extract_json_from_text(text):
     """
     Try to extract a JSON object from the text.
@@ -71,6 +110,28 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
                 if file_record:
                     file_id = file_record.id
 
+    model = settings.ai_model or settings.openai_model
+    metadata_text, original_tokens, sampled_tokens = _sample_text_for_metadata(
+        cleaned_text,
+        model,
+        settings.metadata_max_input_tokens,
+    )
+    if sampled_tokens < original_tokens:
+        logger.info(
+            "[%s] Sampled metadata input from %d to %d tokens for %s",
+            task_id,
+            original_tokens,
+            sampled_tokens,
+            filename,
+        )
+        log_task_progress(
+            task_id,
+            "metadata_input_sampling",
+            "success",
+            f"Sampled metadata input from {original_tokens} to {sampled_tokens} tokens",
+            file_id=file_id,
+        )
+
     prompt = (
         "You are a specialized document analyzer trained to extract structured metadata from documents.\n"
         "Your task is to analyze the given text and return a well-structured JSON object.\n\n"
@@ -98,9 +159,14 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         "- **OCR Correction**: Assume the text has been corrected for OCR errors.\n"
         "- **Tagging**: Max 4 tags, avoiding generic or overly specific terms.\n"
         "- **Title**: Concise, no addresses, and contains key identifying features.\n"
-        "- **Date Selection**: Use the most relevant date if multiple are found.\n"
+        "- **Date Selection**: Prefer an explicit document-level date in the header "
+        "(such as report date, invoice date, or letter date) over line-item, due, completion, "
+        "or historical dates. Infer ambiguous numeric date order from unambiguous dates elsewhere "
+        "in the same document.\n"
+        "- **Document Parties**: Extract sender and recipient only from document-level authorship or "
+        "addressing. Do not use a report title, scope, or arbitrary person from a table as a party.\n"
         "- **Output Language**: Maintain the document's original language.\n\n"
-        f"Extracted text:\n{cleaned_text}\n\n"
+        f"Extracted text:\n{metadata_text}\n\n"
         "Return only valid JSON with no additional commentary.\n"
     )
 
@@ -108,7 +174,6 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         logger.info(f"[{task_id}] Sending classification request for {filename}...")
         log_task_progress(task_id, "call_ai_provider", "in_progress", "Calling AI provider API", file_id=file_id)
         provider = get_ai_provider()
-        model = settings.ai_model or settings.openai_model
         content = provider.chat_completion(
             messages=[
                 {"role": "system", "content": "You are an intelligent document classifier."},

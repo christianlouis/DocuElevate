@@ -5,6 +5,9 @@ import logging
 import os
 import uuid
 
+import redis
+from celery.result import AsyncResult
+
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
@@ -16,6 +19,50 @@ from app.utils.encryption import decrypt_value
 from app.utils.filename_utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
+
+_CELERY_QUEUES = ("document_processor", "default", "celery")
+
+
+def _pending_queue_depth() -> int | None:
+    """Return pending interactive pipeline work, failing open if Redis is unavailable."""
+    try:
+        client = redis.Redis.from_url(
+            settings.redis_url,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        return sum(int(client.llen(queue)) for queue in _CELERY_QUEUES)
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not inspect queue depth before corpus backfill", exc_info=True)
+        return None
+
+
+def schedule_dropbox_corpus_import(job_id: str, *, countdown: int = 0) -> AsyncResult:
+    """Schedule low-priority corpus coordination without blocking interactive uploads."""
+    return run_dropbox_corpus_import.apply_async(
+        args=[job_id],
+        countdown=countdown,
+        priority=settings.corpus_backfill_task_priority,
+    )
+
+
+def _bounded_config_int(
+    config: dict,
+    key: str,
+    default: int,
+    *,
+    minimum: int,
+    maximum: int | None = None,
+) -> int:
+    """Return a validated integer integration override or the global default."""
+    raw_value = config.get(key)
+    try:
+        value = int(raw_value) if raw_value not in (None, "") else default
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid %s integration override: %r", key, raw_value)
+        value = default
+    value = max(minimum, value)
+    return min(value, maximum) if maximum is not None else value
 
 
 def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
@@ -81,7 +128,7 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
         if owns_session:
             db.close()
 
-    run_dropbox_corpus_import.delay(job_id)
+    schedule_dropbox_corpus_import(job_id)
     return {"status": "queued", "job_id": job_id, "mode": mode}
 
 
@@ -228,14 +275,53 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
         if not integration or not integration.is_active:
             raise RuntimeError("Dropbox source integration is missing or inactive")
 
+        try:
+            config = json.loads(integration.config or "{}")
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+        if not isinstance(config, dict):
+            config = {}
+        high_watermark = _bounded_config_int(
+            config,
+            "backfill_queue_high_watermark",
+            settings.corpus_backfill_queue_high_watermark,
+            minimum=1,
+        )
+        queue_depth = _pending_queue_depth()
+        if queue_depth is not None and queue_depth >= high_watermark:
+            job.state = "queued"
+            job.error = f"Paused for queue backpressure at depth {queue_depth}"
+            db.commit()
+            delay = _bounded_config_int(
+                config,
+                "backfill_resume_delay_seconds",
+                settings.corpus_backfill_resume_delay_seconds,
+                minimum=1,
+            )
+            schedule_dropbox_corpus_import(job.id, countdown=delay)
+            return {
+                "status": "paused",
+                "job_id": job.id,
+                "queue_depth": queue_depth,
+                "resume_in_seconds": delay,
+            }
+
         job.state = "running"
+        job.error = None
         db.commit()
         client = _dropbox_client(integration)
         if job.cursor:
             page = client.files_list_folder_continue(job.cursor)
         else:
             root = "" if job.root_path in {"", "/"} else job.root_path
-            page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=2000)
+            batch_size = _bounded_config_int(
+                config,
+                "backfill_batch_size",
+                settings.corpus_backfill_batch_size,
+                minimum=1,
+                maximum=2000,
+            )
+            page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=batch_size)
 
         for entry in page.entries:
             if not isinstance(entry, dropbox.files.FileMetadata):
@@ -253,6 +339,10 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 job.skipped += 1
             else:
                 job.failed += 1
+            # Persist each enqueued document before moving on. If the worker is
+            # interrupted, Dropbox returns the same page and idempotency skips
+            # the already committed entries instead of creating orphan tasks.
+            db.commit()
 
         job.cursor = page.cursor
         job.state = "running" if page.has_more else "completed"
@@ -267,5 +357,5 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
         }
 
     if page.has_more:
-        run_dropbox_corpus_import.delay(job_id)
+        schedule_dropbox_corpus_import(job_id)
     return result
