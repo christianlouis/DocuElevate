@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.182.0 (2026-07-14)
+
+### Bug Fixes
+
+- **integrations**: Keep Dropbox true-up user-configured
+  ([#1039](https://github.com/christianlouis/DocuElevate/pull/1039),
+  [`3531d12`](https://github.com/christianlouis/DocuElevate/commit/3531d1258b12a6d2ea05f37c1789afc7507dc632))
+
+### Features
+
+- **integrations**: Add safe OAuth folder selection
+  ([#1039](https://github.com/christianlouis/DocuElevate/pull/1039),
+  [`3531d12`](https://github.com/christianlouis/DocuElevate/commit/3531d1258b12a6d2ea05f37c1789afc7507dc632))
+
+- **integrations**: Add vector destination and Dropbox true-up
+  ([#1039](https://github.com/christianlouis/DocuElevate/pull/1039),
+  [`3531d12`](https://github.com/christianlouis/DocuElevate/commit/3531d1258b12a6d2ea05f37c1789afc7507dc632))
+
+- **integrations**: Connect Dropbox through OAuth on save
+  ([#1039](https://github.com/christianlouis/DocuElevate/pull/1039),
+  [`3531d12`](https://github.com/christianlouis/DocuElevate/commit/3531d1258b12a6d2ea05f37c1789afc7507dc632))
+
+
 ## v0.181.1 (2026-07-14)
 
 ### Bug Fixes
