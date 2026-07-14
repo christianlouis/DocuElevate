@@ -4,6 +4,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from app.models import DropboxImportJob, IntegrationDirection, IntegrationType, UserIntegration
 
 
@@ -35,6 +37,7 @@ def test_dropbox_import_start_queues_owned_source(client, db_session):
     delay.assert_called_once()
 
 
+@pytest.mark.integration
 def test_dropbox_import_rejects_invalid_integration_config(client, db_session):
     integration = _integration(db_session)
     integration.config = "not-json"
@@ -88,6 +91,7 @@ def test_dropbox_file_revision_is_idempotent(db_session, tmp_path):
     assert delay.call_count == 2
 
 
+@pytest.mark.unit
 def test_dropbox_import_removes_download_when_queueing_fails(db_session, tmp_path):
     integration = _integration(db_session)
     job = DropboxImportJob(
@@ -114,11 +118,7 @@ def test_dropbox_import_removes_download_when_queueing_fails(db_session, tmp_pat
     ):
         from app.tasks.dropbox_corpus_import import _import_file
 
-        try:
+        with pytest.raises(RuntimeError, match="queue unavailable"):
             _import_file(db_session, job, integration, client, entry)
-        except RuntimeError as exc:
-            assert str(exc) == "queue unavailable"
-        else:
-            raise AssertionError("queue failure was not propagated")
 
     assert not list(tmp_path.glob("dropbox_*"))
