@@ -60,6 +60,24 @@ def test_index_replaces_document_after_embeddings_are_ready():
     assert all(point["payload"]["document_id"] == 7 for point in upsert["points"])
 
 
+def test_index_skips_empty_text_and_rejects_incomplete_embedding_batches():
+    from app.utils.vector_index import QdrantVectorIndex, TextChunk, VectorIndexError
+
+    empty = _file()
+    empty.ocr_text = "  "
+    assert QdrantVectorIndex().index_document(empty) == 0
+
+    with (
+        patch(
+            "app.utils.vector_index.chunk_text",
+            return_value=[TextChunk(0, "first", 0, 5), TextChunk(1, "second", 4, 9)],
+        ),
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[1.0, 0.0]]),
+    ):
+        with pytest.raises(VectorIndexError, match="unexpected number"):
+            QdrantVectorIndex().index_document(_file())
+
+
 def test_qdrant_request_wraps_transport_and_http_errors():
     from app.utils.vector_index import QdrantVectorIndex, VectorIndexError
 
