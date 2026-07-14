@@ -137,6 +137,40 @@ class TestUploadToUserIntegration:
 
     @patch("app.tasks.upload_to_user_integration.log_task_progress")
     @patch("app.tasks.upload_to_user_integration.SessionLocal")
+    def test_next_job_reads_updated_credentials_without_worker_restart(
+        self, mock_session_local, mock_log_progress, tmp_path
+    ):
+        """Every task invocation reads the integration row again from the database."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+
+        from app.models import IntegrationType
+        from app.tasks.upload_to_user_integration import _UPLOAD_HANDLERS
+
+        before = _make_integration(
+            int_id=33,
+            int_type=IntegrationType.S3,
+            creds_dict={"access_key_id": "first", "secret_access_key": "secret"},
+        )
+        after = _make_integration(
+            int_id=33,
+            int_type=IntegrationType.S3,
+            creds_dict={"access_key_id": "second", "secret_access_key": "secret"},
+        )
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.side_effect = [before, before, after, after]
+        handler = MagicMock(return_value={"status": "Completed"})
+
+        with patch.dict(_UPLOAD_HANDLERS, {IntegrationType.S3: handler}):
+            _run_upload_task(str(test_file), integration_id=33)
+            _run_upload_task(str(test_file), integration_id=33)
+
+        assert handler.call_args_list[0].args[2]["access_key_id"] == "first"
+        assert handler.call_args_list[1].args[2]["access_key_id"] == "second"
+
+    @patch("app.tasks.upload_to_user_integration.log_task_progress")
+    @patch("app.tasks.upload_to_user_integration.SessionLocal")
     def test_persists_last_used_at_on_success(self, mock_session_local, mock_log_progress, tmp_path):
         """On success, last_used_at is updated and last_error is cleared."""
         test_file = tmp_path / "doc.pdf"

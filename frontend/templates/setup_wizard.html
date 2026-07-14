@@ -101,7 +101,23 @@
               {{ setting.description }}
             </p>
 
-            {% if setting.key == 'session_secret' %}
+            {% if setting.bootstrap %}
+            <div class="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              <strong>Deployment bootstrap setting.</strong> {{ setting.bootstrap_reason }}
+            </div>
+            {% endif %}
+
+            {% if setting.bootstrap %}
+            <input
+              type="password"
+              id="{{ setting.key }}"
+              value="{% if setting.current_value %}configured{% endif %}"
+              disabled
+              class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
+              aria-describedby="{{ setting.key }}-bootstrap-help"
+            />
+            <p id="{{ setting.key }}-bootstrap-help" class="mt-1 text-xs text-gray-500">Source: deployment environment. The value is intentionally not copied into the application database.</p>
+            {% elif setting.key == 'session_secret' %}
             <!-- Special handling for session_secret with auto-generate -->
             <div class="space-y-2">
               <div class="flex items-center space-x-4">

@@ -1031,6 +1031,7 @@ print(response.json())</code></pre>
 
 <script>
 function integrationsDashboard() {
+  const PREPROD_PATH = {{ ('/DocuElevate Preprod' if is_preprod else '/DocuElevate') | tojson }};
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
   const DEST_TYPES = ['S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
   const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
@@ -1169,6 +1170,11 @@ function integrationsDashboard() {
         console.error('Failed to load integrations', err);
       } finally {
         this.loading = false;
+        const onboardingDirection = new URLSearchParams(window.location.search).get('onboarding');
+        if (onboardingDirection === 'source' || onboardingDirection === 'destination') {
+          this.openCreateModal();
+          this.form.direction = onboardingDirection.toUpperCase();
+        }
       }
     },
 
@@ -1199,22 +1205,22 @@ function integrationsDashboard() {
         this.form.config = { host: '', port: 993, username: '', use_ssl: true, delete_after_process: false, gmail_apply_labels: true };
         this.form.credentials = { password: '' };
       } else if (this.form.integration_type === 'S3') {
-        this.form.config = { bucket: '', region: 'us-east-1', folder_prefix: '', endpoint_url: '' };
+        this.form.config = { bucket: '', region: 'us-east-1', folder_prefix: PREPROD_PATH.replace(/^\//, '') + '/', endpoint_url: '' };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (this.form.integration_type === 'WEBDAV' || this.form.integration_type === 'NEXTCLOUD') {
-        this.form.config = { url: '', folder: '' };
+        this.form.config = { url: '', folder: PREPROD_PATH };
         this.form.credentials = { username: '', password: '' };
       } else if (this.form.integration_type === 'FTP' || this.form.integration_type === 'SFTP') {
-        this.form.config = { host: '', port: this.form.integration_type === 'SFTP' ? 22 : 21, folder: '' };
+        this.form.config = { host: '', port: this.form.integration_type === 'SFTP' ? 22 : 21, folder: PREPROD_PATH };
         this.form.credentials = { username: '', password: '' };
       } else if (this.form.integration_type === 'DROPBOX' || this.form.integration_type === 'GOOGLE_DRIVE' || this.form.integration_type === 'ONEDRIVE') {
-        this.form.config = { folder: '' };
+        this.form.config = { folder: PREPROD_PATH };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'EMAIL') {
         this.form.config = { recipient: '' };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'WATCH_FOLDER') {
-        this.form.config = { source_type: 'local', folder_path: '', delete_after_process: false };
+        this.form.config = { source_type: 'local', folder_path: PREPROD_PATH, delete_after_process: false };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'PAPERLESS') {
         this.form.config = { url: '' };
@@ -1227,24 +1233,24 @@ function integrationsDashboard() {
       const dap = this.form.config.delete_after_process || false;
       this.form.credentials = {};
       if (st === 'local') {
-        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: PREPROD_PATH, delete_after_process: dap };
       } else if (st === 's3') {
         this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', delete_after_process: dap };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
-        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: PREPROD_PATH, delete_after_process: dap };
         this.form.credentials = { refresh_token: '', app_key: '', app_secret: '' };
       } else if (st === 'google_drive') {
         this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
         this.form.credentials = { credentials_json: '' };
       } else if (st === 'onedrive') {
-        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: PREPROD_PATH, delete_after_process: dap };
         this.form.credentials = { refresh_token: '', client_id: '', client_secret: '' };
       } else if (st === 'nextcloud') {
-        this.form.config = { source_type: st, url: '', folder_path: '', delete_after_process: dap };
+        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
       } else if (st === 'webdav') {
-        this.form.config = { source_type: st, url: '', folder_path: '', delete_after_process: dap };
+        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
       }
     },
@@ -1379,21 +1385,10 @@ function integrationsDashboard() {
     async testSavedIntegration(intg) {
       this.testingId = intg.id;
       try {
-        // Retrieve saved credentials to test
-        const credsResp = await fetch(`/api/integrations/${intg.id}/credentials`);
-        if (!credsResp.ok) {
-          this.showAlert('error', 'Test Failed', 'Could not retrieve saved credentials for testing.');
-          return;
-        }
-        const creds = await credsResp.json();
-        const resp = await fetch('/api/integrations/test', {
+        // Stored credentials stay server-side throughout the test.
+        const resp = await fetch(`/api/integrations/${intg.id}/test`, {
           method: 'POST',
-          headers: authHeaders(true),
-          body: JSON.stringify({
-            integration_type: intg.integration_type,
-            config: intg.config,
-            credentials: creds,
-          }),
+          headers: authHeaders(false),
         });
         const data = await resp.json();
         if (data.success) {

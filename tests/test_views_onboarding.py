@@ -628,7 +628,9 @@ class TestOnboardingPage:
             context = call_args[0][1]
             assert context["request"] is mock_req
             assert context["user"] == user
-            assert context["configured_destinations"] == [{"id": "s3"}]
+            assert context["configured_destinations"] == []
+            assert context["legacy_destinations"] == [{"id": "s3"}]
+            assert context["instance_label"] == "DocuElevate"
             assert context["tiers"] == ["free"]
         finally:
             db.close()

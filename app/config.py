@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env")
 
     database_url: str
-    redis_url: str
+    redis_url: str = "redis://redis:6379/0"
 
     # Database connection-pool tuning (ignored for SQLite, which uses NullPool).
     db_pool_size: int = Field(
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
         default=1800,
         description="Recycle (close and reopen) connections after this many seconds to avoid stale connections.",
     )
-    openai_api_key: str
+    openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"  # Default to OpenAI's endpoint
     openai_model: str = "gpt-4o-mini"  # Default model
 
@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
     # Azure OpenAI API version (used when ai_provider="azure")
     azure_openai_api_version: str = "2024-02-01"
-    workdir: str
+    workdir: str = "/workdir"
     debug: bool = False  # Default to False
 
     # Logging level for the application.  Accepts standard Python level names:
@@ -165,10 +165,10 @@ class Settings(BaseSettings):
     evernote_default_tags: Optional[str] = None
     evernote_include_metadata: bool = True
 
-    azure_ai_key: str
-    azure_region: str
-    azure_endpoint: str
-    gotenberg_url: str
+    azure_ai_key: str = ""
+    azure_region: str = ""
+    azure_endpoint: str = ""
+    gotenberg_url: str = "http://gotenberg:3000"
 
     # ---------------------------------------------------------------------------
     # OCR provider settings

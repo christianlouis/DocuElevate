@@ -1,5 +1,6 @@
 """Tests for the per-user integrations API (app/api/integrations.py)."""
 
+import json
 import unittest.mock
 
 import pytest
@@ -405,44 +406,25 @@ class TestDeleteIntegration:
 
 
 @pytest.mark.integration
-class TestGetIntegrationCredentials:
-    """Tests for GET /api/integrations/{id}/credentials."""
+class TestIntegrationCredentialIsolation:
+    """Stored credentials must never be returned to the browser."""
 
-    def test_returns_decrypted_credentials(self, int_client):
-        """Credentials endpoint returns the decrypted dict."""
+    def test_decrypted_credentials_endpoint_does_not_exist(self, int_client):
         created = int_client.post("/api/integrations/", json=_IMAP_SOURCE).json()
         resp = int_client.get(f"/api/integrations/{created['id']}/credentials")
-        assert resp.status_code == 200
-        creds = resp.json()["credentials"]
-        assert creds["password"] == "s3cr3t"  # noqa: S105
-
-    def test_returns_empty_dict_when_no_credentials(self, int_client):
-        """No credentials stored returns empty dict."""
-        payload = dict(_IMAP_SOURCE, credentials=None)
-        created = int_client.post("/api/integrations/", json=payload).json()
-        resp = int_client.get(f"/api/integrations/{created['id']}/credentials")
-        assert resp.status_code == 200
-        assert resp.json()["credentials"] == {}
-
-    def test_not_found(self, int_client):
-        """Non-existent integration returns 404."""
-        resp = int_client.get("/api/integrations/9999/credentials")
         assert resp.status_code == 404
 
-    def test_other_users_credentials_returns_404(self, int_client, int_session):
-        """Cannot retrieve another user's credentials."""
-        other_integration = UserIntegration(
-            owner_id=_OTHER_OWNER,
-            direction="SOURCE",
-            integration_type="IMAP",
-            name="Other Mailbox",
-            credentials='{"password": "secret"}',
-            is_active=True,
-        )
-        int_session.add(other_integration)
-        int_session.commit()
-        resp = int_client.get(f"/api/integrations/{other_integration.id}/credentials")
-        assert resp.status_code == 404
+    def test_saved_connection_test_decrypts_only_on_server(self, int_client):
+        mock_test = unittest.mock.MagicMock(return_value={"success": True, "message": "IMAP connection successful"})
+        created = int_client.post("/api/integrations/", json=_IMAP_SOURCE).json()
+
+        with unittest.mock.patch.dict("app.api.integrations._CONNECTION_TESTERS", {"IMAP": mock_test}):
+            resp = int_client.post(f"/api/integrations/{created['id']}/test")
+
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert "s3cr3t" not in resp.text
+        mock_test.assert_called_once()
 
 
 @pytest.mark.unit
@@ -1155,6 +1137,33 @@ class TestConnectionTestEndpoint:
         data = resp.json()
         assert data["success"] is False
         assert "failed" in data["message"].lower()
+
+
+# ---------------------------------------------------------------------------
+# Quota endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestGoogleDriveConnectionTester:
+    def test_service_account_credentials_are_supported(self):
+        from app.api.integrations import _test_google_drive_connection
+
+        service = unittest.mock.MagicMock()
+        service.about.return_value.get.return_value.execute.return_value = {
+            "user": {"emailAddress": "service@example.com"}
+        }
+        with (
+            unittest.mock.patch("google.oauth2.service_account.Credentials.from_service_account_info") as from_info,
+            unittest.mock.patch("googleapiclient.discovery.build", return_value=service),
+        ):
+            result = _test_google_drive_connection(
+                {},
+                {"credentials_json": json.dumps({"type": "service_account", "client_email": "service@example.com"})},
+            )
+
+        assert result["success"] is True
+        from_info.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

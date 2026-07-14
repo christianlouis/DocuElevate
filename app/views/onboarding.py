@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.config import settings as _settings
-from app.models import UserProfile
+from app.models import UserIntegration, UserProfile
 from app.utils.subscription import get_all_tiers
 from app.views.base import APIRouter, get_db, require_login, templates
 
@@ -79,8 +79,28 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
 
             return RedirectResponse(url="/upload", status_code=302)
 
-    configured_destinations = _get_configured_destinations(_settings)
+    user_integrations: list[UserIntegration] = []
+    if user_id:
+        user_integrations = (
+            db.query(UserIntegration)
+            .filter(UserIntegration.owner_id == user_id, UserIntegration.is_active.is_(True))
+            .order_by(UserIntegration.direction, UserIntegration.name)
+            .all()
+        )
+    # Per-user integrations are the normal multi-user path.  Global settings
+    # remain visible only as legacy instance capabilities during migration.
+    configured_destinations = [
+        {
+            "id": integration.integration_type.lower(),
+            "name": integration.name,
+            "icon": "fas fa-cloud",
+        }
+        for integration in user_integrations
+        if integration.direction == "DESTINATION"
+    ]
+    legacy_destinations = _get_configured_destinations(_settings)
     tiers = get_all_tiers(db)
+    is_preprod = "preprod" in request.url.hostname.lower() if request.url.hostname else False
 
     return templates.TemplateResponse(
         "onboarding.html",
@@ -88,6 +108,11 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "user": user,
             "configured_destinations": configured_destinations,
+            "legacy_destinations": legacy_destinations,
+            "integration_sources": [i for i in user_integrations if i.direction == "SOURCE"],
+            "integration_destinations": [i for i in user_integrations if i.direction == "DESTINATION"],
+            "instance_label": "DocuElevate Preprod" if is_preprod else "DocuElevate",
+            "suggested_storage_path": "/DocuElevate Preprod" if is_preprod else "/DocuElevate",
             "tiers": tiers,
         },
     )

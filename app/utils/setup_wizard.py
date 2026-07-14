@@ -29,6 +29,8 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "default": "sqlite:///./app/database.db",
             "wizard_step": 1,
             "wizard_category": "Core Infrastructure",
+            "bootstrap": True,
+            "bootstrap_reason": "Required before DocuElevate can open the settings database; configure DATABASE_URL in the deployment secret.",
         },
         {
             "key": "redis_url",
@@ -69,6 +71,8 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "default": None,  # Should be generated
             "wizard_step": 2,
             "wizard_category": "Security",
+            "bootstrap": True,
+            "bootstrap_reason": "Must remain stable across restarts to decrypt database-stored credentials; configure SESSION_SECRET in the deployment secret.",
         },
         {
             "key": "admin_username",

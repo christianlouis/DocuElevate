@@ -19,7 +19,8 @@ S3          credentials = {"access_key_id", "secret_access_key"}
             config      = {"bucket", "region", "endpoint_url", "folder_prefix"}
 
 GOOGLE_DRIVE
-  OAuth     credentials = {"client_id", "client_secret", "refresh_token"}
+  OAuth     credentials = {"refresh_token", "scope"}; provider app
+            client_id/client_secret come from operator settings
             config      = {"folder_id"}
   SA        credentials = {"credentials_json"}
             config      = {"folder_id"}
@@ -58,6 +59,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from app.celery_app import celery
+from app.config import settings
 from app.database import SessionLocal
 from app.models import IntegrationType, UserIntegration
 from app.tasks.retry_config import UploadTaskWithRetry
@@ -167,9 +169,10 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     filename = os.path.basename(file_path)
 
     # Prefer OAuth credentials (client_id + client_secret + refresh_token)
-    client_id = creds.get("client_id") or ""
-    client_secret = creds.get("client_secret") or ""
+    client_id = settings.google_drive_client_id or ""
+    client_secret = settings.google_drive_client_secret or ""
     refresh_token = creds.get("refresh_token") or ""
+    scope = creds.get("scope") or "https://www.googleapis.com/auth/drive.file"
     credentials_json = creds.get("credentials_json") or ""
 
     if client_id and client_secret and refresh_token:
@@ -182,7 +185,7 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
             token_uri="https://oauth2.googleapis.com/token",
             client_id=client_id,
             client_secret=client_secret,
-            scopes=["https://www.googleapis.com/auth/drive.file"],
+            scopes=[scope],
         )
         google_creds.refresh(Request())
         service = build("drive", "v3", credentials=google_creds)

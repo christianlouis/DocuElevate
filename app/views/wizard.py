@@ -3,7 +3,6 @@ Setup wizard views for initial system configuration.
 """
 
 import logging
-from secrets import token_hex
 
 from fastapi import Depends, Form, Request
 from fastapi.responses import RedirectResponse
@@ -100,13 +99,15 @@ async def setup_wizard_save(request: Request, step: int = Form(...), db: Session
             key = setting["key"]
             value = form_data.get(key)
 
+            # Bootstrap settings are needed before the database can be read or
+            # before encrypted DB values can be decrypted.  Showing their
+            # source in the wizard is useful, but persisting them into that same
+            # database would create a restart-time chicken-and-egg problem.
+            if setting.get("bootstrap"):
+                continue
+
             # Skip empty values unless it's explicitly allowed
             if value and value.strip():
-                # Auto-generate session_secret if needed
-                if key == "session_secret" and value == "auto-generate":
-                    value = token_hex(32)
-                    logger.info("Auto-generated session secret")
-
                 # Save to database
                 if save_setting_to_db(db, key, value):
                     saved_count += 1

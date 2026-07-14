@@ -6,11 +6,8 @@ This guide explains how to set up the Google Drive integration for DocuElevate.
 
 | **Variable**                    | **Description**                                       |
 |---------------------------------|-------------------------------------------------------|
-| `GOOGLE_DRIVE_USE_OAUTH`        | Set to `true` to use OAuth flow (recommended)         |
-| `GOOGLE_DRIVE_CLIENT_ID`        | OAuth Client ID (required if using OAuth flow)        |
-| `GOOGLE_DRIVE_CLIENT_SECRET`    | OAuth Client Secret (required if using OAuth flow)    |
-| `GOOGLE_DRIVE_REFRESH_TOKEN`    | OAuth Refresh Token (required if using OAuth flow)    |
-| `GOOGLE_DRIVE_FOLDER_ID`        | Google Drive folder ID for file uploads               |
+| `GOOGLE_DRIVE_CLIENT_ID`        | Deployment-wide OAuth app Client ID                   |
+| `GOOGLE_DRIVE_CLIENT_SECRET`    | Deployment-wide OAuth app secret; never sent to users |
 | `GOOGLE_DRIVE_CREDENTIALS_JSON` | JSON string containing service account credentials (alternative method) |
 | `GOOGLE_DRIVE_DELEGATE_TO`      | Email address to delegate permissions (optional for service accounts) |
 
@@ -30,12 +27,14 @@ End users can authorize their own Google Drive integration directly from the **I
 1. Navigate to `/integrations` and click **+ Add Destination** (or **+ Add Source** for Watch Folder).
 2. Create a Google Drive destination integration (or a Watch Folder with `source_type = google_drive`).
 3. Click the **Authorize** button — it opens the OAuth wizard pre-loaded with your integration's configuration.
-4. If the administrator has configured system-wide Google Drive app credentials (`GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET`), the wizard defaults to using them — no need to register your own Google Cloud app. Uncheck the toggle to use custom credentials if needed.
+4. The server uses deployment-wide Google app credentials (`GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET`). The client secret never enters the browser.
 5. Click **Start Authentication Flow** and authorize access in Google.
 6. Credentials are saved automatically to your personal integration record; the page redirects back to `/integrations`.
 7. Re-authorization is available at any time via the **Re-Authorize** button.
 
-> **Note:** Credentials are stored encrypted per-integration. Each user can hold multiple Google Drive integrations with independent tokens targeting different folders or accounts.
+> **Note:** Only the user's refresh token, granted scope, and token endpoint are stored in the encrypted integration record. Provider app credentials remain deployment-managed. Access tokens are short-lived and are refreshed automatically in the API/worker when needed.
+
+Destination integrations request `drive.file`. Google Drive corpus sources request `drive.readonly`; a source explicitly configured to delete originals after successful intake requests full `drive` access because Google requires write permission for deletion.
 
 ## Method 1: OAuth Authentication Setup (System-Level)
 
@@ -79,20 +78,21 @@ The OAuth method is preferred as it:
 7. Click "Create"
 8. Note down your Client ID and Client Secret
 
-### 4. Use the OAuth Setup Wizard
+### 4. Configure the DocuElevate OAuth app
 
 DocuElevate includes a built-in OAuth setup wizard that makes configuration simple:
 
-1. Go to your DocuElevate instance and navigate to Settings > Google Drive Setup
-2. Select the OAuth method tab (selected by default)
-3. Enter your Client ID and Client Secret
-4. Click "Start Authentication Flow"
-5. Follow the prompts to authenticate and select a folder
-6. The wizard will automatically save your settings and generate the required environment variables
+1. Store `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` in the deployment secret manager.
+2. Deploy the operator app credentials to API and workers once. They are bootstrap credentials, not user configuration.
+3. Each user creates a Google Drive destination or Google Drive Watch Folder source under `/integrations`.
+4. The user clicks **Authorize**, signs into their own Google account, and grants consent.
+5. DocuElevate exchanges the code server-side and immediately saves the refresh token encrypted in the database. No application restart or refresh-token environment variable is required.
 
-### 5. Manual OAuth Configuration
+Reauthorization, scope changes and folder changes take effect for the next queued job. Workers fetch the integration record at task start and refresh short-lived access tokens themselves. Global database-backed settings are version-invalidated through Redis; during a Redis outage workers fall back to a direct database reload.
 
-If you prefer to set up OAuth manually, you'll need to:
+### 5. Legacy system-level OAuth configuration
+
+The older global configuration remains available for compatibility. New installations should use per-user integrations. A legacy global connection requires:
 
 1. Set `GOOGLE_DRIVE_USE_OAUTH=true` in your configuration
 2. Set `GOOGLE_DRIVE_CLIENT_ID` and `GOOGLE_DRIVE_CLIENT_SECRET` from the credentials you created

@@ -10,7 +10,7 @@
     <div class="text-center mb-8">
       <div class="inline-flex items-center gap-2 text-indigo-600 font-bold text-2xl mb-2">
         <i class="fas fa-file-alt" aria-hidden="true"></i>
-        DocuElevate
+        {{ instance_label }}
       </div>
       <p class="text-gray-500 text-sm">Let's get you set up</p>
     </div>
@@ -80,7 +80,7 @@
           <p class="text-gray-500 text-sm text-center mb-6">
             This quick setup takes about 2 minutes. You can change everything later in your settings.
           </p>
-          <button @click="step++"
+          <button @click="advance('welcome')"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition min-h-[44px]">
             Let's get started <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
           </button>
@@ -224,10 +224,54 @@
         </div>
       </div>
 
+      <!-- Step 4: Processing -->
+      <div x-show="step === 4" x-transition>
+        <div class="bg-gradient-to-r from-cyan-500 to-blue-600 px-8 py-6 text-white">
+          <i class="fas fa-wand-magic-sparkles text-4xl mb-2" aria-hidden="true"></i>
+          <h2 class="text-2xl font-bold">Document processing</h2>
+          <p class="text-cyan-100 text-sm">Understand what happens after intake</p>
+        </div>
+        <div class="p-8">
+          <div class="space-y-3 mb-6 text-sm text-gray-700">
+            <p><i class="fas fa-check text-green-600 mr-2"></i>OCR makes scans searchable.</p>
+            <p><i class="fas fa-check text-green-600 mr-2"></i>AI can classify, tag and rename documents.</p>
+            <p><i class="fas fa-shield-alt text-indigo-600 mr-2"></i>Provider credentials are encrypted in the database; user tokens never belong in environment variables.</p>
+          </div>
+          <div class="flex gap-3">
+            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">Back</button>
+            <button @click="advance('processing')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">Continue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Sources -->
+      <div x-show="step === 5" x-transition>
+        <div class="bg-gradient-to-r from-orange-500 to-amber-600 px-8 py-6 text-white">
+          <i class="fas fa-inbox text-4xl mb-2" aria-hidden="true"></i>
+          <h2 class="text-2xl font-bold">Bring documents in</h2>
+          <p class="text-orange-100 text-sm">Add sources one by one, now or later</p>
+        </div>
+        <div class="p-8">
+          <div class="grid sm:grid-cols-2 gap-3 mb-5">
+            <div class="border rounded-xl p-4"><strong>Upload</strong><p class="text-xs text-gray-500 mt-1">Ready without another integration.</p></div>
+            <div class="border rounded-xl p-4"><strong>Email / IMAP</strong><p class="text-xs text-gray-500 mt-1">Import mailbox attachments.</p></div>
+            <div class="border rounded-xl p-4"><strong>Cloud watch folder</strong><p class="text-xs text-gray-500 mt-1">Google Drive, Dropbox, OneDrive or S3.</p></div>
+            <div class="border rounded-xl p-4"><strong>Webhook / API</strong><p class="text-xs text-gray-500 mt-1">Automated document intake.</p></div>
+          </div>
+          <p class="text-sm text-gray-600 mb-4"><strong x-text="integrationCounts.sources"></strong> source integration(s) configured.</p>
+          <a href="/integrations?onboarding=source" class="block text-center mb-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl">Configure a source</a>
+          <div class="flex gap-3">
+            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">Back</button>
+            <button @click="skip('sources')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">Skip for now</button>
+            <button @click="advance('sources')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">Continue</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ================================================================
-           Step 4: Storage Destination
+           Step 6: Storage Destination
       ================================================================ -->
-      <div x-show="step === 4"
+      <div x-show="step === 6"
            x-transition:enter="transition ease-out duration-300"
            x-transition:enter-start="opacity-0 translate-x-4"
            x-transition:enter-end="opacity-100 translate-x-0">
@@ -238,7 +282,8 @@
         </div>
         <div class="p-8">
           {% if configured_destinations %}
-          <p class="text-gray-600 text-sm mb-4">Select where you'd like your documents stored. You can change this later in settings.</p>
+          <p class="text-gray-600 text-sm mb-2">Select where you'd like your documents stored. User integrations become active immediately.</p>
+          <p class="text-gray-500 text-xs mb-4">Suggested preprod folder: <code>{{ suggested_storage_path }}</code></p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" role="listbox" aria-label="Storage destinations">
             {% for dest in configured_destinations %}
             <button type="button"
@@ -258,7 +303,7 @@
           <p class="text-gray-400 text-xs mb-4">
             Not seeing your provider?
             {% if user.is_admin %}
-            <a href="/settings" class="text-indigo-500 hover:underline">Go to Settings</a> to configure more destinations.
+            <a href="/integrations?onboarding=destination" class="text-indigo-500 hover:underline">Add an integration</a> to configure more destinations.
             {% else %}
             Ask your administrator to configure additional storage providers.
             {% endif %}
@@ -274,9 +319,9 @@
               You can skip this step and set one up later.
             </p>
             {% if user.is_admin %}
-            <a href="/settings"
+            <a href="/integrations?onboarding=destination"
                class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-semibold min-h-[44px]">
-              <i class="fas fa-cog" aria-hidden="true"></i> Configure Storage
+              <i class="fas fa-cog" aria-hidden="true"></i> Configure personal storage
             </a>
             {% else %}
             <p class="text-gray-400 text-xs">Contact your administrator to set up a storage destination.</p>
@@ -302,10 +347,31 @@
         </div>
       </div>
 
+      <!-- Step 7: Automation and notifications -->
+      <div x-show="step === 7" x-transition>
+        <div class="bg-gradient-to-r from-slate-600 to-indigo-700 px-8 py-6 text-white">
+          <i class="fas fa-bolt text-4xl mb-2" aria-hidden="true"></i>
+          <h2 class="text-2xl font-bold">Automation & notifications</h2>
+          <p class="text-slate-100 text-sm">Connect DocuElevate to your workflows</p>
+        </div>
+        <div class="p-8">
+          <div class="space-y-3 mb-5 text-sm">
+            <a href="/api-tokens" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>API tokens</strong><br><span class="text-gray-500">Create revocable credentials for clients and MCP tools.</span></a>
+            <a href="/settings#webhooks" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>Webhooks</strong><br><span class="text-gray-500">Receive intake events and send processed-document events.</span></a>
+            <a href="/notifications" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>Notifications</strong><br><span class="text-gray-500">Choose how processing results reach you.</span></a>
+          </div>
+          <div class="flex gap-3">
+            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">Back</button>
+            <button @click="skip('automation')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">Skip for now</button>
+            <button @click="advance('automation')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">Continue</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ================================================================
-           Step 5: All Set!
+           Step 8: All Set!
       ================================================================ -->
-      <div x-show="step === 5"
+      <div x-show="step === 8"
            x-transition:enter="transition ease-out duration-300"
            x-transition:enter-start="opacity-0 translate-x-4"
            x-transition:enter-end="opacity-100 translate-x-0">
@@ -369,7 +435,7 @@
 function onboardingWizard() {
   return {
     step: 1,
-    totalSteps: 5,
+    totalSteps: 8,
     loading: false,
     error: '',
 
@@ -380,12 +446,13 @@ function onboardingWizard() {
     billingCycle: 'monthly',
     annual: false,
     selectedDestination: '',
+    integrationCounts: { sources: 0, destinations: 0 },
 
     get progressPercent() {
       return ((this.step - 1) / (this.totalSteps - 1)) * 100;
     },
 
-    stepLabels: ['Welcome', 'Your Profile', 'Your Plan', 'Storage', 'All Done!'],
+    stepLabels: ['Welcome', 'Profile', 'Plan', 'Processing', 'Sources', 'Storage', 'Automation', 'Review'],
 
     async init() {
       try {
@@ -403,6 +470,8 @@ function onboardingWizard() {
             if (data.profile.subscription_billing_cycle) this.billingCycle = data.profile.subscription_billing_cycle;
             if (data.profile.preferred_destination) this.selectedDestination = data.profile.preferred_destination;
           }
+          if (data.integrations) this.integrationCounts = data.integrations;
+          if (data.step) this.step = Math.max(1, Math.min(this.totalSteps, data.step));
         }
       } catch (_) {
         // Non-fatal: proceed with defaults
@@ -412,13 +481,35 @@ function onboardingWizard() {
     async goNext() {
       if (this.step === 2) await this.saveProfile();
       else if (this.step === 3) await this.savePlan();
-      else if (this.step === 4) await this.saveStorage();
-      else if (this.step === 5) { await this.completeOnboarding(); return; }
-      if (!this.error) this.step++;
+      else if (this.step === 6) await this.saveStorage();
+      else if (this.step === 8) { await this.completeOnboarding(); return; }
+      if (!this.error) await this.advance();
     },
 
     goBack() {
       if (this.step > 1) this.step--;
+    },
+
+    async persistProgress(nextStep, completedTopic = null, skippedTopic = null) {
+      const r = await fetch('/api/onboarding/progress', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_step: nextStep, completed_topic: completedTopic, skipped_topic: skippedTopic })
+      });
+      if (!r.ok) throw new Error('Failed to save onboarding progress');
+    },
+
+    async advance(topic = null) {
+      this.error = '';
+      const nextStep = Math.min(this.totalSteps, this.step + 1);
+      try { await this.persistProgress(nextStep, topic, null); this.step = nextStep; }
+      catch (_) { this.error = 'Could not save your progress. Please try again.'; }
+    },
+
+    async skip(topic) {
+      this.error = '';
+      const nextStep = Math.min(this.totalSteps, this.step + 1);
+      try { await this.persistProgress(nextStep, null, topic); this.step = nextStep; }
+      catch (_) { this.error = 'Could not save your progress. Please try again.'; }
     },
 
     async saveProfile() {

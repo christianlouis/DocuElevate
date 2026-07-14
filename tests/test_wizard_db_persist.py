@@ -25,12 +25,19 @@ class TestSetupWizardDbPersist:
 
         response = client.post(
             "/setup",
-            data={"step": "1", "database_url": "sqlite:///test.db"},
+            data={
+                "step": "1",
+                "database_url": "sqlite:///test.db",
+                "redis_url": "redis://redis:6379/0",
+            },
             follow_redirects=False,
         )
 
         assert response.status_code == 303
         mock_save.assert_called()
+        saved_keys = [call.args[1] for call in mock_save.call_args_list]
+        assert "database_url" not in saved_keys
+        assert "redis_url" in saved_keys
 
     @patch("app.views.wizard.notify_settings_updated")
     @patch("app.views.wizard.save_setting_to_db")
@@ -40,7 +47,7 @@ class TestSetupWizardDbPersist:
 
         client.post(
             "/setup",
-            data={"step": "1", "database_url": "sqlite:///test.db"},
+            data={"step": "1", "redis_url": "redis://redis:6379/0"},
             follow_redirects=False,
         )
 
@@ -61,25 +68,20 @@ class TestSetupWizardDbPersist:
         mock_notify.assert_not_called()
 
     @patch("app.views.wizard.notify_settings_updated")
-    @patch("app.views.wizard.token_hex")
     @patch("app.views.wizard.save_setting_to_db")
-    def test_auto_generate_session_secret(self, mock_save, mock_token, mock_notify, client):
-        """Test that session_secret auto-generate path produces a real token."""
+    def test_bootstrap_secrets_are_not_saved_to_the_database(self, mock_save, mock_notify, client):
+        """SESSION_SECRET must remain stable outside the DB it decrypts."""
         mock_save.return_value = True
-        mock_token.return_value = "deadbeef" * 8
 
         client.post(
             "/setup",
-            data={"step": "2", "session_secret": "auto-generate"},
+            data={"step": "2", "session_secret": "attempted-db-secret", "admin_password": "safe-password"},
             follow_redirects=False,
         )
 
-        mock_token.assert_called_once()
-        # Ensure save was called with the generated token, not 'auto-generate'
-        for call_args in mock_save.call_args_list:
-            args = call_args[0]
-            if len(args) >= 2 and args[1] == "session_secret":
-                assert args[2] != "auto-generate"
+        saved_keys = [call.args[1] for call in mock_save.call_args_list]
+        assert "session_secret" not in saved_keys
+        assert "admin_password" in saved_keys
 
 
 # ---------------------------------------------------------------------------
