@@ -14,7 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("user_profiles")}
+    inspector = sa.inspect(op.get_bind())
+    if "user_profiles" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("user_profiles")}
     if "onboarding_current_step" not in columns:
         op.add_column(
             "user_profiles",
@@ -25,7 +28,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("user_profiles")}
+    inspector = sa.inspect(op.get_bind())
+    if "user_profiles" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("user_profiles")}
     if "onboarding_journey_state" in columns:
         op.drop_column("user_profiles", "onboarding_journey_state")
     if "onboarding_current_step" in columns:

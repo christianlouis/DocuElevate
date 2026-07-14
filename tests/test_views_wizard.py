@@ -91,10 +91,8 @@ class TestWizardViewsPost:
         assert mock_save.call_count == 0
 
     @patch("app.views.wizard.save_setting_to_db")
-    @patch("app.views.wizard.token_hex")
-    def test_setup_wizard_auto_generate_session_secret(self, mock_token, mock_save, client):
-        """Test auto-generation of session secret."""
-        mock_token.return_value = "auto_generated_secret_token_12345678"
+    def test_setup_wizard_does_not_persist_session_secret(self, mock_save, client):
+        """Bootstrap secrets stay in the deployment environment, not the DB."""
         mock_save.return_value = True
 
         response = client.post(
@@ -107,12 +105,7 @@ class TestWizardViewsPost:
         )
 
         assert response.status_code == 303
-        mock_token.assert_called_once_with(32)
-        # Verify that the auto-generated token was saved
-        mock_save.assert_called_once()
-        call_args = mock_save.call_args[0]
-        assert call_args[1] == "session_secret"
-        assert call_args[2] == "auto_generated_secret_token_12345678"
+        mock_save.assert_not_called()
 
     @patch("app.views.wizard.save_setting_to_db")
     def test_setup_wizard_save_last_step_redirects_home(self, mock_save, client):
@@ -150,8 +143,8 @@ class TestWizardViewsPost:
         assert response.status_code == 303
 
     @patch("app.views.wizard.save_setting_to_db")
-    def test_setup_wizard_save_returns_false_for_valid_key(self, mock_save, client):
-        """Test branch when save_setting_to_db returns False for a real wizard key (covers branch 111->99)."""
+    def test_setup_wizard_does_not_persist_database_url(self, mock_save, client):
+        """The DB URL is a bootstrap setting and cannot be stored inside itself."""
         mock_save.return_value = False
 
         response = client.post(
@@ -163,10 +156,10 @@ class TestWizardViewsPost:
             follow_redirects=False,
         )
 
-        # Should proceed to next step even when save returns False
+        # The wizard still proceeds, but never copies the bootstrap value to DB.
         assert response.status_code == 303
         assert "/setup?step=2" in response.headers["location"]
-        mock_save.assert_called()
+        mock_save.assert_not_called()
 
     @patch("app.views.wizard.save_setting_to_db")
     def test_setup_wizard_save_exception_handling(self, mock_save, client):
@@ -176,15 +169,15 @@ class TestWizardViewsPost:
         response = client.post(
             "/setup",
             data={
-                "step": "1",
-                "database_url": "sqlite:///test.db",
+                "step": "3",
+                "openai_model": "gpt-4o-mini",
             },
             follow_redirects=False,
         )
 
         assert response.status_code == 303
         assert "error=save_failed" in response.headers["location"]
-        assert "step=1" in response.headers["location"]
+        assert "step=3" in response.headers["location"]
 
 
 @pytest.mark.integration
