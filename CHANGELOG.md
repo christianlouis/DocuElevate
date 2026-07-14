@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.180.0 (2026-07-14)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`6ce8f4d`](https://github.com/christianlouis/DocuElevate/commit/6ce8f4d1c4579d0787ad180e762c372b413abc0a))
+
+### Features
+
+- **knowledge**: Add DearConcierge document bridge
+  ([`2120f07`](https://github.com/christianlouis/DocuElevate/commit/2120f072142b59de4fd1e0134c6b2e22c860b02b))
+
+
 ## Unreleased
 
 
