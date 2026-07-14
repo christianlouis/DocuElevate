@@ -179,6 +179,15 @@ curl -X POST "https://<preprod-host>/api/dropbox-imports/" \
 Poll `GET /api/dropbox-imports/{job_id}` for `discovered`, `downloaded`, `queued`,
 `skipped`, `failed`, and checkpoint state.
 
+The regular integration model can drive the same process. Create a `WATCH_FOLDER`
+source with `source_type: "dropbox"`, `folder_path`, `recursive: true`, and
+`true_up_existing: true`. The first watch cycle queues a durable recursive true-up;
+later cycles reuse the completed Dropbox cursor and fetch only changes.
+
+Qdrant is available as the `VECTOR_DATABASE` destination type. It uses the
+operator-managed vector-index connection, so the user integration needs only
+`{"provider":"qdrant"}` and no credentials.
+
 #### Source-backed semantic retrieval
 
 Vector retrieval is available only when `VECTOR_INDEX_ENABLED=true`. Qdrant results

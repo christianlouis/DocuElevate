@@ -34,6 +34,12 @@ End users authorize their own Dropbox integration from the **Integrations** dash
 6. After authorization, an interactive **folder browser** lets you select the target folder directly from your Dropbox — no need to manually type folder paths.
 7. The page redirects to `/integrations` on success. Re-authorization is available at any time via the **Re-Authorize** button.
 
+For an existing archive, enable **True up existing corpus** on the Dropbox-backed
+Watch Folder. DocuElevate performs one recursive import of the selected folder and
+all subfolders, records Dropbox file IDs and revisions, then reuses Dropbox's change
+cursor for later watch cycles. Sources are never deleted unless
+`delete_after_process` is explicitly enabled.
+
 > **Note:** The renewable user grant is stored encrypted per integration. In shared-app mode, the operator App Key and App Secret remain in operator configuration and are not copied into the user's database record. Workers resolve both parts at execution time, so authorization changes do not require a restart.
 
 ## Using the System-Level Setup Wizard (Admin)

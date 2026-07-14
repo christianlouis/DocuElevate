@@ -604,6 +604,17 @@
           </div>
         </template>
 
+        <!-- Vector database (operator-managed Qdrant) -->
+        <template x-if="form.integration_type === 'VECTOR_DATABASE'">
+          <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Vector Database</p>
+            <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
+              <i class="fas fa-database mr-1" aria-hidden="true"></i>
+              Documents are chunked and indexed in the operator-managed Qdrant collection. No user credentials are required.
+            </div>
+          </div>
+        </template>
+
         <!-- Email (destination) fields -->
         <template x-if="form.integration_type === 'EMAIL'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
@@ -681,19 +692,16 @@
                   <label for="wf-dbx-folder" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.folder_path_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
                   <input id="wf-dbx-folder" type="text" x-model="form.config.folder_path" placeholder="/Inbox/Scanner" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
                 </div>
-                <div>
-                  <label for="wf-dbx-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Refresh Token <span class="text-red-500" aria-hidden="true">*</span></label>
-                  <input id="wf-dbx-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.refresh_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label for="wf-dbx-key" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Key <span class="text-red-500" aria-hidden="true">*</span></label>
-                    <input id="wf-dbx-key" type="text" x-model="form.credentials.app_key" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" aria-required="true" />
-                  </div>
-                  <div>
-                    <label for="wf-dbx-secret" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">App Secret <span class="text-red-500" aria-hidden="true">*</span></label>
-                    <input id="wf-dbx-secret" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.app_secret" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
-                  </div>
+                <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                  <input type="checkbox" x-model="form.config.true_up_existing" class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                  <span>
+                    <strong>True up existing corpus</strong><br />
+                    <span class="text-xs text-gray-500 dark:text-gray-400">Import every existing document recursively, including subfolders, then continue from Dropbox's change cursor.</span>
+                  </span>
+                </label>
+                <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
+                  <i class="fas fa-key mr-1" aria-hidden="true"></i>
+                  Save this source, then use <strong>Authorize</strong> on its card. Only your renewable Dropbox grant is stored; App Key and App Secret remain operator-managed.
                 </div>
               </div>
             </template>
@@ -1033,8 +1041,8 @@ print(response.json())</code></pre>
 function integrationsDashboard() {
   const PREPROD_PATH = {{ ('/DocuElevate Preprod' if is_preprod else '/DocuElevate') | tojson }};
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
-  const DEST_TYPES = ['S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
-  const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
+  const DEST_TYPES = ['VECTOR_DATABASE', 'S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
+  const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'VECTOR_DATABASE', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
   const OAUTH_TYPES = new Set(['DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE']);
 
   const TYPE_LABELS = {
@@ -1052,6 +1060,7 @@ function integrationsDashboard() {
     EMAIL: 'Email Forward',
     PAPERLESS: 'Paperless NGX',
     RCLONE: 'Rclone',
+    VECTOR_DATABASE: 'Qdrant / Vector Database',
   };
 
   const TYPE_ICONS = {
@@ -1069,6 +1078,7 @@ function integrationsDashboard() {
     EMAIL: 'fa-paper-plane text-indigo-500',
     PAPERLESS: 'fa-file-pdf text-red-500',
     RCLONE: 'fa-sync text-teal-500',
+    VECTOR_DATABASE: 'fa-database text-purple-500',
   };
 
   return {
@@ -1225,6 +1235,9 @@ function integrationsDashboard() {
       } else if (this.form.integration_type === 'PAPERLESS') {
         this.form.config = { url: '' };
         this.form.credentials = { api_token: '' };
+      } else if (this.form.integration_type === 'VECTOR_DATABASE') {
+        this.form.config = { provider: 'qdrant' };
+        this.form.credentials = {};
       }
     },
 
@@ -1238,8 +1251,8 @@ function integrationsDashboard() {
         this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', delete_after_process: dap };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
-        this.form.config = { source_type: st, folder_path: PREPROD_PATH, delete_after_process: dap };
-        this.form.credentials = { refresh_token: '', app_key: '', app_secret: '' };
+        this.form.config = { source_type: st, folder_path: '/Posteingang', delete_after_process: dap, true_up_existing: true, recursive: true };
+        this.form.credentials = {};
       } else if (st === 'google_drive') {
         this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
         this.form.credentials = { credentials_json: '' };

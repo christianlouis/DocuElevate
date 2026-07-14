@@ -18,6 +18,64 @@ from app.utils.filename_utils import sanitize_filename
 logger = logging.getLogger(__name__)
 
 
+def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
+    """Queue the initial true-up or the next cursor-based delta for a watch source."""
+    owns_session = db_session is None
+    db = db_session or SessionLocal()
+    try:
+        integration = db.query(UserIntegration).filter(UserIntegration.id == integration_id).first()
+        if not integration or not integration.is_active:
+            return {"status": "skipped", "detail": "Dropbox watch integration is inactive"}
+        try:
+            config = json.loads(integration.config or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return {"status": "skipped", "detail": "Integration configuration is invalid"}
+        if config.get("source_type") != "dropbox" or not config.get("true_up_existing"):
+            return {"status": "skipped", "detail": "Dropbox true-up is disabled"}
+
+        active = (
+            db.query(DropboxImportJob)
+            .filter(
+                DropboxImportJob.integration_id == integration.id,
+                DropboxImportJob.state.in_(("queued", "running")),
+            )
+            .first()
+        )
+        if active:
+            return {"status": "running", "job_id": active.id}
+
+        root_path = str(config.get("folder_path") or "")
+        previous = (
+            db.query(DropboxImportJob)
+            .filter(
+                DropboxImportJob.integration_id == integration.id,
+                DropboxImportJob.root_path == root_path,
+                DropboxImportJob.state == "completed",
+            )
+            .order_by(DropboxImportJob.created_at.desc())
+            .first()
+        )
+        job = DropboxImportJob(
+            id=str(uuid.uuid4()),
+            integration_id=integration.id,
+            owner_id=integration.owner_id,
+            root_path=root_path,
+            # A completed recursive listing cursor becomes an incremental
+            # Dropbox change cursor for the next watch cycle.
+            cursor=previous.cursor if previous else None,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+        mode = "incremental" if job.cursor else "true-up"
+    finally:
+        if owns_session:
+            db.close()
+
+    run_dropbox_corpus_import.delay(job_id)
+    return {"status": "queued", "job_id": job_id, "mode": mode}
+
+
 def _decode(stored: str | None) -> dict:
     if not stored:
         return {}

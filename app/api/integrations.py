@@ -681,6 +681,28 @@ def _test_google_drive_connection(config: dict[str, Any] | None, credentials: di
         return {"success": False, "message": "Google Drive connection failed — re-authorize the integration"}
 
 
+def _test_vector_database_connection(
+    config: dict[str, Any] | None, credentials: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Test the operator-managed Qdrant destination without exposing credentials."""
+    from app.config import settings
+
+    provider = str((config or {}).get("provider") or "qdrant").lower()
+    if provider != "qdrant":
+        return {"success": False, "message": f"Unsupported vector database provider: {provider}"}
+    if not settings.vector_index_enabled:
+        return {"success": False, "message": "Vector indexing is disabled by the operator"}
+    try:
+        from app.utils.vector_index import QdrantVectorIndex
+
+        status_result = QdrantVectorIndex().status()
+        collection = status_result.get("collection") or settings.vector_index_collection
+        return {"success": True, "message": f"Qdrant collection '{collection}' is ready"}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Qdrant destination test failed: %s", exc)
+        return {"success": False, "message": "Qdrant connection failed — check operator configuration"}
+
+
 _CONNECTION_TESTERS: dict[str, Any] = {
     IntegrationType.DROPBOX: _test_dropbox_connection,
     IntegrationType.IMAP: _test_imap_connection,
@@ -688,6 +710,7 @@ _CONNECTION_TESTERS: dict[str, Any] = {
     IntegrationType.GOOGLE_DRIVE: _test_google_drive_connection,
     IntegrationType.WEBDAV: _test_webdav_connection,
     IntegrationType.NEXTCLOUD: _test_webdav_connection,
+    IntegrationType.VECTOR_DATABASE: _test_vector_database_connection,
 }
 
 

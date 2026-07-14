@@ -29,6 +29,13 @@ a derived index that can be deleted and rebuilt. Search results are never truste
 authorization: document IDs returned by Qdrant are checked against the relational
 owner/share model before any text is returned.
 
+Qdrant is configured as a normal `VECTOR_DATABASE` destination on the user's
+integration dashboard. The connection remains operator-managed, while destination
+selection, processing status, retries, and errors follow the same per-user flow as
+Google Drive or Dropbox. A Dropbox corpus is represented by a `WATCH_FOLDER` source
+with `true_up_existing=true`; the initial recursive import includes subfolders and
+subsequent polls continue from Dropbox's change cursor.
+
 ## Delivery slices and acceptance criteria
 
 ### KB-1: Authenticated preprod intake

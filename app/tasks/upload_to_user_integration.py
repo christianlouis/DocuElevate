@@ -708,6 +708,42 @@ def _upload_icloud(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], t
     return {"status": "Completed", "icloud_folder": folder or "/"}
 
 
+def _upload_vector_database(
+    file_path: str,
+    cfg: dict[str, Any],
+    creds: dict[str, Any],
+    task_id: str,
+    *,
+    file_id: int | None,
+) -> dict[str, Any]:
+    """Index one processed document in the operator-managed Qdrant collection."""
+    provider = str(cfg.get("provider") or "qdrant").lower()
+    if provider != "qdrant":
+        raise ValueError(f"Unsupported vector database provider: {provider}")
+    if not settings.vector_index_enabled:
+        raise ValueError("Vector indexing is disabled by the operator")
+    if file_id is None:
+        raise ValueError("Vector database destination requires a file_id")
+
+    from app.models import FileRecord
+    from app.utils.vector_index import QdrantVectorIndex
+
+    with SessionLocal() as db:
+        record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        if record is None:
+            raise ValueError(f"FileRecord {file_id} not found")
+        count = QdrantVectorIndex().index_document(record)
+
+    logger.info("[%s] Indexed %d Qdrant chunks for file %s", task_id, count, file_id)
+    return {
+        "status": "Completed",
+        "provider": "qdrant",
+        "collection": settings.vector_index_collection,
+        "file_id": file_id,
+        "chunks_indexed": count,
+    }
+
+
 # Map IntegrationType → upload helper
 _UPLOAD_HANDLERS = {
     IntegrationType.DROPBOX: _upload_dropbox,
@@ -723,6 +759,7 @@ _UPLOAD_HANDLERS = {
     IntegrationType.RCLONE: _upload_rclone,
     IntegrationType.SHAREPOINT: _upload_sharepoint,
     IntegrationType.ICLOUD: _upload_icloud,
+    IntegrationType.VECTOR_DATABASE: _upload_vector_database,
 }
 
 
@@ -819,7 +856,10 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
     )
 
     try:
-        result = handler(file_path, cfg, creds, task_id)
+        if itype == IntegrationType.VECTOR_DATABASE:
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
+        else:
+            result = handler(file_path, cfg, creds, task_id)
 
         # Update last_used_at on success
         with SessionLocal() as db:
