@@ -74,6 +74,16 @@
           <div id="folder-breadcrumb" class="flex items-center text-sm text-gray-500 mb-2">
             <button type="button" class="folder-nav-btn text-indigo-600 hover:text-indigo-800 font-medium" data-path="" aria-label="Navigate to root folder">/ Root</button>
           </div>
+          <button id="new-folder-btn" type="button" class="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <span class="mr-1" aria-hidden="true">+</span> New folder here
+          </button>
+          <div id="new-folder-form" class="hidden mt-2 flex items-center gap-2">
+            <label for="new-folder-name" class="sr-only">New folder name</label>
+            <input id="new-folder-name" type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="Folder name" maxlength="255" />
+            <button id="create-folder-btn" type="button" class="px-3 py-2 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Create</button>
+            <button id="cancel-folder-btn" type="button" class="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">Cancel</button>
+          </div>
+          <p id="new-folder-status" class="hidden mt-2 text-sm" aria-live="polite"></p>
         </div>
 
         <div id="folder-list" class="border border-gray-200 rounded-md max-h-64 overflow-y-auto">
@@ -93,7 +103,7 @@
         <p id="folder-save-status" class="mt-2 text-sm hidden" aria-live="polite"></p>
       </div>
 
-      <div class="mt-6 p-4 bg-gray-100 rounded-md">
+      <div id="worker-config-block" class="mt-6 p-4 bg-gray-100 rounded-md">
         <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
         <p class="text-sm text-gray-600 mb-3">
           Copy these environment variables to configure all worker nodes:
@@ -113,7 +123,7 @@
       </div>
 
       <div class="mt-4 text-center">
-        <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <a id="oauth-return-link" href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Go to Status Page
         </a>
       </div>
@@ -209,15 +219,19 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             return response.json();
           }).then(() => {
-            // Clean up
+            // The renewable user grant is saved. Keep the short-lived access
+            // token only in this callback page so the user can browse folders.
             sessionStorage.removeItem('dropbox_use_global_creds');
             sessionStorage.removeItem('oauth_integration_id');
 
-            document.getElementById('processing-message').innerHTML =
-              '<p class="text-green-600 font-semibold">✓ Dropbox authorized successfully!</p>' +
-              '<p class="text-sm text-gray-500 mt-2">Redirecting to Integrations…</p>';
+            document.getElementById('processing-message').classList.add('hidden');
             document.querySelector('.animate-spin').parentNode.classList.add('hidden');
-            setTimeout(() => { window.location.href = '/integrations'; }, 2000);
+            document.getElementById('success-container').classList.remove('hidden');
+            document.getElementById('worker-config-block').classList.add('hidden');
+            const returnLink = document.getElementById('oauth-return-link');
+            returnLink.href = '/integrations';
+            returnLink.textContent = 'Back to Integrations';
+            initFolderBrowser(data.access_token, integrationId);
           });
         }
         // Global admin flow — the exchange-token-global endpoint is intended for
@@ -299,6 +313,10 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('processing-message').innerHTML =
               '<p class="text-green-600 font-semibold">✓ Dropbox authorized successfully!</p>';
             document.getElementById('success-container').classList.remove('hidden');
+            document.getElementById('worker-config-block').classList.add('hidden');
+            const returnLink = document.getElementById('oauth-return-link');
+            returnLink.href = '/integrations';
+            returnLink.textContent = 'Back to Integrations';
 
             // Show folder browser with the access token
             initFolderBrowser(data.access_token, integrationId);
@@ -411,6 +429,12 @@ DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
     const selectedInput = document.getElementById('selected-folder-path');
     const saveBtn = document.getElementById('save-folder-btn');
     const saveStatus = document.getElementById('folder-save-status');
+    const newFolderBtn = document.getElementById('new-folder-btn');
+    const newFolderForm = document.getElementById('new-folder-form');
+    const newFolderName = document.getElementById('new-folder-name');
+    const createFolderBtn = document.getElementById('create-folder-btn');
+    const cancelFolderBtn = document.getElementById('cancel-folder-btn');
+    const newFolderStatus = document.getElementById('new-folder-status');
 
     function loadFolders(path) {
       currentPath = path;
@@ -466,6 +490,50 @@ DROPBOX_FOLDER=${folderPath || '/Documents/Uploads'}`;
         });
       });
     }
+
+    newFolderBtn.addEventListener('click', () => {
+      newFolderForm.classList.remove('hidden');
+      newFolderStatus.classList.add('hidden');
+      newFolderName.value = '';
+      newFolderName.focus();
+    });
+
+    cancelFolderBtn.addEventListener('click', () => {
+      newFolderForm.classList.add('hidden');
+      newFolderStatus.classList.add('hidden');
+    });
+
+    createFolderBtn.addEventListener('click', () => {
+      const name = newFolderName.value.trim();
+      if (!name) {
+        newFolderStatus.textContent = 'Enter a folder name.';
+        newFolderStatus.className = 'mt-2 text-sm text-red-600';
+        return;
+      }
+      createFolderBtn.disabled = true;
+      createFolderBtn.textContent = 'Creating…';
+      const formData = new FormData();
+      formData.append('access_token', accessToken);
+      formData.append('parent_path', currentPath);
+      formData.append('name', name);
+      fetch('/api/dropbox/create-folder', { method: 'POST', body: formData })
+        .then(r => r.ok ? r.json() : r.json().then(err => { throw new Error(err.detail || 'Failed to create folder'); }))
+        .then(data => {
+          selectedInput.value = data.path;
+          newFolderForm.classList.add('hidden');
+          newFolderStatus.textContent = `✓ Created ${data.path}`;
+          newFolderStatus.className = 'mt-2 text-sm text-green-600';
+          loadFolders(data.path);
+        })
+        .catch(err => {
+          newFolderStatus.textContent = 'Error: ' + err.message;
+          newFolderStatus.className = 'mt-2 text-sm text-red-600';
+        })
+        .finally(() => {
+          createFolderBtn.disabled = false;
+          createFolderBtn.textContent = 'Create';
+        });
+    });
 
     // Save selected folder to integration config
     saveBtn.addEventListener('click', () => {

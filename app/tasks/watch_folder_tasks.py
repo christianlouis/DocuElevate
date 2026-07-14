@@ -2173,6 +2173,15 @@ _USER_WF_CLOUD_HANDLERS.update(
 )
 
 
+def _watch_source_delete_enabled(config: dict) -> bool:
+    """Require an explicit two-step opt-in before deleting source files.
+
+    Missing ``preserve_source_files`` is treated as protected so older or
+    hand-written integrations fail closed after this safety feature ships.
+    """
+    return config.get("preserve_source_files", True) is False and config.get("delete_after_process", False) is True
+
+
 def _pull_user_integration_watch_folders() -> dict:
     """Iterate over all active WATCH_FOLDER UserIntegrations and scan their sources.
 
@@ -2214,7 +2223,7 @@ def _pull_user_integration_watch_folders() -> dict:
             for integ in integrations:
                 try:
                     cfg = _json.loads(integ.config) if integ.config else {}
-                    delete_after = cfg.get("delete_after_process", False)
+                    delete_after = _watch_source_delete_enabled(cfg)
                     source_type = cfg.get("source_type", "local")
 
                     cache_file = f"{_USER_WF_CACHE_PREFIX}{integ.id}.json"

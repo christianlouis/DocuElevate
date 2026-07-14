@@ -183,7 +183,10 @@
       </h2>
       <div class="space-y-3">
         <template x-for="intg in sources" :key="intg.id">
-          <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700">
+          <div
+            class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden border"
+            :class="sourceDeletionEnabled(intg) ? 'border-red-600 ring-2 ring-red-500' : (sourceDeletionProtectionDisabled(intg) ? 'border-amber-500' : 'border-gray-100 dark:border-gray-700')"
+          >
             <div class="p-5 flex flex-col sm:flex-row sm:items-center gap-4">
               <div class="flex items-start gap-3 flex-1 min-w-0">
                 <div class="mt-0.5 flex-shrink-0">
@@ -201,6 +204,18 @@
                   </p>
                   <template x-if="intg.last_error">
                     <p class="mt-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-words" x-text="intg.last_error"></p>
+                  </template>
+                  <template x-if="sourceDeletionEnabled(intg)">
+                    <div class="mt-2 flex items-center gap-2 rounded-md border-2 border-red-700 bg-red-100 px-3 py-2 text-sm font-extrabold uppercase tracking-wide text-red-900" role="alert">
+                      <i class="fas fa-exclamation-triangle text-xl" aria-hidden="true"></i>
+                      <span>ACHTUNG: QUELLDATEIEN WERDEN NACH DEM IMPORT GELÖSCHT</span>
+                    </div>
+                  </template>
+                  <template x-if="sourceDeletionProtectionDisabled(intg) && !sourceDeletionEnabled(intg)">
+                    <div class="mt-2 flex items-center gap-2 rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900" role="status">
+                      <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                      <span>Löschschutz deaktiviert; automatisches Löschen ist derzeit nicht aktiv.</span>
+                    </div>
                   </template>
                 </div>
               </div>
@@ -793,11 +808,20 @@
             </template>
 
             <!-- Common watch folder options -->
-            <div class="flex flex-wrap items-center gap-4 pt-2">
-              <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
-                <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                {{ _("integrations.delete_files_label") }}
+            <div class="space-y-3 pt-2">
+              <label class="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200 cursor-pointer">
+                <input type="checkbox" x-model="form.config.preserve_source_files" class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500" />
+                <span>
+                  <strong>Quelldateien NICHT LÖSCHEN!</strong><br />
+                  <span class="text-xs">Globaler Sicherheitsschalter für lokale und Cloud-Watch-Folder. Standard: aktiv.</span>
+                </span>
               </label>
+              <template x-if="form.config.preserve_source_files === false">
+                <label class="inline-flex items-center gap-2 text-sm text-red-700 dark:text-red-300 cursor-pointer">
+                  <input type="checkbox" x-model="form.config.delete_after_process" class="rounded border-gray-300 text-red-600 focus:ring-red-500" />
+                  {{ _("integrations.delete_files_label") }}
+                </label>
+              </template>
               <template x-if="form.config.source_type !== 'local'">
                 <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                   <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
@@ -1164,6 +1188,16 @@ function integrationsDashboard() {
       );
     },
 
+    sourceDeletionProtectionDisabled(intg) {
+      return intg.integration_type === 'WATCH_FOLDER' &&
+        intg.config && intg.config.preserve_source_files === false;
+    },
+
+    sourceDeletionEnabled(intg) {
+      return this.sourceDeletionProtectionDisabled(intg) &&
+        intg.config.delete_after_process === true;
+    },
+
     needsDropboxAuthorization() {
       return this.isDropboxBackedForm() && !(this.editingIntegration && this.editingIntegration.has_credentials);
     },
@@ -1242,7 +1276,7 @@ function integrationsDashboard() {
         this.form.config = { recipient: '' };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'WATCH_FOLDER') {
-        this.form.config = { source_type: 'local', folder_path: PREPROD_PATH, delete_after_process: false };
+        this.form.config = { source_type: 'local', folder_path: PREPROD_PATH, preserve_source_files: true, delete_after_process: false };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'PAPERLESS') {
         this.form.config = { url: '' };
@@ -1256,26 +1290,27 @@ function integrationsDashboard() {
     onWatchFolderSourceTypeChange() {
       const st = this.form.config.source_type;
       const dap = this.form.config.delete_after_process || false;
+      const preserve = this.form.config.preserve_source_files !== false;
       this.form.credentials = {};
       if (st === 'local') {
-        this.form.config = { source_type: st, folder_path: PREPROD_PATH, delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
       } else if (st === 's3') {
-        this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', delete_after_process: dap };
+        this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
-        this.form.config = { source_type: st, folder_path: '', delete_after_process: dap, true_up_existing: false, recursive: true };
+        this.form.config = { source_type: st, folder_path: '', preserve_source_files: preserve, delete_after_process: dap, true_up_existing: false, recursive: true };
         this.form.credentials = {};
       } else if (st === 'google_drive') {
-        this.form.config = { source_type: st, folder_id: '', delete_after_process: dap };
+        this.form.config = { source_type: st, folder_id: '', preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { credentials_json: '' };
       } else if (st === 'onedrive') {
-        this.form.config = { source_type: st, folder_path: PREPROD_PATH, delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { refresh_token: '', client_id: '', client_secret: '' };
       } else if (st === 'nextcloud') {
-        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, delete_after_process: dap };
+        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
       } else if (st === 'webdav') {
-        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, delete_after_process: dap };
+        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
       }
     },
@@ -1298,11 +1333,15 @@ function integrationsDashboard() {
 
     openEditModal(intg) {
       this.editingIntegration = intg;
+      const config = intg.config ? JSON.parse(JSON.stringify(intg.config)) : {};
+      if (intg.integration_type === 'WATCH_FOLDER' && config.preserve_source_files === undefined) {
+        config.preserve_source_files = true;
+      }
       this.form = {
         direction: intg.direction,
         integration_type: intg.integration_type,
         name: intg.name,
-        config: intg.config ? JSON.parse(JSON.stringify(intg.config)) : {},
+        config,
         credentials: {},
         is_active: intg.is_active,
       };

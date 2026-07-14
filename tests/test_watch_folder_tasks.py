@@ -3756,6 +3756,21 @@ class TestScanUserWatchFolder:
 class TestPullUserIntegrationWatchFolders:
     """Tests for _pull_user_integration_watch_folders."""
 
+    @pytest.mark.parametrize(
+        ("config", "expected"),
+        [
+            ({}, False),
+            ({"delete_after_process": True}, False),
+            ({"preserve_source_files": True, "delete_after_process": True}, False),
+            ({"preserve_source_files": False, "delete_after_process": False}, False),
+            ({"preserve_source_files": False, "delete_after_process": True}, True),
+        ],
+    )
+    def test_source_deletion_requires_explicit_double_opt_in(self, config, expected):
+        from app.tasks.watch_folder_tasks import _watch_source_delete_enabled
+
+        assert _watch_source_delete_enabled(config) is expected
+
     @patch("app.tasks.watch_folder_tasks._get_db_session")
     @patch("app.tasks.watch_folder_tasks._scan_user_watch_folder", return_value=2)
     @patch("app.tasks.watch_folder_tasks._load_cache", return_value={})

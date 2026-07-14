@@ -106,6 +106,14 @@ class TestIntegrationsDashboardView:
         assert "app credentials remain operator-managed" in body
         assert "personal integration record" in body
 
+    def test_watch_folder_deletion_guard_is_prominent(self, client):
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        body = response.text
+        assert "Quelldateien NICHT LÖSCHEN!" in body
+        assert "sourceDeletionEnabled" in body
+        assert "ACHTUNG: QUELLDATEIEN WERDEN NACH DEM IMPORT GELÖSCHT" in body
+
     def test_integrations_page_contains_quota_indicators(self, client):
         """GET /integrations page includes quota labels."""
         response = client.get("/integrations")
