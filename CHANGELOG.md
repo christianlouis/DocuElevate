@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.1 (2026-07-15)
+
+### Bug Fixes
+
+- Prevent provider SDK prompt logging
+  ([#1108](https://github.com/christianlouis/DocuElevate/pull/1108),
+  [`d1718d9`](https://github.com/christianlouis/DocuElevate/commit/d1718d95092c3021dc578ed519891a57a1f21221))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ef80651`](https://github.com/christianlouis/DocuElevate/commit/ef80651d34a3b5e9433bb085d85cf60cc0f17c5d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`988ae28`](https://github.com/christianlouis/DocuElevate/commit/988ae287238f3b7bf465fa825c16d8af1902b065))
+
+- **changelog**: Update changelog [skip ci]
+  ([`3870662`](https://github.com/christianlouis/DocuElevate/commit/3870662394969160b49bd9e0d98af35304e33e7f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9485cbf`](https://github.com/christianlouis/DocuElevate/commit/9485cbfcfb0e563c497c1fa3ac92f8a93d8227ac))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e6e3bfa`](https://github.com/christianlouis/DocuElevate/commit/e6e3bfade1ce43d7dd60d3f6566decbe5d258d29))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
 ## Unreleased
 
 ### Documentation
