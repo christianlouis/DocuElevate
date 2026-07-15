@@ -21,17 +21,29 @@ from app.utils.filename_utils import sanitize_filename
 logger = logging.getLogger(__name__)
 
 _CELERY_QUEUES = ("document_processor", "default", "celery")
+_REDIS_PRIORITY_SEPARATOR = "\x06\x16"
+_REDIS_PRIORITY_STEPS = range(10)
 
 
 def _pending_queue_depth() -> int | None:
-    """Return pending interactive pipeline work, failing open if Redis is unavailable."""
+    """Return queued plus worker-reserved pipeline work, failing open on Redis errors."""
     try:
         client = redis.Redis.from_url(
             settings.redis_url,
             socket_connect_timeout=2,
             socket_timeout=2,
         )
-        return sum(int(client.llen(queue)) for queue in _CELERY_QUEUES)
+        queue_keys = (
+            queue if priority == 0 else f"{queue}{_REDIS_PRIORITY_SEPARATOR}{priority}"
+            for queue in _CELERY_QUEUES
+            for priority in _REDIS_PRIORITY_STEPS
+        )
+        queued = sum(int(client.llen(queue_key)) for queue_key in queue_keys)
+        # Kombu moves Redis messages into this hash as soon as a worker
+        # reserves them. Counting it closes the prefetch gap where the visible
+        # lists are empty while dozens of tasks are active or reserved.
+        in_flight = int(client.hlen("unacked"))
+        return queued + in_flight
     except Exception:  # noqa: BLE001
         logger.warning("Could not inspect queue depth before corpus backfill", exc_info=True)
         return None

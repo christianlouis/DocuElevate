@@ -229,6 +229,21 @@ def test_dropbox_import_pauses_at_queue_high_watermark(db_session):
 
 
 @pytest.mark.unit
+def test_queue_depth_counts_priority_queues_and_worker_reserved_tasks():
+    redis_client = MagicMock()
+    redis_client.llen.side_effect = lambda key: 4 if key == "document_processor\x06\x169" else 0
+    redis_client.hlen.return_value = 6
+
+    with patch("app.tasks.dropbox_corpus_import.redis.Redis.from_url", return_value=redis_client):
+        from app.tasks.dropbox_corpus_import import _pending_queue_depth
+
+        assert _pending_queue_depth() == 10
+
+    assert redis_client.llen.call_count == 30
+    redis_client.hlen.assert_called_once_with("unacked")
+
+
+@pytest.mark.unit
 def test_dropbox_import_uses_configured_provider_batch_size(db_session):
     integration = _integration(db_session)
     integration.config = json.dumps({"backfill_batch_size": 7})
