@@ -338,12 +338,13 @@ def test_dropbox_import_pauses_until_utc_reset_at_daily_token_budget(db_session)
         "job_id": job.id,
         "tokens_reserved": 8_990_000,
         "token_budget": 9_000_000,
-        "resume_in_seconds": 3600,
+        "resume_in_seconds": 900,
+        "budget_resets_in_seconds": 3600,
     }
     assert job.state == "queued"
     assert job.cursor is None
     assert job.discovered == 0
-    schedule.assert_called_once_with(job.id, countdown=3600)
+    schedule.assert_called_once_with(job.id, countdown=900)
 
 
 @pytest.mark.unit

@@ -26,6 +26,7 @@ _CELERY_QUEUES = ("document_processor", "default", "celery")
 _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
 _METADATA_PROMPT_OUTPUT_HEADROOM = 1500
+_MAX_BUDGET_RECHECK_SECONDS = 15 * 60
 
 
 class CorpusDailyBudgetReached(RuntimeError):
@@ -464,14 +465,19 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 job.state = "queued"
                 job.error = str(exc)
                 db.commit()
-                schedule_dropbox_corpus_import(job.id, countdown=exc.retry_after_seconds)
+                # Redis' default Celery visibility timeout is shorter than a
+                # possible wait to the next UTC day. Short rechecks avoid a
+                # long-lived ETA task being restored and delivered twice.
+                recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
+                schedule_dropbox_corpus_import(job.id, countdown=recheck_in)
                 return {
                     "status": "paused",
                     "reason": "daily_llm_token_budget",
                     "job_id": job.id,
                     "tokens_reserved": exc.used,
                     "token_budget": exc.budget,
-                    "resume_in_seconds": exc.retry_after_seconds,
+                    "resume_in_seconds": recheck_in,
+                    "budget_resets_in_seconds": exc.retry_after_seconds,
                 }
             except CorpusDailyBudgetUnavailable as exc:
                 job.discovered -= 1
