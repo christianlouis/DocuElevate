@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.0 (2026-07-15)
+
+### Bug Fixes
+
+- Harden deferred corpus handoffs ([#1089](https://github.com/christianlouis/DocuElevate/pull/1089),
+  [`33773f3`](https://github.com/christianlouis/DocuElevate/commit/33773f33f9310769f06c264a911042ac4cf9ebfa))
+
+### Features
+
+- Index deferred corpus OCR backlog
+  ([#1089](https://github.com/christianlouis/DocuElevate/pull/1089),
+  [`33773f3`](https://github.com/christianlouis/DocuElevate/commit/33773f33f9310769f06c264a911042ac4cf9ebfa))
+
+
 ## v0.183.8 (2026-07-15)
 
 ### Bug Fixes
