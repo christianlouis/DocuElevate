@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.7 (2026-07-15)
+
+### Bug Fixes
+
+- Scope corpus token budget to initial backfills
+  ([#1076](https://github.com/christianlouis/DocuElevate/pull/1076),
+  [`13194d4`](https://github.com/christianlouis/DocuElevate/commit/13194d4fdc2654036e7d99d925218bb418463a21))
+
+
 ## v0.183.6 (2026-07-15)
 
 ### Bug Fixes
