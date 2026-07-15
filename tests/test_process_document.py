@@ -5,6 +5,7 @@ These tests verify that the process_document task correctly handles file process
 and doesn't cause DetachedInstanceError when accessing database objects.
 """
 
+from contextlib import nullcontext
 from unittest.mock import MagicMock, patch
 
 import pypdf
@@ -118,6 +119,50 @@ startxref
         mock_extract.delay.assert_called_once()
         call_args = mock_extract.delay.call_args
         assert call_args[0][2] == file_record.id  # Third argument should be file_id
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_index_first_persists_embedded_text_without_metadata_pipeline(db_session, tmp_path):
+    immutable_pdf = tmp_path / "original.pdf"
+    immutable_pdf.write_bytes(b"%PDF-1.4")
+    working_pdf = tmp_path / "working.pdf"
+    working_pdf.write_bytes(b"%PDF-1.4")
+    record = FileRecord(
+        filehash="abc",
+        original_filename="index-first.pdf",
+        local_filename=str(working_pdf),
+        original_file_path=str(immutable_pdf),
+        file_size=8,
+        mime_type="application/pdf",
+    )
+    db_session.add(record)
+    db_session.commit()
+    file_id = record.id
+
+    with (
+        patch("app.tasks.process_document.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.vector_index.index_document_vectors.delay") as index_vectors,
+    ):
+        from app.tasks.process_document import _complete_index_first_document
+
+        result = _complete_index_first_document(
+            task_id="index-task",
+            file_id=file_id,
+            extracted_text="Project deadline is Friday.",
+            original_filename="index-first.pdf",
+            original_input_path=str(working_pdf),
+            working_path=str(working_pdf),
+        )
+
+    record = db_session.query(FileRecord).filter(FileRecord.id == file_id).one()
+    assert result["status"] == "Queued for vector indexing"
+    assert record.ocr_text == "Project deadline is Friday."
+    assert record.document_title == "index-first"
+    assert record.local_filename == str(immutable_pdf)
+    assert not working_pdf.exists()
+    index_vectors.assert_called_once_with(record.id, source_task_id="index-task")
 
 
 @pytest.mark.unit

@@ -333,6 +333,18 @@ def _configured_backfill_token_budget(integration: UserIntegration) -> int:
     )
 
 
+def _index_first_enabled(integration: UserIntegration) -> bool:
+    """Return whether this source explicitly opts into RAG-only true-up."""
+    try:
+        config = json.loads(integration.config or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(config, dict):
+        return False
+    value = config.get("backfill_index_first_enabled", False)
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _reserve_job_llm_tokens(job: DropboxImportJob, integration: UserIntegration) -> tuple[date | None, int]:
     """Apply the daily cost guard only to an initial corpus backfill."""
     if not job.is_backfill:
@@ -386,7 +398,8 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(imported)
         return "skipped"
 
-    reservation = _reserve_job_llm_tokens(job, integration)
+    index_only = job.is_backfill and _index_first_enabled(integration)
+    reservation = (None, 0) if index_only else _reserve_job_llm_tokens(job, integration)
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     queued = False
@@ -419,7 +432,13 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
 
         from app.api.intake import _queue_document
 
-        task = _queue_document(target_path, filename, None, job.owner_id if settings.multi_user_enabled else None)
+        task = _queue_document(
+            target_path,
+            filename,
+            None,
+            job.owner_id if settings.multi_user_enabled else None,
+            index_only=index_only,
+        )
         intake.local_path = target_path
         intake.task_id = task.id
         intake.state = "queued"
