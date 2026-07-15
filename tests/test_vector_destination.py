@@ -4,6 +4,8 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.models import DocumentIntake, FileRecord, IntegrationType
 
 
@@ -100,3 +102,83 @@ def test_index_first_vector_task_completes_source_ledger(db_session):
     assert result == {"status": "success", "file_id": record.id, "chunks_indexed": 2}
     assert intake.state == "indexed"
     assert intake.error is None
+
+
+def test_index_first_vector_task_keeps_intermediate_failure_retryable(db_session):
+    record = FileRecord(
+        filehash="vector-retry",
+        original_filename="retry.pdf",
+        local_filename="/workdir/original/retry.pdf",
+        file_size=10,
+        mime_type="application/pdf",
+        ocr_text="Retry this document after a transient Qdrant timeout.",
+    )
+    intake = DocumentIntake(
+        principal_id="owner",
+        idempotency_key="dropbox:retry",
+        source="dropbox",
+        original_filename="retry.pdf",
+        task_id="retry-task",
+        state="indexing",
+    )
+    db_session.add_all([record, intake])
+    db_session.commit()
+
+    with (
+        patch("app.tasks.vector_index.settings.vector_index_enabled", True),
+        patch("app.tasks.vector_index.SessionLocal", return_value=nullcontext(db_session)),
+        patch(
+            "app.utils.vector_index.QdrantVectorIndex.index_document",
+            side_effect=TimeoutError("Qdrant timed out"),
+        ),
+    ):
+        from app.tasks.vector_index import index_document_vectors
+
+        with pytest.raises(TimeoutError, match="Qdrant timed out"):
+            index_document_vectors.run(record.id, source_task_id="retry-task")
+
+    db_session.refresh(intake)
+    assert intake.state == "index_retrying"
+    assert intake.error == "TimeoutError"
+
+
+def test_index_first_vector_task_marks_exhausted_failure_terminal(db_session):
+    record = FileRecord(
+        filehash="vector-exhausted",
+        original_filename="exhausted.pdf",
+        local_filename="/workdir/original/exhausted.pdf",
+        file_size=10,
+        mime_type="application/pdf",
+        ocr_text="This document exhausted its Qdrant retry budget.",
+    )
+    intake = DocumentIntake(
+        principal_id="owner",
+        idempotency_key="dropbox:exhausted",
+        source="dropbox",
+        original_filename="exhausted.pdf",
+        task_id="exhausted-task",
+        state="indexing",
+    )
+    db_session.add_all([record, intake])
+    db_session.commit()
+
+    with (
+        patch("app.tasks.vector_index.settings.vector_index_enabled", True),
+        patch("app.tasks.vector_index.SessionLocal", return_value=nullcontext(db_session)),
+        patch(
+            "app.utils.vector_index.QdrantVectorIndex.index_document",
+            side_effect=TimeoutError("Qdrant timed out"),
+        ),
+    ):
+        from app.tasks.vector_index import index_document_vectors
+
+        index_document_vectors.push_request(retries=index_document_vectors.max_retries)
+        try:
+            with pytest.raises(TimeoutError, match="Qdrant timed out"):
+                index_document_vectors.run(record.id, source_task_id="exhausted-task")
+        finally:
+            index_document_vectors.pop_request()
+
+    db_session.refresh(intake)
+    assert intake.state == "failed"
+    assert intake.error == "TimeoutError"

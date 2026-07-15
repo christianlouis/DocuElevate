@@ -1060,6 +1060,7 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
                             "ocr_retrying",
                             "ocr_complete",
                             "indexing",
+                            "index_retrying",
                         )
                     ),
                 )
