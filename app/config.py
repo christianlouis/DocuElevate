@@ -1146,6 +1146,15 @@ class Settings(BaseSettings):
             "Large documents are split across multiple requests to stay below provider request limits."
         ),
     )
+    vector_upsert_batch_size: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description=(
+            "Maximum number of Qdrant points sent in one upsert request. "
+            "Large documents are split across requests to stay below Qdrant payload limits."
+        ),
+    )
     vector_index_timeout_seconds: float = Field(
         default=30.0,
         gt=0,

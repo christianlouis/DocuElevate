@@ -3429,6 +3429,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "vector_upsert_batch_size": {
+        "category": "Knowledge Bridge",
+        "description": "Maximum number of Qdrant points sent in one upsert request.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "vector_index_timeout_seconds": {
         "category": "Knowledge Bridge",
         "description": "Timeout in seconds for Qdrant operations.",

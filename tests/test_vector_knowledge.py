@@ -52,12 +52,15 @@ def test_index_replaces_document_after_embeddings_are_ready():
 
     ensure.assert_called_once_with(2)
     assert request.call_args_list[0].args[0:2] == (
-        "POST",
-        "/collections/docuelevate_documents/points/delete?wait=true",
+        "PUT",
+        "/collections/docuelevate_documents/points?wait=true",
     )
-    upsert = request.call_args_list[1].args[2]
+    upsert = request.call_args_list[0].args[2]
     assert [point["payload"]["text"] for point in upsert["points"]] == ["first", "second"]
     assert all(point["payload"]["document_id"] == 7 for point in upsert["points"])
+    index_version = upsert["points"][0]["payload"]["index_version"]
+    cleanup = request.call_args_list[1].args[2]["filter"]
+    assert cleanup["must_not"] == [{"key": "index_version", "match": {"value": index_version}}]
 
 
 def test_index_batches_large_embedding_requests_without_reordering_chunks():
@@ -82,8 +85,63 @@ def test_index_batches_large_embedding_requests_without_reordering_chunks():
         assert QdrantVectorIndex().index_document(record) == 3
 
     assert embed.call_args_list == [call(["first", "second"]), call(["third"])]
-    points = request.call_args_list[1].args[2]["points"]
+    points = request.call_args_list[0].args[2]["points"]
     assert [point["vector"] for point in points] == [[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]]
+
+
+def test_index_batches_qdrant_upserts_without_reordering_points():
+    from app.utils.vector_index import QdrantVectorIndex, TextChunk
+
+    chunks = [
+        TextChunk(0, "first", 0, 5),
+        TextChunk(1, "second", 5, 10),
+        TextChunk(2, "third", 10, 15),
+    ]
+    with (
+        patch("app.utils.vector_index.chunk_text", return_value=chunks),
+        patch(
+            "app.utils.vector_index.generate_embeddings",
+            return_value=[[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]],
+        ),
+        patch("app.utils.vector_index.settings.vector_upsert_batch_size", 2),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection"),
+        patch("app.utils.vector_index.QdrantVectorIndex._request") as request,
+    ):
+        assert QdrantVectorIndex().index_document(_file()) == 3
+
+    assert [call.args[0] for call in request.call_args_list] == ["PUT", "PUT", "POST"]
+    assert [
+        point["payload"]["text"]
+        for upsert_call in request.call_args_list[:2]
+        for point in upsert_call.args[2]["points"]
+    ] == ["first", "second", "third"]
+
+
+def test_index_keeps_old_points_when_a_later_qdrant_upsert_fails():
+    from app.utils.vector_index import QdrantVectorIndex, TextChunk
+
+    chunks = [
+        TextChunk(0, "first", 0, 5),
+        TextChunk(1, "second", 5, 10),
+        TextChunk(2, "third", 10, 15),
+    ]
+    with (
+        patch("app.utils.vector_index.chunk_text", return_value=chunks),
+        patch(
+            "app.utils.vector_index.generate_embeddings",
+            return_value=[[1.0, 0.0], [2.0, 0.0], [3.0, 0.0]],
+        ),
+        patch("app.utils.vector_index.settings.vector_upsert_batch_size", 2),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection"),
+        patch(
+            "app.utils.vector_index.QdrantVectorIndex._request",
+            side_effect=[SimpleNamespace(), RuntimeError("qdrant unavailable")],
+        ) as request,
+    ):
+        with pytest.raises(RuntimeError, match="qdrant unavailable"):
+            QdrantVectorIndex().index_document(_file())
+
+    assert [call.args[0] for call in request.call_args_list] == ["PUT", "PUT"]
 
 
 def test_index_keeps_old_points_when_a_later_embedding_batch_fails():

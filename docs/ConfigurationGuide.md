@@ -37,6 +37,7 @@ secret manager; do not store them in `.env` files committed to source control.
 | `VECTOR_INDEX_URL` | Internal Qdrant base URL. | `http://qdrant:6333` |
 | `VECTOR_INDEX_API_KEY` | Qdrant API key sent only to the internal service. | unset |
 | `VECTOR_INDEX_COLLECTION` | Qdrant collection for document chunks. | `docuelevate_documents` |
+| `VECTOR_UPSERT_BATCH_SIZE` | Maximum Qdrant points per upsert request. | `100` |
 | `VECTOR_CHUNK_TOKENS` | Target token count per chunk. | `600` |
 | `VECTOR_CHUNK_OVERLAP_TOKENS` | Token overlap between adjacent chunks. | `80` |
 | `VECTOR_EMBEDDING_BATCH_TOKENS` | Maximum aggregate tokens per embedding request; larger documents use multiple ordered requests. | `200000` |
