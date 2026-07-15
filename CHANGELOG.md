@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.6 (2026-07-15)
+
+### Bug Fixes
+
+- Resume Dropbox corpus pages without recounting
+  ([#1074](https://github.com/christianlouis/DocuElevate/pull/1074),
+  [`4bbb1c6`](https://github.com/christianlouis/DocuElevate/commit/4bbb1c6ced2498a278b43c6ef7a7d07b9c8943cd))
+
+
 ## v0.183.5 (2026-07-15)
 
 ### Bug Fixes
