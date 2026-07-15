@@ -80,14 +80,18 @@ def _queue_document(
     owner_id: str | None,
     *,
     index_only: bool = False,
-):
+    task_id: str | None = None,
+) -> Any:
     extension = os.path.splitext(filename)[1].lower()
     if index_only:
-        return process_document.delay(
-            path,
-            original_filename=filename,
-            owner_id=owner_id,
-            index_only=True,
+        return process_document.apply_async(
+            args=[path],
+            kwargs={
+                "original_filename": filename,
+                "owner_id": owner_id,
+                "index_only": True,
+            },
+            task_id=task_id,
         )
     if content_type == "application/pdf" or extension == ".pdf":
         return process_document.delay(path, original_filename=filename, owner_id=owner_id)

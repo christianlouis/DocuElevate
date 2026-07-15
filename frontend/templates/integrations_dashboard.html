@@ -720,8 +720,8 @@
                     <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                       <input type="checkbox" x-model="form.config.backfill_index_first_enabled" class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                       <span>
-                        <strong>Index existing documents first</strong><br />
-                        <span class="text-xs text-gray-500 dark:text-gray-400">For this initial true-up, extract embedded PDF text and send it directly to vector search. Documents needing conversion or OCR are retained for a later pass. Normal uploads and later watch updates still use the full pipeline.</span>
+                        <strong>{{ _("integrations.index_first_title") }}</strong><br />
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ _("integrations.index_first_hint") }}</span>
                       </span>
                     </label>
                     <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">

@@ -335,6 +335,8 @@ def _configured_backfill_token_budget(integration: UserIntegration) -> int:
 
 def _index_first_enabled(integration: UserIntegration) -> bool:
     """Return whether this source explicitly opts into RAG-only true-up."""
+    if not settings.vector_index_enabled:
+        return False
     try:
         config = json.loads(integration.config or "{}")
     except (json.JSONDecodeError, TypeError):
@@ -373,7 +375,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
         )
         .first()
     )
-    if imported and imported.revision == entry.rev:
+    if imported and imported.revision == entry.rev and imported.state != "failed":
         return "skipped"
 
     idempotency_key = f"dropbox:{integration.id}:{entry.id}:{entry.rev}"
@@ -430,18 +432,11 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(intake)
             db.flush()
 
-        from app.api.intake import _queue_document
-
-        task = _queue_document(
-            target_path,
-            filename,
-            None,
-            job.owner_id if settings.multi_user_enabled else None,
-            index_only=index_only,
-        )
+        source_task_id = str(uuid.uuid4()) if index_only else None
         intake.local_path = target_path
-        intake.task_id = task.id
+        intake.task_id = source_task_id
         intake.state = "queued"
+        intake.error = None
         if imported is None:
             imported = DropboxImportObject(
                 integration_id=integration.id,
@@ -453,9 +448,37 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
         imported.revision = entry.rev
         imported.remote_path = entry.path_display or entry.path_lower
         imported.intake_id = intake.id
-        imported.task_id = task.id
+        imported.task_id = source_task_id
         imported.state = "queued"
-        db.flush()
+        if index_only:
+            # A fast worker must be able to see the correlation id before it
+            # reports needs_ocr/indexed/failed against the durable ledgers.
+            db.commit()
+        else:
+            db.flush()
+
+        from app.api.intake import _queue_document
+
+        try:
+            task = _queue_document(
+                target_path,
+                filename,
+                None,
+                job.owner_id if settings.multi_user_enabled else None,
+                index_only=index_only,
+                task_id=source_task_id,
+            )
+        except Exception as exc:
+            if index_only:
+                intake.state = "failed"
+                intake.error = type(exc).__name__
+                imported.state = "failed"
+                db.commit()
+            raise
+        if not index_only:
+            intake.task_id = task.id
+            imported.task_id = task.id
+            db.flush()
         queued = True
         return "queued"
     finally:

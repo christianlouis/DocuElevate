@@ -70,10 +70,9 @@ def _complete_index_first_document(
         record.ocr_text = cleaned_text
         if not record.document_title:
             record.document_title = os.path.splitext(original_filename)[0]
-        if record.original_file_path:
-            record.local_filename = record.original_file_path
+        immutable_path = record.original_file_path or original_input_path
+        record.local_filename = immutable_path
         _set_index_first_source_state(db, task_id, "indexing")
-        immutable_path = record.original_file_path
         db.commit()
 
     for step in ("extract_metadata_with_gpt", "embed_metadata_into_pdf", "finalize_document_storage"):
@@ -113,7 +112,7 @@ def _mark_index_first_pending(
     """Retain a corpus item for a later OCR/conversion pass without LLM work."""
     with SessionLocal() as db:
         record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
-        immutable_path = record.original_file_path if record else None
+        immutable_path = (record.original_file_path if record else None) or original_input_path
         if record and immutable_path:
             record.local_filename = immutable_path
         _set_index_first_source_state(db, task_id, "needs_ocr", reason)

@@ -167,6 +167,42 @@ def test_index_first_persists_embedded_text_without_metadata_pipeline(db_session
 
 @pytest.mark.unit
 @pytest.mark.requires_db
+def test_index_first_pending_never_deletes_only_remaining_source(db_session, tmp_path):
+    only_copy = tmp_path / "only-copy.pdf"
+    only_copy.write_bytes(b"%PDF-1.4")
+    record = FileRecord(
+        filehash="only-copy",
+        original_filename="only-copy.pdf",
+        local_filename=str(only_copy),
+        original_file_path=None,
+        file_size=8,
+        mime_type="application/pdf",
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    with (
+        patch("app.tasks.process_document.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.process_document.log_task_progress"),
+    ):
+        from app.tasks.process_document import _mark_index_first_pending
+
+        result = _mark_index_first_pending(
+            "index-task",
+            record.id,
+            "No usable embedded text",
+            original_input_path=str(only_copy),
+            working_path=str(only_copy),
+        )
+
+    db_session.refresh(record)
+    assert result["status"] == "Index-first pending OCR"
+    assert only_copy.exists()
+    assert record.local_filename == str(only_copy)
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
 def test_process_document_duplicate_file(db_session, tmp_path):
     """
     Test that duplicate files are detected and processing is skipped.

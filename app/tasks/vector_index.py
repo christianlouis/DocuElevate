@@ -1,6 +1,7 @@
 """Celery tasks for the optional chunk-level vector index."""
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.celery_app import celery
 from app.config import settings
@@ -8,10 +9,13 @@ from app.database import SessionLocal
 from app.models import DocumentIntake, DropboxImportObject, FileRecord
 from app.tasks.retry_config import BaseTaskWithRetry
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 logger = logging.getLogger(__name__)
 
 
-def _set_source_state(db, source_task_id: str | None, state: str, error: str | None = None) -> None:
+def _set_source_state(db: "Session", source_task_id: str | None, state: str, error: str | None = None) -> None:
     if not source_task_id:
         return
     intake = db.query(DocumentIntake).filter(DocumentIntake.task_id == source_task_id).first()
