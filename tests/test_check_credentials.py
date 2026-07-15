@@ -249,6 +249,36 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.get_failure_state")
     @patch("app.tasks.check_credentials.get_provider_status")
     @patch("app.tasks.check_credentials.validate_storage_configs")
+    @patch("app.tasks.check_credentials.sync_test_onedrive_token")
+    def test_skips_configured_but_disabled_storage_provider(
+        self,
+        mock_onedrive,
+        mock_storage_configs,
+        mock_provider_status,
+        mock_get_state,
+        mock_save_state,
+    ):
+        """Disabled destinations must not refresh otherwise valid legacy credentials."""
+        mock_get_state.return_value = {}
+        mock_provider_status.return_value = {
+            "AI Provider": {"configured": False},
+            "Azure AI": {"configured": False},
+            "Dropbox": {"configured": False},
+            "Google Drive": {"configured": False},
+            "OneDrive": {"configured": True, "enabled": False},
+        }
+        mock_storage_configs.return_value = {"onedrive": []}
+
+        result = check_credentials()
+
+        mock_onedrive.assert_not_called()
+        assert result["checked"] == 0
+        assert result["unconfigured"] == 5
+
+    @patch("app.tasks.check_credentials.save_failure_state")
+    @patch("app.tasks.check_credentials.get_failure_state")
+    @patch("app.tasks.check_credentials.get_provider_status")
+    @patch("app.tasks.check_credentials.validate_storage_configs")
     @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     def test_tracks_failures(
         self, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state

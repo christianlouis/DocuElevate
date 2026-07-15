@@ -162,19 +162,22 @@ def check_credentials():
         {
             "name": "Dropbox",
             "check_func": sync_test_dropbox_token,
-            "configured": provider_status.get("Dropbox", {}).get("configured", False),
+            "configured": provider_status.get("Dropbox", {}).get("configured", False)
+            and provider_status.get("Dropbox", {}).get("enabled", True),
             "config_issues": storage_configs.get("dropbox", []),
         },
         {
             "name": "Google Drive",
             "check_func": sync_test_google_drive_token,
-            "configured": provider_status.get("Google Drive", {}).get("configured", False),
+            "configured": provider_status.get("Google Drive", {}).get("configured", False)
+            and provider_status.get("Google Drive", {}).get("enabled", True),
             "config_issues": storage_configs.get("google_drive", []),
         },
         {
             "name": "OneDrive",
             "check_func": sync_test_onedrive_token,
-            "configured": provider_status.get("OneDrive", {}).get("configured", False),
+            "configured": provider_status.get("OneDrive", {}).get("configured", False)
+            and provider_status.get("OneDrive", {}).get("enabled", True),
             "config_issues": storage_configs.get("onedrive", []),
         },
     ]
