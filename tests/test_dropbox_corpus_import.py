@@ -352,7 +352,7 @@ def test_corpus_token_budget_mutations_refresh_usage_timestamp(db_session):
         db_session.expire_all()
         refreshed = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=usage.usage_date).one()
         assert refreshed.reserved_tokens == 20_000
-        assert refreshed.updated_at > old_timestamp
+        assert refreshed.updated_at.replace(tzinfo=None) > old_timestamp
 
         refreshed.updated_at = old_timestamp
         db_session.commit()
@@ -360,7 +360,16 @@ def test_corpus_token_budget_mutations_refresh_usage_timestamp(db_session):
         db_session.expire_all()
         refreshed = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=usage.usage_date).one()
         assert refreshed.reserved_tokens == 10_000
-        assert refreshed.updated_at > old_timestamp
+        assert refreshed.updated_at.replace(tzinfo=None) > old_timestamp
+
+
+@pytest.mark.unit
+def test_corpus_token_budget_rejects_negative_global_setting():
+    with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", -1):
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_corpus_llm_tokens
+
+        with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+            _reserve_corpus_llm_tokens()
 
 
 @pytest.mark.unit

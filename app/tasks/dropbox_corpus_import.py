@@ -58,7 +58,11 @@ def _reserve_corpus_llm_tokens(*, budget: int | None = None) -> tuple[date | Non
     accounting is unavailable. Interactive uploads do not use this path.
     """
     budget = int(settings.corpus_backfill_daily_llm_token_budget if budget is None else budget)
-    if budget <= 0:
+    if budget < 0:
+        raise CorpusDailyBudgetUnavailable(
+            "Negative corpus backfill token budgets are invalid; use 0 or disable the budget explicitly"
+        )
+    if budget == 0:
         return None, 0
 
     reservation = max(
@@ -340,10 +344,6 @@ def _configured_backfill_token_budget(integration: UserIntegration) -> int:
     except (TypeError, ValueError):
         logger.warning("Ignoring invalid backfill_daily_llm_token_budget integration override: %r", raw_budget)
         budget = int(settings.corpus_backfill_daily_llm_token_budget)
-    if budget < 0:
-        raise CorpusDailyBudgetUnavailable(
-            "Negative corpus backfill token budgets are invalid; use 0 or disable the budget explicitly"
-        )
     return budget
 
 
