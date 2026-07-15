@@ -138,6 +138,7 @@ def test_occurrence_filter_rejects_promotions_and_schedules_but_keeps_proof():
     filtered = _filter_evidence_for_question("Wie oft war ich in London?", evidence)
 
     assert [item["evidence_type"] for item in filtered] == ["boarding_pass", "hotel_booking"]
+    assert _filter_evidence_for_question("Wie viele Flüge hatte ich nach London?", evidence) == filtered
     assert _filter_evidence_for_question("Welche Flugpläne habe ich?", evidence) == evidence
 
 

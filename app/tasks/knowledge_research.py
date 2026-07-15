@@ -127,7 +127,7 @@ def _filter_evidence_for_question(question: str, items: list[dict[str, Any]]) ->
     normalized_question = _normalize_key(question)
     asks_for_occurrences = bool(
         re.search(
-            r"\b(how (?:many|often)|wie (?:oft|häufig)|trend|verändert|changed|teuerste|most expensive)\b",
+            r"\b(how (?:many|often)|wie (?:oft|häufig|viele)|wieviele|trend|verändert|changed|teuerste|most expensive)\b",
             normalized_question,
         )
     )
