@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.182.4 (2026-07-15)
+
+### Bug Fixes
+
+- Count Celery in-flight work for backpressure
+  ([#1054](https://github.com/christianlouis/DocuElevate/pull/1054),
+  [`89c18d7`](https://github.com/christianlouis/DocuElevate/commit/89c18d79a0bd23ccbce8ff4ae19980333c938127))
+
+
 ## v0.182.3 (2026-07-15)
 
 ### Bug Fixes
