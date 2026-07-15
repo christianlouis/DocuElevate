@@ -412,6 +412,7 @@ def test_index_first_backfill_bypasses_llm_budget_and_queues_direct_processing(d
         patch("app.api.intake._queue_document") as queue_document,
         patch.object(db_session, "commit", wraps=db_session.commit) as commit,
     ):
+
         def assert_committed_before_queue(*_args, **kwargs):
             assert commit.call_count == 1
             return SimpleNamespace(id=kwargs["task_id"])
