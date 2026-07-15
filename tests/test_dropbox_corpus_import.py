@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models import DropboxImportJob, IntegrationDirection, IntegrationType, UserIntegration
+from app.models import CorpusLlmDailyUsage, DropboxImportJob, IntegrationDirection, IntegrationType, UserIntegration
 from app.utils.encryption import encrypt_value
 
 
@@ -245,38 +245,34 @@ def test_queue_depth_counts_priority_queues_and_worker_reserved_tasks():
 
 
 @pytest.mark.unit
-def test_corpus_token_budget_reserves_with_prompt_headroom():
-    redis_client = MagicMock()
-    redis_client.incrby.return_value = 9500
-
+def test_corpus_token_budget_reserves_with_prompt_headroom(db_session):
     with (
         patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
         patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_llm_token_reservation_per_document", 1),
         patch("app.tasks.dropbox_corpus_import.settings.metadata_max_input_tokens", 8000),
-        patch("app.tasks.dropbox_corpus_import.redis.Redis.from_url", return_value=redis_client),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
     ):
         from app.tasks.dropbox_corpus_import import _reserve_corpus_llm_tokens
 
-        key, reservation = _reserve_corpus_llm_tokens()
+        usage_date, reservation = _reserve_corpus_llm_tokens()
 
-    assert key is not None and key.startswith("docuelevate:corpus:llm-tokens:")
+    assert usage_date is not None
     assert reservation == 9500
-    redis_client.incrby.assert_called_once_with(key, 9500)
-    redis_client.expireat.assert_called_once()
-    redis_client.decrby.assert_not_called()
+    usage = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=usage_date).one()
+    assert usage.reserved_tokens == 9500
 
 
 @pytest.mark.unit
-def test_corpus_token_budget_rejects_request_that_crosses_limit():
-    redis_client = MagicMock()
-    redis_client.incrby.return_value = 9_005_000
+def test_corpus_token_budget_rejects_request_that_crosses_limit(db_session):
     frozen_now = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
+    db_session.add(CorpusLlmDailyUsage(usage_date=frozen_now.date(), reserved_tokens=8_995_000))
+    db_session.commit()
 
     with (
         patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
         patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_llm_token_reservation_per_document", 10_000),
         patch("app.tasks.dropbox_corpus_import.settings.metadata_max_input_tokens", 8000),
-        patch("app.tasks.dropbox_corpus_import.redis.Redis.from_url", return_value=redis_client),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
         patch("app.tasks.dropbox_corpus_import.datetime") as clock,
     ):
         clock.now.return_value = frozen_now
@@ -290,17 +286,15 @@ def test_corpus_token_budget_rejects_request_that_crosses_limit():
     assert error.value.used == 8_995_000
     assert error.value.budget == 9_000_000
     assert error.value.retry_after_seconds == 43_205
-    redis_client.decrby.assert_called_once()
+    usage = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=frozen_now.date()).one()
+    assert usage.reserved_tokens == 8_995_000
 
 
 @pytest.mark.unit
 def test_corpus_token_budget_fails_closed_when_counter_is_unavailable():
-    redis_client = MagicMock()
-    redis_client.incrby.side_effect = ConnectionError("redis unavailable")
-
     with (
         patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
-        patch("app.tasks.dropbox_corpus_import.redis.Redis.from_url", return_value=redis_client),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", side_effect=RuntimeError("database unavailable")),
     ):
         from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_corpus_llm_tokens
 

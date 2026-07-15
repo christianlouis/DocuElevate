@@ -78,7 +78,7 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `CORPUS_BACKFILL_QUEUE_HIGH_WATERMARK` | Pause corpus backfills at this queued plus worker-reserved Celery depth. | `50` |
 | `CORPUS_BACKFILL_RESUME_DELAY_SECONDS` | Seconds before a queue-limited backfill checks capacity again. | `30` |
 | `CORPUS_BACKFILL_TASK_PRIORITY` | Celery Redis priority for corpus coordinator tasks; `9` runs behind normal priority `0` work. | `9` |
-| `CORPUS_BACKFILL_DAILY_LLM_TOKEN_BUDGET` | Conservative UTC-day token budget for corpus imports only; `0` disables the budget. | `0` |
+| `CORPUS_BACKFILL_DAILY_LLM_TOKEN_BUDGET` | Conservative database-backed UTC-day token budget for corpus imports only; survives broker restarts; `0` disables it. | `0` |
 | `CORPUS_BACKFILL_LLM_TOKEN_RESERVATION_PER_DOCUMENT` | Tokens reserved per queued corpus document; metadata prompt/output headroom is enforced automatically. | `10000` |
 | `METADATA_MAX_INPUT_TOKENS` | Maximum document-text tokens sent to metadata extraction; keeps the beginning plus a short ending. | `8000` |
 

@@ -932,7 +932,7 @@ class Settings(BaseSettings):
         default=0,
         ge=0,
         description=(
-            "Conservative UTC-day token budget reserved by corpus imports before queuing documents. "
+            "Conservative, database-backed UTC-day token budget reserved by corpus imports before queuing documents. "
             "Set to 0 to disable the budget. Interactive uploads are not affected. Default: 0."
         ),
     )

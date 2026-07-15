@@ -4,15 +4,16 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import redis
 from celery.result import AsyncResult
+from sqlalchemy.exc import IntegrityError
 
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
+from app.models import CorpusLlmDailyUsage, DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.allowed_types import ALLOWED_EXTENSIONS
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
@@ -24,7 +25,6 @@ logger = logging.getLogger(__name__)
 _CELERY_QUEUES = ("document_processor", "default", "celery")
 _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
-_CORPUS_TOKEN_BUDGET_KEY_PREFIX = "docuelevate:corpus:llm-tokens"
 _METADATA_PROMPT_OUTPUT_HEADROOM = 1500
 
 
@@ -47,13 +47,13 @@ def _next_utc_reset(now: datetime) -> datetime:
     return datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
 
 
-def _reserve_corpus_llm_tokens() -> tuple[str | None, int]:
-    """Atomically reserve conservative LLM capacity for one corpus document.
+def _reserve_corpus_llm_tokens() -> tuple[date | None, int]:
+    """Atomically reserve durable LLM capacity for one corpus document.
 
     A zero budget disables the guard. When enabled, Redis is deliberately
-    fail-closed: losing the counter must pause background imports rather than
-    silently allowing billable overage. Interactive uploads do not use this
-    path.
+    not involved because it is an intentionally ephemeral task broker. The
+    database reservation survives Redis restarts and fails closed if durable
+    accounting is unavailable. Interactive uploads do not use this path.
     """
     budget = int(settings.corpus_backfill_daily_llm_token_budget)
     if budget <= 0:
@@ -65,42 +65,75 @@ def _reserve_corpus_llm_tokens() -> tuple[str | None, int]:
     )
     now = datetime.now(timezone.utc)
     reset_at = _next_utc_reset(now)
-    key = f"{_CORPUS_TOKEN_BUDGET_KEY_PREFIX}:{now.date().isoformat()}"
+    usage_date = now.date()
     try:
-        client = redis.Redis.from_url(
-            settings.redis_url,
-            socket_connect_timeout=2,
-            socket_timeout=2,
+        # The guarded UPDATE is atomic in PostgreSQL and SQLite. If two
+        # workers see a missing UTC-day row, one insert wins and the other
+        # retries the guarded UPDATE.
+        for _attempt in range(2):
+            with SessionLocal() as budget_db:
+                updated = (
+                    budget_db.query(CorpusLlmDailyUsage)
+                    .filter(
+                        CorpusLlmDailyUsage.usage_date == usage_date,
+                        CorpusLlmDailyUsage.reserved_tokens <= budget - reservation,
+                    )
+                    .update(
+                        {CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens + reservation},
+                        synchronize_session=False,
+                    )
+                )
+                if updated:
+                    budget_db.commit()
+                    return usage_date, reservation
+
+                existing = (
+                    budget_db.query(CorpusLlmDailyUsage).filter(CorpusLlmDailyUsage.usage_date == usage_date).first()
+                )
+                if existing is not None or reservation > budget:
+                    used = int(existing.reserved_tokens) if existing is not None else 0
+                    retry_after = max(1, int((reset_at - now).total_seconds()) + 5)
+                    raise CorpusDailyBudgetReached(
+                        used=used,
+                        budget=budget,
+                        retry_after_seconds=retry_after,
+                    )
+
+                budget_db.add(CorpusLlmDailyUsage(usage_date=usage_date, reserved_tokens=reservation))
+                try:
+                    budget_db.commit()
+                    return usage_date, reservation
+                except IntegrityError:
+                    budget_db.rollback()
+                    # A concurrent worker may have created the row. Retry the
+                    # guarded UPDATE once; other failures become fail-closed.
+                    continue
+        raise CorpusDailyBudgetUnavailable(
+            "Could not establish durable corpus LLM token accounting after a concurrent update"
         )
-        used = int(client.incrby(key, reservation))
-        client.expireat(key, reset_at)
-        if used > budget:
-            client.decrby(key, reservation)
-            retry_after = max(1, int((reset_at - now).total_seconds()) + 5)
-            raise CorpusDailyBudgetReached(
-                used=used - reservation,
-                budget=budget,
-                retry_after_seconds=retry_after,
-            )
-        return key, reservation
     except CorpusDailyBudgetReached:
+        raise
+    except CorpusDailyBudgetUnavailable:
         raise
     except Exception as exc:  # noqa: BLE001
         raise CorpusDailyBudgetUnavailable("Could not reserve the enabled corpus LLM token budget") from exc
 
 
-def _release_corpus_llm_tokens(reservation: tuple[str | None, int]) -> None:
+def _release_corpus_llm_tokens(reservation: tuple[date | None, int]) -> None:
     """Release a reservation when no pipeline task was queued."""
-    key, amount = reservation
-    if not key or amount <= 0:
+    usage_date, amount = reservation
+    if usage_date is None or amount <= 0:
         return
     try:
-        client = redis.Redis.from_url(
-            settings.redis_url,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-        client.decrby(key, amount)
+        with SessionLocal() as budget_db:
+            budget_db.query(CorpusLlmDailyUsage).filter(
+                CorpusLlmDailyUsage.usage_date == usage_date,
+                CorpusLlmDailyUsage.reserved_tokens >= amount,
+            ).update(
+                {CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens - amount},
+                synchronize_session=False,
+            )
+            budget_db.commit()
     except Exception:  # noqa: BLE001
         # Keeping a conservative reservation only delays background work; it
         # is safer than losing track of usage and allowing an overage.

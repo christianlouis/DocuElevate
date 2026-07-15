@@ -2196,7 +2196,8 @@ SETTING_METADATA = {
     "corpus_backfill_daily_llm_token_budget": {
         "category": "Processing",
         "description": (
-            "Conservative UTC-day LLM token budget for corpus imports only; 0 disables the budget (default: 0)"
+            "Conservative database-backed UTC-day LLM token budget for corpus imports only; "
+            "0 disables the budget (default: 0)"
         ),
         "type": "integer",
         "sensitive": False,
