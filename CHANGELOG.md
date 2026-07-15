@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.0 (2026-07-15)
+
+### Features
+
+- Guard corpus backfills with a daily LLM token budget
+  ([#1056](https://github.com/christianlouis/DocuElevate/pull/1056),
+  [`783b66d`](https://github.com/christianlouis/DocuElevate/commit/783b66d4a6f6e72ee0e926ccb8ed7e08fe05df35))
+
+
 ## v0.182.4 (2026-07-15)
 
 ### Bug Fixes
