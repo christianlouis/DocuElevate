@@ -89,9 +89,12 @@ def _metadata_candidates(db: Session, request: Request, query: str) -> list[File
         )
         weighted_clauses.append((clause, _search_token_weight(token)))
     raw_query = query.strip().lower()
-    metadata_match = or_(
+    exact_match = or_(
         func.lower(FileRecord.document_title) == raw_query,
         func.lower(FileRecord.original_filename) == raw_query,
+    )
+    metadata_match = or_(
+        exact_match,
         *(clause for clause, _weight in weighted_clauses),
     )
     match_weight = sum(
@@ -105,7 +108,7 @@ def _metadata_candidates(db: Session, request: Request, query: str) -> list[File
     )
     return (
         apply_owner_filter(records, request)
-        .order_by(match_weight.desc(), FileRecord.id.asc())
+        .order_by(case((exact_match, 1), else_=0).desc(), match_weight.desc(), FileRecord.id.asc())
         .limit(_METADATA_CANDIDATE_LIMIT)
         .all()
     )

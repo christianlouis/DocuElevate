@@ -598,3 +598,38 @@ def test_metadata_candidates_handle_unicode_exact_names_in_stable_order(db_sessi
     candidates = _metadata_candidates(db_session, request, "Straße.pdf")
 
     assert [record.id for record in candidates] == [26, 27]
+
+
+def test_metadata_candidates_put_exact_name_before_lower_id_partial_match(db_session):
+    partial = FileRecord(
+        id=28,
+        owner_id=None,
+        filehash="partial-name",
+        original_filename="report-final.pdf",
+        document_title="Final report",
+        local_filename="/tmp/partial.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Partial source text",
+    )
+    exact = FileRecord(
+        id=29,
+        owner_id=None,
+        filehash="exact-name",
+        original_filename="report.pdf",
+        document_title="Report",
+        local_filename="/tmp/exact.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Exact source text",
+    )
+    db_session.add_all([partial, exact])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {}
+
+    from app.api.knowledge import _metadata_candidates
+
+    candidates = _metadata_candidates(db_session, request, "report.pdf")
+
+    assert [record.id for record in candidates] == [29, 28]
