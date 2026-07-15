@@ -313,7 +313,7 @@ def test_dropbox_import_pauses_until_utc_reset_at_daily_token_budget(db_session)
     )
     db_session.add(job)
     db_session.commit()
-    entry = SimpleNamespace(name="invoice.pdf")
+    entry = SimpleNamespace(id="id:invoice", rev="rev-1", name="invoice.pdf")
     page = SimpleNamespace(entries=[entry], cursor="cursor-1", has_more=True)
     dropbox_client = MagicMock()
     dropbox_client.files_list_folder.return_value = page
@@ -343,27 +343,29 @@ def test_dropbox_import_pauses_until_utc_reset_at_daily_token_budget(db_session)
     }
     assert job.state == "queued"
     assert job.cursor is None
-    assert job.page_offset == 0
+    assert json.loads(job.page_entry_keys) == []
     assert job.discovered == 0
     schedule.assert_called_once_with(job.id, countdown=900)
 
 
 @pytest.mark.unit
-def test_budget_rechecks_resume_at_unprocessed_page_entry_without_recounting(db_session):
+def test_budget_rechecks_use_stable_entry_keys_when_page_changes(db_session):
     integration = _integration(db_session)
     job = DropboxImportJob(
-        id="job-page-offset",
+        id="job-page-progress",
         integration_id=integration.id,
         owner_id=integration.owner_id,
         root_path="/Documents",
     )
     db_session.add(job)
     db_session.commit()
-    first = SimpleNamespace(name="first.pdf")
-    second = SimpleNamespace(name="second.pdf")
-    page = SimpleNamespace(entries=[first, second], cursor="cursor-1", has_more=False)
+    first = SimpleNamespace(id="id:first", rev="rev-1", name="first.pdf")
+    second = SimpleNamespace(id="id:second", rev="rev-1", name="second.pdf")
+    inserted = SimpleNamespace(id="id:inserted", rev="rev-1", name="inserted.pdf")
+    first_page = SimpleNamespace(entries=[first, second], cursor="cursor-1", has_more=False)
+    changed_page = SimpleNamespace(entries=[inserted, first, second], cursor="cursor-2", has_more=False)
     dropbox_client = MagicMock()
-    dropbox_client.files_list_folder.return_value = page
+    dropbox_client.files_list_folder.side_effect = [first_page, changed_page, changed_page]
 
     with (
         patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
@@ -385,19 +387,19 @@ def test_budget_rechecks_resume_at_unprocessed_page_entry_without_recounting(db_
 
         db_session.refresh(job)
         assert first_pause["reason"] == "daily_llm_token_budget"
-        assert job.page_offset == 1
+        assert set(json.loads(job.page_entry_keys)) == {"id:first:rev-1"}
         assert job.discovered == 1
         assert job.queued == 1
         assert job.skipped == 0
 
-        import_file.side_effect = [budget_reached]
+        import_file.side_effect = ["queued", budget_reached]
         second_pause = run_dropbox_corpus_import.run(job.id)
 
         db_session.refresh(job)
         assert second_pause["reason"] == "daily_llm_token_budget"
-        assert job.page_offset == 1
-        assert job.discovered == 1
-        assert job.queued == 1
+        assert set(json.loads(job.page_entry_keys)) == {"id:first:rev-1", "id:inserted:rev-1"}
+        assert job.discovered == 2
+        assert job.queued == 2
         assert job.skipped == 0
 
         import_file.side_effect = ["queued"]
@@ -405,20 +407,20 @@ def test_budget_rechecks_resume_at_unprocessed_page_entry_without_recounting(db_
 
     db_session.refresh(job)
     assert completed["status"] == "completed"
-    assert job.cursor == "cursor-1"
-    assert job.page_offset == 0
-    assert job.discovered == 2
-    assert job.queued == 2
+    assert job.cursor == "cursor-2"
+    assert json.loads(job.page_entry_keys) == []
+    assert job.discovered == 3
+    assert job.queued == 3
     assert job.skipped == 0
     assert import_file.call_args.args[-1] is second
     assert schedule.call_count == 2
 
 
 @pytest.mark.unit
-def test_page_offset_persists_non_file_prefix_before_budget_pause(db_session):
+def test_invalid_page_progress_fails_closed_and_persists_error(db_session):
     integration = _integration(db_session)
     job = DropboxImportJob(
-        id="job-directory-offset",
+        id="job-invalid-page-progress",
         integration_id=integration.id,
         owner_id=integration.owner_id,
         root_path="/Documents",
@@ -426,10 +428,9 @@ def test_page_offset_persists_non_file_prefix_before_budget_pause(db_session):
     db_session.add(job)
     db_session.commit()
 
-    class FileEntry:
-        name = "invoice.pdf"
-
-    page = SimpleNamespace(entries=[SimpleNamespace(name="Folder"), FileEntry()], cursor="cursor-1", has_more=True)
+    job.page_entry_keys = "not-json"
+    db_session.commit()
+    page = SimpleNamespace(entries=[], cursor="cursor-1", has_more=True)
     dropbox_client = MagicMock()
     dropbox_client.files_list_folder.return_value = page
 
@@ -437,22 +438,15 @@ def test_page_offset_persists_non_file_prefix_before_budget_pause(db_session):
         patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
         patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
         patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
-        patch("dropbox.files.FileMetadata", FileEntry),
-        patch("app.tasks.dropbox_corpus_import._import_file") as import_file,
-        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_import"),
     ):
-        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetReached, run_dropbox_corpus_import
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
 
-        import_file.side_effect = CorpusDailyBudgetReached(
-            used=9_000_000,
-            budget=9_000_000,
-            retry_after_seconds=3600,
-        )
-        run_dropbox_corpus_import.run(job.id)
+        with pytest.raises(RuntimeError, match="not valid JSON"):
+            run_dropbox_corpus_import.run(job.id)
 
     db_session.refresh(job)
-    assert job.page_offset == 1
-    assert job.discovered == 0
+    assert job.state == "failed"
+    assert job.error == "Saved Dropbox page progress is not valid JSON"
 
 
 @pytest.mark.unit

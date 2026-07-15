@@ -286,6 +286,33 @@ def _dropbox_client(integration: UserIntegration):
     )
 
 
+def _load_page_entry_keys(job: DropboxImportJob) -> set[str]:
+    """Load stable identities already committed within the current Dropbox page."""
+    try:
+        values = json.loads(job.page_entry_keys or "[]")
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise RuntimeError("Saved Dropbox page progress is not valid JSON") from exc
+    if not isinstance(values, list) or not all(isinstance(value, str) and value for value in values):
+        raise RuntimeError("Saved Dropbox page progress must be a list of entry identities")
+    return set(values)
+
+
+def _dropbox_file_key(entry) -> str:
+    """Return an immutable identity for one Dropbox file revision."""
+    file_id = str(getattr(entry, "id", "") or "").strip()
+    revision = str(getattr(entry, "rev", "") or "").strip()
+    if not file_id or not revision:
+        raise RuntimeError("Dropbox file metadata is missing its stable id or revision")
+    return f"{file_id}:{revision}"
+
+
+def _fail_import_job(db, job: DropboxImportJob, message: str) -> None:
+    """Persist a terminal coordinator error before surfacing it to Celery."""
+    job.state = "failed"
+    job.error = message
+    db.commit()
+
+
 def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client, entry) -> str:
     """Import one Dropbox FileMetadata and return queued/skipped/failed."""
     filename = sanitize_filename(entry.name) or "document"
@@ -454,16 +481,21 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             )
             page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=batch_size)
 
-        page_offset = int(job.page_offset or 0)
-        if page_offset < 0 or page_offset > len(page.entries):
-            raise RuntimeError(f"Saved Dropbox page offset {page_offset} is invalid for {len(page.entries)} entries")
+        try:
+            committed_entry_keys = _load_page_entry_keys(job)
+        except RuntimeError as exc:
+            _fail_import_job(db, job, str(exc))
+            raise
 
-        for entry_index, entry in enumerate(page.entries):
-            if entry_index < page_offset:
-                continue
+        for entry in page.entries:
             if not isinstance(entry, dropbox.files.FileMetadata):
-                job.page_offset = entry_index + 1
-                db.commit()
+                continue
+            try:
+                entry_key = _dropbox_file_key(entry)
+            except RuntimeError as exc:
+                _fail_import_job(db, job, str(exc))
+                raise
+            if entry_key in committed_entry_keys:
                 continue
             job.discovered += 1
             try:
@@ -515,16 +547,16 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 job.skipped += 1
             else:
                 job.failed += 1
-            job.page_offset = entry_index + 1
+            committed_entry_keys.add(entry_key)
+            job.page_entry_keys = json.dumps(sorted(committed_entry_keys))
             # Persist each enqueued document before moving on. If the worker is
-            # interrupted, Dropbox returns the same page and idempotency skips
-            # the already committed entries instead of creating orphan tasks.
-            # The offset also prevents budget rechecks from recounting that
-            # committed prefix before the page cursor can advance.
+            # interrupted, stable file-revision identities prevent recounting
+            # committed entries. Unlike a numeric offset, this remains safe if
+            # the Dropbox page changes between budget rechecks.
             db.commit()
 
         job.cursor = page.cursor
-        job.page_offset = 0
+        job.page_entry_keys = "[]"
         job.state = "running" if page.has_more else "completed"
         db.commit()
         result = {
