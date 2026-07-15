@@ -27,6 +27,16 @@ class TestDetectMimeTypeFromMagic:
         result = _detect_mime_type_from_magic("/test/file.pdf")
         assert result == "application/pdf"
 
+    @patch(
+        "app.tasks.convert_to_pdf.puremagic.from_file",
+        return_value="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    def test_accepts_string_return_from_puremagic(self, _mock_puremagic):
+        assert (
+            _detect_mime_type_from_magic("/test/document")
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+
     @patch("app.tasks.convert_to_pdf.filetype.guess")
     @patch("app.tasks.convert_to_pdf.puremagic.from_file")
     def test_falls_back_to_filetype(self, mock_puremagic, mock_filetype):
@@ -121,6 +131,12 @@ class TestDetectExtension:
 
         result = _detect_extension("/test/file", None, None)
         assert result == ".png"
+
+    @patch("app.tasks.convert_to_pdf.filetype.guess")
+    @patch("app.tasks.convert_to_pdf.puremagic.from_file", return_value="docx")
+    @patch("app.tasks.convert_to_pdf.mimetypes.guess_extension", return_value=None)
+    def test_accepts_string_extension_from_puremagic(self, _mock_guess_ext, _mock_puremagic, _mock_filetype):
+        assert _detect_extension("/test/file", None, None) == ".docx"
 
     @patch("app.tasks.convert_to_pdf.filetype.guess")
     @patch("app.tasks.convert_to_pdf.puremagic.from_file")

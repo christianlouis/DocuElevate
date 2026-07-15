@@ -2161,6 +2161,49 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "corpus_backfill_batch_size": {
+        "category": "Processing",
+        "description": "Maximum provider entries requested per corpus backfill page (default: 10)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_queue_high_watermark": {
+        "category": "Processing",
+        "description": "Pause corpus backfills at this total pending Celery queue depth (default: 50)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_resume_delay_seconds": {
+        "category": "Processing",
+        "description": "Seconds before a queue-limited corpus backfill checks capacity again (default: 30)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_task_priority": {
+        "category": "Processing",
+        "description": "Celery priority for corpus backfill coordinator tasks (default: 0)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "metadata_max_input_tokens": {
+        "category": "Processing",
+        "description": (
+            "Maximum document-text tokens sent to metadata extraction. Longer documents retain the beginning "
+            "and a short ending (default: 8000)."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "upload_concurrency": {
         "category": "Processing",
         "description": (
@@ -3377,6 +3420,14 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": True,
+    },
+    "vector_embedding_batch_tokens": {
+        "category": "Knowledge Bridge",
+        "description": "Maximum aggregate token count sent in one chunk-embedding request.",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
     },
     "vector_index_timeout_seconds": {
         "category": "Knowledge Bridge",

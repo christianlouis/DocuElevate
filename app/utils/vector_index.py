@@ -111,6 +111,22 @@ def chunk_text(
         return _character_chunks(normalized, size, overlap)
 
 
+def _embedding_batches(chunks: list[TextChunk], token_budget: int) -> Iterable[list[TextChunk]]:
+    """Group ordered chunks below a provider's aggregate request-token limit."""
+    batch: list[TextChunk] = []
+    batch_tokens = 0
+    for chunk in chunks:
+        chunk_tokens = max(1, chunk.token_end - chunk.token_start)
+        if batch and batch_tokens + chunk_tokens > token_budget:
+            yield batch
+            batch = []
+            batch_tokens = 0
+        batch.append(chunk)
+        batch_tokens += chunk_tokens
+    if batch:
+        yield batch
+
+
 class QdrantVectorIndex:
     """Small HTTP client covering the Qdrant operations DocuElevate needs."""
 
@@ -175,7 +191,19 @@ class QdrantVectorIndex:
         if not chunks:
             return 0
 
-        vectors = generate_embeddings([chunk.text for chunk in chunks])
+        vectors: list[list[float]] = []
+        for batch_number, batch in enumerate(
+            _embedding_batches(chunks, settings.vector_embedding_batch_tokens),
+            start=1,
+        ):
+            logger.info(
+                "Embedding vector-index batch %d for document %s (%d chunks, %d tokens)",
+                batch_number,
+                file_record.id,
+                len(batch),
+                sum(max(1, chunk.token_end - chunk.token_start) for chunk in batch),
+            )
+            vectors.extend(generate_embeddings([chunk.text for chunk in batch]))
         if len(vectors) != len(chunks):
             raise VectorIndexError("Embedding provider returned an unexpected number of vectors")
         self.ensure_collection(len(vectors[0]))

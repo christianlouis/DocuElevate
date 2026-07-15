@@ -1,8 +1,9 @@
 """Tests for resumable Dropbox corpus import and revision deduplication."""
 
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -30,14 +31,15 @@ def _integration(db_session) -> UserIntegration:
 
 def test_dropbox_import_start_queues_owned_source(client, db_session):
     integration = _integration(db_session)
-    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.delay") as delay:
-        delay.return_value.id = "import-task"
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.apply_async") as apply_async:
+        apply_async.return_value.id = "task-1"
         response = client.post("/api/dropbox-imports/", json={"integration_id": integration.id})
 
     assert response.status_code == 202
     assert response.json()["root_path"] == "/Documents"
     assert response.json()["state"] == "queued"
-    delay.assert_called_once()
+    assert response.json()["task_id"] == "task-1"
+    apply_async.assert_called_once_with(args=[response.json()["job_id"]], countdown=0, priority=9)
 
 
 def test_watch_true_up_reuses_completed_cursor(db_session):
@@ -61,7 +63,7 @@ def test_watch_true_up_reuses_completed_cursor(db_session):
     db_session.add(previous)
     db_session.commit()
 
-    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.delay") as delay:
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.apply_async") as apply_async:
         from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
 
         result = queue_dropbox_watch_sync(integration.id, db_session)
@@ -69,7 +71,7 @@ def test_watch_true_up_reuses_completed_cursor(db_session):
     queued = db_session.query(DropboxImportJob).filter(DropboxImportJob.id == result["job_id"]).one()
     assert result["mode"] == "incremental"
     assert queued.cursor == "cursor-after-true-up"
-    delay.assert_called_once_with(queued.id)
+    apply_async.assert_called_once_with(args=[queued.id], countdown=0, priority=9)
 
 
 def test_watch_true_up_waits_for_folder_selection(db_session):
@@ -190,3 +192,132 @@ def test_dropbox_import_removes_download_when_queueing_fails(db_session, tmp_pat
             _import_file(db_session, job, integration, client, entry)
 
     assert not list(tmp_path.glob("dropbox_*"))
+
+
+@pytest.mark.unit
+def test_dropbox_import_pauses_at_queue_high_watermark(db_session):
+    integration = _integration(db_session)
+    integration.config = json.dumps({"backfill_queue_high_watermark": 25, "backfill_resume_delay_seconds": 12})
+    job = DropboxImportJob(
+        id="job-backpressure",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=25),
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_import") as schedule,
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
+
+        result = run_dropbox_corpus_import.run(job.id)
+
+    db_session.refresh(job)
+    assert result == {
+        "status": "paused",
+        "job_id": job.id,
+        "queue_depth": 25,
+        "resume_in_seconds": 12,
+    }
+    assert job.state == "queued"
+    assert "depth 25" in job.error
+    schedule.assert_called_once_with(job.id, countdown=12)
+
+
+@pytest.mark.unit
+def test_dropbox_import_uses_configured_provider_batch_size(db_session):
+    integration = _integration(db_session)
+    integration.config = json.dumps({"backfill_batch_size": 7})
+    job = DropboxImportJob(
+        id="job-small-page",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+    )
+    db_session.add(job)
+    db_session.commit()
+    page = SimpleNamespace(entries=[], cursor="cursor-1", has_more=False)
+    dropbox_client = MagicMock()
+    dropbox_client.files_list_folder.return_value = page
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
+
+        result = run_dropbox_corpus_import.run(job.id)
+
+    assert result["status"] == "completed"
+    dropbox_client.files_list_folder.assert_called_once_with(
+        "/Documents",
+        recursive=True,
+        include_deleted=False,
+        limit=7,
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, 10),
+        ({"backfill_batch_size": "7"}, 7),
+        ({"backfill_batch_size": "not-a-number"}, 10),
+        ({"backfill_batch_size": 0}, 1),
+        ({"backfill_batch_size": 5000}, 2000),
+    ],
+)
+def test_bounded_config_int_uses_safe_fallbacks_and_limits(config, expected):
+    from app.tasks.dropbox_corpus_import import _bounded_config_int
+
+    assert (
+        _bounded_config_int(
+            config,
+            "backfill_batch_size",
+            10,
+            minimum=1,
+            maximum=2000,
+        )
+        == expected
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("override", ["not-a-number", [], {}])
+def test_dropbox_import_ignores_invalid_provider_batch_size(db_session, override):
+    integration = _integration(db_session)
+    integration.config = json.dumps({"backfill_batch_size": override})
+    job = DropboxImportJob(
+        id=f"job-invalid-page-{type(override).__name__}",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+    )
+    db_session.add(job)
+    db_session.commit()
+    page = SimpleNamespace(entries=[], cursor="cursor-1", has_more=False)
+    dropbox_client = MagicMock()
+    dropbox_client.files_list_folder.return_value = page
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
+
+        result = run_dropbox_corpus_import.run(job.id)
+
+    assert result["status"] == "completed"
+    dropbox_client.files_list_folder.assert_called_once_with(
+        "/Documents",
+        recursive=True,
+        include_deleted=False,
+        limit=10,
+    )

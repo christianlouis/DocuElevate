@@ -48,6 +48,15 @@ class TestCeleryAppConfig:
 
         assert celery.conf.broker_connection_retry_on_startup is True
 
+    def test_redis_transport_consumes_normal_work_before_corpus_backfills(self):
+        """Redis priority lists must be consumed from priority 0 through 9."""
+        from app.celery_app import celery
+
+        assert celery.conf.broker_transport_options == {
+            "queue_order_strategy": "priority",
+            "priority_steps": list(range(10)),
+        }
+
 
 @pytest.mark.unit
 class TestTaskFailureHandler:

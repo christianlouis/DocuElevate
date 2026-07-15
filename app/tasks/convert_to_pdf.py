@@ -16,6 +16,18 @@ from app.utils import log_task_progress
 logger = logging.getLogger(__name__)
 
 
+def _normalise_magic_match(matches) -> tuple[Optional[str], Optional[str]]:
+    """Normalise puremagic return shapes across supported library versions."""
+    if not matches:
+        return None, None
+    if isinstance(matches, str):
+        return (matches, None) if "/" in matches else (None, matches)
+    match = matches[0]
+    if isinstance(match, str):
+        return (match, None) if "/" in match else (None, match)
+    return getattr(match, "mime_type", None), getattr(match, "extension", None)
+
+
 def _detect_mime_type_from_magic(file_path: str) -> Optional[str]:
     """
     Detect MIME type from file headers using platform-agnostic libraries.
@@ -28,8 +40,9 @@ def _detect_mime_type_from_magic(file_path: str) -> Optional[str]:
     """
     try:
         matches = puremagic.from_file(file_path)
-        if matches:
-            return matches[0].mime_type
+        mime_type, _extension = _normalise_magic_match(matches)
+        if mime_type:
+            return mime_type
     except puremagic.PureError:
         pass
 
@@ -89,8 +102,9 @@ def _detect_extension(file_path: str, original_filename: Optional[str], mime_typ
 
     try:
         matches = puremagic.from_file(file_path)
-        if matches and matches[0].extension:
-            return f".{matches[0].extension.lstrip('.')}"
+        _mime_type, extension = _normalise_magic_match(matches)
+        if extension:
+            return f".{extension.lstrip('.')}"
     except puremagic.PureError:
         pass
 

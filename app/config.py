@@ -901,6 +901,33 @@ class Settings(BaseSettings):
         default=3,
         description="Delay in seconds between each task submission when throttling in /processall",
     )
+    corpus_backfill_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=2000,
+        description="Maximum provider entries requested per corpus backfill page. Default: 10.",
+    )
+    corpus_backfill_queue_high_watermark: int = Field(
+        default=50,
+        ge=1,
+        description=(
+            "Pause corpus backfills when the total pending Celery queue depth reaches this value. Default: 50."
+        ),
+    )
+    corpus_backfill_resume_delay_seconds: int = Field(
+        default=30,
+        ge=1,
+        description="Delay before a queue-limited corpus backfill checks for capacity again. Default: 30 seconds.",
+    )
+    corpus_backfill_task_priority: int = Field(
+        default=9,
+        ge=0,
+        le=9,
+        description=(
+            "Celery priority for corpus backfill coordinator tasks. Redis consumes lower numeric priorities first, "
+            "so the default 9 keeps backfills behind interactive work."
+        ),
+    )
 
     # Client-side upload throttling settings (applied when uploading files via the web UI)
     upload_concurrency: int = Field(
@@ -1063,6 +1090,14 @@ class Settings(BaseSettings):
             " Set this below the model's context window (e.g. 8000 for an 8192-token model)."
         ),
     )
+    metadata_max_input_tokens: int = Field(
+        default=8000,
+        ge=1000,
+        description=(
+            "Maximum document-text tokens sent to metadata extraction. Longer documents retain the beginning "
+            "and a short ending before the LLM call. Default: 8000."
+        ),
+    )
     embedding_backfill_batch_size: int = Field(
         default=50,
         description=(
@@ -1101,6 +1136,15 @@ class Settings(BaseSettings):
         ge=0,
         le=1000,
         description="Number of tokens repeated between adjacent chunks to preserve context.",
+    )
+    vector_embedding_batch_tokens: int = Field(
+        default=200000,
+        ge=1000,
+        le=250000,
+        description=(
+            "Maximum aggregate token count sent in one chunk-embedding request. "
+            "Large documents are split across multiple requests to stay below provider request limits."
+        ),
     )
     vector_index_timeout_seconds: float = Field(
         default=30.0,
