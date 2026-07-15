@@ -21,6 +21,8 @@ from app.models import FileRecord, KnowledgeResearchJob
 from app.utils.user_scope import apply_owner_filter, get_current_owner_id
 
 logger = logging.getLogger(__name__)
+
+_RESEARCH_CACHE_VERSION = 2
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -160,6 +162,7 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
     history = [message.model_dump() for message in body.history[-12:]]
     cache_material = json.dumps(
         {
+            "algorithm_version": _RESEARCH_CACHE_VERSION,
             "owner": owner_id,
             "question": _normalized_search_text(body.message),
             "history": history,
