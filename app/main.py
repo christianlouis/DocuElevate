@@ -30,6 +30,7 @@ from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_ha
 from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
+from app.utils.log_safety import restrict_sensitive_provider_logging
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
 from app.utils.sentry import init_sentry
 
@@ -58,7 +59,8 @@ from app.views.files import router as files_router
 # traditional (non-container) deployments and centralised SIEM ingestion.
 #
 # Noisy third-party loggers (httpx, httpcore, authlib, etc.) are pinned to
-# WARNING when the app-level is DEBUG to keep output useful.
+# WARNING when the app-level is DEBUG to keep output useful. Provider SDKs
+# that can include prompts or document text are always pinned to WARNING.
 # ---------------------------------------------------------------------------
 _explicit_log_level = os.environ.get("LOG_LEVEL")
 if settings.debug and _explicit_log_level is None:
@@ -137,6 +139,8 @@ if _effective_level_int <= logging.DEBUG:
         "watchfiles",
     ):
         logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+restrict_sensitive_provider_logging()
 
 _startup_logger = logging.getLogger(__name__)
 _startup_logger.info(

@@ -4,11 +4,18 @@ import logging
 import os
 
 from celery import Celery
-from celery.signals import task_failure, worker_ready
+from celery.signals import after_setup_logger, after_setup_task_logger, task_failure, worker_ready
 
 from app.config import settings
+from app.utils.log_safety import restrict_sensitive_provider_logging
 
 logger = logging.getLogger(__name__)
+
+# Celery replaces/configures loggers during worker startup, so apply the
+# safeguard both now and after Celery has installed its handlers.
+restrict_sensitive_provider_logging()
+after_setup_logger.connect(restrict_sensitive_provider_logging)
+after_setup_task_logger.connect(restrict_sensitive_provider_logging)
 
 celery = Celery(
     "document_processor",
