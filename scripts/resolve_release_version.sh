@@ -3,7 +3,8 @@
 
 set -euo pipefail
 
-head_sha="${1:-$(git rev-parse HEAD)}"
+head_ref="${1:-HEAD}"
+head_sha="$(git rev-parse "${head_ref}^{commit}")"
 
 # Semantic Release creates an annotated tag on a release commit whose direct
 # parent is the merge commit that triggered the release workflow. Matching the

@@ -178,6 +178,14 @@ jobs:
               fi
               sleep 5
             done
+            if [[ -z "${NEW_VERSION}" ]]; then
+              REMOTE_VERSION="$(git show origin/main:VERSION | tr -d '\n')"
+              LOCAL_VERSION="$(tr -d '\n' < VERSION)"
+              if [[ "${REMOTE_VERSION}" != "${LOCAL_VERSION}" ]]; then
+                echo "Release metadata advanced to ${REMOTE_VERSION}, but no matching release tag was resolved"
+                exit 1
+              fi
+            fi
           fi
           ./scripts/generate_build_metadata.sh
       - name: Set up Docker Buildx
