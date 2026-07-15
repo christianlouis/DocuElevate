@@ -6,6 +6,7 @@ import os
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from threading import local
 
 import redis
 from celery.result import AsyncResult
@@ -28,6 +29,7 @@ _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
 _METADATA_PROMPT_OUTPUT_HEADROOM = 1500
 _MAX_BUDGET_RECHECK_SECONDS = 15 * 60
+_PREFETCH_THREAD_STATE = local()
 
 
 class CorpusDailyBudgetReached(RuntimeError):
@@ -384,7 +386,13 @@ def _prefetch_dropbox_entry(integration_id: int, stored_credentials: str | None,
     target_path = os.path.join(settings.workdir, f"dropbox_prefetch_{integration_id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     try:
-        client = _dropbox_client_from_stored_credentials(stored_credentials)
+        if (
+            not hasattr(_PREFETCH_THREAD_STATE, "client")
+            or getattr(_PREFETCH_THREAD_STATE, "stored_credentials", None) != stored_credentials
+        ):
+            _PREFETCH_THREAD_STATE.client = _dropbox_client_from_stored_credentials(stored_credentials)
+            _PREFETCH_THREAD_STATE.stored_credentials = stored_credentials
+        client = _PREFETCH_THREAD_STATE.client
         _metadata, response = client.files_download(entry.path_lower)
         content = response.content
         if len(content) > settings.max_upload_size:

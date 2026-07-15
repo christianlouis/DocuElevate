@@ -495,6 +495,36 @@ def test_index_first_import_consumes_prefetched_file_without_redownloading(db_se
 
 
 @pytest.mark.unit
+def test_prefetch_reuses_one_dropbox_client_per_worker_thread(tmp_path):
+    entries = [
+        SimpleNamespace(
+            name=f"notes-{index}.pdf",
+            path_lower=f"/documents/notes-{index}.pdf",
+        )
+        for index in range(2)
+    ]
+    client = MagicMock()
+    client.files_download.return_value = (None, SimpleNamespace(content=b"document"))
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.workdir", str(tmp_path)),
+        patch("app.tasks.dropbox_corpus_import._PREFETCH_THREAD_STATE", SimpleNamespace()),
+        patch(
+            "app.tasks.dropbox_corpus_import._dropbox_client_from_stored_credentials",
+            return_value=client,
+        ) as client_factory,
+    ):
+        from app.tasks.dropbox_corpus_import import _prefetch_dropbox_entry
+
+        paths = [_prefetch_dropbox_entry(4, "encrypted", entry) for entry in entries]
+
+    assert client_factory.call_count == 1
+    assert client.files_download.call_count == 2
+    for path in paths:
+        os.remove(path)
+
+
+@pytest.mark.unit
 def test_index_first_page_prefetches_downloads_in_parallel(db_session, tmp_path):
     integration = _integration(db_session)
     integration.config = json.dumps(
