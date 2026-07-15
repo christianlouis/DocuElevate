@@ -75,6 +75,10 @@ class CorpusDailyBudgetUnavailable(RuntimeError):
     """Raised when an enabled cost guard cannot reserve tokens safely."""
 
 
+class CorpusCoordinatorLockLost(RuntimeError):
+    """Raised when a corpus page can no longer prove coordinator ownership."""
+
+
 def _next_utc_reset(now: datetime) -> datetime:
     tomorrow = now.date() + timedelta(days=1)
     return datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
@@ -241,6 +245,7 @@ def _maintain_import_coordinator_lock(
     lock_key: str,
     lock_token: str,
     stop_event: Event,
+    lock_lost_event: Event,
 ) -> None:
     """Renew an owned coordinator lock until the page run finishes."""
     while not stop_event.wait(_IMPORT_COORDINATOR_LOCK_RENEWAL_SECONDS):
@@ -254,10 +259,18 @@ def _maintain_import_coordinator_lock(
             )
         except Exception:  # noqa: BLE001
             logger.warning("Could not renew Dropbox corpus coordinator lock: %s", lock_key, exc_info=True)
-            continue
+            lock_lost_event.set()
+            return
         if not renewed:
             logger.warning("Dropbox corpus coordinator lock owner changed during renewal: %s", lock_key)
+            lock_lost_event.set()
             return
+
+
+def _ensure_import_coordinator_lock(lock_lost_event: Event | None) -> None:
+    """Stop page processing as soon as the lock heartbeat loses ownership."""
+    if lock_lost_event is not None and lock_lost_event.is_set():
+        raise CorpusCoordinatorLockLost("Dropbox corpus coordinator lock was lost")
 
 
 def schedule_dropbox_corpus_import(job_id: str, *, countdown: int = 0) -> AsyncResult:
@@ -680,10 +693,16 @@ def _import_file(
             _release_corpus_llm_tokens(reservation)
 
 
-def _run_dropbox_corpus_import(self, job_id: str) -> dict:
+def _run_dropbox_corpus_import(
+    self,
+    job_id: str,
+    *,
+    lock_lost_event: Event | None = None,
+) -> dict:
     """Process one Dropbox result page and schedule the next page if needed."""
     import dropbox
 
+    _ensure_import_coordinator_lock(lock_lost_event)
     with SessionLocal() as db:
         job = db.query(DropboxImportJob).filter(DropboxImportJob.id == job_id).first()
         if not job:
@@ -710,6 +729,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
         if queue_depth is not None and queue_depth >= high_watermark:
             job.state = "queued"
             job.error = f"Paused for queue backpressure at depth {queue_depth}"
+            _ensure_import_coordinator_lock(lock_lost_event)
             db.commit()
             delay = _bounded_config_int(
                 config,
@@ -727,8 +747,10 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
 
         job.state = "running"
         job.error = None
+        _ensure_import_coordinator_lock(lock_lost_event)
         db.commit()
         client = _dropbox_client(integration)
+        _ensure_import_coordinator_lock(lock_lost_event)
         if job.cursor:
             page = client.files_list_folder_continue(job.cursor)
         else:
@@ -741,6 +763,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                 maximum=2000,
             )
             page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=batch_size)
+        _ensure_import_coordinator_lock(lock_lost_event)
 
         try:
             committed_entry_keys = _load_page_entry_keys(job)
@@ -763,6 +786,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
             if prefetch_executor is None:
                 return
             while len(prefetch_futures) < download_concurrency and prefetch_position < len(prefetch_entries):
+                _ensure_import_coordinator_lock(lock_lost_event)
                 entry_key, entry = prefetch_entries[prefetch_position]
                 prefetch_position += 1
                 prefetch_futures[entry_key] = prefetch_executor.submit(
@@ -790,6 +814,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                 fill_prefetch_window()
 
             for entry in page.entries:
+                _ensure_import_coordinator_lock(lock_lost_event)
                 if not isinstance(entry, dropbox.files.FileMetadata):
                     continue
                 try:
@@ -808,6 +833,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                             prefetched_path = future.result()
                         finally:
                             fill_prefetch_window()
+                    _ensure_import_coordinator_lock(lock_lost_event)
                     outcome = _import_file(
                         db,
                         job,
@@ -818,10 +844,15 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                     )
                     if prefetched_path and not os.path.exists(prefetched_path):
                         prefetched_path = None  # ownership moved into the durable pipeline
+                except CorpusCoordinatorLockLost:
+                    # Do not mark this revision failed or committed. Celery's
+                    # retry must see it again after coordinator ownership is restored.
+                    raise
                 except CorpusDailyBudgetReached as exc:
                     job.discovered -= 1
                     job.state = "queued"
                     job.error = str(exc)
+                    _ensure_import_coordinator_lock(lock_lost_event)
                     db.commit()
                     # Redis' default Celery visibility timeout is shorter than a
                     # possible wait to the next UTC day. Short rechecks avoid a
@@ -841,6 +872,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                     job.discovered -= 1
                     job.state = "queued"
                     job.error = str(exc)
+                    _ensure_import_coordinator_lock(lock_lost_event)
                     db.commit()
                     delay = _bounded_config_int(
                         config,
@@ -874,7 +906,11 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                 # interrupted, stable file-revision identities prevent recounting
                 # committed entries. Unlike a numeric offset, this remains safe if
                 # the Dropbox page changes between budget rechecks.
+                # If ownership was lost during _import_file, the child task may
+                # already be queued. Commit its durable ledger atomically before
+                # aborting so a retry cannot orphan or enqueue this revision twice.
                 db.commit()
+                _ensure_import_coordinator_lock(lock_lost_event)
         finally:
             if prefetch_executor is not None:
                 prefetch_executor.shutdown(wait=True, cancel_futures=True)
@@ -885,6 +921,7 @@ def _run_dropbox_corpus_import(self, job_id: str) -> dict:
                 if os.path.exists(prefetched_path):
                     os.remove(prefetched_path)
 
+        _ensure_import_coordinator_lock(lock_lost_event)
         job.cursor = page.cursor
         job.page_entry_keys = "[]"
         job.state = "running" if page.has_more else "completed"
@@ -933,15 +970,16 @@ def run_dropbox_corpus_import(self, job_id: str, recover_lock: bool = False) -> 
 
     client, lock_key, lock_token = lock
     renewal_stop = Event()
+    lock_lost = Event()
     renewal_thread = Thread(
         target=_maintain_import_coordinator_lock,
-        args=(client, lock_key, lock_token, renewal_stop),
+        args=(client, lock_key, lock_token, renewal_stop, lock_lost),
         daemon=True,
         name=f"dropbox-corpus-lock-{job_id}",
     )
     renewal_thread.start()
     try:
-        result = _run_dropbox_corpus_import(self, job_id)
+        result = _run_dropbox_corpus_import(self, job_id, lock_lost_event=lock_lost)
     finally:
         renewal_stop.set()
         renewal_thread.join(timeout=5)

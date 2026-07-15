@@ -71,8 +71,15 @@ def test_import_coordinator_lock_is_renewed_only_for_its_owner():
     client.eval.return_value = 1
     stop_event = MagicMock()
     stop_event.wait.side_effect = [False, True]
+    lock_lost_event = MagicMock()
 
-    _maintain_import_coordinator_lock(client, "corpus-lock", "owner-token", stop_event)
+    _maintain_import_coordinator_lock(
+        client,
+        "corpus-lock",
+        "owner-token",
+        stop_event,
+        lock_lost_event,
+    )
 
     assert stop_event.wait.call_args_list[0].args == (_IMPORT_COORDINATOR_LOCK_RENEWAL_SECONDS,)
     client.eval.assert_called_once_with(
@@ -82,6 +89,57 @@ def test_import_coordinator_lock_is_renewed_only_for_its_owner():
         "owner-token",
         _IMPORT_COORDINATOR_LOCK_TTL_SECONDS,
     )
+    lock_lost_event.set.assert_not_called()
+
+
+@pytest.mark.unit
+def test_import_coordinator_lock_loss_aborts_page_processing():
+    from app.tasks.dropbox_corpus_import import (
+        CorpusCoordinatorLockLost,
+        _ensure_import_coordinator_lock,
+        _maintain_import_coordinator_lock,
+    )
+
+    client = MagicMock()
+    client.eval.return_value = 0
+    stop_event = MagicMock()
+    stop_event.wait.return_value = False
+    lock_lost_event = MagicMock()
+
+    _maintain_import_coordinator_lock(
+        client,
+        "corpus-lock",
+        "owner-token",
+        stop_event,
+        lock_lost_event,
+    )
+    lock_lost_event.set.assert_called_once_with()
+    lock_lost_event.is_set.return_value = True
+
+    with pytest.raises(CorpusCoordinatorLockLost, match="coordinator lock was lost"):
+        _ensure_import_coordinator_lock(lock_lost_event)
+
+
+@pytest.mark.unit
+def test_import_coordinator_renewal_exception_signals_lock_loss():
+    from app.tasks.dropbox_corpus_import import _maintain_import_coordinator_lock
+
+    client = MagicMock()
+    client.eval.side_effect = RuntimeError("redis unavailable")
+    stop_event = MagicMock()
+    stop_event.wait.return_value = False
+    lock_lost_event = MagicMock()
+
+    _maintain_import_coordinator_lock(
+        client,
+        "corpus-lock",
+        "owner-token",
+        stop_event,
+        lock_lost_event,
+    )
+
+    client.eval.assert_called_once()
+    lock_lost_event.set.assert_called_once_with()
 
 
 @pytest.mark.unit

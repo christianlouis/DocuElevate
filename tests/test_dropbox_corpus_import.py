@@ -614,6 +614,125 @@ def test_index_first_page_prefetches_downloads_in_parallel(db_session, tmp_path)
 
 
 @pytest.mark.unit
+def test_lock_loss_during_prefetch_does_not_commit_or_fail_revision(db_session, tmp_path):
+    from threading import Event
+
+    from app.tasks.dropbox_corpus_import import (
+        CorpusCoordinatorLockLost,
+        _run_dropbox_corpus_import,
+    )
+
+    integration = _integration(db_session)
+    integration.config = json.dumps(
+        {
+            "backfill_index_first_enabled": True,
+            "backfill_download_concurrency": 2,
+        }
+    )
+    job = DropboxImportJob(
+        id="job-lock-loss-prefetch",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+        is_backfill=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    entry = SimpleNamespace(
+        id="id:lock-loss",
+        rev="rev-1",
+        name="notes.pdf",
+        size=8,
+        path_lower="/documents/notes.pdf",
+        path_display="/Documents/notes.pdf",
+    )
+    page = SimpleNamespace(entries=[entry], cursor="cursor-1", has_more=False)
+    dropbox_client = MagicMock()
+    dropbox_client.files_list_folder.return_value = page
+    lock_lost = Event()
+
+    def lose_lock_during_prefetch(*_args):
+        path = tmp_path / "notes.pdf"
+        path.write_bytes(b"document")
+        lock_lost.set()
+        return str(path)
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("dropbox.files.FileMetadata", SimpleNamespace),
+        patch(
+            "app.tasks.dropbox_corpus_import._prefetch_dropbox_entry",
+            side_effect=lose_lock_during_prefetch,
+        ),
+        patch("app.tasks.dropbox_corpus_import._import_file") as import_file,
+        pytest.raises(CorpusCoordinatorLockLost, match="coordinator lock was lost"),
+    ):
+        _run_dropbox_corpus_import(None, job.id, lock_lost_event=lock_lost)
+
+    db_session.refresh(job)
+    assert job.failed == 0
+    assert job.page_entry_keys == "[]"
+    import_file.assert_not_called()
+
+
+@pytest.mark.unit
+def test_lock_loss_after_queueing_commits_current_revision_then_aborts(db_session):
+    from threading import Event
+
+    from app.tasks.dropbox_corpus_import import (
+        CorpusCoordinatorLockLost,
+        _run_dropbox_corpus_import,
+    )
+
+    integration = _integration(db_session)
+    integration.config = json.dumps({"backfill_index_first_enabled": False})
+    job = DropboxImportJob(
+        id="job-lock-loss-after-queue",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+        is_backfill=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    entry = SimpleNamespace(
+        id="id:queued-before-loss",
+        rev="rev-1",
+        name="notes.pdf",
+        size=8,
+        path_lower="/documents/notes.pdf",
+        path_display="/Documents/notes.pdf",
+    )
+    page = SimpleNamespace(entries=[entry], cursor="cursor-1", has_more=False)
+    dropbox_client = MagicMock()
+    dropbox_client.files_list_folder.return_value = page
+    lock_lost = Event()
+
+    def queue_then_lose_lock(*_args, **_kwargs):
+        lock_lost.set()
+        return "queued"
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+        patch("dropbox.files.FileMetadata", SimpleNamespace),
+        patch("app.tasks.dropbox_corpus_import._import_file", side_effect=queue_then_lose_lock),
+        pytest.raises(CorpusCoordinatorLockLost, match="coordinator lock was lost"),
+    ):
+        _run_dropbox_corpus_import(None, job.id, lock_lost_event=lock_lost)
+
+    db_session.refresh(job)
+    assert job.downloaded == 1
+    assert job.queued == 1
+    assert job.failed == 0
+    assert "queued-before-loss" in job.page_entry_keys
+
+
+@pytest.mark.unit
 def test_index_first_prefetch_keeps_a_bounded_lookahead_window(db_session, tmp_path):
     from concurrent.futures import ThreadPoolExecutor as RealThreadPoolExecutor
 
