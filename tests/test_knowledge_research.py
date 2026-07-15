@@ -13,6 +13,7 @@ from app.tasks.knowledge_research import (
     _chat_completion_with_retry,
     _contextual_research_question,
     _deduplicate_evidence,
+    _excerpt,
     _filter_evidence_for_question,
     _no_evidence_answer,
     _numeric,
@@ -172,6 +173,43 @@ def test_hba1c_filter_rejects_reference_ranges_but_keeps_patient_results():
     ]
 
     assert _filter_evidence_for_question("Wie hat sich mein HbA1c verändert?", evidence) == [evidence[1]]
+
+
+def test_occurrence_filter_requires_named_entity_in_cited_source():
+    evidence = [
+        {"document_id": 1, "evidence_type": "hotel_stay", "claim": "Motel One stay"},
+        {"document_id": 2, "evidence_type": "hotel_stay", "claim": "Motel One stay"},
+    ]
+    records = {
+        1: SimpleNamespace(document_title="OTTO delivery", original_filename="delivery.pdf", ocr_text="Hermes"),
+        2: SimpleNamespace(
+            document_title="Motel One invoice",
+            original_filename="motel-one.pdf",
+            ocr_text="Motel One München-Garching",
+        ),
+    }
+
+    assert _filter_evidence_for_question("Wie oft war ich im Motel One?", evidence, records) == [evidence[1]]
+
+
+def test_excerpt_samples_distributed_entity_occurrences_in_long_documents():
+    sections = [f"AMAZON purchase {index} amount {index},00 EUR " + ("x" * 180) for index in range(80)]
+    sections[10] = "AMZ expensive purchase amount 387,70 EUR " + ("y" * 180)
+    text = "".join(sections)
+
+    excerpt = _excerpt(text, "Was war der teuerste Amazon Kauf?")
+
+    assert "387,70 EUR" in excerpt
+    assert len(excerpt) <= 6_000
+
+
+def test_excerpt_does_not_let_frequent_generic_terms_starve_entity_terms():
+    generic = ("teuerste boilerplate " + ("x" * 180)) * 80
+    text = generic + " AMAZON amount 387,70 EUR " + ("y" * 8_000)
+
+    excerpt = _excerpt(text, "Was war der teuerste Amazon Kauf?")
+
+    assert "AMAZON amount 387,70 EUR" in excerpt
 
 
 def test_bounded_synthesis_reports_when_it_truncates():
