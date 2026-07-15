@@ -14,7 +14,7 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_current_user, require_login
 from app.config import settings
 from app.database import get_db
 from app.models import FileRecord, KnowledgeResearchJob
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Bump whenever retrieval, reduction, or synthesis semantics change so a
 # deployment cannot serve answers produced by an older research algorithm.
-_RESEARCH_CACHE_VERSION = 2
+_RESEARCH_CACHE_VERSION = 3
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -123,6 +123,18 @@ def _research_principal(request: Request) -> str:
     return get_current_owner_id(request) or "__single_user__"
 
 
+def _research_subject_hint(request: Request) -> str | None:
+    """Return a bounded display-name hint for resolving first-person questions."""
+    user = get_current_user(request)
+    if not isinstance(user, dict):
+        return None
+    value = user.get("name") or user.get("display_name") or user.get("preferred_username")
+    if not isinstance(value, str):
+        return None
+    normalized = " ".join(value.split())[:255]
+    return normalized or None
+
+
 def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "job_id": job.id,
@@ -162,12 +174,14 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
     accessible_ids = [row[0] for row in accessible_rows]
     owner_id = _research_principal(request)
     history = [message.model_dump() for message in body.history[-12:]]
+    subject_hint = _research_subject_hint(request)
     cache_material = json.dumps(
         {
             "algorithm_version": _RESEARCH_CACHE_VERSION,
             "owner": owner_id,
             "question": _normalized_search_text(body.message),
             "history": history,
+            "subject_hint": subject_hint,
             "scope_count": len(accessible_ids),
             "scope_max": max(accessible_ids, default=0),
             "scope_digest": hashlib.blake2b(
@@ -211,7 +225,7 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
         owner_id=owner_id,
         cache_key=cache_key,
         question=body.message,
-        history_json=json.dumps(history, ensure_ascii=False),
+        history_json=json.dumps({"history": history, "subject_hint": subject_hint}, ensure_ascii=False),
         accessible_file_ids_json=json.dumps(accessible_ids),
         state="queued",
     )

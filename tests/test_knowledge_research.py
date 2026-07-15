@@ -84,6 +84,29 @@ def test_follow_up_research_includes_bounded_conversation_context():
     assert _research_keyword_query(contextual) == "london trips 2024"
 
 
+def test_research_context_includes_bounded_authenticated_subject_hint():
+    payload = '{"history":[],"subject_hint":"  Christian   Krakau-Louis  "}'
+
+    contextual = _contextual_research_question("Wie oft war ich in London?", payload)
+
+    assert "AUTHENTICATED USER DISPLAY NAME" in contextual
+    assert "Christian Krakau-Louis" in contextual
+    assert "CURRENT QUESTION" in contextual
+
+
+def test_retrieval_context_excludes_authenticated_subject_hint():
+    from app.api.knowledge import _research_keyword_query
+
+    payload = '{"history":[],"subject_hint":"Christian Krakau-Louis"}'
+
+    contextual = _contextual_research_question(
+        "Wie oft war ich in London per Flugzeug?", payload, include_subject_hint=False
+    )
+
+    assert "AUTHENTICATED USER DISPLAY NAME" not in contextual
+    assert _research_keyword_query(contextual) == "london flugzeug"
+
+
 def test_empty_research_answer_is_localized_and_qualifies_incomplete_index():
     answer = _no_evidence_answer("Wie oft war ich in London?", index_complete=False)
 
@@ -142,6 +165,15 @@ def test_occurrence_filter_rejects_promotions_and_schedules_but_keeps_proof():
     assert _filter_evidence_for_question("Welche Flugpläne habe ich?", evidence) == evidence
 
 
+def test_hba1c_filter_rejects_reference_ranges_but_keeps_patient_results():
+    evidence = [
+        {"evidence_type": "lab_reference_range", "numeric_value": "4.8-5.9", "claim": "HbA1c normal range"},
+        {"evidence_type": "hba1c_measurement", "numeric_value": "6.4", "claim": "Patient result 6.4%"},
+    ]
+
+    assert _filter_evidence_for_question("Wie hat sich mein HbA1c verändert?", evidence) == [evidence[1]]
+
+
 def test_bounded_synthesis_reports_when_it_truncates():
     small, small_truncated = _bounded_synthesis_evidence([{"event_key": "one"}])
     large, large_truncated = _bounded_synthesis_evidence(
@@ -189,6 +221,8 @@ def test_synthesis_returns_only_sources_cited_by_model():
     assert '"citations": "[1]"' in prompts[0]
     assert "candidate count is not an answer" in prompts[0]
     assert "do not combine evidence explicitly belonging" in prompts[0]
+    assert "primary hotel total must be labeled stays/Aufenthalte" in prompts[0]
+    assert "exclude reference, normal and target ranges" in prompts[0]
 
 
 def test_cleanup_removes_only_expired_terminal_jobs(db_session):

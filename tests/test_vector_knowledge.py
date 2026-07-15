@@ -1,5 +1,6 @@
 """Tests for chunk-level vector indexing and authorized retrieval."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import call, patch
 
@@ -546,6 +547,7 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
     assert job.owner_id == "__single_user__"
     assert job.question == "Wie oft war ich in London per Flugzeug?"
     assert job.accessible_file_ids_json == "[30, 31]"
+    assert json.loads(job.history_json) == {"history": [], "subject_hint": None}
     delay.assert_called_once_with(job.id)
 
 
