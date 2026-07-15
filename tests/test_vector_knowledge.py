@@ -349,3 +349,66 @@ def test_search_returns_cited_authoritative_document(client, db_session):
     assert result["document_id"] == 3
     assert result["title"] == "Calendar constraints"
     assert result["source_url"] == "/files/3"
+
+
+def test_search_reranks_exact_metadata_and_deduplicates_documents(client, db_session):
+    exact = FileRecord(
+        id=10,
+        owner_id=None,
+        filehash="exact",
+        original_filename="Posteingang_0012.pdf",
+        document_title="Deutsche Bank Kontoauszug Dezember 2010",
+        local_filename="/tmp/exact.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Account details",
+    )
+    similar = FileRecord(
+        id=11,
+        owner_id=None,
+        filehash="similar",
+        original_filename="statement.pdf",
+        document_title="Kontoauszug Deutsche Bank Christian Louis",
+        local_filename="/tmp/similar.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Similar account details",
+    )
+    other = FileRecord(
+        id=12,
+        owner_id=None,
+        filehash="other",
+        original_filename="other.pdf",
+        document_title="Kontoauszug einer anderen Bank",
+        local_filename="/tmp/other.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Other account details",
+    )
+    db_session.add_all([exact, similar, other])
+    db_session.commit()
+    hits = [
+        {"score": 0.74, "payload": {"document_id": 11, "text": "similar first", "chunk_index": 0}},
+        {"score": 0.73, "payload": {"document_id": 11, "text": "similar second", "chunk_index": 1}},
+        {"score": 0.66, "payload": {"document_id": 10, "text": "exact passage", "chunk_index": 0}},
+        {"score": 0.65, "payload": {"document_id": 12, "text": "other passage", "chunk_index": 0}},
+    ]
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits) as search,
+    ):
+        response = client.post(
+            "/api/knowledge/search",
+            json={"query": "Deutsche Bank Kontoauszug Dezember 2010", "limit": 2},
+        )
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert [result["document_id"] for result in results] == [10, 11]
+    assert results[0]["semantic_score"] == pytest.approx(0.66)
+    assert results[0]["score"] > results[0]["semantic_score"]
+    search.assert_called_once_with(
+        "Deutsche Bank Kontoauszug Dezember 2010",
+        limit=50,
+        score_threshold=0.25,
+    )

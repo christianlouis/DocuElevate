@@ -1,6 +1,7 @@
 """Authenticated retrieval API for chunk-level document knowledge."""
 
 import logging
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -16,6 +17,8 @@ from app.utils.user_scope import apply_owner_filter
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 DbSession = Annotated[Session, Depends(get_db)]
+
+_SEARCH_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -40,6 +43,41 @@ def _accessible_records(db: Session, request: Request, document_ids: list[int]) 
     return {record.id: record for record in records}
 
 
+def _normalized_search_text(value: str | None) -> str:
+    """Return comparable Unicode words without punctuation or filename separators."""
+    return " ".join(_SEARCH_TOKEN_RE.findall((value or "").casefold()))
+
+
+def _search_token_weight(token: str) -> float:
+    """Give dates, identifiers, and distinctive long terms more lexical weight."""
+    if any(character.isdigit() for character in token):
+        return 3.0
+    if len(token) >= 7:
+        return 2.0
+    return 1.0
+
+
+def _hybrid_search_score(query: str, hit: dict[str, Any], record: FileRecord) -> tuple[float, float]:
+    """Blend semantic similarity with exact evidence from authoritative metadata."""
+    try:
+        semantic_score = float(hit.get("score") or 0.0)
+    except (TypeError, ValueError):
+        semantic_score = 0.0
+
+    normalized_query = _normalized_search_text(query)
+    query_tokens = set(normalized_query.split())
+    metadata_text = _normalized_search_text(f"{record.document_title or ''} {record.original_filename or ''}")
+    metadata_tokens = set(metadata_text.split())
+    query_weight = sum(_search_token_weight(token) for token in query_tokens)
+    matched_weight = sum(_search_token_weight(token) for token in query_tokens & metadata_tokens)
+    token_coverage = matched_weight / query_weight if query_weight else 0.0
+
+    normalized_title = _normalized_search_text(record.document_title)
+    exact_title_bonus = 1.0 if normalized_query and normalized_query in normalized_title else 0.0
+    hybrid_score = min(1.0, semantic_score + (0.30 * token_coverage) + (0.10 * exact_title_bonus))
+    return hybrid_score, semantic_score
+
+
 @router.post("/search")
 @require_login
 def search_knowledge(request: Request, body: KnowledgeSearchRequest, db: DbSession) -> dict[str, Any]:
@@ -52,7 +90,7 @@ def search_knowledge(request: Request, body: KnowledgeSearchRequest, db: DbSessi
         # authoritative owner/share checks before returning any payload.
         raw_hits = QdrantVectorIndex().search(
             body.query,
-            limit=min(body.limit * 5, 250),
+            limit=min(max(body.limit * 10, 50), 250),
             score_threshold=body.score_threshold,
         )
     except Exception as exc:
@@ -69,17 +107,29 @@ def search_knowledge(request: Request, body: KnowledgeSearchRequest, db: DbSessi
             document_ids.append(value)
     accessible = _accessible_records(db, request, list(set(document_ids)))
 
-    results = []
-    for hit in raw_hits:
+    ranked_hits = []
+    for original_rank, hit in enumerate(raw_hits):
         payload = hit.get("payload") or {}
         document_id = payload.get("document_id")
         record = accessible.get(document_id)
         if record is None:
             continue
+        hybrid_score, semantic_score = _hybrid_search_score(body.query, hit, record)
+        ranked_hits.append((hybrid_score, semantic_score, -original_rank, hit, record))
+
+    ranked_hits.sort(key=lambda item: item[:3], reverse=True)
+    results = []
+    seen_documents: set[int] = set()
+    for hybrid_score, semantic_score, _original_rank, hit, record in ranked_hits:
+        if record.id in seen_documents:
+            continue
+        seen_documents.add(record.id)
+        payload = hit.get("payload") or {}
         results.append(
             {
                 "document_id": record.id,
-                "score": hit.get("score"),
+                "score": hybrid_score,
+                "semantic_score": semantic_score,
                 "text": payload.get("text", ""),
                 "chunk_index": payload.get("chunk_index"),
                 "chunk_count": payload.get("chunk_count"),
