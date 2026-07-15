@@ -122,7 +122,11 @@ def _deduplicate_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
-def _filter_evidence_for_question(question: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _filter_evidence_for_question(
+    question: str,
+    items: list[dict[str, Any]],
+    records: dict[int, FileRecord] | None = None,
+) -> list[dict[str, Any]]:
     """Reject obvious non-events for questions that ask about actual occurrences."""
     normalized_question = _normalize_key(question)
     asks_for_occurrences = bool(
@@ -135,10 +139,29 @@ def _filter_evidence_for_question(question: str, items: list[dict[str, Any]]) ->
         return items
 
     filtered = []
+    normalized_sources: dict[int, str] = {}
     for item in items:
         evidence_type = _normalize_key(item.get("evidence_type"))
         if any(term in evidence_type for term in _NON_EVENT_EVIDENCE_TERMS):
             continue
+        document_id = item.get("document_id")
+        record = records.get(document_id) if records and isinstance(document_id, int) else None
+        if record is not None:
+            if document_id not in normalized_sources:
+                normalized_sources[document_id] = _normalize_key(
+                    " ".join(
+                        (
+                            record.document_title or "",
+                            record.original_filename or "",
+                            record.ocr_text or "",
+                        )
+                    )
+                )
+            source_text = normalized_sources[document_id]
+            if "motel one" in normalized_question and not re.search(r"\bmotel\s+one\b", source_text):
+                continue
+            if "amazon" in normalized_question and not re.search(r"\b(?:amazon|amz|amzn)\b", source_text):
+                continue
         if "hba1c" in normalized_question:
             measurement_text = " ".join(
                 _normalize_key(item.get(field)) for field in ("evidence_type", "claim", "numeric_value")
@@ -222,12 +245,30 @@ def _excerpt(text: str, query: str) -> str:
     tokens = sorted({token for token in re.findall(r"\w+", query.casefold()) if len(token) >= 3}, key=len, reverse=True)
     windows = [value[:1_200], value[-1_200:]]
     lowered = value.casefold()
+    positions_by_token: dict[str, list[int]] = {}
     for token in tokens[:10]:
-        position = lowered.find(token)
-        if position >= 0:
-            windows.append(value[max(0, position - 700) : position + 1_300])
-        if sum(map(len, windows)) >= _EXCERPT_CHARS:
+        positions = [match.start() for match in re.finditer(re.escape(token), lowered)]
+        if len(positions) > 9:
+            positions = [positions[round(index * (len(positions) - 1) / 8)] for index in range(9)]
+        if positions:
+            positions_by_token[token] = positions
+            position = positions[0]
+            windows.append(value[max(0, position - 120) : position + 180])
+
+    sample_index = 1
+    while True:
+        active = [positions for positions in positions_by_token.values() if sample_index < len(positions)]
+        if not active:
             break
+        remaining = _EXCERPT_CHARS - sum(map(len, windows))
+        window_size = min(600, remaining // len(active))
+        if window_size < 160:
+            break
+        for positions in active:
+            position = positions[sample_index]
+            before = window_size // 3
+            windows.append(value[max(0, position - before) : position + (window_size - before)])
+        sample_index += 1
     return "\n…\n".join(windows)[:_EXCERPT_CHARS]
 
 
@@ -486,7 +527,7 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                 job.processed_documents = min(offset + len(records), len(candidate_ids))
                 db.commit()
 
-            relevant_evidence = _filter_evidence_for_question(job.question, evidence)
+            relevant_evidence = _filter_evidence_for_question(job.question, evidence, record_map)
             reduced = _deduplicate_evidence(relevant_evidence)
             if reduced:
                 synthesized = _synthesize(job.question, research_context, reduced, record_map, model)
