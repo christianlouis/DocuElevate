@@ -7,7 +7,8 @@ import shutil
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
-from threading import local
+from functools import lru_cache
+from threading import Event, Thread, local
 
 import redis
 from celery.result import AsyncResult
@@ -43,6 +44,21 @@ _REDIS_PRIORITY_STEPS = range(10)
 _METADATA_PROMPT_OUTPUT_HEADROOM = 1500
 _MAX_BUDGET_RECHECK_SECONDS = 15 * 60
 _PREFETCH_THREAD_STATE = local()
+_IMPORT_COORDINATOR_LOCK_TTL_SECONDS = 15 * 60
+_IMPORT_COORDINATOR_LOCK_RENEWAL_SECONDS = 60
+_IMPORT_COORDINATOR_RECOVERY_DELAY_SECONDS = 60
+_RELEASE_IMPORT_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+end
+return 0
+"""
+_RENEW_IMPORT_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("expire", KEYS[1], ARGV[2])
+end
+return 0
+"""
 
 
 class CorpusDailyBudgetReached(RuntimeError):
@@ -157,7 +173,7 @@ def _release_corpus_llm_tokens(reservation: tuple[date | None, int]) -> None:
         logger.warning("Could not release unused corpus LLM token reservation", exc_info=True)
 
 
-def _pending_queue_depth() -> int | None:
+def _pending_queue_depth(*, exclude_current_delivery: bool = False) -> int | None:
     """Return queued plus worker-reserved pipeline work, failing open on Redis errors."""
     try:
         client = redis.Redis.from_url(
@@ -175,10 +191,73 @@ def _pending_queue_depth() -> int | None:
         # reserves them. Counting it closes the prefetch gap where the visible
         # lists are empty while dozens of tasks are active or reserved.
         in_flight = int(client.hlen("unacked"))
+        if exclude_current_delivery:
+            # The coordinator uses late ACKs for crash recovery, so its own
+            # delivery remains in ``unacked`` for the whole page run. It is
+            # control-plane work, not pipeline pressure.
+            in_flight = max(in_flight - 1, 0)
         return queued + in_flight
     except Exception:  # noqa: BLE001
         logger.warning("Could not inspect queue depth before corpus backfill", exc_info=True)
         return None
+
+
+@lru_cache(maxsize=1)
+def _get_import_coordinator_redis_client() -> redis.Redis:
+    """Reuse one Redis connection pool per worker process."""
+    return redis.Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
+
+
+def _acquire_import_coordinator_lock(job_id: str) -> tuple[redis.Redis, str, str] | None:
+    """Acquire one expiring, owner-scoped coordinator lock per durable import job."""
+    client = _get_import_coordinator_redis_client()
+    lock_key = f"docuelevate:dropbox-corpus-import:{job_id}:coordinator"
+    lock_token = str(uuid.uuid4())
+    acquired = client.set(
+        lock_key,
+        lock_token,
+        ex=_IMPORT_COORDINATOR_LOCK_TTL_SECONDS,
+        nx=True,
+    )
+    if not acquired:
+        return None
+    return client, lock_key, lock_token
+
+
+def _release_import_coordinator_lock(client: redis.Redis, lock_key: str, lock_token: str) -> None:
+    """Release the coordinator lock only while this task still owns it."""
+    released = client.eval(_RELEASE_IMPORT_LOCK_SCRIPT, 1, lock_key, lock_token)
+    if not released:
+        logger.warning("Dropbox corpus coordinator lock owner changed before release: %s", lock_key)
+
+
+def _maintain_import_coordinator_lock(
+    client: redis.Redis,
+    lock_key: str,
+    lock_token: str,
+    stop_event: Event,
+) -> None:
+    """Renew an owned coordinator lock until the page run finishes."""
+    while not stop_event.wait(_IMPORT_COORDINATOR_LOCK_RENEWAL_SECONDS):
+        try:
+            renewed = client.eval(
+                _RENEW_IMPORT_LOCK_SCRIPT,
+                1,
+                lock_key,
+                lock_token,
+                _IMPORT_COORDINATOR_LOCK_TTL_SECONDS,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not renew Dropbox corpus coordinator lock: %s", lock_key, exc_info=True)
+            continue
+        if not renewed:
+            logger.warning("Dropbox corpus coordinator lock owner changed during renewal: %s", lock_key)
+            return
 
 
 def schedule_dropbox_corpus_import(job_id: str, *, countdown: int = 0) -> AsyncResult:
@@ -601,8 +680,7 @@ def _import_file(
             _release_corpus_llm_tokens(reservation)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_import")
-def run_dropbox_corpus_import(self, job_id: str) -> dict:
+def _run_dropbox_corpus_import(self, job_id: str) -> dict:
     """Process one Dropbox result page and schedule the next page if needed."""
     import dropbox
 
@@ -628,7 +706,7 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             settings.corpus_backfill_queue_high_watermark,
             minimum=1,
         )
-        queue_depth = _pending_queue_depth()
+        queue_depth = _pending_queue_depth(exclude_current_delivery=True)
         if queue_depth is not None and queue_depth >= high_watermark:
             job.state = "queued"
             job.error = f"Paused for queue backpressure at depth {queue_depth}"
@@ -639,12 +717,12 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 settings.corpus_backfill_resume_delay_seconds,
                 minimum=1,
             )
-            schedule_dropbox_corpus_import(job.id, countdown=delay)
             return {
                 "status": "paused",
                 "job_id": job.id,
                 "queue_depth": queue_depth,
                 "resume_in_seconds": delay,
+                "_schedule_resume_in_seconds": delay,
             }
 
         job.state = "running"
@@ -749,7 +827,6 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                     # possible wait to the next UTC day. Short rechecks avoid a
                     # long-lived ETA task being restored and delivered twice.
                     recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
-                    schedule_dropbox_corpus_import(job.id, countdown=recheck_in)
                     return {
                         "status": "paused",
                         "reason": "daily_llm_token_budget",
@@ -758,6 +835,7 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                         "token_budget": exc.budget,
                         "resume_in_seconds": recheck_in,
                         "budget_resets_in_seconds": exc.retry_after_seconds,
+                        "_schedule_resume_in_seconds": recheck_in,
                     }
                 except CorpusDailyBudgetUnavailable as exc:
                     job.discovered -= 1
@@ -770,12 +848,12 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                         settings.corpus_backfill_resume_delay_seconds,
                         minimum=1,
                     )
-                    schedule_dropbox_corpus_import(job.id, countdown=delay)
                     return {
                         "status": "paused",
                         "reason": "daily_llm_token_budget_unavailable",
                         "job_id": job.id,
                         "resume_in_seconds": delay,
+                        "_schedule_resume_in_seconds": delay,
                     }
                 except Exception as exc:
                     logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
@@ -820,9 +898,63 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             "failed": job.failed,
         }
 
-    if page.has_more:
+    result["_schedule_next_page"] = page.has_more
+    result["_schedule_ocr_backlog"] = not page.has_more and index_only
+    return result
+
+
+@celery.task(
+    base=BaseTaskWithRetry,
+    bind=True,
+    name="run_dropbox_corpus_import",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def run_dropbox_corpus_import(self, job_id: str, recover_lock: bool = False) -> dict:
+    """Run one corpus page while rejecting duplicate coordinator delivery."""
+    lock = _acquire_import_coordinator_lock(job_id)
+    if lock is None:
+        delivery_info = getattr(self.request, "delivery_info", {}) or {}
+        is_recovery_delivery = recover_lock or bool(delivery_info.get("redelivered")) or self.request.retries > 0
+        if is_recovery_delivery:
+            run_dropbox_corpus_import.apply_async(
+                args=[job_id],
+                kwargs={"recover_lock": True},
+                countdown=_IMPORT_COORDINATOR_RECOVERY_DELAY_SECONDS,
+                priority=settings.corpus_backfill_task_priority,
+            )
+            logger.warning(
+                "Dropbox corpus import %s recovery is waiting for a coordinator lock",
+                job_id,
+            )
+            return {"status": "waiting_for_lock", "job_id": job_id}
+        logger.info("Dropbox corpus import %s already has an active coordinator", job_id)
+        return {"status": "already_running", "job_id": job_id}
+
+    client, lock_key, lock_token = lock
+    renewal_stop = Event()
+    renewal_thread = Thread(
+        target=_maintain_import_coordinator_lock,
+        args=(client, lock_key, lock_token, renewal_stop),
+        daemon=True,
+        name=f"dropbox-corpus-lock-{job_id}",
+    )
+    renewal_thread.start()
+    try:
+        result = _run_dropbox_corpus_import(self, job_id)
+    finally:
+        renewal_stop.set()
+        renewal_thread.join(timeout=5)
+        _release_import_coordinator_lock(client, lock_key, lock_token)
+
+    schedule_next_page = result.pop("_schedule_next_page", False)
+    schedule_ocr_backlog = result.pop("_schedule_ocr_backlog", False)
+    schedule_resume_in_seconds = result.pop("_schedule_resume_in_seconds", None)
+    if schedule_resume_in_seconds is not None:
+        schedule_dropbox_corpus_import(job_id, countdown=schedule_resume_in_seconds)
+    elif schedule_next_page:
         schedule_dropbox_corpus_import(job_id)
-    elif index_only:
+    elif schedule_ocr_backlog:
         schedule_dropbox_corpus_ocr_backlog(job_id)
     return result
 

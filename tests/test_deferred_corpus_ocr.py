@@ -21,6 +21,19 @@ from app.models import (
 from app.utils.ocr_provider import OCRResult
 
 
+@pytest.fixture(autouse=True)
+def _owned_import_coordinator_lock():
+    client = Mock()
+    with (
+        patch(
+            "app.tasks.dropbox_corpus_import._acquire_import_coordinator_lock",
+            return_value=(client, "corpus-lock", "owner-token"),
+        ),
+        patch("app.tasks.dropbox_corpus_import._release_import_coordinator_lock"),
+    ):
+        yield
+
+
 def _integration(db_session, *, config: dict | None = None) -> UserIntegration:
     integration = UserIntegration(
         owner_id="owner@example.com",

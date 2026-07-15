@@ -13,6 +13,19 @@ from app.models import CorpusLlmDailyUsage, DropboxImportJob, IntegrationDirecti
 from app.utils.encryption import encrypt_value
 
 
+@pytest.fixture(autouse=True)
+def _owned_import_coordinator_lock():
+    client = MagicMock()
+    with (
+        patch(
+            "app.tasks.dropbox_corpus_import._acquire_import_coordinator_lock",
+            return_value=(client, "corpus-lock", "owner-token"),
+        ),
+        patch("app.tasks.dropbox_corpus_import._release_import_coordinator_lock"),
+    ):
+        yield
+
+
 def _integration(db_session) -> UserIntegration:
     integration = UserIntegration(
         owner_id="owner@example.com",
@@ -268,6 +281,18 @@ def test_queue_depth_counts_priority_queues_and_worker_reserved_tasks():
 
     assert redis_client.llen.call_count == 30
     redis_client.hlen.assert_called_once_with("unacked")
+
+
+@pytest.mark.unit
+def test_queue_depth_excludes_late_acked_coordinator_delivery():
+    redis_client = MagicMock()
+    redis_client.llen.return_value = 0
+    redis_client.hlen.return_value = 1
+
+    with patch("app.tasks.dropbox_corpus_import.redis.Redis.from_url", return_value=redis_client):
+        from app.tasks.dropbox_corpus_import import _pending_queue_depth
+
+        assert _pending_queue_depth(exclude_current_delivery=True) == 0
 
 
 @pytest.mark.unit
