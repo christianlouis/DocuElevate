@@ -101,14 +101,17 @@ def test_index_only_ocr_persists_text_and_queues_vector_index(db_session, tmp_pa
             return_value=("Searchable OCR text", str(staged), {}),
         ),
         patch("app.tasks.process_with_ocr.check_text_quality") as quality,
+        patch("app.tasks.process_with_ocr.compare_text_quality") as compare,
+        patch("app.tasks.process_with_ocr.embed_text_layer") as embed,
         patch("app.tasks.process_with_ocr.rotate_pdf_pages") as rotate,
-        patch("app.tasks.vector_index.index_document_vectors.delay") as index,
+        patch("app.tasks.vector_index.index_document_vectors.apply_async") as index,
     ):
         from app.tasks.process_with_ocr import process_with_ocr
 
         result = process_with_ocr.run(
             "scan.pdf",
             file_id=record.id,
+            original_text="Existing low-quality text",
             index_only=True,
             source_task_id="source-task",
         )
@@ -121,8 +124,14 @@ def test_index_only_ocr_persists_text_and_queues_vector_index(db_session, tmp_pa
     assert imported.state == "indexing"
     assert intake.state == "indexing"
     assert not staged.exists()
-    index.assert_called_once_with(record.id, source_task_id="source-task")
+    index.assert_called_once_with(
+        args=[record.id],
+        kwargs={"source_task_id": "source-task"},
+        priority=9,
+    )
     quality.assert_not_called()
+    compare.assert_not_called()
+    embed.assert_not_called()
     rotate.delay.assert_not_called()
 
 
@@ -164,7 +173,7 @@ def test_index_only_empty_ocr_is_terminal_and_does_not_index(db_session, tmp_pat
         patch("app.tasks.process_with_ocr.SessionLocal", return_value=nullcontext(db_session)),
         patch("app.tasks.process_with_ocr.get_ocr_providers", return_value=[provider]),
         patch("app.tasks.process_with_ocr.merge_ocr_results", return_value=("", str(staged), {})),
-        patch("app.tasks.vector_index.index_document_vectors.delay") as index,
+        patch("app.tasks.vector_index.index_document_vectors.apply_async") as index,
     ):
         from app.tasks.process_with_ocr import process_with_ocr
 
@@ -229,7 +238,7 @@ def test_index_only_ocr_removes_separate_tmp_provider_artifact(db_session, tmp_p
             "app.tasks.process_with_ocr.merge_ocr_results",
             return_value=("Searchable OCR text", str(provider_pdf), {}),
         ),
-        patch("app.tasks.vector_index.index_document_vectors.delay"),
+        patch("app.tasks.vector_index.index_document_vectors.apply_async"),
     ):
         from app.tasks.process_with_ocr import process_with_ocr
 
@@ -242,6 +251,71 @@ def test_index_only_ocr_removes_separate_tmp_provider_artifact(db_session, tmp_p
 
     assert not staged.exists()
     assert not provider_pdf.exists()
+
+
+@pytest.mark.unit
+def test_index_only_ocr_keeps_durable_state_when_vector_publish_fails(db_session, tmp_path):
+    integration = _integration(db_session)
+    tmp_dir = tmp_path / "tmp"
+    tmp_dir.mkdir()
+    staged = tmp_dir / "scan.pdf"
+    staged.write_bytes(b"scan")
+    record = _file_record(db_session, staged)
+    intake = DocumentIntake(
+        principal_id="owner@example.com",
+        idempotency_key="dropbox:publish-failure",
+        source="dropbox-corpus",
+        original_filename="scan.pdf",
+        task_id="publish-failure-task",
+        state="ocr_queued",
+    )
+    db_session.add(intake)
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:publish-failure",
+        revision="rev-1",
+        remote_path="/Posteingang/scan.pdf",
+        intake_id=intake.id,
+        task_id="publish-failure-task",
+        state="ocr_queued",
+    )
+    db_session.add(imported)
+    db_session.commit()
+    provider = Mock()
+    provider.name = "azure"
+    provider.process.return_value = OCRResult("azure", "Recovered later", str(staged))
+
+    with (
+        patch("app.tasks.process_with_ocr.settings.workdir", str(tmp_path)),
+        patch("app.tasks.process_with_ocr.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.process_with_ocr.get_ocr_providers", return_value=[provider]),
+        patch(
+            "app.tasks.process_with_ocr.merge_ocr_results",
+            return_value=("Recovered later", str(staged), {}),
+        ),
+        patch(
+            "app.tasks.vector_index.index_document_vectors.apply_async",
+            side_effect=RuntimeError("broker unavailable"),
+        ),
+    ):
+        from app.tasks.process_with_ocr import process_with_ocr
+
+        result = process_with_ocr.run(
+            "scan.pdf",
+            file_id=record.id,
+            index_only=True,
+            source_task_id="publish-failure-task",
+        )
+
+    db_session.refresh(imported)
+    db_session.refresh(intake)
+    db_session.refresh(record)
+    assert result["status"] == "pending_vector_index"
+    assert imported.state == "ocr_complete"
+    assert intake.state == "ocr_complete"
+    assert record.ocr_text == "Recovered later"
+    assert not staged.exists()
 
 
 @pytest.mark.unit
@@ -371,6 +445,72 @@ def test_deferred_ocr_backlog_stages_bounded_low_priority_work(db_session, tmp_p
     }
     assert apply_async.call_args.kwargs["priority"] == 9
     schedule.assert_called_once_with(job.id, countdown=7)
+
+
+@pytest.mark.unit
+def test_deferred_ocr_backlog_leaves_office_files_for_conversion(db_session, tmp_path):
+    integration = _integration(db_session)
+    job = DropboxImportJob(
+        id="conversion-job",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Posteingang",
+        state="completed",
+        is_backfill=True,
+    )
+    original = tmp_path / "notes.docx"
+    original.write_bytes(b"office")
+    record = _file_record(db_session, original, filename="notes.docx")
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:conversion",
+        source="dropbox-corpus",
+        original_filename="notes.docx",
+        task_id="conversion-source-task",
+        state="needs_ocr",
+        error="PDF conversion is required",
+    )
+    db_session.add_all([job, intake])
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:conversion",
+        revision="rev-1",
+        remote_path="/Posteingang/notes.docx",
+        intake_id=intake.id,
+        task_id="conversion-source-task",
+        state="needs_ocr",
+    )
+    db_session.add(imported)
+    db_session.add(
+        ProcessingLog(
+            file_id=record.id,
+            task_id="conversion-source-task",
+            step_name="process_document",
+            status="skipped",
+        )
+    )
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.workdir", str(tmp_path)),
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.process_with_ocr.process_with_ocr.apply_async") as apply_async,
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog"),
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_ocr_backlog
+
+        result = run_dropbox_corpus_ocr_backlog.run(job.id)
+
+    db_session.refresh(imported)
+    db_session.refresh(intake)
+    assert result["status"] == "completed"
+    assert imported.state == "needs_conversion"
+    assert intake.state == "needs_conversion"
+    assert intake.error == "PDF conversion is required"
+    apply_async.assert_not_called()
 
 
 @pytest.mark.unit

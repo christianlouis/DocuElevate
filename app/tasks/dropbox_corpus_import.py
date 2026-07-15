@@ -33,6 +33,10 @@ from app.utils.filename_utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+_OCR_CAPABLE_EXTENSIONS = frozenset(
+    {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".heic", ".heif"}
+)
+
 _CELERY_QUEUES = ("document_processor", "default", "celery")
 _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
@@ -260,6 +264,12 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
             .order_by(DropboxImportJob.created_at.desc())
             .first()
         )
+        if previous and _deferred_ocr_enabled(
+            config, index_only=previous.is_backfill and _index_first_enabled(integration)
+        ):
+            # The regular watch poll is the durable recovery trigger if the
+            # completion-to-coordinator broker publication was interrupted.
+            schedule_dropbox_corpus_ocr_backlog(previous.id)
         job = DropboxImportJob(
             id=str(uuid.uuid4()),
             integration_id=integration.id,
@@ -849,6 +859,49 @@ def _deferred_ocr_file_id(db, imported: DropboxImportObject) -> int | None:
     return int(row[0]) if row and row[0] is not None else None
 
 
+def _claim_deferred_state(db, imported: DropboxImportObject, expected: str, claimed: str) -> bool:
+    """Atomically claim one import row and align its intake ledger."""
+    updated = (
+        db.query(DropboxImportObject)
+        .filter(DropboxImportObject.id == imported.id, DropboxImportObject.state == expected)
+        .update({DropboxImportObject.state: claimed}, synchronize_session=False)
+    )
+    if not updated:
+        db.rollback()
+        return False
+    if imported.intake_id:
+        db.query(DocumentIntake).filter(DocumentIntake.id == imported.intake_id).update(
+            {DocumentIntake.state: claimed, DocumentIntake.error: None},
+            synchronize_session=False,
+        )
+    db.commit()
+    db.refresh(imported)
+    return True
+
+
+def _recover_stale_deferred_claims(db, integration_id: int, *, stale_before: datetime) -> int:
+    """Return abandoned coordinator claims to a recoverable durable state."""
+    mappings = {"ocr_claimed": "needs_ocr", "indexing": "ocr_complete"}
+    recovered = 0
+    for claimed, ready in mappings.items():
+        rows = (
+            db.query(DropboxImportObject)
+            .join(DocumentIntake, DocumentIntake.id == DropboxImportObject.intake_id)
+            .filter(
+                DropboxImportObject.integration_id == integration_id,
+                DropboxImportObject.state == claimed,
+                DocumentIntake.updated_at < stale_before,
+            )
+            .all()
+        )
+        for imported in rows:
+            _set_deferred_ocr_state(db, imported, ready, "Recovered stale deferred claim")
+            recovered += 1
+    if recovered:
+        db.commit()
+    return recovered
+
+
 @celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_ocr_backlog")
 def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
     """Queue bounded OCR-only work for scanned index-first corpus documents."""
@@ -881,6 +934,8 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
             settings.corpus_backfill_ocr_recheck_seconds,
             minimum=1,
         )
+        stale_before = datetime.now(timezone.utc) - timedelta(seconds=max(300, recheck_delay * 10))
+        _recover_stale_deferred_claims(db, integration.id, stale_before=stale_before)
         high_watermark = _bounded_config_int(
             config,
             "backfill_queue_high_watermark",
@@ -906,6 +961,43 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
             )
             if queue_depth is not None:
                 batch_size = min(batch_size, max(0, high_watermark - queue_depth))
+            remaining_slots = batch_size
+
+            from app.tasks.vector_index import index_document_vectors
+
+            index_candidates = (
+                db.query(DropboxImportObject)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state == "ocr_complete",
+                )
+                .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
+                .limit(remaining_slots)
+                .all()
+            )
+            for imported in index_candidates:
+                if not _claim_deferred_state(db, imported, "ocr_complete", "indexing"):
+                    continue
+                file_id = _deferred_ocr_file_id(db, imported)
+                record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+                if not record or not record.ocr_text or not imported.task_id:
+                    _set_deferred_ocr_state(db, imported, "failed", "OCR text is unavailable for indexing")
+                    db.commit()
+                    failed += 1
+                    continue
+                try:
+                    index_document_vectors.apply_async(
+                        args=[record.id],
+                        kwargs={"source_task_id": imported.task_id},
+                        priority=settings.corpus_backfill_task_priority,
+                    )
+                except Exception as exc:
+                    _set_deferred_ocr_state(db, imported, "ocr_complete", type(exc).__name__)
+                    db.commit()
+                    continue
+                queued += 1
+                remaining_slots -= 1
+
             candidates = (
                 db.query(DropboxImportObject)
                 .filter(
@@ -913,13 +1005,15 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
                     DropboxImportObject.state == "needs_ocr",
                 )
                 .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
-                .limit(batch_size)
+                .limit(remaining_slots)
                 .all()
             )
 
             from app.tasks.process_with_ocr import process_with_ocr
 
             for imported in candidates:
+                if not _claim_deferred_state(db, imported, "needs_ocr", "ocr_claimed"):
+                    continue
                 file_id = _deferred_ocr_file_id(db, imported)
                 record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
                 source_path = record.original_file_path if record else None
@@ -930,32 +1024,44 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
                     continue
 
                 extension = os.path.splitext(record.original_filename or imported.remote_path)[1].lower()
+                if extension not in _OCR_CAPABLE_EXTENSIONS:
+                    _set_deferred_ocr_state(db, imported, "needs_conversion", "PDF conversion is required")
+                    db.commit()
+                    continue
                 staged_name = f"corpus_ocr_{imported.id}_{uuid.uuid4().hex}{extension or '.pdf'}"
                 tmp_dir = os.path.join(settings.workdir, "tmp")
                 os.makedirs(tmp_dir, exist_ok=True)
                 staged_path = os.path.join(tmp_dir, staged_name)
                 try:
                     shutil.copy2(source_path, staged_path)
-                    _set_deferred_ocr_state(db, imported, "ocr_queued")
-                    db.commit()
                     process_with_ocr.apply_async(
                         args=[staged_name, record.id],
                         kwargs={"index_only": True, "source_task_id": imported.task_id},
                         priority=settings.corpus_backfill_task_priority,
                     )
+                    _set_deferred_ocr_state(db, imported, "ocr_queued")
+                    db.commit()
                     queued += 1
                 except Exception as exc:
                     if os.path.exists(staged_path):
                         os.remove(staged_path)
                     _set_deferred_ocr_state(db, imported, "needs_ocr", type(exc).__name__)
                     db.commit()
-                    raise
 
             pending = (
                 db.query(DropboxImportObject.id)
                 .filter(
                     DropboxImportObject.integration_id == integration.id,
-                    DropboxImportObject.state.in_(("needs_ocr", "ocr_queued", "indexing")),
+                    DropboxImportObject.state.in_(
+                        (
+                            "needs_ocr",
+                            "ocr_claimed",
+                            "ocr_queued",
+                            "ocr_retrying",
+                            "ocr_complete",
+                            "indexing",
+                        )
+                    ),
                 )
                 .first()
                 is not None
