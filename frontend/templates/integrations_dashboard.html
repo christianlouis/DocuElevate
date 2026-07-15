@@ -718,6 +718,13 @@
                 <template x-if="form.config.true_up_existing">
                   <div class="rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-3">
                     <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                      <input type="checkbox" x-model="form.config.backfill_index_first_enabled" class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span>
+                        <strong>{{ _("integrations.index_first_title") }}</strong><br />
+                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ _("integrations.index_first_hint") }}</span>
+                      </span>
+                    </label>
+                    <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
                       <input type="checkbox" x-model="form.config.backfill_token_budget_enabled" class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                       <span>
                         <strong>Daily LLM token budget</strong><br />
@@ -1323,6 +1330,7 @@ function integrationsDashboard() {
           delete_after_process: dap,
           true_up_existing: false,
           recursive: true,
+          backfill_index_first_enabled: false,
           backfill_token_budget_enabled: true,
           backfill_daily_llm_token_budget: DEFAULT_BACKFILL_TOKEN_BUDGET,
         };
@@ -1365,6 +1373,7 @@ function integrationsDashboard() {
         config.preserve_source_files = true;
       }
       if (intg.integration_type === 'WATCH_FOLDER' && config.source_type === 'dropbox') {
+        if (config.backfill_index_first_enabled === undefined) config.backfill_index_first_enabled = false;
         if (config.backfill_token_budget_enabled === undefined) config.backfill_token_budget_enabled = true;
         if (config.backfill_daily_llm_token_budget === undefined) config.backfill_daily_llm_token_budget = DEFAULT_BACKFILL_TOKEN_BUDGET;
       }

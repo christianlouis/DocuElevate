@@ -1132,6 +1132,8 @@
   "integrations.gmail_labels": "Gmail-Labels & Stern anwenden",
   "integrations.host_label": "Host",
   "integrations.imap_settings": "IMAP-Einstellungen",
+  "integrations.index_first_hint": "Bei diesem ersten Abgleich wird eingebetteter PDF-Text extrahiert und direkt an die Vektorsuche gesendet. Dokumente, die Konvertierung oder OCR benötigen, bleiben für einen späteren Durchlauf erhalten. Normale Uploads und spätere Änderungen durch die Ordnerüberwachung verwenden weiterhin die vollständige Pipeline.",
+  "integrations.index_first_title": "Bestehende Dokumente zuerst indexieren",
   "integrations.loading": "Integrationen laden\u00046",
   "integrations.modal_close": "Modal schließen",
   "integrations.modal_title_add": "Integration hinzufügen",

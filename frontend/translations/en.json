@@ -1134,6 +1134,8 @@
   "integrations.gmail_labels": "Apply Gmail labels & star",
   "integrations.host_label": "Host",
   "integrations.imap_settings": "IMAP Settings",
+  "integrations.index_first_hint": "For this initial true-up, extract embedded PDF text and send it directly to vector search. Documents needing conversion or OCR are retained for a later pass. Normal uploads and later watch updates still use the full pipeline.",
+  "integrations.index_first_title": "Index existing documents first",
   "integrations.loading": "Loading integrations…",
   "integrations.modal_close": "Close modal",
   "integrations.modal_title_add": "Add Integration",

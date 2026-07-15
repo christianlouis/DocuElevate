@@ -73,8 +73,26 @@ async def _save_upload(file: UploadFile, target_path: str) -> int:
             os.remove(temporary_path)
 
 
-def _queue_document(path: str, filename: str, content_type: str | None, owner_id: str | None):
+def _queue_document(
+    path: str,
+    filename: str,
+    content_type: str | None,
+    owner_id: str | None,
+    *,
+    index_only: bool = False,
+    task_id: str | None = None,
+) -> Any:
     extension = os.path.splitext(filename)[1].lower()
+    if index_only:
+        return process_document.apply_async(
+            args=[path],
+            kwargs={
+                "original_filename": filename,
+                "owner_id": owner_id,
+                "index_only": True,
+            },
+            task_id=task_id,
+        )
     if content_type == "application/pdf" or extension == ".pdf":
         return process_document.delay(path, original_filename=filename, owner_id=owner_id)
     return convert_to_pdf.delay(path, original_filename=filename, owner_id=owner_id)

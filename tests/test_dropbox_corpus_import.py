@@ -372,6 +372,73 @@ def test_initial_backfill_budget_can_be_disabled_live(config):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("value", [True, "true", "1", "yes", "on"])
+def test_initial_backfill_index_first_can_be_enabled_live(value):
+    integration = SimpleNamespace(config=json.dumps({"backfill_index_first_enabled": value}))
+
+    with patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True):
+        from app.tasks.dropbox_corpus_import import _index_first_enabled
+
+        assert _index_first_enabled(integration) is True
+
+
+@pytest.mark.unit
+def test_index_first_backfill_bypasses_llm_budget_and_queues_direct_processing(db_session, tmp_path):
+    integration = _integration(db_session)
+    integration.config = json.dumps({"backfill_index_first_enabled": True})
+    job = DropboxImportJob(
+        id="job-index-first",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+        is_backfill=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    entry = SimpleNamespace(
+        id="id:index-first",
+        rev="rev-1",
+        name="notes.docx",
+        size=8,
+        path_lower="/documents/notes.docx",
+        path_display="/Documents/notes.docx",
+    )
+    client = SimpleNamespace(files_download=lambda _path: (None, SimpleNamespace(content=b"document")))
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.workdir", str(tmp_path)),
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.tasks.dropbox_corpus_import._reserve_job_llm_tokens") as reserve,
+        patch("app.api.intake._queue_document") as queue_document,
+        patch.object(db_session, "commit", wraps=db_session.commit) as commit,
+    ):
+
+        def assert_committed_before_queue(*_args, **kwargs):
+            assert commit.call_count == 1
+            return SimpleNamespace(id=kwargs["task_id"])
+
+        queue_document.side_effect = assert_committed_before_queue
+        from app.tasks.dropbox_corpus_import import _import_file
+
+        assert _import_file(db_session, job, integration, client, entry) == "queued"
+
+    reserve.assert_not_called()
+    queue_document.assert_called_once()
+    assert queue_document.call_args.kwargs["index_only"] is True
+    assert queue_document.call_args.kwargs["task_id"]
+
+
+@pytest.mark.unit
+def test_index_first_falls_back_to_full_pipeline_when_vector_index_is_disabled():
+    integration = SimpleNamespace(config=json.dumps({"backfill_index_first_enabled": True}))
+
+    with patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", False):
+        from app.tasks.dropbox_corpus_import import _index_first_enabled
+
+        assert _index_first_enabled(integration) is False
+
+
+@pytest.mark.unit
 def test_dropbox_import_pauses_until_utc_reset_at_daily_token_budget(db_session):
     integration = _integration(db_session)
     job = DropboxImportJob(
