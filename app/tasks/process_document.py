@@ -669,8 +669,8 @@ def process_document(
                 log_task_progress(
                     task_id,
                     "check_text_quality",
-                    "failure",
-                    f"Poor quality text (score={quality_result.quality_score}/100); queuing OCR for comparison",
+                    "success",
+                    f"Poor embedded text detected (score={quality_result.quality_score}/100); queued OCR comparison",
                     file_id=file_id,
                     detail=detail_msg,
                 )
