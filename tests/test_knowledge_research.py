@@ -13,6 +13,7 @@ from app.tasks.knowledge_research import (
     _chat_completion_with_retry,
     _contextual_research_question,
     _deduplicate_evidence,
+    _filter_evidence_for_question,
     _no_evidence_answer,
     _numeric,
     _synthesize,
@@ -126,6 +127,21 @@ def test_deduplication_backfills_structured_fields_from_later_document():
     assert reduced[0]["event_date"] == "2025-01-02"
 
 
+def test_occurrence_filter_rejects_promotions_and_schedules_but_keeps_proof():
+    evidence = [
+        {"evidence_type": "flight_promotion", "claim": "London from 49 EUR"},
+        {"evidence_type": "route schedule", "claim": "Daily flights to Heathrow"},
+        {"evidence_type": "boarding_pass", "claim": "Flew to London"},
+        {"evidence_type": "hotel_booking", "claim": "Stayed at Motel One"},
+    ]
+
+    filtered = _filter_evidence_for_question("Wie oft war ich in London?", evidence)
+
+    assert [item["evidence_type"] for item in filtered] == ["boarding_pass", "hotel_booking"]
+    assert _filter_evidence_for_question("Wie viele Flüge hatte ich nach London?", evidence) == filtered
+    assert _filter_evidence_for_question("Welche Flugpläne habe ich?", evidence) == evidence
+
+
 def test_bounded_synthesis_reports_when_it_truncates():
     small, small_truncated = _bounded_synthesis_evidence([{"event_key": "one"}])
     large, large_truncated = _bounded_synthesis_evidence(
@@ -149,7 +165,13 @@ def test_model_call_retries_transient_failures_without_unbounded_loop():
 
 def test_synthesis_returns_only_sources_cited_by_model():
     record = SimpleNamespace(document_title="Invoice", original_filename="invoice.pdf")
-    provider = SimpleNamespace(chat_completion=lambda **_kwargs: "The maximum was 42 EUR [1].")
+    prompts = []
+
+    def complete(**kwargs):
+        prompts.append(kwargs["messages"][1]["content"])
+        return "The maximum was 42 EUR [1]."
+
+    provider = SimpleNamespace(chat_completion=complete)
     with patch("app.utils.ai_provider.get_ai_provider", return_value=provider):
         result = _synthesize(
             "What was the maximum?",
@@ -162,6 +184,11 @@ def test_synthesis_returns_only_sources_cited_by_model():
     assert result["answer"] == "The maximum was 42 EUR [1]."
     assert result["sources"][0]["document_id"] == 7
     assert result["truncated"] is False
+    assert '"document_id"' not in prompts[0]
+    assert '"document_ids"' not in prompts[0]
+    assert '"citations": "[1]"' in prompts[0]
+    assert "candidate count is not an answer" in prompts[0]
+    assert "do not combine evidence explicitly belonging" in prompts[0]
 
 
 def test_cleanup_removes_only_expired_terminal_jobs(db_session):
