@@ -55,9 +55,12 @@ def test_release_version_is_empty_without_a_direct_release_child(git_repo: Path)
     assert version == ""
 
 
+@pytest.mark.unit
 def test_image_tags_and_oci_label_use_resolved_release_version():
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     resolved_version = "${{ steps.build_metadata.outputs.version }}"
+    release_version = "${{ steps.build_metadata.outputs.release_version }}"
 
-    assert f"type=raw,value={resolved_version}" in workflow
+    assert f"type=raw,value={release_version}" in workflow
+    assert "enable=${{ steps.build_metadata.outputs.release_version != '' }}" in workflow
     assert f"org.opencontainers.image.version={resolved_version}" in workflow
