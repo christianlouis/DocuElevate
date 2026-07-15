@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    true,
 )
 
 from app.database import Base
@@ -159,6 +160,7 @@ class DropboxImportJob(Base):
     root_path = Column(String, nullable=False)
     cursor = Column(Text, nullable=True)
     page_entry_keys = Column(Text, nullable=False, default="[]", server_default="[]")
+    is_backfill = Column(Boolean, nullable=False, default=True, server_default=true())
     state = Column(String(20), nullable=False, default="queued", server_default="queued", index=True)
     discovered = Column(Integer, nullable=False, default=0, server_default="0")
     downloaded = Column(Integer, nullable=False, default=0, server_default="0")

@@ -247,6 +247,7 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
             # A completed recursive listing cursor becomes an incremental
             # Dropbox change cursor for the next watch cycle.
             cursor=previous.cursor if previous else None,
+            is_backfill=previous is None,
         )
         db.add(job)
         db.commit()
@@ -313,6 +314,13 @@ def _fail_import_job(db, job: DropboxImportJob, message: str) -> None:
     db.commit()
 
 
+def _reserve_job_llm_tokens(job: DropboxImportJob) -> tuple[date | None, int]:
+    """Apply the daily cost guard only to an initial corpus backfill."""
+    if not job.is_backfill:
+        return None, 0
+    return _reserve_corpus_llm_tokens()
+
+
 def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client, entry) -> str:
     """Import one Dropbox FileMetadata and return queued/skipped/failed."""
     filename = sanitize_filename(entry.name) or "document"
@@ -356,7 +364,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(imported)
         return "skipped"
 
-    reservation = _reserve_corpus_llm_tokens()
+    reservation = _reserve_job_llm_tokens(job)
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     queued = False
