@@ -454,8 +454,16 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             )
             page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=batch_size)
 
-        for entry in page.entries:
+        page_offset = int(job.page_offset or 0)
+        if page_offset < 0 or page_offset > len(page.entries):
+            raise RuntimeError(f"Saved Dropbox page offset {page_offset} is invalid for {len(page.entries)} entries")
+
+        for entry_index, entry in enumerate(page.entries):
+            if entry_index < page_offset:
+                continue
             if not isinstance(entry, dropbox.files.FileMetadata):
+                job.page_offset = entry_index + 1
+                db.commit()
                 continue
             job.discovered += 1
             try:
@@ -507,12 +515,16 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 job.skipped += 1
             else:
                 job.failed += 1
+            job.page_offset = entry_index + 1
             # Persist each enqueued document before moving on. If the worker is
             # interrupted, Dropbox returns the same page and idempotency skips
             # the already committed entries instead of creating orphan tasks.
+            # The offset also prevents budget rechecks from recounting that
+            # committed prefix before the page cursor can advance.
             db.commit()
 
         job.cursor = page.cursor
+        job.page_offset = 0
         job.state = "running" if page.has_more else "completed"
         db.commit()
         result = {
