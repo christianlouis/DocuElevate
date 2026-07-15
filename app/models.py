@@ -1,6 +1,19 @@
 # app/models.py
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 
 from app.database import Base
 
@@ -171,6 +184,16 @@ class DropboxImportObject(Base):
     task_id = Column(String, nullable=True)
     state = Column(String(20), nullable=False, default="queued", server_default="queued")
     imported_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CorpusLlmDailyUsage(Base):
+    """Durable conservative LLM reservations for corpus imports by UTC day."""
+
+    __tablename__ = "corpus_llm_daily_usage"
+
+    usage_date = Column(Date, primary_key=True)
+    reserved_tokens = Column(BigInteger, nullable=False, default=0, server_default="0")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class FileProcessingStep(Base):

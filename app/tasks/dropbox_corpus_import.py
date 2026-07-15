@@ -4,14 +4,16 @@ import json
 import logging
 import os
 import uuid
+from datetime import date, datetime, timedelta, timezone
 
 import redis
 from celery.result import AsyncResult
+from sqlalchemy.exc import IntegrityError
 
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
+from app.models import CorpusLlmDailyUsage, DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.allowed_types import ALLOWED_EXTENSIONS
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
@@ -23,6 +25,120 @@ logger = logging.getLogger(__name__)
 _CELERY_QUEUES = ("document_processor", "default", "celery")
 _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
+_METADATA_PROMPT_OUTPUT_HEADROOM = 1500
+_MAX_BUDGET_RECHECK_SECONDS = 15 * 60
+
+
+class CorpusDailyBudgetReached(RuntimeError):
+    """Raised when a corpus import must wait for the next UTC token window."""
+
+    def __init__(self, *, used: int, budget: int, retry_after_seconds: int) -> None:
+        super().__init__(f"Daily corpus LLM token budget reached ({used}/{budget})")
+        self.used = used
+        self.budget = budget
+        self.retry_after_seconds = retry_after_seconds
+
+
+class CorpusDailyBudgetUnavailable(RuntimeError):
+    """Raised when an enabled cost guard cannot reserve tokens safely."""
+
+
+def _next_utc_reset(now: datetime) -> datetime:
+    tomorrow = now.date() + timedelta(days=1)
+    return datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
+
+
+def _reserve_corpus_llm_tokens() -> tuple[date | None, int]:
+    """Atomically reserve durable LLM capacity for one corpus document.
+
+    A zero budget disables the guard. When enabled, Redis is deliberately
+    not involved because it is an intentionally ephemeral task broker. The
+    database reservation survives Redis restarts and fails closed if durable
+    accounting is unavailable. Interactive uploads do not use this path.
+    """
+    budget = int(settings.corpus_backfill_daily_llm_token_budget)
+    if budget <= 0:
+        return None, 0
+
+    reservation = max(
+        int(settings.corpus_backfill_llm_token_reservation_per_document),
+        int(settings.metadata_max_input_tokens) + _METADATA_PROMPT_OUTPUT_HEADROOM,
+    )
+    now = datetime.now(timezone.utc)
+    reset_at = _next_utc_reset(now)
+    usage_date = now.date()
+    try:
+        # The guarded UPDATE is atomic in PostgreSQL and SQLite. If two
+        # workers see a missing UTC-day row, one insert wins and the other
+        # retries the guarded UPDATE.
+        for _attempt in range(2):
+            with SessionLocal() as budget_db:
+                updated = (
+                    budget_db.query(CorpusLlmDailyUsage)
+                    .filter(
+                        CorpusLlmDailyUsage.usage_date == usage_date,
+                        CorpusLlmDailyUsage.reserved_tokens <= budget - reservation,
+                    )
+                    .update(
+                        {CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens + reservation},
+                        synchronize_session=False,
+                    )
+                )
+                if updated:
+                    budget_db.commit()
+                    return usage_date, reservation
+
+                existing = (
+                    budget_db.query(CorpusLlmDailyUsage).filter(CorpusLlmDailyUsage.usage_date == usage_date).first()
+                )
+                if existing is not None or reservation > budget:
+                    used = int(existing.reserved_tokens) if existing is not None else 0
+                    retry_after = max(1, int((reset_at - now).total_seconds()) + 5)
+                    raise CorpusDailyBudgetReached(
+                        used=used,
+                        budget=budget,
+                        retry_after_seconds=retry_after,
+                    )
+
+                budget_db.add(CorpusLlmDailyUsage(usage_date=usage_date, reserved_tokens=reservation))
+                try:
+                    budget_db.commit()
+                    return usage_date, reservation
+                except IntegrityError:
+                    budget_db.rollback()
+                    # A concurrent worker may have created the row. Retry the
+                    # guarded UPDATE once; other failures become fail-closed.
+                    continue
+        raise CorpusDailyBudgetUnavailable(
+            "Could not establish durable corpus LLM token accounting after a concurrent update"
+        )
+    except CorpusDailyBudgetReached:
+        raise
+    except CorpusDailyBudgetUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise CorpusDailyBudgetUnavailable("Could not reserve the enabled corpus LLM token budget") from exc
+
+
+def _release_corpus_llm_tokens(reservation: tuple[date | None, int]) -> None:
+    """Release a reservation when no pipeline task was queued."""
+    usage_date, amount = reservation
+    if usage_date is None or amount <= 0:
+        return
+    try:
+        with SessionLocal() as budget_db:
+            budget_db.query(CorpusLlmDailyUsage).filter(
+                CorpusLlmDailyUsage.usage_date == usage_date,
+                CorpusLlmDailyUsage.reserved_tokens >= amount,
+            ).update(
+                {CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens - amount},
+                synchronize_session=False,
+            )
+            budget_db.commit()
+    except Exception:  # noqa: BLE001
+        # Keeping a conservative reservation only delays background work; it
+        # is safer than losing track of usage and allowing an overage.
+        logger.warning("Could not release unused corpus LLM token reservation", exc_info=True)
 
 
 def _pending_queue_depth() -> int | None:
@@ -213,6 +329,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(imported)
         return "skipped"
 
+    reservation = _reserve_corpus_llm_tokens()
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     queued = False
@@ -270,6 +387,8 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             os.remove(temporary_path)
         if not queued and os.path.exists(target_path):
             os.remove(target_path)
+        if not queued:
+            _release_corpus_llm_tokens(reservation)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_import")
@@ -341,6 +460,43 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             job.discovered += 1
             try:
                 outcome = _import_file(db, job, integration, client, entry)
+            except CorpusDailyBudgetReached as exc:
+                job.discovered -= 1
+                job.state = "queued"
+                job.error = str(exc)
+                db.commit()
+                # Redis' default Celery visibility timeout is shorter than a
+                # possible wait to the next UTC day. Short rechecks avoid a
+                # long-lived ETA task being restored and delivered twice.
+                recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
+                schedule_dropbox_corpus_import(job.id, countdown=recheck_in)
+                return {
+                    "status": "paused",
+                    "reason": "daily_llm_token_budget",
+                    "job_id": job.id,
+                    "tokens_reserved": exc.used,
+                    "token_budget": exc.budget,
+                    "resume_in_seconds": recheck_in,
+                    "budget_resets_in_seconds": exc.retry_after_seconds,
+                }
+            except CorpusDailyBudgetUnavailable as exc:
+                job.discovered -= 1
+                job.state = "queued"
+                job.error = str(exc)
+                db.commit()
+                delay = _bounded_config_int(
+                    config,
+                    "backfill_resume_delay_seconds",
+                    settings.corpus_backfill_resume_delay_seconds,
+                    minimum=1,
+                )
+                schedule_dropbox_corpus_import(job.id, countdown=delay)
+                return {
+                    "status": "paused",
+                    "reason": "daily_llm_token_budget_unavailable",
+                    "job_id": job.id,
+                    "resume_in_seconds": delay,
+                }
             except Exception as exc:
                 logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
                 outcome = "failed"

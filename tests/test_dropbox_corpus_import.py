@@ -2,12 +2,13 @@
 
 import json
 from contextlib import nullcontext
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models import DropboxImportJob, IntegrationDirection, IntegrationType, UserIntegration
+from app.models import CorpusLlmDailyUsage, DropboxImportJob, IntegrationDirection, IntegrationType, UserIntegration
 from app.utils.encryption import encrypt_value
 
 
@@ -241,6 +242,109 @@ def test_queue_depth_counts_priority_queues_and_worker_reserved_tasks():
 
     assert redis_client.llen.call_count == 30
     redis_client.hlen.assert_called_once_with("unacked")
+
+
+@pytest.mark.unit
+def test_corpus_token_budget_reserves_with_prompt_headroom(db_session):
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_llm_token_reservation_per_document", 1),
+        patch("app.tasks.dropbox_corpus_import.settings.metadata_max_input_tokens", 8000),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+    ):
+        from app.tasks.dropbox_corpus_import import _reserve_corpus_llm_tokens
+
+        usage_date, reservation = _reserve_corpus_llm_tokens()
+
+    assert usage_date is not None
+    assert reservation == 9500
+    usage = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=usage_date).one()
+    assert usage.reserved_tokens == 9500
+
+
+@pytest.mark.unit
+def test_corpus_token_budget_rejects_request_that_crosses_limit(db_session):
+    frozen_now = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
+    db_session.add(CorpusLlmDailyUsage(usage_date=frozen_now.date(), reserved_tokens=8_995_000))
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_llm_token_reservation_per_document", 10_000),
+        patch("app.tasks.dropbox_corpus_import.settings.metadata_max_input_tokens", 8000),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import.datetime") as clock,
+    ):
+        clock.now.return_value = frozen_now
+        clock.combine.side_effect = datetime.combine
+        clock.min = datetime.min
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetReached, _reserve_corpus_llm_tokens
+
+        with pytest.raises(CorpusDailyBudgetReached) as error:
+            _reserve_corpus_llm_tokens()
+
+    assert error.value.used == 8_995_000
+    assert error.value.budget == 9_000_000
+    assert error.value.retry_after_seconds == 43_205
+    usage = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=frozen_now.date()).one()
+    assert usage.reserved_tokens == 8_995_000
+
+
+@pytest.mark.unit
+def test_corpus_token_budget_fails_closed_when_counter_is_unavailable():
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", side_effect=RuntimeError("database unavailable")),
+    ):
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_corpus_llm_tokens
+
+        with pytest.raises(CorpusDailyBudgetUnavailable, match="Could not reserve"):
+            _reserve_corpus_llm_tokens()
+
+
+@pytest.mark.unit
+def test_dropbox_import_pauses_until_utc_reset_at_daily_token_budget(db_session):
+    integration = _integration(db_session)
+    job = DropboxImportJob(
+        id="job-token-budget",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+    )
+    db_session.add(job)
+    db_session.commit()
+    entry = SimpleNamespace(name="invoice.pdf")
+    page = SimpleNamespace(entries=[entry], cursor="cursor-1", has_more=True)
+    dropbox_client = MagicMock()
+    dropbox_client.files_list_folder.return_value = page
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+        patch("dropbox.files.FileMetadata", SimpleNamespace),
+        patch("app.tasks.dropbox_corpus_import._import_file") as import_file,
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_import") as schedule,
+    ):
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetReached, run_dropbox_corpus_import
+
+        import_file.side_effect = CorpusDailyBudgetReached(used=8_990_000, budget=9_000_000, retry_after_seconds=3600)
+        result = run_dropbox_corpus_import.run(job.id)
+
+    db_session.refresh(job)
+    assert result == {
+        "status": "paused",
+        "reason": "daily_llm_token_budget",
+        "job_id": job.id,
+        "tokens_reserved": 8_990_000,
+        "token_budget": 9_000_000,
+        "resume_in_seconds": 900,
+        "budget_resets_in_seconds": 3600,
+    }
+    assert job.state == "queued"
+    assert job.cursor is None
+    assert job.discovered == 0
+    schedule.assert_called_once_with(job.id, countdown=900)
 
 
 @pytest.mark.unit

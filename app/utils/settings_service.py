@@ -2193,6 +2193,27 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "corpus_backfill_daily_llm_token_budget": {
+        "category": "Processing",
+        "description": (
+            "Conservative database-backed UTC-day LLM token budget for corpus imports only; "
+            "0 disables the budget (default: 0)"
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_llm_token_reservation_per_document": {
+        "category": "Processing",
+        "description": (
+            "Tokens reserved per queued corpus document, with automatic metadata prompt headroom (default: 10000)"
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "metadata_max_input_tokens": {
         "category": "Processing",
         "description": (
