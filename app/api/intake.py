@@ -82,13 +82,15 @@ def _queue_document(
     index_only: bool = False,
 ):
     extension = os.path.splitext(filename)[1].lower()
-    if index_only or content_type == "application/pdf" or extension == ".pdf":
+    if index_only:
         return process_document.delay(
             path,
             original_filename=filename,
             owner_id=owner_id,
-            index_only=index_only,
+            index_only=True,
         )
+    if content_type == "application/pdf" or extension == ".pdf":
+        return process_document.delay(path, original_filename=filename, owner_id=owner_id)
     return convert_to_pdf.delay(path, original_filename=filename, owner_id=owner_id)
 
 
