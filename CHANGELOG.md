@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.3 (2026-07-15)
+
+### Bug Fixes
+
+- Sync release and image versions ([#1068](https://github.com/christianlouis/DocuElevate/pull/1068),
+  [`33e248e`](https://github.com/christianlouis/DocuElevate/commit/33e248e422729c5c0b9d914c8573d8df11da4844))
+
+
 ## v0.183.2 (2026-07-15)
 
 ### Bug Fixes
