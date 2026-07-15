@@ -44,7 +44,9 @@ def test_map_batch_rejects_evidence_for_documents_outside_batch():
 
     record = SimpleNamespace(id=7, document_title="Lab", original_filename="lab.pdf", ocr_text="HbA1c 5.8 %")
     provider = SimpleNamespace(
-        chat_completion=lambda **_kwargs: '{"evidence":[{"document_id":7,"event_key":"lab-1"},{"document_id":99,"event_key":"leak"}]}'
+        chat_completion=lambda **_kwargs: (
+            '{"evidence":[{"document_id":7,"event_key":"lab-1"},{"document_id":99,"event_key":"leak"}]}'
+        )
     )
     with patch("app.utils.ai_provider.get_ai_provider", return_value=provider):
         result = _map_batch("HbA1c trend", [record], "gpt-5-nano")
