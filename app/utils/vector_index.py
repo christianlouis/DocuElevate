@@ -209,9 +209,20 @@ class QdrantVectorIndex:
         self.ensure_collection(len(vectors[0]))
 
         digest = content_hash(text)
+        index_version = hashlib.sha256(
+            (
+                f"{digest}:{settings.embedding_model}:"
+                f"{settings.vector_chunk_tokens}:{settings.vector_chunk_overlap_tokens}"
+            ).encode("utf-8")
+        ).hexdigest()
         points = []
         for chunk, vector in zip(chunks, vectors, strict=True):
-            point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"docuelevate:{file_record.id}:{digest}:{chunk.index}"))
+            point_id = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"docuelevate:{file_record.id}:{index_version}:{chunk.index}",
+                )
+            )
             created_at = getattr(file_record, "created_at", None)
             points.append(
                 {
@@ -222,6 +233,7 @@ class QdrantVectorIndex:
                         "owner_id": file_record.owner_id,
                         "file_hash": file_record.filehash,
                         "content_hash": digest,
+                        "index_version": index_version,
                         "filename": file_record.original_filename,
                         "title": file_record.document_title,
                         "mime_type": file_record.mime_type,
@@ -235,18 +247,27 @@ class QdrantVectorIndex:
                 }
             )
 
-        # Generate every embedding before deleting old points.  A provider
-        # outage therefore leaves the last known-good index intact.
+        # Keep the last complete index live until every new batch is stored.
+        # Stable point IDs make retries idempotent; cleanup happens only after
+        # the complete replacement version has been written successfully.
+        batch_size = settings.vector_upsert_batch_size
+        for start in range(0, len(points), batch_size):
+            batch = points[start : start + batch_size]
+            self._request(
+                "PUT",
+                f"/collections/{self.collection}/points?wait=true",
+                {"points": batch},
+                expected=(200, 201),
+            )
         self._request(
             "POST",
             f"/collections/{self.collection}/points/delete?wait=true",
-            {"filter": {"must": [{"key": "document_id", "match": {"value": file_record.id}}]}},
-        )
-        self._request(
-            "PUT",
-            f"/collections/{self.collection}/points?wait=true",
-            {"points": points},
-            expected=(200, 201),
+            {
+                "filter": {
+                    "must": [{"key": "document_id", "match": {"value": file_record.id}}],
+                    "must_not": [{"key": "index_version", "match": {"value": index_version}}],
+                }
+            },
         )
         return len(points)
 
