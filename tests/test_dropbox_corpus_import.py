@@ -294,6 +294,21 @@ def test_corpus_token_budget_rejects_request_that_crosses_limit():
 
 
 @pytest.mark.unit
+def test_corpus_token_budget_fails_closed_when_counter_is_unavailable():
+    redis_client = MagicMock()
+    redis_client.incrby.side_effect = ConnectionError("redis unavailable")
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
+        patch("app.tasks.dropbox_corpus_import.redis.Redis.from_url", return_value=redis_client),
+    ):
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_corpus_llm_tokens
+
+        with pytest.raises(CorpusDailyBudgetUnavailable, match="Could not reserve"):
+            _reserve_corpus_llm_tokens()
+
+
+@pytest.mark.unit
 def test_dropbox_import_pauses_until_utc_reset_at_daily_token_budget(db_session):
     integration = _integration(db_session)
     job = DropboxImportJob(
