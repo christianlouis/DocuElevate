@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.182.2 (2026-07-15)
+
+### Bug Fixes
+
+- Throttle corpus backfills
+  ([`cd90cf5`](https://github.com/christianlouis/DocuElevate/commit/cd90cf594a8e2ef26ec6a65258af9e8fa97d4e5f))
+
+
 ## v0.182.1 (2026-07-14)
 
 ### Bug Fixes
