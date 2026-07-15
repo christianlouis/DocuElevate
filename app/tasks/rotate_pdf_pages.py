@@ -162,6 +162,16 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
                 "(angles too small or not multiples of 90°)"
             )
 
+        rotation_detail = json.dumps({"applied_rotations": applied_rotations})
+        log_task_progress(
+            task_id,
+            "apply_rotation",
+            "success",
+            "Page rotation applied" if applied_rotations else "No page rotation required",
+            file_id=file_id,
+            detail=rotation_detail,
+        )
+
         # Continue with metadata extraction
         extract_metadata_with_gpt.delay(filename, extracted_text, file_id)
 
@@ -171,7 +181,7 @@ def rotate_pdf_pages(self, filename: str, extracted_text: str, rotation_data=Non
             "success",
             f"Rotation complete for {filename}",
             file_id=file_id,
-            detail=json.dumps({"applied_rotations": applied_rotations}),
+            detail=rotation_detail,
         )
 
         return {

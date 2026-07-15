@@ -586,6 +586,9 @@ startxref
 
             # Verify metadata extraction was queued
             mock_extract.delay.assert_called_once_with(test_pdf.name, extracted_text, 1)
+            assert any(
+                call.args[1] == "apply_rotation" and call.args[2] == "success" for call in mock_log.call_args_list
+            )
 
     @patch("app.tasks.rotate_pdf_pages.log_task_progress")
     def test_rotate_pdf_pages_no_rotation_needed(self, mock_log, tmp_path):
