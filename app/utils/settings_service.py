@@ -2171,7 +2171,7 @@ SETTING_METADATA = {
     },
     "corpus_backfill_queue_high_watermark": {
         "category": "Processing",
-        "description": "Pause corpus backfills at this total pending Celery queue depth (default: 50)",
+        "description": "Pause corpus backfills at this queued plus worker-reserved Celery depth (default: 50)",
         "type": "integer",
         "sensitive": False,
         "required": False,
@@ -2187,7 +2187,7 @@ SETTING_METADATA = {
     },
     "corpus_backfill_task_priority": {
         "category": "Processing",
-        "description": "Celery priority for corpus backfill coordinator tasks (default: 0)",
+        "description": "Celery priority for corpus backfill coordinator tasks (default: 9)",
         "type": "integer",
         "sensitive": False,
         "required": False,

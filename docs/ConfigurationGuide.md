@@ -75,7 +75,7 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `PROCESSALL_THROTTLE_THRESHOLD`   | Number of files above which throttling is applied. Files <= threshold are processed immediately.  | `20`        |
 | `PROCESSALL_THROTTLE_DELAY`       | Delay in seconds between each task submission when throttling is active.                          | `3`         |
 | `CORPUS_BACKFILL_BATCH_SIZE` | Maximum provider entries requested per Dropbox corpus page. | `10` |
-| `CORPUS_BACKFILL_QUEUE_HIGH_WATERMARK` | Pause corpus backfills at this total pending Celery queue depth. | `50` |
+| `CORPUS_BACKFILL_QUEUE_HIGH_WATERMARK` | Pause corpus backfills at this queued plus worker-reserved Celery depth. | `50` |
 | `CORPUS_BACKFILL_RESUME_DELAY_SECONDS` | Seconds before a queue-limited backfill checks capacity again. | `30` |
 | `CORPUS_BACKFILL_TASK_PRIORITY` | Celery Redis priority for corpus coordinator tasks; `9` runs behind normal priority `0` work. | `9` |
 | `METADATA_MAX_INPUT_TOKENS` | Maximum document-text tokens sent to metadata extraction; keeps the beginning plus a short ending. | `8000` |

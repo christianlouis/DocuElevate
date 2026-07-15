@@ -911,7 +911,7 @@ class Settings(BaseSettings):
         default=50,
         ge=1,
         description=(
-            "Pause corpus backfills when the total pending Celery queue depth reaches this value. Default: 50."
+            "Pause corpus backfills when queued plus worker-reserved Celery work reaches this value. Default: 50."
         ),
     )
     corpus_backfill_resume_delay_seconds: int = Field(
