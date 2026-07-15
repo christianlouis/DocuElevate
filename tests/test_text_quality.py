@@ -769,7 +769,8 @@ class TestProcessDocumentTextQuality:
         with (
             patch("app.tasks.process_document.SessionLocal") as mock_sl,
             patch("app.tasks.process_document.settings") as mock_settings,
-            patch("app.tasks.process_document.log_task_progress"),
+            patch("app.tasks.process_document.hash_file", return_value="quality-fallback-hash"),
+            patch("app.tasks.process_document.log_task_progress") as mock_progress,
             patch("app.tasks.process_document.extract_metadata_with_gpt") as mock_gpt,
             patch("app.tasks.process_document.process_with_ocr") as mock_ocr,
             patch("app.tasks.process_document.detect_pdf_text_source", return_value=TextSource.OCR_PREVIOUS),
@@ -794,6 +795,9 @@ class TestProcessDocumentTextQuality:
         assert len(call_args.args) >= 3
         assert isinstance(call_args.args[2], str)
         assert len(call_args.args[2]) > 0
+        quality_updates = [call for call in mock_progress.call_args_list if call.args[1] == "check_text_quality"]
+        assert len(quality_updates) == 1
+        assert quality_updates[0].args[2] == "success"
 
     def test_quality_check_digital_source_skips_ai_call(self, db_session, tmp_path):
         """Digital-origin PDFs bypass the AI and proceed directly to GPT."""
