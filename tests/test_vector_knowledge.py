@@ -351,6 +351,166 @@ def test_search_returns_cited_authoritative_document(client, db_session):
     assert result["source_url"] == "/files/3"
 
 
+def test_document_chat_uses_independent_rag_model_and_returns_sources(client, db_session):
+    record = FileRecord(
+        id=4,
+        owner_id=None,
+        filehash="chat-source",
+        original_filename="lease.pdf",
+        document_title="Lease agreement",
+        local_filename="/tmp/lease.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="The monthly rent is EUR 1,200.",
+    )
+    db_session.add(record)
+    db_session.commit()
+    hits = [
+        {
+            "score": 0.93,
+            "payload": {
+                "document_id": 4,
+                "text": "The monthly rent is EUR 1,200.",
+                "chunk_index": 0,
+                "chunk_count": 1,
+            },
+        }
+    ]
+    provider = SimpleNamespace(chat_completion=lambda **_kwargs: "The rent is EUR 1,200 [1].")
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.api.knowledge.settings.rag_chat_model", "gpt-5-nano"),
+        patch("app.api.knowledge.settings.ai_model", "gpt-4o-mini"),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits),
+        patch("app.utils.ai_provider.get_ai_provider", return_value=provider) as get_provider,
+        patch.object(provider, "chat_completion", wraps=provider.chat_completion) as completion,
+    ):
+        response = client.post(
+            "/api/knowledge/chat",
+            json={"message": "What is the monthly rent?"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["answer"] == "The rent is EUR 1,200 [1]."
+    assert data["model"] == "gpt-5-nano"
+    assert data["retrieved_count"] == 1
+    assert data["sources"][0]["document_id"] == 4
+    assert data["sources"][0]["number"] == 1
+    assert data["sources"][0]["source_url"] == "/files/4"
+    get_provider.assert_called_once_with()
+    assert completion.call_args.kwargs["model"] == "gpt-5-nano"
+    prompt = completion.call_args.kwargs["messages"]
+    assert "untrusted data" in prompt[0]["content"]
+    assert "SOURCE [1]" in prompt[-1]["content"]
+
+
+def test_document_chat_uses_recent_user_history_for_follow_up_retrieval(client):
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.api.knowledge.settings.rag_chat_model", "gpt-5-nano"),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]) as search,
+        patch("app.utils.ai_provider.get_ai_provider") as get_provider,
+    ):
+        response = client.post(
+            "/api/knowledge/chat",
+            json={
+                "message": "When does it end?",
+                "history": [
+                    {"role": "user", "content": "Tell me about the lease."},
+                    {"role": "assistant", "content": "Which part?"},
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["retrieved_count"] == 0
+    retrieval_query = search.call_args.args[0]
+    assert retrieval_query == "Tell me about the lease.\nWhen does it end?"
+    get_provider.assert_not_called()
+
+
+def test_document_chat_returns_clear_gateway_error_when_model_fails(client, db_session):
+    record = FileRecord(
+        id=5,
+        owner_id=None,
+        filehash="chat-error-source",
+        original_filename="source.pdf",
+        local_filename="/tmp/source.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Grounded source text",
+    )
+    db_session.add(record)
+    db_session.commit()
+    hits = [{"score": 0.9, "payload": {"document_id": 5, "text": "Grounded source text"}}]
+    provider = SimpleNamespace(chat_completion=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("offline")))
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits),
+        patch("app.utils.ai_provider.get_ai_provider", return_value=provider),
+    ):
+        response = client.post("/api/knowledge/chat", json={"message": "What does it say?"})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Document chat model is unavailable"
+
+
+def test_document_chat_uses_cross_document_research_for_counts(client, db_session):
+    records = [
+        FileRecord(
+            id=file_id,
+            owner_id=None,
+            filehash=f"flight-{file_id}",
+            original_filename=f"flight-{file_id}.pdf",
+            document_title=f"London flight {file_id}",
+            local_filename=f"/tmp/flight-{file_id}.pdf",
+            file_size=1,
+            mime_type="application/pdf",
+            ocr_text=f"Flight booking to London number {file_id}",
+        )
+        for file_id in (30, 31)
+    ]
+    db_session.add_all(records)
+    db_session.commit()
+    semantic_hits = [
+        {
+            "score": 0.91,
+            "payload": {"document_id": 30, "text": "Flight booking to London number 30"},
+        }
+    ]
+    keyword_hits = {
+        "results": [{"file_id": 30}, {"file_id": 31}],
+        "total": 125,
+    }
+    provider = SimpleNamespace(chat_completion=lambda **_kwargs: "At least two London flights are documented [1] [2].")
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.api.knowledge.settings.rag_chat_model", "gpt-5-nano"),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=semantic_hits),
+        patch("app.utils.meilisearch_client.search_documents", return_value=keyword_hits) as keyword_search,
+        patch("app.utils.ai_provider.get_ai_provider", return_value=provider),
+        patch.object(provider, "chat_completion", wraps=provider.chat_completion) as completion,
+    ):
+        response = client.post(
+            "/api/knowledge/chat",
+            json={"message": "Wie oft war ich in London per Flugzeug?"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["retrieved_count"] == 2
+    assert data["coverage"] == {
+        "strategy": "cross_document_research",
+        "evidence_documents": 2,
+        "keyword_matches": 125,
+        "truncated": True,
+    }
+    keyword_search.assert_called_once_with("Wie oft war ich in London per Flugzeug?", page=1, per_page=100)
+    assert "Never describe a result as corpus-complete" in completion.call_args.kwargs["messages"][0]["content"]
+    assert "'truncated': True" in completion.call_args.kwargs["messages"][-1]["content"]
+
+
 def test_search_reranks_exact_metadata_and_deduplicates_documents(client, db_session):
     exact = FileRecord(
         id=10,

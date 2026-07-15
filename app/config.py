@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     ai_provider: str = "openai"
     # Override model for any provider; falls back to openai_model when not set
     ai_model: Optional[str] = None
+    # Independent model for document-grounded RAG answers. This remains
+    # separate from metadata/OCR model selection and is live-reloadable from
+    # the database-backed settings service.
+    rag_chat_model: str = "gpt-5-nano"
 
     # Anthropic Claude settings (used when ai_provider="anthropic")
     anthropic_api_key: Optional[str] = None

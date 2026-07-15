@@ -204,6 +204,7 @@ passage is returned.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/knowledge/search` | Return ranked, cited passages visible to the caller |
+| `POST` | `/api/knowledge/chat` | Answer from accessible document evidence and return numbered sources plus retrieval coverage |
 | `GET` | `/api/knowledge/documents/{file_id}` | Return authoritative OCR text and metadata for a cited document |
 | `POST` | `/api/knowledge/documents/{file_id}/index` | Rebuild one accessible document's chunks |
 | `POST` | `/api/knowledge/reindex?limit=1000` | Queue an idempotent accessible-corpus backfill |
@@ -219,6 +220,20 @@ curl -X POST "https://<preprod-host>/api/knowledge/search" \
 Each result contains a `document_id`, score, cited `text`, chunk position, source
 filename/title, and `source_url`. Use the cited-document endpoint only when the full
 OCR text is needed.
+
+The chat endpoint accepts `message`, optional `history`, `limit`, and
+`score_threshold`. It uses the independently configured `RAG_CHAT_MODEL`. Questions
+about counts, maxima, or trends trigger broader semantic plus full-text retrieval.
+The response includes a `coverage` object; when `coverage.truncated` is true, the
+answer is an evidence-backed lower bound rather than a claim about the complete
+corpus.
+
+```bash
+curl -X POST "https://<preprod-host>/api/knowledge/chat" \
+  -H "Authorization: Bearer <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"How has my HbA1c changed over the years?","history":[]}'
+```
 
 #### MCP adapter contract
 

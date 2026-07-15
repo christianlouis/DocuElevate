@@ -42,6 +42,7 @@ secret manager; do not store them in `.env` files committed to source control.
 | `VECTOR_CHUNK_OVERLAP_TOKENS` | Token overlap between adjacent chunks. | `80` |
 | `VECTOR_EMBEDDING_BATCH_TOKENS` | Maximum aggregate tokens per embedding request; larger documents use multiple ordered requests. | `200000` |
 | `VECTOR_INDEX_TIMEOUT_SECONDS` | Qdrant request timeout. | `30` |
+| `RAG_CHAT_MODEL` | Model used only for source-grounded document chat. This is independent from metadata/OCR model selection and can be changed from database-backed settings without restarting app or workers. | `gpt-5-nano` |
 | `DOCUMENT_INTAKE_SHARED_SECRET` | Optional dedicated secret for the controlled legacy sender. | unset |
 | `DOCUMENT_INTAKE_SHARED_OWNER_ID` | Owner/principal assigned to shared-secret intake. | `legacy-bridge` |
 | `DOCUMENT_BRIDGE_ENABLED` | Send completed documents to another DocuElevate intake. | `false` |
@@ -59,6 +60,7 @@ VECTOR_INDEX_COLLECTION=docuelevate_documents
 VECTOR_CHUNK_TOKENS=600
 VECTOR_CHUNK_OVERLAP_TOKENS=80
 VECTOR_EMBEDDING_BATCH_TOKENS=200000
+RAG_CHAT_MODEL=gpt-5-nano
 ```
 
 The vector collection is derived state. PostgreSQL and the document work directory
