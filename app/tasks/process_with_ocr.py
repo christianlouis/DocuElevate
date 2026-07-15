@@ -31,6 +31,98 @@ from app.utils.text_quality import TextSource, check_text_quality, compare_text_
 logger = logging.getLogger(__name__)
 
 
+def _remove_index_only_ocr_artifacts(*paths: str | None) -> None:
+    """Remove only OCR artifacts created inside DocuElevate's tmp directory."""
+    tmp_root = os.path.realpath(os.path.join(settings.workdir, "tmp"))
+    for path in paths:
+        if not path:
+            continue
+        real_path = os.path.realpath(path)
+        try:
+            is_tmp_artifact = os.path.commonpath((tmp_root, real_path)) == tmp_root
+        except ValueError:
+            is_tmp_artifact = False
+        if is_tmp_artifact and os.path.isfile(real_path):
+            os.remove(real_path)
+
+
+def _complete_index_only_ocr(
+    *,
+    file_id: int,
+    source_task_id: str,
+    filename: str,
+    extracted_text: str,
+    providers_used: list[str],
+    tmp_file_path: str,
+    searchable_pdf_path: str | None,
+) -> dict:
+    """Persist OCR text and recoverably hand it to the low-priority indexer."""
+    cleaned_text = extracted_text.strip()
+    from app.tasks.vector_index import _set_source_state, index_document_vectors
+
+    with SessionLocal() as db:
+        record = db.query(FileRecord).filter_by(id=file_id).first()
+        if record is None:
+            _set_source_state(db, source_task_id, "failed", "File not found")
+            db.commit()
+            raise RuntimeError(f"Index-only OCR FileRecord {file_id} disappeared")
+        if not cleaned_text:
+            _set_source_state(db, source_task_id, "failed", "OCR returned no usable text")
+            db.commit()
+            _remove_index_only_ocr_artifacts(tmp_file_path, searchable_pdf_path)
+            return {
+                "status": "failed",
+                "file_id": file_id,
+                "detail": "OCR returned no usable text",
+            }
+        record.ocr_text = cleaned_text
+        if not record.document_title:
+            record.document_title = os.path.splitext(record.original_filename or filename)[0]
+        # This durable state lets the periodic coordinator recover a broker
+        # publication failure without rerunning OCR.
+        _set_source_state(db, source_task_id, "ocr_complete")
+        db.commit()
+
+    for step in ("extract_metadata_with_gpt", "embed_metadata_into_pdf", "finalize_document_storage"):
+        log_task_progress(
+            source_task_id,
+            step,
+            "skipped",
+            "Deferred corpus OCR: text goes directly to Qdrant",
+            file_id=file_id,
+        )
+
+    with SessionLocal() as db:
+        _set_source_state(db, source_task_id, "indexing")
+        db.commit()
+
+    queued = False
+    try:
+        index_document_vectors.apply_async(
+            args=[file_id],
+            kwargs={"source_task_id": source_task_id},
+            priority=settings.corpus_backfill_task_priority,
+        )
+        queued = True
+    except Exception:
+        logger.warning(
+            "Could not publish deferred vector indexing for file %s; coordinator will retry",
+            file_id,
+            exc_info=True,
+        )
+        with SessionLocal() as db:
+            _set_source_state(db, source_task_id, "ocr_complete", "Vector queue publication failed")
+            db.commit()
+
+    _remove_index_only_ocr_artifacts(tmp_file_path, searchable_pdf_path)
+    return {
+        "status": "queued_for_vector_index" if queued else "pending_vector_index",
+        "file_id": file_id,
+        "text_chars": len(cleaned_text),
+        "providers_used": providers_used,
+    }
+
+
 @celery.task(base=OcrTaskWithRetry, bind=True)
 def process_with_ocr(
     self,
@@ -38,6 +130,8 @@ def process_with_ocr(
     file_id: int | None = None,
     original_text: str | None = None,
     language: str | None = None,
+    index_only: bool = False,
+    source_task_id: str | None = None,
 ):
     """Run the configured OCR providers on *filename* and continue the pipeline.
 
@@ -56,6 +150,9 @@ def process_with_ocr(
             to override the global OCR language settings for this specific run.
             Pass ``None`` or ``"auto"`` to use the global settings.  This
             enables per-pipeline language configuration.
+        index_only: Persist OCR text and queue Qdrant indexing without metadata
+            extraction, rotation, or destination distribution.
+        source_task_id: Durable intake/import correlation ID for index-only work.
     """
     task_id = self.request.id
     log_task_progress(
@@ -126,6 +223,19 @@ def process_with_ocr(
             f"pdf={'yes' if searchable_pdf_path else 'no'}, "
             f"rotations={len(rotation_data)}"
         )
+
+        if index_only:
+            if file_id is None or not source_task_id:
+                raise ValueError("Index-only OCR requires file_id and source_task_id")
+            return _complete_index_only_ocr(
+                file_id=file_id,
+                source_task_id=source_task_id,
+                filename=filename,
+                extracted_text=extracted_text,
+                providers_used=[r.provider for r in results],
+                tmp_file_path=tmp_file_path,
+                searchable_pdf_path=searchable_pdf_path,
+            )
 
         # If no provider produced a searchable PDF, post-process the original
         # PDF with ocrmypdf to embed an invisible text layer so the output is
@@ -291,6 +401,20 @@ def process_with_ocr(
         }
 
     except Exception as exc:
+        if index_only and source_task_id:
+            from app.tasks.vector_index import _set_source_state
+
+            with SessionLocal() as db:
+                final_attempt = self.request.retries >= self.max_retries
+                _set_source_state(
+                    db,
+                    source_task_id,
+                    "failed" if final_attempt else "ocr_retrying",
+                    type(exc).__name__,
+                )
+                db.commit()
+            if final_attempt:
+                _remove_index_only_ocr_artifacts(locals().get("tmp_file_path"), locals().get("searchable_pdf_path"))
         logger.error(f"[{task_id}] OCR failed for {filename}: {exc}")
         log_task_progress(
             task_id,

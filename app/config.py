@@ -916,6 +916,24 @@ class Settings(BaseSettings):
             "Only opt-in initial backfills use values above 1. Default: 1."
         ),
     )
+    corpus_backfill_deferred_ocr_enabled: bool = Field(
+        default=False,
+        description=(
+            "Run a bounded OCR-only second pass for index-first corpus documents "
+            "without embedded text. Metadata LLM and destination distribution remain skipped. Default: False."
+        ),
+    )
+    corpus_backfill_ocr_batch_size: int = Field(
+        default=2,
+        ge=1,
+        le=100,
+        description="Maximum deferred corpus OCR tasks queued per coordinator pass. Default: 2.",
+    )
+    corpus_backfill_ocr_recheck_seconds: int = Field(
+        default=30,
+        ge=1,
+        description="Delay between deferred corpus OCR backlog capacity checks. Default: 30 seconds.",
+    )
     corpus_backfill_queue_high_watermark: int = Field(
         default=50,
         ge=1,

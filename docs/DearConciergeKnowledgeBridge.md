@@ -71,6 +71,9 @@ subsequent polls continue from Dropbox's change cursor.
   crash resumes without duplicating unchanged documents.
 - Source files are never deleted during the corpus import.
 - Progress reports discovered, downloaded, skipped, queued, failed, and last cursor.
+- An optional bounded second pass OCRs index-first scans with no embedded text and
+  sends the resulting text directly to Qdrant without metadata LLM work or legacy
+  destination distribution.
 
 ### KB-4: Chunk vector index
 

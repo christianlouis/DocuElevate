@@ -184,6 +184,13 @@ source with `source_type: "dropbox"`, `folder_path`, `recursive: true`, and
 `true_up_existing: true`. The first watch cycle queues a durable recursive true-up;
 later cycles reuse the completed Dropbox cursor and fetch only changes.
 
+For a RAG-first historical import, set `backfill_index_first_enabled: true`.
+Setting `backfill_deferred_ocr_enabled: true` additionally starts a bounded OCR-only
+second pass after the initial Dropbox listing completes. Documents move through
+`needs_ocr`, `ocr_queued`, `indexing`, and `indexed`; non-PDF office documents
+remain explicitly marked `needs_conversion` for the conversion pass. This path
+deliberately skips metadata extraction and normal storage destinations.
+
 Qdrant is available as the `VECTOR_DATABASE` destination type. It uses the
 operator-managed vector-index connection, so the user integration needs only
 `{"provider":"qdrant"}` and no credentials.
