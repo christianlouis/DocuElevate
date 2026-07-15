@@ -552,3 +552,52 @@ def test_deferred_ocr_backlog_respects_queue_high_watermark(db_session):
         "resume_in_seconds": 11,
     }
     schedule.assert_called_once_with(job.id, countdown=11)
+
+
+@pytest.mark.unit
+def test_deferred_ocr_backlog_waits_for_vector_index_retries(db_session):
+    integration = _integration(
+        db_session,
+        config={
+            "backfill_index_first_enabled": True,
+            "backfill_deferred_ocr_enabled": True,
+            "backfill_ocr_recheck_seconds": 13,
+        },
+    )
+    job = DropboxImportJob(
+        id="vector-retry-job",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Posteingang",
+        state="completed",
+        is_backfill=True,
+    )
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:vector-retry",
+        revision="rev-1",
+        remote_path="/Posteingang/vector-retry.pdf",
+        task_id="vector-retry-task",
+        state="index_retrying",
+    )
+    db_session.add_all([job, imported])
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog") as schedule,
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_ocr_backlog
+
+        result = run_dropbox_corpus_ocr_backlog.run(job.id)
+
+    assert result == {
+        "status": "running",
+        "job_id": job.id,
+        "queued": 0,
+        "failed": 0,
+        "resume_in_seconds": 13,
+    }
+    schedule.assert_called_once_with(job.id, countdown=13)
