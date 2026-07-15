@@ -76,6 +76,9 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `PROCESSALL_THROTTLE_DELAY`       | Delay in seconds between each task submission when throttling is active.                          | `3`         |
 | `CORPUS_BACKFILL_BATCH_SIZE` | Maximum provider entries requested per Dropbox corpus page. | `10` |
 | `CORPUS_BACKFILL_DOWNLOAD_CONCURRENCY` | Parallel Dropbox downloads for opt-in index-first initial backfills; bounded to 8. | `1` |
+| `CORPUS_BACKFILL_DEFERRED_OCR_ENABLED` | Run a low-priority OCR-only second pass for index-first documents without embedded text. | `false` |
+| `CORPUS_BACKFILL_OCR_BATCH_SIZE` | Maximum deferred OCR tasks queued per coordinator pass. | `2` |
+| `CORPUS_BACKFILL_OCR_RECHECK_SECONDS` | Seconds between deferred OCR backlog capacity checks. | `30` |
 | `CORPUS_BACKFILL_QUEUE_HIGH_WATERMARK` | Pause corpus backfills at this queued plus worker-reserved Celery depth. | `50` |
 | `CORPUS_BACKFILL_RESUME_DELAY_SECONDS` | Seconds before a queue-limited backfill checks capacity again. | `30` |
 | `CORPUS_BACKFILL_TASK_PRIORITY` | Celery Redis priority for corpus coordinator tasks; `9` runs behind normal priority `0` work. | `9` |
@@ -83,12 +86,19 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `CORPUS_BACKFILL_LLM_TOKEN_RESERVATION_PER_DOCUMENT` | Tokens reserved per queued corpus document; metadata prompt/output headroom is enforced automatically. | `10000` |
 | `METADATA_MAX_INPUT_TOKENS` | Maximum document-text tokens sent to metadata extraction; keeps the beginning plus a short ending. | `8000` |
 
-Dropbox Watch Folder integrations may override the first four defaults with
-`backfill_batch_size`, `backfill_download_concurrency`, `backfill_queue_high_watermark`, and
-`backfill_resume_delay_seconds` in their database-backed integration config.
+Dropbox Watch Folder integrations may override these defaults with
+`backfill_batch_size`, `backfill_download_concurrency`, `backfill_deferred_ocr_enabled`,
+`backfill_ocr_batch_size`, `backfill_ocr_recheck_seconds`, `backfill_queue_high_watermark`,
+and `backfill_resume_delay_seconds` in their database-backed integration config.
 The importer commits progress after every queued document and reuses the
 Dropbox cursor, so pausing or restarting a worker does not require rescanning
 the completed portion of the corpus.
+
+When deferred OCR is enabled, the fast first pass still indexes embedded PDF
+text immediately. After the initial true-up completes, scanned PDFs and images
+marked `needs_ocr` are processed in bounded, low-priority batches. Their OCR text
+goes directly to the vector index; metadata LLM extraction and destination
+distribution remain skipped.
 
 **Example Usage**: When processing 25 files with default settings:
 - Files are staggered: file 0 at 0s, file 1 at 3s, file 2 at 6s, etc.

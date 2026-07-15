@@ -31,6 +31,21 @@ from app.utils.text_quality import TextSource, check_text_quality, compare_text_
 logger = logging.getLogger(__name__)
 
 
+def _remove_index_only_ocr_artifacts(*paths: str | None) -> None:
+    """Remove only OCR artifacts created inside DocuElevate's tmp directory."""
+    tmp_root = os.path.realpath(os.path.join(settings.workdir, "tmp"))
+    for path in paths:
+        if not path:
+            continue
+        real_path = os.path.realpath(path)
+        try:
+            is_tmp_artifact = os.path.commonpath((tmp_root, real_path)) == tmp_root
+        except ValueError:
+            is_tmp_artifact = False
+        if is_tmp_artifact and os.path.isfile(real_path):
+            os.remove(real_path)
+
+
 @celery.task(base=OcrTaskWithRetry, bind=True)
 def process_with_ocr(
     self,
@@ -38,6 +53,8 @@ def process_with_ocr(
     file_id: int | None = None,
     original_text: str | None = None,
     language: str | None = None,
+    index_only: bool = False,
+    source_task_id: str | None = None,
 ):
     """Run the configured OCR providers on *filename* and continue the pipeline.
 
@@ -56,6 +73,9 @@ def process_with_ocr(
             to override the global OCR language settings for this specific run.
             Pass ``None`` or ``"auto"`` to use the global settings.  This
             enables per-pipeline language configuration.
+        index_only: Persist OCR text and queue Qdrant indexing without metadata
+            extraction, rotation, or destination distribution.
+        source_task_id: Durable intake/import correlation ID for index-only work.
     """
     task_id = self.request.id
     log_task_progress(
@@ -257,6 +277,51 @@ def process_with_ocr(
             f"final text length: {len(final_text)} chars",
         )
 
+        if index_only:
+            if file_id is None or not source_task_id:
+                raise ValueError("Index-only OCR requires file_id and source_task_id")
+
+            cleaned_text = final_text.strip()
+            from app.tasks.vector_index import _set_source_state, index_document_vectors
+
+            with SessionLocal() as db:
+                record = db.query(FileRecord).filter_by(id=file_id).first()
+                if record is None:
+                    _set_source_state(db, source_task_id, "failed", "File not found")
+                    db.commit()
+                    raise RuntimeError(f"Index-only OCR FileRecord {file_id} disappeared")
+                if not cleaned_text:
+                    _set_source_state(db, source_task_id, "failed", "OCR returned no usable text")
+                    db.commit()
+                    _remove_index_only_ocr_artifacts(tmp_file_path, searchable_pdf_path)
+                    return {
+                        "status": "failed",
+                        "file_id": file_id,
+                        "detail": "OCR returned no usable text",
+                    }
+                record.ocr_text = cleaned_text
+                if not record.document_title:
+                    record.document_title = os.path.splitext(record.original_filename or filename)[0]
+                _set_source_state(db, source_task_id, "indexing")
+                db.commit()
+
+            for step in ("extract_metadata_with_gpt", "embed_metadata_into_pdf", "finalize_document_storage"):
+                log_task_progress(
+                    source_task_id,
+                    step,
+                    "skipped",
+                    "Deferred corpus OCR: text goes directly to Qdrant",
+                    file_id=file_id,
+                )
+            index_document_vectors.delay(file_id, source_task_id=source_task_id)
+            _remove_index_only_ocr_artifacts(tmp_file_path, searchable_pdf_path)
+            return {
+                "status": "queued_for_vector_index",
+                "file_id": file_id,
+                "text_chars": len(cleaned_text),
+                "providers_used": [r.provider for r in results],
+            }
+
         # Score the final embedded text — the text that will land in ocr_text.
         # We always call check_text_quality() on final_text because:
         #   - merge_ocr_results() may have AI-merged output from several engines
@@ -291,6 +356,12 @@ def process_with_ocr(
         }
 
     except Exception as exc:
+        if index_only and source_task_id:
+            from app.tasks.vector_index import _set_source_state
+
+            with SessionLocal() as db:
+                _set_source_state(db, source_task_id, "failed", type(exc).__name__)
+                db.commit()
         logger.error(f"[{task_id}] OCR failed for {filename}: {exc}")
         log_task_progress(
             task_id,

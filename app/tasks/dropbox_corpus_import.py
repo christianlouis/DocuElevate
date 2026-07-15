@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import shutil
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
@@ -15,7 +16,15 @@ from sqlalchemy.exc import IntegrityError
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import CorpusLlmDailyUsage, DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
+from app.models import (
+    CorpusLlmDailyUsage,
+    DocumentIntake,
+    DropboxImportJob,
+    DropboxImportObject,
+    FileRecord,
+    ProcessingLog,
+    UserIntegration,
+)
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.allowed_types import ALLOWED_EXTENSIONS
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
@@ -171,6 +180,15 @@ def _pending_queue_depth() -> int | None:
 def schedule_dropbox_corpus_import(job_id: str, *, countdown: int = 0) -> AsyncResult:
     """Schedule low-priority corpus coordination without blocking interactive uploads."""
     return run_dropbox_corpus_import.apply_async(
+        args=[job_id],
+        countdown=countdown,
+        priority=settings.corpus_backfill_task_priority,
+    )
+
+
+def schedule_dropbox_corpus_ocr_backlog(job_id: str, *, countdown: int = 0) -> AsyncResult:
+    """Schedule low-priority OCR-only work after an index-first true-up."""
+    return run_dropbox_corpus_ocr_backlog.apply_async(
         args=[job_id],
         countdown=countdown,
         priority=settings.corpus_backfill_task_priority,
@@ -365,6 +383,17 @@ def _index_first_download_concurrency(config: dict, *, index_only: bool) -> int:
         minimum=1,
         maximum=8,
     )
+
+
+def _deferred_ocr_enabled(config: dict, *, index_only: bool) -> bool:
+    """Return whether an index-first source opts into the OCR-only second pass."""
+    if not index_only:
+        return False
+    value = config.get(
+        "backfill_deferred_ocr_enabled",
+        settings.corpus_backfill_deferred_ocr_enabled,
+    )
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _entry_can_be_prefetched(entry) -> bool:
@@ -632,6 +661,7 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             raise
 
         index_only = job.is_backfill and _index_first_enabled(integration)
+        deferred_ocr = _deferred_ocr_enabled(config, index_only=index_only)
         download_concurrency = _index_first_download_concurrency(config, index_only=index_only)
         integration_id = integration.id
         stored_credentials = integration.credentials
@@ -783,4 +813,162 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
 
     if page.has_more:
         schedule_dropbox_corpus_import(job_id)
+    elif deferred_ocr:
+        schedule_dropbox_corpus_ocr_backlog(job_id)
+    return result
+
+
+def _set_deferred_ocr_state(
+    db,
+    imported: DropboxImportObject,
+    state: str,
+    error: str | None = None,
+) -> None:
+    """Keep the import object and its intake ledger aligned."""
+    imported.state = state
+    if imported.intake_id:
+        intake = db.query(DocumentIntake).filter(DocumentIntake.id == imported.intake_id).first()
+        if intake:
+            intake.state = state
+            intake.error = error
+
+
+def _deferred_ocr_file_id(db, imported: DropboxImportObject) -> int | None:
+    """Resolve the FileRecord created by the original index-first task."""
+    if not imported.task_id:
+        return None
+    row = (
+        db.query(ProcessingLog.file_id)
+        .filter(
+            ProcessingLog.task_id == imported.task_id,
+            ProcessingLog.file_id.isnot(None),
+        )
+        .order_by(ProcessingLog.timestamp.desc(), ProcessingLog.id.desc())
+        .first()
+    )
+    return int(row[0]) if row and row[0] is not None else None
+
+
+@celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_ocr_backlog")
+def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
+    """Queue bounded OCR-only work for scanned index-first corpus documents."""
+    should_recheck = False
+    recheck_delay = settings.corpus_backfill_ocr_recheck_seconds
+    queued = 0
+    failed = 0
+
+    with SessionLocal() as db:
+        job = db.query(DropboxImportJob).filter(DropboxImportJob.id == job_id).first()
+        if not job:
+            return {"status": "skipped", "detail": "Import job not found"}
+        integration = db.query(UserIntegration).filter(UserIntegration.id == job.integration_id).first()
+        if not integration or not integration.is_active:
+            return {"status": "skipped", "detail": "Dropbox source integration is inactive"}
+        try:
+            config = json.loads(integration.config or "{}")
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+        if not isinstance(config, dict):
+            config = {}
+        if job.state != "completed":
+            return {"status": "waiting", "job_id": job.id, "detail": "Initial corpus import is not complete"}
+        if not _deferred_ocr_enabled(config, index_only=job.is_backfill and _index_first_enabled(integration)):
+            return {"status": "disabled", "job_id": job.id}
+
+        recheck_delay = _bounded_config_int(
+            config,
+            "backfill_ocr_recheck_seconds",
+            settings.corpus_backfill_ocr_recheck_seconds,
+            minimum=1,
+        )
+        high_watermark = _bounded_config_int(
+            config,
+            "backfill_queue_high_watermark",
+            settings.corpus_backfill_queue_high_watermark,
+            minimum=1,
+        )
+        queue_depth = _pending_queue_depth()
+        if queue_depth is not None and queue_depth >= high_watermark:
+            should_recheck = True
+            result = {
+                "status": "paused",
+                "job_id": job.id,
+                "queue_depth": queue_depth,
+                "resume_in_seconds": recheck_delay,
+            }
+        else:
+            batch_size = _bounded_config_int(
+                config,
+                "backfill_ocr_batch_size",
+                settings.corpus_backfill_ocr_batch_size,
+                minimum=1,
+                maximum=100,
+            )
+            if queue_depth is not None:
+                batch_size = min(batch_size, max(0, high_watermark - queue_depth))
+            candidates = (
+                db.query(DropboxImportObject)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state == "needs_ocr",
+                )
+                .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
+                .limit(batch_size)
+                .all()
+            )
+
+            from app.tasks.process_with_ocr import process_with_ocr
+
+            for imported in candidates:
+                file_id = _deferred_ocr_file_id(db, imported)
+                record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+                source_path = record.original_file_path if record else None
+                if not record or not source_path or not os.path.exists(source_path) or not imported.task_id:
+                    _set_deferred_ocr_state(db, imported, "failed", "Original corpus file is unavailable")
+                    db.commit()
+                    failed += 1
+                    continue
+
+                extension = os.path.splitext(record.original_filename or imported.remote_path)[1].lower()
+                staged_name = f"corpus_ocr_{imported.id}_{uuid.uuid4().hex}{extension or '.pdf'}"
+                tmp_dir = os.path.join(settings.workdir, "tmp")
+                os.makedirs(tmp_dir, exist_ok=True)
+                staged_path = os.path.join(tmp_dir, staged_name)
+                try:
+                    shutil.copy2(source_path, staged_path)
+                    _set_deferred_ocr_state(db, imported, "ocr_queued")
+                    db.commit()
+                    process_with_ocr.apply_async(
+                        args=[staged_name, record.id],
+                        kwargs={"index_only": True, "source_task_id": imported.task_id},
+                        priority=settings.corpus_backfill_task_priority,
+                    )
+                    queued += 1
+                except Exception as exc:
+                    if os.path.exists(staged_path):
+                        os.remove(staged_path)
+                    _set_deferred_ocr_state(db, imported, "needs_ocr", type(exc).__name__)
+                    db.commit()
+                    raise
+
+            pending = (
+                db.query(DropboxImportObject.id)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state.in_(("needs_ocr", "ocr_queued", "indexing")),
+                )
+                .first()
+                is not None
+            )
+            should_recheck = pending
+            result = {
+                "status": "running" if pending else "completed",
+                "job_id": job.id,
+                "queued": queued,
+                "failed": failed,
+                "resume_in_seconds": recheck_delay if pending else None,
+            }
+
+    if should_recheck:
+        schedule_dropbox_corpus_ocr_backlog(job_id, countdown=recheck_delay)
     return result
