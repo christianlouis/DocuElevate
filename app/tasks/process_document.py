@@ -108,6 +108,7 @@ def _mark_index_first_pending(
     *,
     original_input_path: str | None = None,
     working_path: str | None = None,
+    embedded_text_checked: bool = False,
 ) -> dict[str, object]:
     """Retain a corpus item for a later OCR/conversion pass without LLM work."""
     with SessionLocal() as db:
@@ -117,6 +118,21 @@ def _mark_index_first_pending(
             record.local_filename = immutable_path
         _set_index_first_source_state(db, task_id, "needs_ocr", reason)
         db.commit()
+    if embedded_text_checked:
+        log_task_progress(
+            task_id,
+            "check_text",
+            "success",
+            "No embedded text found; deferred to the corpus OCR pass",
+            file_id=file_id,
+        )
+        log_task_progress(
+            task_id,
+            "extract_text",
+            "skipped",
+            "No embedded text available; deferred to the corpus OCR pass",
+            file_id=file_id,
+        )
     log_task_progress(
         task_id,
         "process_document",
@@ -873,6 +889,7 @@ def process_document(
             "No usable embedded text",
             original_input_path=original_local_file,
             working_path=new_local_path,
+            embedded_text_checked=True,
         )
     logger.info(f"[{task_id}] No embedded text found. Queueing OCR processing")
     log_task_progress(
