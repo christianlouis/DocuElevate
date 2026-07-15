@@ -328,6 +328,42 @@ def test_corpus_token_budget_fails_closed_when_counter_is_unavailable():
 
 
 @pytest.mark.unit
+def test_corpus_token_budget_mutations_refresh_usage_timestamp(db_session):
+    # SQLite returns a naive value for DateTime(timezone=True), while
+    # PostgreSQL preserves the offset. A naive sentinel remains portable.
+    old_timestamp = datetime(2020, 1, 1)
+    usage = CorpusLlmDailyUsage(
+        usage_date=datetime.now(timezone.utc).date(),
+        reserved_tokens=10_000,
+        updated_at=old_timestamp,
+    )
+    db_session.add(usage)
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 9_000_000),
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_llm_token_reservation_per_document", 10_000),
+        patch("app.tasks.dropbox_corpus_import.settings.metadata_max_input_tokens", 8000),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+    ):
+        from app.tasks.dropbox_corpus_import import _release_corpus_llm_tokens, _reserve_corpus_llm_tokens
+
+        reservation = _reserve_corpus_llm_tokens()
+        db_session.expire_all()
+        refreshed = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=usage.usage_date).one()
+        assert refreshed.reserved_tokens == 20_000
+        assert refreshed.updated_at > old_timestamp
+
+        refreshed.updated_at = old_timestamp
+        db_session.commit()
+        _release_corpus_llm_tokens(reservation)
+        db_session.expire_all()
+        refreshed = db_session.query(CorpusLlmDailyUsage).filter_by(usage_date=usage.usage_date).one()
+        assert refreshed.reserved_tokens == 10_000
+        assert refreshed.updated_at > old_timestamp
+
+
+@pytest.mark.unit
 def test_incremental_watch_job_bypasses_backfill_token_budget():
     job = SimpleNamespace(is_backfill=False)
     integration = SimpleNamespace(config="{}")
@@ -351,6 +387,20 @@ def test_initial_backfill_job_uses_token_budget():
 
         assert _reserve_job_llm_tokens(job, integration) == (date(2026, 7, 15), 9500)
     reserve.assert_called_once_with(budget=8_500_000)
+
+
+@pytest.mark.unit
+def test_initial_backfill_negative_budget_fails_closed():
+    job = SimpleNamespace(is_backfill=True)
+    integration = SimpleNamespace(
+        config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": -1})
+    )
+    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
+
+        with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+            _reserve_job_llm_tokens(job, integration)
+    reserve.assert_not_called()
 
 
 @pytest.mark.unit
