@@ -454,19 +454,27 @@ def test_search_unions_exact_filename_outside_semantic_candidates(client, db_ses
         patch("app.api.knowledge.settings.vector_index_enabled", True),
         patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits),
     ):
-        response = client.post(
+        exact_response = client.post(
             "/api/knowledge/search",
             json={"query": "Posteingang_0007.pdf", "limit": 2},
         )
+        embedded_response = client.post(
+            "/api/knowledge/search",
+            json={"query": "summarize Posteingang_0007.pdf", "limit": 2},
+        )
 
-    assert response.status_code == 200
-    results = response.json()["results"]
+    assert exact_response.status_code == 200
+    results = exact_response.json()["results"]
     assert [result["document_id"] for result in results] == [20, 21]
     assert results[0]["semantic_score"] == 0.0
     assert results[0]["score"] == pytest.approx(0.95)
     assert results[0]["match_source"] == "metadata"
     assert results[0]["source_url"] == "/files/20"
     assert 0 < len(results[0]["text"]) <= 2400
+    assert embedded_response.status_code == 200
+    embedded_results = embedded_response.json()["results"]
+    assert embedded_results[0]["document_id"] == 20
+    assert embedded_results[0]["score"] >= 0.8
 
 
 def test_search_unions_and_prioritizes_exact_title_without_vector_hit(client, db_session):

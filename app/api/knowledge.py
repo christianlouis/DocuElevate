@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
@@ -77,30 +77,38 @@ def _metadata_candidates(db: Session, request: Request, query: str) -> list[File
     if not query_tokens:
         return []
 
-    # Require every distinctive query term to occur in either authoritative
-    # title or filename. This stays selective for a large multi-user corpus,
-    # while the raw equality clauses preserve exact punctuation-heavy names.
-    token_clauses = []
+    # Rank metadata candidates by weighted query-term coverage. Using an OR
+    # here deliberately supports natural questions such as "summarize X.pdf";
+    # the bounded limit and weighted SQL ordering keep the scan selective.
+    weighted_clauses = []
     for token in query_tokens:
         pattern = _escaped_like_pattern(token)
-        token_clauses.append(
-            or_(
-                FileRecord.document_title.ilike(pattern, escape="\\"),
-                FileRecord.original_filename.ilike(pattern, escape="\\"),
-            )
+        clause = or_(
+            FileRecord.document_title.ilike(pattern, escape="\\"),
+            FileRecord.original_filename.ilike(pattern, escape="\\"),
         )
+        weighted_clauses.append((clause, _search_token_weight(token)))
     raw_query = query.strip().lower()
     metadata_match = or_(
         func.lower(FileRecord.document_title) == raw_query,
         func.lower(FileRecord.original_filename) == raw_query,
-        and_(*token_clauses),
+        *(clause for clause, _weight in weighted_clauses),
+    )
+    match_weight = sum(
+        (case((clause, weight), else_=0.0) for clause, weight in weighted_clauses),
+        start=0.0,
     )
     records = db.query(FileRecord).filter(
         metadata_match,
         FileRecord.ocr_text.isnot(None),
         func.length(func.trim(FileRecord.ocr_text)) > 0,
     )
-    return apply_owner_filter(records, request).order_by(FileRecord.id.asc()).limit(_METADATA_CANDIDATE_LIMIT).all()
+    return (
+        apply_owner_filter(records, request)
+        .order_by(match_weight.desc(), FileRecord.id.asc())
+        .limit(_METADATA_CANDIDATE_LIMIT)
+        .all()
+    )
 
 
 def _metadata_hit(record: FileRecord) -> dict[str, Any]:
@@ -136,8 +144,10 @@ def _hybrid_search_score(query: str, hit: dict[str, Any], record: FileRecord) ->
 
     normalized_title = _normalized_search_text(record.document_title)
     normalized_filename = _normalized_search_text(record.original_filename)
-    exact_title_bonus = 0.60 if normalized_query and normalized_query == normalized_title else 0.0
-    exact_filename_bonus = 0.65 if normalized_query and normalized_query == normalized_filename else 0.0
+    exact_title_bonus = 0.60 if normalized_query and normalized_title and normalized_title in normalized_query else 0.0
+    exact_filename_bonus = (
+        0.65 if normalized_query and normalized_filename and normalized_filename in normalized_query else 0.0
+    )
     phrase_bonus = (
         0.15
         if normalized_query
