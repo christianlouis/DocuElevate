@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.1 (2026-07-15)
+
+### Bug Fixes
+
+- Complete successful rotation workflow steps
+  ([#1059](https://github.com/christianlouis/DocuElevate/pull/1059),
+  [`091ebab`](https://github.com/christianlouis/DocuElevate/commit/091ebabeb341b037e109ad28a27c283c5ee68f70))
+
+- Keep background provider and rotation state accurate
+  ([#1059](https://github.com/christianlouis/DocuElevate/pull/1059),
+  [`091ebab`](https://github.com/christianlouis/DocuElevate/commit/091ebabeb341b037e109ad28a27c283c5ee68f70))
+
+- Skip credential checks for disabled providers
+  ([#1059](https://github.com/christianlouis/DocuElevate/pull/1059),
+  [`091ebab`](https://github.com/christianlouis/DocuElevate/commit/091ebabeb341b037e109ad28a27c283c5ee68f70))
+
+- Treat OCR quality fallback as a successful route
+  ([#1059](https://github.com/christianlouis/DocuElevate/pull/1059),
+  [`091ebab`](https://github.com/christianlouis/DocuElevate/commit/091ebabeb341b037e109ad28a27c283c5ee68f70))
+
+
 ## v0.183.0 (2026-07-15)
 
 ### Features
