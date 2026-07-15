@@ -464,6 +464,8 @@
     operationProgress: {{ _("search.bulk_operation_progress") | tojson }},
     renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }},
     chatWorking: {{ _("search.chat_working") | tojson }},
+    chatResearching: {{ _("search.chat_researching") | tojson }},
+    chatIndexIncomplete: {{ _("search.chat_index_incomplete") | tojson }},
     chatError: {{ _("search.chat_error") | tojson }},
     chatSources: {{ _("search.chat_sources") | tojson }},
     chatModel: {{ _("search.chat_model") | tojson }},
@@ -497,6 +499,7 @@
   const chatSend = document.getElementById('knowledge-chat-send');
   const chatClear = document.getElementById('knowledge-chat-clear');
   const chatHistory = [];
+  let activeResearchJobId = null;
 
   // Filter elements
   const filterDocType    = document.getElementById('filter-document-type');
@@ -542,6 +545,9 @@
       if (data.coverage && data.coverage.truncated) {
         meta.textContent += ' · ' + searchI18n.chatCoverageLimited;
       }
+      if (data.coverage && data.coverage.index_complete === false) {
+        meta.textContent += ' · ' + searchI18n.chatIndexIncomplete;
+      }
       message.appendChild(meta);
       if (Array.isArray(data.sources) && data.sources.length) {
         const sources = document.createElement('div');
@@ -573,15 +579,36 @@
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || searchI18n.chatError);
-      appendChatMessage('assistant', data.answer, data);
+      const answerData = data.result || (data.job_id ? await waitForResearchJob(data.job_id) : data);
+      appendChatMessage('assistant', answerData.answer, answerData);
       chatHistory.push({role: 'user', content: message});
-      chatHistory.push({role: 'assistant', content: data.answer});
+      chatHistory.push({role: 'assistant', content: answerData.answer});
     } catch (error) {
       appendChatMessage('assistant', searchI18n.chatError + ' ' + (error.message || ''));
     } finally {
       chatSend.disabled = false;
       chatSend.innerHTML = originalLabel;
       chatInput.focus();
+    }
+  }
+
+  async function waitForResearchJob(jobId) {
+    activeResearchJobId = jobId;
+    while (true) {
+      await new Promise(function(resolve) { window.setTimeout(resolve, 1000); });
+      const response = await fetch('/api/knowledge/research/' + encodeURIComponent(jobId));
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || searchI18n.chatError);
+      chatSend.textContent = formatSearchMessage(searchI18n.chatResearching, {
+        processed: data.processed_documents || 0,
+        total: data.total_documents || '…'
+      });
+      if (data.state === 'completed' && data.result) {
+        activeResearchJobId = null;
+        return data.result;
+      }
+      if (data.state === 'failed') throw new Error(data.error || searchI18n.chatError);
+      if (data.state === 'cancelled') throw new Error('Cancelled');
     }
   }
 
@@ -600,7 +627,11 @@
       chatForm.requestSubmit();
     }
   });
-  chatClear.addEventListener('click', function() {
+  chatClear.addEventListener('click', async function() {
+    if (activeResearchJobId) {
+      await fetch('/api/knowledge/research/' + encodeURIComponent(activeResearchJobId) + '/cancel', {method: 'POST'});
+      activeResearchJobId = null;
+    }
     chatHistory.length = 0;
     chatLog.innerHTML = '<div class="knowledge-chat-empty" id="knowledge-chat-empty"><i class="fas fa-book-open fa-2x" aria-hidden="true"></i><p><strong>' + escapeHtml({{ _("search.chat_heading") | tojson }}) + '</strong></p><p>' + escapeHtml({{ _("search.chat_intro") | tojson }}) + '</p></div>';
     chatInput.focus();

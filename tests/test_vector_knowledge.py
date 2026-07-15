@@ -7,7 +7,7 @@ import pytest
 import requests
 from starlette.requests import Request
 
-from app.models import FileRecord
+from app.models import FileRecord, KnowledgeResearchJob
 
 
 def _file(file_id: int = 7, owner_id: str | None = None) -> SimpleNamespace:
@@ -532,42 +532,43 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
     ]
     db_session.add_all(records)
     db_session.commit()
-    semantic_hits = [
-        {
-            "score": 0.91,
-            "payload": {"document_id": 30, "text": "Flight booking to London number 30"},
-        }
-    ]
-    keyword_hits = {
-        "results": [{"file_id": 30}, {"file_id": 31}],
-        "total": 125,
-    }
-    provider = SimpleNamespace(chat_completion=lambda **_kwargs: "At least two London flights are documented [1] [2].")
-    with (
-        patch("app.api.knowledge.settings.vector_index_enabled", True),
-        patch("app.api.knowledge.settings.rag_chat_model", "gpt-5-nano"),
-        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=semantic_hits),
-        patch("app.utils.meilisearch_client.search_documents", return_value=keyword_hits) as keyword_search,
-        patch("app.utils.ai_provider.get_ai_provider", return_value=provider),
-        patch.object(provider, "chat_completion", wraps=provider.chat_completion) as completion,
-    ):
+    with patch("app.tasks.knowledge_research.run_knowledge_research.delay") as delay:
         response = client.post(
             "/api/knowledge/chat",
             json={"message": "Wie oft war ich in London per Flugzeug?"},
         )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     data = response.json()
-    assert data["retrieved_count"] == 2
-    assert data["coverage"] == {
-        "strategy": "cross_document_research",
-        "evidence_documents": 2,
-        "keyword_matches": 125,
-        "truncated": True,
-    }
-    keyword_search.assert_called_once_with("london flugzeug", page=1, per_page=100)
-    assert "Never describe a result as corpus-complete" in completion.call_args.kwargs["messages"][0]["content"]
-    assert "'truncated': True" in completion.call_args.kwargs["messages"][-1]["content"]
+    assert data["state"] == "queued"
+    job = db_session.query(KnowledgeResearchJob).filter_by(id=data["job_id"]).one()
+    assert job.owner_id == "__single_user__"
+    assert job.question == "Wie oft war ich in London per Flugzeug?"
+    assert job.accessible_file_ids_json == "[30, 31]"
+    delay.assert_called_once_with(job.id)
+
+
+def test_research_job_status_and_cancel_are_owner_scoped(client, db_session):
+    job = KnowledgeResearchJob(
+        id="job-1",
+        owner_id="__single_user__",
+        cache_key="a" * 64,
+        question="How many?",
+        accessible_file_ids_json="[]",
+        state="running",
+        total_documents=20,
+        processed_documents=10,
+    )
+    db_session.add(job)
+    db_session.commit()
+
+    status_response = client.get("/api/knowledge/research/job-1")
+    cancel_response = client.post("/api/knowledge/research/job-1/cancel")
+
+    assert status_response.status_code == 200
+    assert status_response.json()["processed_documents"] == 10
+    assert cancel_response.status_code == 202
+    assert cancel_response.json()["cancel_requested"] is True
 
 
 def test_rag_prompt_has_aggregate_excerpt_budget():

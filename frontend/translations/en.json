@@ -1709,6 +1709,8 @@
   "search.chat_send": "Ask",
   "search.chat_clear": "Clear conversation",
   "search.chat_working": "Searching…",
+  "search.chat_researching": "Analyzing {processed} of {total} relevant documents…",
+  "search.chat_index_incomplete": "Index is not complete yet – result covers the currently indexed corpus",
   "search.chat_error": "Document chat is currently unavailable.",
   "search.chat_sources": "Sources",
   "search.chat_model": "Model",

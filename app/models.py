@@ -238,6 +238,27 @@ class BulkOperation(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class KnowledgeResearchJob(Base):
+    """Durable owner-scoped state for exhaustive document analytics."""
+
+    __tablename__ = "knowledge_research_jobs"
+
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String, nullable=False, index=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    history_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    accessible_file_ids_json = Column(Text, nullable=False)
+    state = Column(String(20), nullable=False, default="queued", server_default="queued", index=True)
+    total_documents = Column(Integer, nullable=False, default=0, server_default="0")
+    processed_documents = Column(Integer, nullable=False, default=0, server_default="0")
+    cancel_requested = Column(Boolean, nullable=False, default=False, server_default="0")
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class ProcessingLog(Base):
     __tablename__ = "processing_logs"
     id = Column(Integer, primary_key=True, index=True)

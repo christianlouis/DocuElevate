@@ -1642,6 +1642,8 @@
   "search.chat_send": "Fragen",
   "search.chat_clear": "Unterhaltung leeren",
   "search.chat_working": "Suche…",
+  "search.chat_researching": "Analysiere {processed} von {total} relevanten Dokumenten…",
+  "search.chat_index_incomplete": "Index noch nicht vollständig – Ergebnis bezieht sich auf den aktuell indexierten Bestand",
   "search.chat_error": "Der Dokumentenchat ist gerade nicht verfügbar.",
   "search.chat_sources": "Quellen",
   "search.chat_model": "Modell",

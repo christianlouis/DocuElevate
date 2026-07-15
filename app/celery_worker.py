@@ -33,6 +33,7 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
 from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
+from app.tasks.knowledge_research import run_knowledge_research  # noqa: F401
 from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
