@@ -155,9 +155,38 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # The release workflow creates an annotated version tag on a direct
+          # child of this merge commit. Fetching tags lets the image build use
+          # that authoritative version instead of the previous VERSION file.
+          fetch-depth: 0
+          fetch-tags: true
       - name: Generate Build Metadata
         run: |
           chmod +x scripts/generate_build_metadata.sh
+          chmod +x scripts/resolve_release_version.sh
+          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            # Semantic Release runs in parallel and normally finishes well
+            # before tests unlock this build. Retry briefly to close the race.
+            for attempt in {1..12}; do
+              git fetch --force --tags origin
+              NEW_VERSION="$(scripts/resolve_release_version.sh "${GITHUB_SHA}")"
+              if [[ -n "${NEW_VERSION}" ]]; then
+                export NEW_VERSION
+                echo "Using release version ${NEW_VERSION} for image metadata"
+                break
+              fi
+              sleep 5
+            done
+            if [[ -z "${NEW_VERSION}" ]]; then
+              REMOTE_VERSION="$(git show origin/main:VERSION | tr -d '\n')"
+              LOCAL_VERSION="$(tr -d '\n' < VERSION)"
+              if [[ "${REMOTE_VERSION}" != "${LOCAL_VERSION}" ]]; then
+                echo "Release metadata advanced to ${REMOTE_VERSION}, but no matching release tag was resolved"
+                exit 1
+              fi
+            fi
+          fi
           ./scripts/generate_build_metadata.sh
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
