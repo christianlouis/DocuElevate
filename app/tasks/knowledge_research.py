@@ -4,7 +4,7 @@ import hashlib
 import json
 import logging
 import re
-from typing import Any
+from typing import Any, cast
 
 from app.celery_app import celery
 from app.config import settings
@@ -294,7 +294,7 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                 # The immutable authorized ID snapshot is checked again before
                 # every model call; no cross-owner row can enter the prompt.
                 records = [record for record in records if record.id in accessible_set]
-                record_map.update({record.id: record for record in records})
+                record_map.update({cast(int, record.id): record for record in records})
                 if records:
                     evidence.extend(_map_batch(job.question, records, model))
                 job.processed_documents = min(offset + len(records), len(candidate_ids))
