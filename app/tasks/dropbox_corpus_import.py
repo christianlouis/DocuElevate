@@ -629,6 +629,24 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
         stored_credentials = integration.credentials
         prefetch_executor: ThreadPoolExecutor | None = None
         prefetch_futures: dict[str, Future[str]] = {}
+        prefetch_entries: list[tuple[str, object]] = []
+        prefetch_position = 0
+
+        def fill_prefetch_window() -> None:
+            """Keep at most one bounded window of downloads on disk or in flight."""
+            nonlocal prefetch_position
+            if prefetch_executor is None:
+                return
+            while len(prefetch_futures) < download_concurrency and prefetch_position < len(prefetch_entries):
+                entry_key, entry = prefetch_entries[prefetch_position]
+                prefetch_position += 1
+                prefetch_futures[entry_key] = prefetch_executor.submit(
+                    _prefetch_dropbox_entry,
+                    integration_id,
+                    stored_credentials,
+                    entry,
+                )
+
         try:
             if download_concurrency > 1:
                 prefetch_executor = ThreadPoolExecutor(
@@ -643,12 +661,8 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                     except RuntimeError:
                         continue
                     if entry_key not in committed_entry_keys:
-                        prefetch_futures[entry_key] = prefetch_executor.submit(
-                            _prefetch_dropbox_entry,
-                            integration_id,
-                            stored_credentials,
-                            entry,
-                        )
+                        prefetch_entries.append((entry_key, entry))
+                fill_prefetch_window()
 
             for entry in page.entries:
                 if not isinstance(entry, dropbox.files.FileMetadata):
@@ -663,8 +677,12 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 job.discovered += 1
                 prefetched_path = None
                 try:
-                    future = prefetch_futures.get(entry_key)
-                    prefetched_path = future.result() if future else None
+                    future = prefetch_futures.pop(entry_key, None)
+                    if future:
+                        try:
+                            prefetched_path = future.result()
+                        finally:
+                            fill_prefetch_window()
                     outcome = _import_file(
                         db,
                         job,
