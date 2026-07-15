@@ -715,6 +715,22 @@
                     <span class="text-xs text-gray-500 dark:text-gray-400">Import every existing document recursively, including subfolders, then continue from Dropbox's change cursor.</span>
                   </span>
                 </label>
+                <template x-if="form.config.true_up_existing">
+                  <div class="rounded-md border border-gray-200 dark:border-gray-700 p-3 space-y-3">
+                    <label class="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+                      <input type="checkbox" x-model="form.config.backfill_token_budget_enabled" class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span>
+                        <strong>Daily LLM token budget</strong><br />
+                        <span class="text-xs text-gray-500 dark:text-gray-400">Pause only this initial corpus backfill at the configured daily limit. Normal uploads and later watch updates are unaffected.</span>
+                      </span>
+                    </label>
+                    <div>
+                      <label for="wf-dbx-token-budget" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Tokens per UTC day</label>
+                      <input id="wf-dbx-token-budget" type="number" min="0" step="1000" x-model.number="form.config.backfill_daily_llm_token_budget" :disabled="!form.config.backfill_token_budget_enabled" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 dark:bg-gray-700 dark:text-white text-sm" />
+                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Turn the switch off or enter 0 to disable the budget. Changes are read from the database without restarting the app or worker.</p>
+                    </div>
+                  </div>
+                </template>
                 <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
                   <i class="fas fa-key mr-1" aria-hidden="true"></i>
                   Saving opens Dropbox so you can authorize this source with your own account. Only your renewable grant is stored; App Key and App Secret remain operator-managed.
@@ -1066,6 +1082,7 @@ print(response.json())</code></pre>
 <script>
 function integrationsDashboard() {
   const PREPROD_PATH = {{ ('/DocuElevate Preprod' if is_preprod else '/DocuElevate') | tojson }};
+  const DEFAULT_BACKFILL_TOKEN_BUDGET = {{ default_backfill_token_budget | tojson }};
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
   const DEST_TYPES = ['VECTOR_DATABASE', 'S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
   const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'VECTOR_DATABASE', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
@@ -1299,7 +1316,16 @@ function integrationsDashboard() {
         this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (st === 'dropbox') {
-        this.form.config = { source_type: st, folder_path: '', preserve_source_files: preserve, delete_after_process: dap, true_up_existing: false, recursive: true };
+        this.form.config = {
+          source_type: st,
+          folder_path: '',
+          preserve_source_files: preserve,
+          delete_after_process: dap,
+          true_up_existing: false,
+          recursive: true,
+          backfill_token_budget_enabled: true,
+          backfill_daily_llm_token_budget: DEFAULT_BACKFILL_TOKEN_BUDGET,
+        };
         this.form.credentials = {};
       } else if (st === 'google_drive') {
         this.form.config = { source_type: st, folder_id: '', preserve_source_files: preserve, delete_after_process: dap };
@@ -1337,6 +1363,10 @@ function integrationsDashboard() {
       const config = intg.config ? JSON.parse(JSON.stringify(intg.config)) : {};
       if (intg.integration_type === 'WATCH_FOLDER' && config.preserve_source_files === undefined) {
         config.preserve_source_files = true;
+      }
+      if (intg.integration_type === 'WATCH_FOLDER' && config.source_type === 'dropbox') {
+        if (config.backfill_token_budget_enabled === undefined) config.backfill_token_budget_enabled = true;
+        if (config.backfill_daily_llm_token_budget === undefined) config.backfill_daily_llm_token_budget = DEFAULT_BACKFILL_TOKEN_BUDGET;
       }
       this.form = {
         direction: intg.direction,

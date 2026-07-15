@@ -48,7 +48,7 @@ def _next_utc_reset(now: datetime) -> datetime:
     return datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
 
 
-def _reserve_corpus_llm_tokens() -> tuple[date | None, int]:
+def _reserve_corpus_llm_tokens(*, budget: int | None = None) -> tuple[date | None, int]:
     """Atomically reserve durable LLM capacity for one corpus document.
 
     A zero budget disables the guard. When enabled, Redis is deliberately
@@ -56,7 +56,7 @@ def _reserve_corpus_llm_tokens() -> tuple[date | None, int]:
     database reservation survives Redis restarts and fails closed if durable
     accounting is unavailable. Interactive uploads do not use this path.
     """
-    budget = int(settings.corpus_backfill_daily_llm_token_budget)
+    budget = int(settings.corpus_backfill_daily_llm_token_budget if budget is None else budget)
     if budget <= 0:
         return None, 0
 
@@ -247,6 +247,7 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
             # A completed recursive listing cursor becomes an incremental
             # Dropbox change cursor for the next watch cycle.
             cursor=previous.cursor if previous else None,
+            is_backfill=previous is None,
         )
         db.add(job)
         db.commit()
@@ -313,6 +314,35 @@ def _fail_import_job(db, job: DropboxImportJob, message: str) -> None:
     db.commit()
 
 
+def _configured_backfill_token_budget(integration: UserIntegration) -> int:
+    """Resolve the live per-integration backfill budget with a global fallback."""
+    try:
+        config = json.loads(integration.config or "{}")
+    except (json.JSONDecodeError, TypeError):
+        config = {}
+    if not isinstance(config, dict):
+        config = {}
+    enabled = config.get("backfill_token_budget_enabled", True)
+    if enabled is False or str(enabled).strip().lower() in {"0", "false", "no", "off"}:
+        return 0
+    return _bounded_config_int(
+        config,
+        "backfill_daily_llm_token_budget",
+        settings.corpus_backfill_daily_llm_token_budget,
+        minimum=0,
+    )
+
+
+def _reserve_job_llm_tokens(job: DropboxImportJob, integration: UserIntegration) -> tuple[date | None, int]:
+    """Apply the daily cost guard only to an initial corpus backfill."""
+    if not job.is_backfill:
+        return None, 0
+    budget = _configured_backfill_token_budget(integration)
+    if budget <= 0:
+        return None, 0
+    return _reserve_corpus_llm_tokens(budget=budget)
+
+
 def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client, entry) -> str:
     """Import one Dropbox FileMetadata and return queued/skipped/failed."""
     filename = sanitize_filename(entry.name) or "document"
@@ -356,7 +386,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(imported)
         return "skipped"
 
-    reservation = _reserve_corpus_llm_tokens()
+    reservation = _reserve_job_llm_tokens(job, integration)
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     queued = False

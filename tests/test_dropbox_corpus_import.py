@@ -2,7 +2,7 @@
 
 import json
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -38,6 +38,7 @@ def test_dropbox_import_start_queues_owned_source(client, db_session):
 
     assert response.status_code == 202
     assert response.json()["root_path"] == "/Documents"
+    assert response.json()["mode"] == "backfill"
     assert response.json()["state"] == "queued"
     assert response.json()["task_id"] == "task-1"
     apply_async.assert_called_once_with(args=[response.json()["job_id"]], countdown=0, priority=9)
@@ -72,7 +73,31 @@ def test_watch_true_up_reuses_completed_cursor(db_session):
     queued = db_session.query(DropboxImportJob).filter(DropboxImportJob.id == result["job_id"]).one()
     assert result["mode"] == "incremental"
     assert queued.cursor == "cursor-after-true-up"
+    assert queued.is_backfill is False
     apply_async.assert_called_once_with(args=[queued.id], countdown=0, priority=9)
+
+
+def test_watch_true_up_marks_initial_job_as_backfill(db_session):
+    integration = _integration(db_session)
+    integration.config = json.dumps(
+        {
+            "source_type": "dropbox",
+            "folder_path": "/Posteingang",
+            "true_up_existing": True,
+            "recursive": True,
+        }
+    )
+    db_session.commit()
+
+    with patch("app.tasks.dropbox_corpus_import.run_dropbox_corpus_import.apply_async"):
+        from app.tasks.dropbox_corpus_import import queue_dropbox_watch_sync
+
+        result = queue_dropbox_watch_sync(integration.id, db_session)
+
+    queued = db_session.query(DropboxImportJob).filter(DropboxImportJob.id == result["job_id"]).one()
+    assert result["mode"] == "true-up"
+    assert queued.cursor is None
+    assert queued.is_backfill is True
 
 
 def test_watch_true_up_waits_for_folder_selection(db_session):
@@ -300,6 +325,50 @@ def test_corpus_token_budget_fails_closed_when_counter_is_unavailable():
 
         with pytest.raises(CorpusDailyBudgetUnavailable, match="Could not reserve"):
             _reserve_corpus_llm_tokens()
+
+
+@pytest.mark.unit
+def test_incremental_watch_job_bypasses_backfill_token_budget():
+    job = SimpleNamespace(is_backfill=False)
+    integration = SimpleNamespace(config="{}")
+    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
+        from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
+
+        assert _reserve_job_llm_tokens(job, integration) == (None, 0)
+    reserve.assert_not_called()
+
+
+@pytest.mark.unit
+def test_initial_backfill_job_uses_token_budget():
+    job = SimpleNamespace(is_backfill=True)
+    integration = SimpleNamespace(
+        config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 8_500_000})
+    )
+    with patch(
+        "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 9500)
+    ) as reserve:
+        from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
+
+        assert _reserve_job_llm_tokens(job, integration) == (date(2026, 7, 15), 9500)
+    reserve.assert_called_once_with(budget=8_500_000)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"backfill_token_budget_enabled": False, "backfill_daily_llm_token_budget": 9_000_000},
+        {"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 0},
+    ],
+)
+def test_initial_backfill_budget_can_be_disabled_live(config):
+    job = SimpleNamespace(is_backfill=True)
+    integration = SimpleNamespace(config=json.dumps(config))
+    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
+        from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
+
+        assert _reserve_job_llm_tokens(job, integration) == (None, 0)
+    reserve.assert_not_called()
 
 
 @pytest.mark.unit

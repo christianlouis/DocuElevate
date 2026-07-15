@@ -28,6 +28,7 @@ def _job_response(job: DropboxImportJob) -> dict[str, Any]:
         "job_id": job.id,
         "integration_id": job.integration_id,
         "root_path": job.root_path,
+        "mode": "backfill" if job.is_backfill else "incremental",
         "state": job.state,
         "discovered": job.discovered,
         "downloaded": job.downloaded,
@@ -86,6 +87,7 @@ def start_dropbox_import(request: Request, body: DropboxImportCreate, db: DbSess
         integration_id=integration.id,
         owner_id=integration.owner_id,
         root_path=root_path or "",
+        is_backfill=True,
     )
     db.add(job)
     db.commit()
