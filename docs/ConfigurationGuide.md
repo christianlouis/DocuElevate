@@ -75,6 +75,7 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `PROCESSALL_THROTTLE_THRESHOLD`   | Number of files above which throttling is applied. Files <= threshold are processed immediately.  | `20`        |
 | `PROCESSALL_THROTTLE_DELAY`       | Delay in seconds between each task submission when throttling is active.                          | `3`         |
 | `CORPUS_BACKFILL_BATCH_SIZE` | Maximum provider entries requested per Dropbox corpus page. | `10` |
+| `CORPUS_BACKFILL_DOWNLOAD_CONCURRENCY` | Parallel Dropbox downloads for opt-in index-first initial backfills; bounded to 8. | `1` |
 | `CORPUS_BACKFILL_QUEUE_HIGH_WATERMARK` | Pause corpus backfills at this queued plus worker-reserved Celery depth. | `50` |
 | `CORPUS_BACKFILL_RESUME_DELAY_SECONDS` | Seconds before a queue-limited backfill checks capacity again. | `30` |
 | `CORPUS_BACKFILL_TASK_PRIORITY` | Celery Redis priority for corpus coordinator tasks; `9` runs behind normal priority `0` work. | `9` |
@@ -82,8 +83,8 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `CORPUS_BACKFILL_LLM_TOKEN_RESERVATION_PER_DOCUMENT` | Tokens reserved per queued corpus document; metadata prompt/output headroom is enforced automatically. | `10000` |
 | `METADATA_MAX_INPUT_TOKENS` | Maximum document-text tokens sent to metadata extraction; keeps the beginning plus a short ending. | `8000` |
 
-Dropbox Watch Folder integrations may override the first three defaults with
-`backfill_batch_size`, `backfill_queue_high_watermark`, and
+Dropbox Watch Folder integrations may override the first four defaults with
+`backfill_batch_size`, `backfill_download_concurrency`, `backfill_queue_high_watermark`, and
 `backfill_resume_delay_seconds` in their database-backed integration config.
 The importer commits progress after every queued document and reuses the
 Dropbox cursor, so pausing or restarting a worker does not require rescanning
