@@ -330,23 +330,45 @@ def test_corpus_token_budget_fails_closed_when_counter_is_unavailable():
 @pytest.mark.unit
 def test_incremental_watch_job_bypasses_backfill_token_budget():
     job = SimpleNamespace(is_backfill=False)
+    integration = SimpleNamespace(config="{}")
     with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
         from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
 
-        assert _reserve_job_llm_tokens(job) == (None, 0)
+        assert _reserve_job_llm_tokens(job, integration) == (None, 0)
     reserve.assert_not_called()
 
 
 @pytest.mark.unit
 def test_initial_backfill_job_uses_token_budget():
     job = SimpleNamespace(is_backfill=True)
+    integration = SimpleNamespace(
+        config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 8_500_000})
+    )
     with patch(
         "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 9500)
     ) as reserve:
         from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
 
-        assert _reserve_job_llm_tokens(job) == (date(2026, 7, 15), 9500)
-    reserve.assert_called_once_with()
+        assert _reserve_job_llm_tokens(job, integration) == (date(2026, 7, 15), 9500)
+    reserve.assert_called_once_with(budget=8_500_000)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"backfill_token_budget_enabled": False, "backfill_daily_llm_token_budget": 9_000_000},
+        {"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 0},
+    ],
+)
+def test_initial_backfill_budget_can_be_disabled_live(config):
+    job = SimpleNamespace(is_backfill=True)
+    integration = SimpleNamespace(config=json.dumps(config))
+    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
+        from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
+
+        assert _reserve_job_llm_tokens(job, integration) == (None, 0)
+    reserve.assert_not_called()
 
 
 @pytest.mark.unit

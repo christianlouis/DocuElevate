@@ -46,6 +46,9 @@ class TestDropboxViews:
         assert " required" not in tag.group(0)
         assert 'aria-required="true"' not in tag.group(0)
         assert "Optional before sign-in" in response.text
+        assert 'id="wf-dbx-token-budget"' in response.text
+        assert "Normal uploads and later watch updates are unaffected" in response.text
+        assert "DEFAULT_BACKFILL_TOKEN_BUDGET" in response.text
 
     def test_dropbox_setup_page_with_integration_id(self, client):
         """Test the Dropbox setup page accepts integration_id query param."""

@@ -5,6 +5,7 @@ import logging
 from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import IntegrationDirection, IntegrationType, UserIntegration
 from app.utils.subscription import get_tier, get_user_tier_id
 from app.utils.user_scope import get_current_owner_id
@@ -105,6 +106,7 @@ async def integrations_dashboard(request: Request, db: Session = Depends(get_db)
                 "tier_id": tier_id,
                 "tier_name": tier_name,
                 "is_preprod": bool(request.url.hostname and "preprod" in request.url.hostname.lower()),
+                "default_backfill_token_budget": settings.corpus_backfill_daily_llm_token_budget,
             },
         )
     except HTTPException:
