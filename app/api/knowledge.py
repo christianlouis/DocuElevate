@@ -89,7 +89,7 @@ def _metadata_candidates(db: Session, request: Request, query: str) -> list[File
                 FileRecord.original_filename.ilike(pattern, escape="\\"),
             )
         )
-    raw_query = query.strip().casefold()
+    raw_query = query.strip().lower()
     metadata_match = or_(
         func.lower(FileRecord.document_title) == raw_query,
         func.lower(FileRecord.original_filename) == raw_query,
@@ -100,7 +100,7 @@ def _metadata_candidates(db: Session, request: Request, query: str) -> list[File
         FileRecord.ocr_text.isnot(None),
         func.length(func.trim(FileRecord.ocr_text)) > 0,
     )
-    return apply_owner_filter(records, request).limit(_METADATA_CANDIDATE_LIMIT).all()
+    return apply_owner_filter(records, request).order_by(FileRecord.id.asc()).limit(_METADATA_CANDIDATE_LIMIT).all()
 
 
 def _metadata_hit(record: FileRecord) -> dict[str, Any]:
@@ -141,7 +141,7 @@ def _hybrid_search_score(query: str, hit: dict[str, Any], record: FileRecord) ->
     phrase_bonus = (
         0.15
         if normalized_query
-        and not exact_title_bonus
+        and not (exact_title_bonus or exact_filename_bonus)
         and (normalized_query in normalized_title or normalized_query in normalized_filename)
         else 0.0
     )

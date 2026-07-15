@@ -463,6 +463,7 @@ def test_search_unions_exact_filename_outside_semantic_candidates(client, db_ses
     results = response.json()["results"]
     assert [result["document_id"] for result in results] == [20, 21]
     assert results[0]["semantic_score"] == 0.0
+    assert results[0]["score"] == pytest.approx(0.95)
     assert results[0]["match_source"] == "metadata"
     assert results[0]["source_url"] == "/files/20"
     assert 0 < len(results[0]["text"]) <= 2400
@@ -554,3 +555,38 @@ def test_metadata_candidates_preserve_owner_isolation(db_session):
         candidates = _metadata_candidates(db_session, request, "Posteingang_0007.pdf")
 
     assert [record.id for record in candidates] == [24]
+
+
+def test_metadata_candidates_handle_unicode_exact_names_in_stable_order(db_session):
+    later = FileRecord(
+        id=27,
+        owner_id=None,
+        filehash="unicode-later",
+        original_filename="Straße.pdf",
+        document_title="Archive copy",
+        local_filename="/tmp/later.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Later source text",
+    )
+    earlier = FileRecord(
+        id=26,
+        owner_id=None,
+        filehash="unicode-earlier",
+        original_filename="Straße.pdf",
+        document_title="Original copy",
+        local_filename="/tmp/earlier.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Earlier source text",
+    )
+    db_session.add_all([later, earlier])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {}
+
+    from app.api.knowledge import _metadata_candidates
+
+    candidates = _metadata_candidates(db_session, request, "Straße.pdf")
+
+    assert [record.id for record in candidates] == [26, 27]
