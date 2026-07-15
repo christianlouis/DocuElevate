@@ -183,7 +183,7 @@ def test_index_first_pending_never_deletes_only_remaining_source(db_session, tmp
 
     with (
         patch("app.tasks.process_document.SessionLocal", return_value=nullcontext(db_session)),
-        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.process_document.log_task_progress") as progress,
     ):
         from app.tasks.process_document import _mark_index_first_pending
 
@@ -193,12 +193,21 @@ def test_index_first_pending_never_deletes_only_remaining_source(db_session, tmp
             "No usable embedded text",
             original_input_path=str(only_copy),
             working_path=str(only_copy),
+            embedded_text_checked=True,
         )
 
     db_session.refresh(record)
     assert result["status"] == "Index-first pending OCR"
     assert only_copy.exists()
     assert record.local_filename == str(only_copy)
+    assert any(
+        call.args[1:4] == ("check_text", "success", "No embedded text found; deferred to the corpus OCR pass")
+        for call in progress.call_args_list
+    )
+    assert any(
+        call.args[1:4] == ("extract_text", "skipped", "No embedded text available; deferred to the corpus OCR pass")
+        for call in progress.call_args_list
+    )
 
 
 @pytest.mark.unit
