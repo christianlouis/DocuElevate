@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import redis
 from celery.result import AsyncResult
@@ -23,6 +24,87 @@ logger = logging.getLogger(__name__)
 _CELERY_QUEUES = ("document_processor", "default", "celery")
 _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
+_CORPUS_TOKEN_BUDGET_KEY_PREFIX = "docuelevate:corpus:llm-tokens"
+_METADATA_PROMPT_OUTPUT_HEADROOM = 1500
+
+
+class CorpusDailyBudgetReached(RuntimeError):
+    """Raised when a corpus import must wait for the next UTC token window."""
+
+    def __init__(self, *, used: int, budget: int, retry_after_seconds: int) -> None:
+        super().__init__(f"Daily corpus LLM token budget reached ({used}/{budget})")
+        self.used = used
+        self.budget = budget
+        self.retry_after_seconds = retry_after_seconds
+
+
+class CorpusDailyBudgetUnavailable(RuntimeError):
+    """Raised when an enabled cost guard cannot reserve tokens safely."""
+
+
+def _next_utc_reset(now: datetime) -> datetime:
+    tomorrow = now.date() + timedelta(days=1)
+    return datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
+
+
+def _reserve_corpus_llm_tokens() -> tuple[str | None, int]:
+    """Atomically reserve conservative LLM capacity for one corpus document.
+
+    A zero budget disables the guard. When enabled, Redis is deliberately
+    fail-closed: losing the counter must pause background imports rather than
+    silently allowing billable overage. Interactive uploads do not use this
+    path.
+    """
+    budget = int(settings.corpus_backfill_daily_llm_token_budget)
+    if budget <= 0:
+        return None, 0
+
+    reservation = max(
+        int(settings.corpus_backfill_llm_token_reservation_per_document),
+        int(settings.metadata_max_input_tokens) + _METADATA_PROMPT_OUTPUT_HEADROOM,
+    )
+    now = datetime.now(timezone.utc)
+    reset_at = _next_utc_reset(now)
+    key = f"{_CORPUS_TOKEN_BUDGET_KEY_PREFIX}:{now.date().isoformat()}"
+    try:
+        client = redis.Redis.from_url(
+            settings.redis_url,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        used = int(client.incrby(key, reservation))
+        client.expireat(key, reset_at)
+        if used > budget:
+            client.decrby(key, reservation)
+            retry_after = max(1, int((reset_at - now).total_seconds()) + 5)
+            raise CorpusDailyBudgetReached(
+                used=used - reservation,
+                budget=budget,
+                retry_after_seconds=retry_after,
+            )
+        return key, reservation
+    except CorpusDailyBudgetReached:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise CorpusDailyBudgetUnavailable("Could not reserve the enabled corpus LLM token budget") from exc
+
+
+def _release_corpus_llm_tokens(reservation: tuple[str | None, int]) -> None:
+    """Release a reservation when no pipeline task was queued."""
+    key, amount = reservation
+    if not key or amount <= 0:
+        return
+    try:
+        client = redis.Redis.from_url(
+            settings.redis_url,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+        client.decrby(key, amount)
+    except Exception:  # noqa: BLE001
+        # Keeping a conservative reservation only delays background work; it
+        # is safer than losing track of usage and allowing an overage.
+        logger.warning("Could not release unused corpus LLM token reservation", exc_info=True)
 
 
 def _pending_queue_depth() -> int | None:
@@ -213,6 +295,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(imported)
         return "skipped"
 
+    reservation = _reserve_corpus_llm_tokens()
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     queued = False
@@ -270,6 +353,8 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             os.remove(temporary_path)
         if not queued and os.path.exists(target_path):
             os.remove(target_path)
+        if not queued:
+            _release_corpus_llm_tokens(reservation)
 
 
 @celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_import")
@@ -341,6 +426,38 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             job.discovered += 1
             try:
                 outcome = _import_file(db, job, integration, client, entry)
+            except CorpusDailyBudgetReached as exc:
+                job.discovered -= 1
+                job.state = "queued"
+                job.error = str(exc)
+                db.commit()
+                schedule_dropbox_corpus_import(job.id, countdown=exc.retry_after_seconds)
+                return {
+                    "status": "paused",
+                    "reason": "daily_llm_token_budget",
+                    "job_id": job.id,
+                    "tokens_reserved": exc.used,
+                    "token_budget": exc.budget,
+                    "resume_in_seconds": exc.retry_after_seconds,
+                }
+            except CorpusDailyBudgetUnavailable as exc:
+                job.discovered -= 1
+                job.state = "queued"
+                job.error = str(exc)
+                db.commit()
+                delay = _bounded_config_int(
+                    config,
+                    "backfill_resume_delay_seconds",
+                    settings.corpus_backfill_resume_delay_seconds,
+                    minimum=1,
+                )
+                schedule_dropbox_corpus_import(job.id, countdown=delay)
+                return {
+                    "status": "paused",
+                    "reason": "daily_llm_token_budget_unavailable",
+                    "job_id": job.id,
+                    "resume_in_seconds": delay,
+                }
             except Exception as exc:
                 logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
                 outcome = "failed"

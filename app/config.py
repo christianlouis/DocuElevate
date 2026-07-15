@@ -928,6 +928,22 @@ class Settings(BaseSettings):
             "so the default 9 keeps backfills behind interactive work."
         ),
     )
+    corpus_backfill_daily_llm_token_budget: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Conservative UTC-day token budget reserved by corpus imports before queuing documents. "
+            "Set to 0 to disable the budget. Interactive uploads are not affected. Default: 0."
+        ),
+    )
+    corpus_backfill_llm_token_reservation_per_document: int = Field(
+        default=10000,
+        ge=1,
+        description=(
+            "LLM tokens conservatively reserved for each corpus document. The effective reservation is never "
+            "lower than METADATA_MAX_INPUT_TOKENS plus prompt/output headroom. Default: 10000."
+        ),
+    )
 
     # Client-side upload throttling settings (applied when uploading files via the web UI)
     upload_concurrency: int = Field(
