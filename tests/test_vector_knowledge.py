@@ -412,3 +412,224 @@ def test_search_reranks_exact_metadata_and_deduplicates_documents(client, db_ses
         limit=50,
         score_threshold=0.25,
     )
+
+
+def test_search_unions_exact_filename_outside_semantic_candidates(client, db_session):
+    exact = FileRecord(
+        id=20,
+        owner_id=None,
+        filehash="filename-exact",
+        original_filename="Posteingang_0007.pdf",
+        document_title="Deutsche Bank Kontoauszug Dezember 2010",
+        local_filename="/tmp/Posteingang_0007.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Source-backed account statement text " * 200,
+    )
+    semantic_only = FileRecord(
+        id=21,
+        owner_id=None,
+        filehash="semantic-only",
+        original_filename="mobile-invoice.pdf",
+        document_title="Mobile phone invoice",
+        local_filename="/tmp/mobile-invoice.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Unrelated semantic passage",
+    )
+    db_session.add_all([exact, semantic_only])
+    db_session.commit()
+    hits = [
+        {
+            "score": 0.52,
+            "payload": {
+                "document_id": 21,
+                "text": "Unrelated semantic passage",
+                "chunk_index": 0,
+            },
+        }
+    ]
+
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits),
+    ):
+        exact_response = client.post(
+            "/api/knowledge/search",
+            json={"query": "Posteingang_0007.pdf", "limit": 2},
+        )
+        embedded_response = client.post(
+            "/api/knowledge/search",
+            json={"query": "summarize Posteingang_0007.pdf", "limit": 2},
+        )
+
+    assert exact_response.status_code == 200
+    results = exact_response.json()["results"]
+    assert [result["document_id"] for result in results] == [20, 21]
+    assert results[0]["semantic_score"] == 0.0
+    assert results[0]["score"] == pytest.approx(0.95)
+    assert results[0]["match_source"] == "metadata"
+    assert results[0]["source_url"] == "/files/20"
+    assert 0 < len(results[0]["text"]) <= 2400
+    assert embedded_response.status_code == 200
+    embedded_results = embedded_response.json()["results"]
+    assert embedded_results[0]["document_id"] == 20
+    assert embedded_results[0]["score"] >= 0.8
+
+
+def test_search_unions_and_prioritizes_exact_title_without_vector_hit(client, db_session):
+    exact = FileRecord(
+        id=22,
+        owner_id=None,
+        filehash="title-exact",
+        original_filename="scan.pdf",
+        document_title="Deutsche Bank Kontoauszug Dezember 2010",
+        local_filename="/tmp/scan.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Exact title source text",
+    )
+    semantic_only = FileRecord(
+        id=23,
+        owner_id=None,
+        filehash="title-semantic",
+        original_filename="similar.pdf",
+        document_title="Kontoauszug Deutsche Bank Christian Louis",
+        local_filename="/tmp/similar.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Similar source text",
+    )
+    db_session.add_all([exact, semantic_only])
+    db_session.commit()
+    hits = [
+        {
+            "score": 0.74,
+            "payload": {
+                "document_id": 23,
+                "text": "Similar source text",
+                "chunk_index": 0,
+            },
+        }
+    ]
+
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits),
+    ):
+        response = client.post(
+            "/api/knowledge/search",
+            json={"query": "Deutsche Bank Kontoauszug Dezember 2010", "limit": 2},
+        )
+
+    assert response.status_code == 200
+    results = response.json()["results"]
+    assert [result["document_id"] for result in results] == [22, 23]
+    assert results[0]["score"] > results[1]["score"]
+    assert results[0]["match_source"] == "metadata"
+
+
+def test_metadata_candidates_preserve_owner_isolation(db_session):
+    own = FileRecord(
+        id=24,
+        owner_id="alice@example.com",
+        filehash="alice-exact",
+        original_filename="Posteingang_0007.pdf",
+        document_title="Alice statement",
+        local_filename="/tmp/alice.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Alice source text",
+    )
+    other = FileRecord(
+        id=25,
+        owner_id="bob@example.com",
+        filehash="bob-exact",
+        original_filename="Posteingang_0007.pdf",
+        document_title="Bob statement",
+        local_filename="/tmp/bob.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Bob source text",
+    )
+    db_session.add_all([own, other])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {"user": {"email": "alice@example.com"}}
+
+    with patch("app.utils.user_scope.settings.multi_user_enabled", True):
+        from app.api.knowledge import _metadata_candidates
+
+        candidates = _metadata_candidates(db_session, request, "Posteingang_0007.pdf")
+
+    assert [record.id for record in candidates] == [24]
+
+
+def test_metadata_candidates_handle_unicode_exact_names_in_stable_order(db_session):
+    later = FileRecord(
+        id=27,
+        owner_id=None,
+        filehash="unicode-later",
+        original_filename="Straße.pdf",
+        document_title="Archive copy",
+        local_filename="/tmp/later.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Later source text",
+    )
+    earlier = FileRecord(
+        id=26,
+        owner_id=None,
+        filehash="unicode-earlier",
+        original_filename="Straße.pdf",
+        document_title="Original copy",
+        local_filename="/tmp/earlier.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Earlier source text",
+    )
+    db_session.add_all([later, earlier])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {}
+
+    from app.api.knowledge import _metadata_candidates
+
+    candidates = _metadata_candidates(db_session, request, "Straße.pdf")
+
+    assert [record.id for record in candidates] == [26, 27]
+
+
+def test_metadata_candidates_put_exact_name_before_lower_id_partial_match(db_session):
+    partial = FileRecord(
+        id=28,
+        owner_id=None,
+        filehash="partial-name",
+        original_filename="report-final.pdf",
+        document_title="Final report",
+        local_filename="/tmp/partial.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Partial source text",
+    )
+    exact = FileRecord(
+        id=29,
+        owner_id=None,
+        filehash="exact-name",
+        original_filename="report.pdf",
+        document_title="Report",
+        local_filename="/tmp/exact.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Exact source text",
+    )
+    db_session.add_all([partial, exact])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {}
+
+    from app.api.knowledge import _metadata_candidates
+
+    candidates = _metadata_candidates(db_session, request, "report.pdf")
+
+    assert [record.id for record in candidates] == [29, 28]
