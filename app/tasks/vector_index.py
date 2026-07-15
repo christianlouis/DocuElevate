@@ -52,7 +52,14 @@ def index_document_vectors(self, file_id: int, source_task_id: str | None = None
         try:
             count = QdrantVectorIndex().index_document(file_record)
         except Exception as exc:
-            _set_source_state(db, source_task_id, "failed", type(exc).__name__)
+            # ``BaseTaskWithRetry`` will reschedule intermediate failures after
+            # this task body raises.  Keep the durable source ledger explicitly
+            # non-terminal until Celery has exhausted that retry budget so the
+            # UI and corpus reconciliation do not report false failures.
+            retries = int(getattr(self.request, "retries", 0))
+            max_retries = int(getattr(self, "max_retries", 0))
+            state = "failed" if retries >= max_retries else "index_retrying"
+            _set_source_state(db, source_task_id, state, type(exc).__name__)
             db.commit()
             raise
         _set_source_state(db, source_task_id, "indexed")
