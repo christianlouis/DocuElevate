@@ -162,9 +162,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
       - name: Generate Build Metadata
+        id: build_metadata
         run: |
           chmod +x scripts/generate_build_metadata.sh
           chmod +x scripts/resolve_release_version.sh
+          RESOLVED_RELEASE_VERSION=""
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
             # Semantic Release runs in parallel and normally finishes well
             # before tests unlock this build. Retry briefly to close the race.
@@ -173,6 +175,7 @@ jobs:
               NEW_VERSION="$(scripts/resolve_release_version.sh "${GITHUB_SHA}")"
               if [[ -n "${NEW_VERSION}" ]]; then
                 export NEW_VERSION
+                RESOLVED_RELEASE_VERSION="${NEW_VERSION}"
                 echo "Using release version ${NEW_VERSION} for image metadata"
                 break
               fi
@@ -188,6 +191,8 @@ jobs:
             fi
           fi
           ./scripts/generate_build_metadata.sh
+          echo "version=$(tr -d '\n' < VERSION)" >> "$GITHUB_OUTPUT"
+          echo "release_version=${RESOLVED_RELEASE_VERSION}" >> "$GITHUB_OUTPUT"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to Docker Hub
@@ -212,7 +217,10 @@ jobs:
             type=ref,event=branch
             type=sha,prefix={{branch}}-
             type=semver,pattern={{version}}
+            type=raw,value=${{ steps.build_metadata.outputs.release_version }},enable=${{ steps.build_metadata.outputs.release_version != '' }}
             type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.version=${{ steps.build_metadata.outputs.version }}
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v6
         with:
