@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 
 import redis
@@ -272,10 +273,10 @@ def _decode(stored: str | None) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _dropbox_client(integration: UserIntegration):
+def _dropbox_client_from_stored_credentials(stored_credentials: str | None):
     import dropbox
 
-    credentials = _decode(integration.credentials)
+    credentials = _decode(stored_credentials)
     try:
         app_key, app_secret, refresh_token = resolve_dropbox_oauth_credentials(credentials)
     except ValueError as exc:
@@ -285,6 +286,10 @@ def _dropbox_client(integration: UserIntegration):
         app_key=app_key,
         app_secret=app_secret,
     )
+
+
+def _dropbox_client(integration: UserIntegration):
+    return _dropbox_client_from_stored_credentials(integration.credentials)
 
 
 def _load_page_entry_keys(job: DropboxImportJob) -> set[str]:
@@ -347,6 +352,52 @@ def _index_first_enabled(integration: UserIntegration) -> bool:
     return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _index_first_download_concurrency(config: dict, *, index_only: bool) -> int:
+    """Return bounded Dropbox prefetch concurrency for an opt-in initial backfill."""
+    if not index_only:
+        return 1
+    return _bounded_config_int(
+        config,
+        "backfill_download_concurrency",
+        settings.corpus_backfill_download_concurrency,
+        minimum=1,
+        maximum=8,
+    )
+
+
+def _entry_can_be_prefetched(entry) -> bool:
+    """Reject entries that the durable importer would skip before downloading."""
+    filename = sanitize_filename(entry.name) or "document"
+    extension = os.path.splitext(filename)[1].lower()
+    return extension in ALLOWED_EXTENSIONS and getattr(entry, "size", 0) <= settings.max_upload_size
+
+
+def _prefetch_dropbox_entry(integration_id: int, stored_credentials: str | None, entry) -> str:
+    """Download one Dropbox object into an isolated temporary file.
+
+    Each thread creates its own Dropbox client because requests sessions are
+    not guaranteed to be thread-safe. The caller owns cleanup of the returned
+    path, including when the durable import later discovers a duplicate.
+    """
+    filename = sanitize_filename(entry.name) or "document"
+    extension = os.path.splitext(filename)[1].lower()
+    target_path = os.path.join(settings.workdir, f"dropbox_prefetch_{integration_id}_{uuid.uuid4().hex}{extension}")
+    temporary_path = f"{target_path}.part"
+    try:
+        client = _dropbox_client_from_stored_credentials(stored_credentials)
+        _metadata, response = client.files_download(entry.path_lower)
+        content = response.content
+        if len(content) > settings.max_upload_size:
+            raise ValueError("Dropbox object exceeds the configured upload limit")
+        with open(temporary_path, "wb") as output:
+            output.write(content)
+        os.replace(temporary_path, target_path)
+        return target_path
+    finally:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
+
+
 def _reserve_job_llm_tokens(job: DropboxImportJob, integration: UserIntegration) -> tuple[date | None, int]:
     """Apply the daily cost guard only to an initial corpus backfill."""
     if not job.is_backfill:
@@ -357,7 +408,15 @@ def _reserve_job_llm_tokens(job: DropboxImportJob, integration: UserIntegration)
     return _reserve_corpus_llm_tokens(budget=budget)
 
 
-def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client, entry) -> str:
+def _import_file(
+    db,
+    job: DropboxImportJob,
+    integration: UserIntegration,
+    client,
+    entry,
+    *,
+    prefetched_path: str | None = None,
+) -> str:
     """Import one Dropbox FileMetadata and return queued/skipped/failed."""
     filename = sanitize_filename(entry.name) or "document"
     extension = os.path.splitext(filename)[1].lower()
@@ -406,13 +465,18 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
     temporary_path = f"{target_path}.part"
     queued = False
     try:
-        _metadata, response = client.files_download(entry.path_lower)
-        content = response.content
-        if len(content) > settings.max_upload_size:
-            return "failed"
-        with open(temporary_path, "wb") as output:
-            output.write(content)
-        os.replace(temporary_path, target_path)
+        if prefetched_path:
+            if os.path.getsize(prefetched_path) > settings.max_upload_size:
+                return "failed"
+            os.replace(prefetched_path, target_path)
+        else:
+            _metadata, response = client.files_download(entry.path_lower)
+            content = response.content
+            if len(content) > settings.max_upload_size:
+                return "failed"
+            with open(temporary_path, "wb") as output:
+                output.write(content)
+            os.replace(temporary_path, target_path)
 
         if intake is None:
             intake = DocumentIntake(
@@ -559,73 +623,124 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             _fail_import_job(db, job, str(exc))
             raise
 
-        for entry in page.entries:
-            if not isinstance(entry, dropbox.files.FileMetadata):
-                continue
-            try:
-                entry_key = _dropbox_file_key(entry)
-            except RuntimeError as exc:
-                _fail_import_job(db, job, str(exc))
-                raise
-            if entry_key in committed_entry_keys:
-                continue
-            job.discovered += 1
-            try:
-                outcome = _import_file(db, job, integration, client, entry)
-            except CorpusDailyBudgetReached as exc:
-                job.discovered -= 1
-                job.state = "queued"
-                job.error = str(exc)
-                db.commit()
-                # Redis' default Celery visibility timeout is shorter than a
-                # possible wait to the next UTC day. Short rechecks avoid a
-                # long-lived ETA task being restored and delivered twice.
-                recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
-                schedule_dropbox_corpus_import(job.id, countdown=recheck_in)
-                return {
-                    "status": "paused",
-                    "reason": "daily_llm_token_budget",
-                    "job_id": job.id,
-                    "tokens_reserved": exc.used,
-                    "token_budget": exc.budget,
-                    "resume_in_seconds": recheck_in,
-                    "budget_resets_in_seconds": exc.retry_after_seconds,
-                }
-            except CorpusDailyBudgetUnavailable as exc:
-                job.discovered -= 1
-                job.state = "queued"
-                job.error = str(exc)
-                db.commit()
-                delay = _bounded_config_int(
-                    config,
-                    "backfill_resume_delay_seconds",
-                    settings.corpus_backfill_resume_delay_seconds,
-                    minimum=1,
+        index_only = job.is_backfill and _index_first_enabled(integration)
+        download_concurrency = _index_first_download_concurrency(config, index_only=index_only)
+        integration_id = integration.id
+        stored_credentials = integration.credentials
+        prefetch_executor: ThreadPoolExecutor | None = None
+        prefetch_futures: dict[str, Future[str]] = {}
+        try:
+            if download_concurrency > 1:
+                prefetch_executor = ThreadPoolExecutor(
+                    max_workers=download_concurrency,
+                    thread_name_prefix="dropbox-corpus",
                 )
-                schedule_dropbox_corpus_import(job.id, countdown=delay)
-                return {
-                    "status": "paused",
-                    "reason": "daily_llm_token_budget_unavailable",
-                    "job_id": job.id,
-                    "resume_in_seconds": delay,
-                }
-            except Exception as exc:
-                logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
-                outcome = "failed"
-            if outcome == "queued":
-                job.downloaded += 1
-                job.queued += 1
-            elif outcome == "skipped":
-                job.skipped += 1
-            else:
-                job.failed += 1
-            committed_entry_keys.add(entry_key)
-            job.page_entry_keys = json.dumps(sorted(committed_entry_keys))
-            # Persist each enqueued document before moving on. If the worker is
-            # interrupted, stable file-revision identities prevent recounting
-            # committed entries. Unlike a numeric offset, this remains safe if
-            # the Dropbox page changes between budget rechecks.
-            db.commit()
+                for entry in page.entries:
+                    if not isinstance(entry, dropbox.files.FileMetadata) or not _entry_can_be_prefetched(entry):
+                        continue
+                    try:
+                        entry_key = _dropbox_file_key(entry)
+                    except RuntimeError:
+                        continue
+                    if entry_key not in committed_entry_keys:
+                        prefetch_futures[entry_key] = prefetch_executor.submit(
+                            _prefetch_dropbox_entry,
+                            integration_id,
+                            stored_credentials,
+                            entry,
+                        )
+
+            for entry in page.entries:
+                if not isinstance(entry, dropbox.files.FileMetadata):
+                    continue
+                try:
+                    entry_key = _dropbox_file_key(entry)
+                except RuntimeError as exc:
+                    _fail_import_job(db, job, str(exc))
+                    raise
+                if entry_key in committed_entry_keys:
+                    continue
+                job.discovered += 1
+                prefetched_path = None
+                try:
+                    future = prefetch_futures.get(entry_key)
+                    prefetched_path = future.result() if future else None
+                    outcome = _import_file(
+                        db,
+                        job,
+                        integration,
+                        client,
+                        entry,
+                        prefetched_path=prefetched_path,
+                    )
+                    if prefetched_path and not os.path.exists(prefetched_path):
+                        prefetched_path = None  # ownership moved into the durable pipeline
+                except CorpusDailyBudgetReached as exc:
+                    job.discovered -= 1
+                    job.state = "queued"
+                    job.error = str(exc)
+                    db.commit()
+                    # Redis' default Celery visibility timeout is shorter than a
+                    # possible wait to the next UTC day. Short rechecks avoid a
+                    # long-lived ETA task being restored and delivered twice.
+                    recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
+                    schedule_dropbox_corpus_import(job.id, countdown=recheck_in)
+                    return {
+                        "status": "paused",
+                        "reason": "daily_llm_token_budget",
+                        "job_id": job.id,
+                        "tokens_reserved": exc.used,
+                        "token_budget": exc.budget,
+                        "resume_in_seconds": recheck_in,
+                        "budget_resets_in_seconds": exc.retry_after_seconds,
+                    }
+                except CorpusDailyBudgetUnavailable as exc:
+                    job.discovered -= 1
+                    job.state = "queued"
+                    job.error = str(exc)
+                    db.commit()
+                    delay = _bounded_config_int(
+                        config,
+                        "backfill_resume_delay_seconds",
+                        settings.corpus_backfill_resume_delay_seconds,
+                        minimum=1,
+                    )
+                    schedule_dropbox_corpus_import(job.id, countdown=delay)
+                    return {
+                        "status": "paused",
+                        "reason": "daily_llm_token_budget_unavailable",
+                        "job_id": job.id,
+                        "resume_in_seconds": delay,
+                    }
+                except Exception as exc:
+                    logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
+                    outcome = "failed"
+                finally:
+                    if prefetched_path and os.path.exists(prefetched_path):
+                        os.remove(prefetched_path)
+                if outcome == "queued":
+                    job.downloaded += 1
+                    job.queued += 1
+                elif outcome == "skipped":
+                    job.skipped += 1
+                else:
+                    job.failed += 1
+                committed_entry_keys.add(entry_key)
+                job.page_entry_keys = json.dumps(sorted(committed_entry_keys))
+                # Persist each enqueued document before moving on. If the worker is
+                # interrupted, stable file-revision identities prevent recounting
+                # committed entries. Unlike a numeric offset, this remains safe if
+                # the Dropbox page changes between budget rechecks.
+                db.commit()
+        finally:
+            if prefetch_executor is not None:
+                prefetch_executor.shutdown(wait=True, cancel_futures=True)
+            for future in prefetch_futures.values():
+                if not future.done() or future.cancelled() or future.exception() is not None:
+                    continue
+                prefetched_path = future.result()
+                if os.path.exists(prefetched_path):
+                    os.remove(prefetched_path)
 
         job.cursor = page.cursor
         job.page_entry_keys = "[]"

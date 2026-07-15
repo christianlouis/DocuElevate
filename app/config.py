@@ -907,6 +907,15 @@ class Settings(BaseSettings):
         le=2000,
         description="Maximum provider entries requested per corpus backfill page. Default: 10.",
     )
+    corpus_backfill_download_concurrency: int = Field(
+        default=1,
+        ge=1,
+        le=8,
+        description=(
+            "Parallel Dropbox downloads per index-first corpus page. "
+            "Only opt-in initial backfills use values above 1. Default: 1."
+        ),
+    )
     corpus_backfill_queue_high_watermark: int = Field(
         default=50,
         ge=1,

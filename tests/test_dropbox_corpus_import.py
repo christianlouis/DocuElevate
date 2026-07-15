@@ -1,6 +1,7 @@
 """Tests for resumable Dropbox corpus import and revision deduplication."""
 
 import json
+import os
 from contextlib import nullcontext
 from datetime import date, datetime, timezone
 from types import SimpleNamespace
@@ -383,6 +384,23 @@ def test_initial_backfill_index_first_can_be_enabled_live(value):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("config", "index_only", "expected"),
+    [
+        ({"backfill_download_concurrency": 4}, True, 4),
+        ({"backfill_download_concurrency": 99}, True, 8),
+        ({"backfill_download_concurrency": "invalid"}, True, 1),
+        ({"backfill_download_concurrency": 4}, False, 1),
+    ],
+)
+def test_index_first_download_concurrency_is_live_bounded_and_scoped(config, index_only, expected):
+    from app.tasks.dropbox_corpus_import import _index_first_download_concurrency
+
+    with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_download_concurrency", 1):
+        assert _index_first_download_concurrency(config, index_only=index_only) == expected
+
+
+@pytest.mark.unit
 def test_index_first_backfill_bypasses_llm_budget_and_queues_direct_processing(db_session, tmp_path):
     integration = _integration(db_session)
     integration.config = json.dumps({"backfill_index_first_enabled": True})
@@ -426,6 +444,117 @@ def test_index_first_backfill_bypasses_llm_budget_and_queues_direct_processing(d
     queue_document.assert_called_once()
     assert queue_document.call_args.kwargs["index_only"] is True
     assert queue_document.call_args.kwargs["task_id"]
+
+
+@pytest.mark.unit
+def test_index_first_import_consumes_prefetched_file_without_redownloading(db_session, tmp_path):
+    integration = _integration(db_session)
+    integration.config = json.dumps({"backfill_index_first_enabled": True})
+    job = DropboxImportJob(
+        id="job-index-first-prefetched",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+        is_backfill=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    entry = SimpleNamespace(
+        id="id:prefetched",
+        rev="rev-1",
+        name="notes.pdf",
+        size=8,
+        path_lower="/documents/notes.pdf",
+        path_display="/Documents/notes.pdf",
+    )
+    prefetched_path = tmp_path / "prefetched.pdf"
+    prefetched_path.write_bytes(b"document")
+    client = MagicMock()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.workdir", str(tmp_path)),
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.api.intake._queue_document", return_value=SimpleNamespace(id="task-id")),
+    ):
+        from app.tasks.dropbox_corpus_import import _import_file
+
+        assert (
+            _import_file(
+                db_session,
+                job,
+                integration,
+                client,
+                entry,
+                prefetched_path=str(prefetched_path),
+            )
+            == "queued"
+        )
+
+    client.files_download.assert_not_called()
+    assert not prefetched_path.exists()
+
+
+@pytest.mark.unit
+def test_index_first_page_prefetches_downloads_in_parallel(db_session, tmp_path):
+    integration = _integration(db_session)
+    integration.config = json.dumps(
+        {
+            "backfill_index_first_enabled": True,
+            "backfill_download_concurrency": 2,
+        }
+    )
+    job = DropboxImportJob(
+        id="job-index-first-parallel",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Documents",
+        is_backfill=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    entries = [
+        SimpleNamespace(
+            id=f"id:parallel-{index}",
+            rev="rev-1",
+            name=f"notes-{index}.pdf",
+            size=8,
+            path_lower=f"/documents/notes-{index}.pdf",
+            path_display=f"/Documents/notes-{index}.pdf",
+        )
+        for index in range(2)
+    ]
+    page = SimpleNamespace(entries=entries, cursor="cursor-1", has_more=False)
+    dropbox_client = MagicMock()
+    dropbox_client.files_list_folder.return_value = page
+
+    def fake_prefetch(_integration_id, _stored_credentials, entry):
+        path = tmp_path / f"{entry.id.replace(':', '-')}.pdf"
+        path.write_bytes(b"document")
+        return str(path)
+
+    def fake_import(_db, _job, _integration, _client, _entry, *, prefetched_path=None):
+        assert prefetched_path is not None
+        assert os.path.exists(prefetched_path)
+        os.remove(prefetched_path)
+        return "queued"
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("dropbox.files.FileMetadata", SimpleNamespace),
+        patch("app.tasks.dropbox_corpus_import._prefetch_dropbox_entry", side_effect=fake_prefetch) as prefetch,
+        patch("app.tasks.dropbox_corpus_import._import_file", side_effect=fake_import) as import_file,
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
+
+        result = run_dropbox_corpus_import.run(job.id)
+
+    assert result["status"] == "completed"
+    assert result["queued"] == 2
+    assert prefetch.call_count == 2
+    assert import_file.call_count == 2
 
 
 @pytest.mark.unit
