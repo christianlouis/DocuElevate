@@ -2,6 +2,7 @@
 
 import json
 from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -360,6 +361,45 @@ def test_completed_index_first_import_schedules_deferred_ocr(db_session):
 
 
 @pytest.mark.unit
+def test_completed_index_first_import_schedules_reconciliation_without_ocr(db_session):
+    integration = _integration(
+        db_session,
+        config={
+            "source_type": "dropbox",
+            "folder_path": "/Posteingang",
+            "backfill_index_first_enabled": True,
+            "backfill_deferred_ocr_enabled": False,
+        },
+    )
+    job = DropboxImportJob(
+        id="reconciliation-only-job",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Posteingang",
+        is_backfill=True,
+    )
+    db_session.add(job)
+    db_session.commit()
+    page = SimpleNamespace(entries=[], cursor="finished-cursor", has_more=False)
+    dropbox_client = Mock()
+    dropbox_client.files_list_folder.return_value = page
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.dropbox_corpus_import._dropbox_client", return_value=dropbox_client),
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog") as schedule,
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
+
+        result = run_dropbox_corpus_import.run(job.id)
+
+    assert result["status"] == "completed"
+    schedule.assert_called_once_with(job.id)
+
+
+@pytest.mark.unit
 def test_deferred_ocr_backlog_stages_bounded_low_priority_work(db_session, tmp_path):
     integration = _integration(
         db_session,
@@ -506,11 +546,384 @@ def test_deferred_ocr_backlog_leaves_office_files_for_conversion(db_session, tmp
 
     db_session.refresh(imported)
     db_session.refresh(intake)
-    assert result["status"] == "completed"
+    assert result["status"] == "completed_with_gaps"
+    assert result["gaps"] == 1
     assert imported.state == "needs_conversion"
     assert intake.state == "needs_conversion"
     assert intake.error == "PDF conversion is required"
     apply_async.assert_not_called()
+
+
+@pytest.mark.unit
+def test_stale_queued_text_record_is_reindexed_without_reingestion(db_session, tmp_path):
+    integration = _integration(db_session)
+    original = tmp_path / "searchable.pdf"
+    original.write_bytes(b"searchable")
+    record = _file_record(db_session, original, filename="searchable.pdf")
+    record.ocr_text = "Useful embedded document text"
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:stale-searchable",
+        source="dropbox-corpus",
+        original_filename="searchable.pdf",
+        local_path=str(original),
+        task_id="stale-searchable-task",
+        state="queued",
+        updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db_session.add(intake)
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:stale-searchable",
+        revision="rev-1",
+        remote_path="/Posteingang/searchable.pdf",
+        intake_id=intake.id,
+        task_id="stale-searchable-task",
+        state="queued",
+    )
+    db_session.add_all(
+        [
+            imported,
+            ProcessingLog(
+                file_id=record.id,
+                task_id="stale-searchable-task",
+                step_name="process_document",
+                status="success",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    with patch("app.tasks.vector_index.index_document_vectors.apply_async") as index:
+        from app.tasks.dropbox_corpus_import import _reconcile_stale_queued
+
+        queued, gaps = _reconcile_stale_queued(
+            db_session,
+            integration,
+            stale_before=datetime.now(timezone.utc) - timedelta(minutes=15),
+            limit=10,
+        )
+
+    db_session.refresh(imported)
+    db_session.refresh(intake)
+    assert (queued, gaps) == (1, 0)
+    assert imported.state == "indexing"
+    assert intake.state == "indexing"
+    index.assert_called_once_with(
+        args=[record.id],
+        kwargs={"source_task_id": "stale-searchable-task"},
+        priority=9,
+    )
+
+
+@pytest.mark.unit
+def test_stale_queued_textless_record_moves_to_deferred_ocr(db_session, tmp_path):
+    integration = _integration(db_session)
+    original = tmp_path / "scan.pdf"
+    original.write_bytes(b"scan")
+    record = _file_record(db_session, original)
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:stale-scan",
+        source="dropbox-corpus",
+        original_filename="scan.pdf",
+        local_path=str(original),
+        task_id="stale-scan-task",
+        state="queued",
+        updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db_session.add(intake)
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:stale-scan",
+        revision="rev-1",
+        remote_path="/Posteingang/scan.pdf",
+        intake_id=intake.id,
+        task_id="stale-scan-task",
+        state="queued",
+    )
+    db_session.add_all(
+        [
+            imported,
+            ProcessingLog(
+                file_id=record.id,
+                task_id="stale-scan-task",
+                step_name="process_document",
+                status="skipped",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    with patch("app.tasks.vector_index.index_document_vectors.apply_async") as index:
+        from app.tasks.dropbox_corpus_import import _reconcile_stale_queued
+
+        queued, gaps = _reconcile_stale_queued(
+            db_session,
+            integration,
+            stale_before=datetime.now(timezone.utc) - timedelta(minutes=15),
+            limit=10,
+        )
+
+    db_session.refresh(imported)
+    db_session.refresh(intake)
+    assert (queued, gaps) == (0, 0)
+    assert imported.state == "needs_ocr"
+    assert intake.state == "needs_ocr"
+    index.assert_not_called()
+
+
+@pytest.mark.unit
+def test_stale_queue_reconciliation_runs_when_deferred_ocr_is_disabled(db_session, tmp_path):
+    integration = _integration(
+        db_session,
+        config={
+            "backfill_index_first_enabled": True,
+            "backfill_deferred_ocr_enabled": False,
+            "backfill_stale_queue_seconds": 60,
+            "backfill_ocr_recheck_seconds": 17,
+        },
+    )
+    job = DropboxImportJob(
+        id="reconcile-without-ocr-job",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Posteingang",
+        state="completed",
+        is_backfill=True,
+    )
+    original = tmp_path / "searchable-without-ocr.pdf"
+    original.write_bytes(b"searchable")
+    record = _file_record(db_session, original, filename="searchable-without-ocr.pdf")
+    record.ocr_text = "Existing embedded text"
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:reconcile-without-ocr",
+        source="dropbox-corpus",
+        original_filename="searchable-without-ocr.pdf",
+        local_path=str(original),
+        task_id="reconcile-without-ocr-task",
+        state="queued",
+        updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db_session.add_all([job, intake])
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:reconcile-without-ocr",
+        revision="rev-1",
+        remote_path="/Posteingang/searchable-without-ocr.pdf",
+        intake_id=intake.id,
+        task_id="reconcile-without-ocr-task",
+        state="queued",
+    )
+    db_session.add_all(
+        [
+            imported,
+            ProcessingLog(
+                file_id=record.id,
+                task_id="reconcile-without-ocr-task",
+                step_name="process_document",
+                status="success",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.tasks.vector_index.index_document_vectors.apply_async") as index,
+        patch("app.tasks.process_with_ocr.process_with_ocr.apply_async") as ocr,
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog") as schedule,
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_ocr_backlog
+
+        result = run_dropbox_corpus_ocr_backlog.run(job.id)
+
+    db_session.refresh(imported)
+    assert result == {
+        "status": "running",
+        "job_id": job.id,
+        "queued": 1,
+        "failed": 0,
+        "resume_in_seconds": 17,
+    }
+    assert imported.state == "indexing"
+    index.assert_called_once()
+    ocr.assert_not_called()
+    schedule.assert_called_once_with(job.id, countdown=17)
+
+
+@pytest.mark.unit
+def test_stale_queued_unprocessed_file_is_requeued_once(db_session, tmp_path):
+    integration = _integration(db_session)
+    staged = tmp_path / "staged.pdf"
+    staged.write_bytes(b"staged")
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:stale-unprocessed",
+        source="dropbox-corpus",
+        original_filename="staged.pdf",
+        local_path=str(staged),
+        task_id="stale-unprocessed-task",
+        state="queued",
+        updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db_session.add(intake)
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:stale-unprocessed",
+        revision="rev-1",
+        remote_path="/Posteingang/staged.pdf",
+        intake_id=intake.id,
+        task_id="stale-unprocessed-task",
+        state="queued",
+    )
+    db_session.add(imported)
+    db_session.commit()
+
+    with patch("app.api.intake._queue_document") as queue_document:
+        from app.tasks.dropbox_corpus_import import _reconcile_stale_queued
+
+        first = _reconcile_stale_queued(
+            db_session,
+            integration,
+            stale_before=datetime.now(timezone.utc) - timedelta(minutes=15),
+            limit=10,
+        )
+        second = _reconcile_stale_queued(
+            db_session,
+            integration,
+            stale_before=datetime.now(timezone.utc) - timedelta(minutes=15),
+            limit=10,
+        )
+
+    db_session.refresh(imported)
+    db_session.refresh(intake)
+    assert first == (1, 0)
+    assert second == (0, 0)
+    assert imported.state == "requeue_claimed"
+    assert intake.state == "requeue_claimed"
+    queue_document.assert_called_once_with(
+        str(staged),
+        "staged.pdf",
+        None,
+        None,
+        index_only=True,
+        task_id="stale-unprocessed-task",
+    )
+
+
+@pytest.mark.unit
+def test_stale_queued_missing_staging_file_is_reported_as_gap(db_session, tmp_path):
+    integration = _integration(db_session)
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:stale-missing",
+        source="dropbox-corpus",
+        original_filename="missing.pdf",
+        local_path=str(tmp_path / "missing.pdf"),
+        task_id="stale-missing-task",
+        state="queued",
+        updated_at=datetime.now(timezone.utc) - timedelta(hours=1),
+    )
+    db_session.add(intake)
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:stale-missing",
+        revision="rev-1",
+        remote_path="/Posteingang/missing.pdf",
+        intake_id=intake.id,
+        task_id="stale-missing-task",
+        state="queued",
+    )
+    db_session.add(imported)
+    db_session.commit()
+
+    from app.tasks.dropbox_corpus_import import _reconcile_stale_queued
+
+    queued, gaps = _reconcile_stale_queued(
+        db_session,
+        integration,
+        stale_before=datetime.now(timezone.utc) - timedelta(minutes=15),
+        limit=10,
+    )
+
+    db_session.refresh(imported)
+    db_session.refresh(intake)
+    assert (queued, gaps) == (0, 1)
+    assert imported.state == "requeue_missing"
+    assert intake.state == "requeue_missing"
+    assert intake.error == "Staged corpus file is unavailable"
+
+
+@pytest.mark.unit
+def test_fresh_queued_record_keeps_coordinator_running_without_requeue(db_session):
+    integration = _integration(
+        db_session,
+        config={
+            "backfill_index_first_enabled": True,
+            "backfill_deferred_ocr_enabled": True,
+            "backfill_ocr_recheck_seconds": 13,
+            "backfill_stale_queue_seconds": 900,
+        },
+    )
+    job = DropboxImportJob(
+        id="fresh-queued-job",
+        integration_id=integration.id,
+        owner_id=integration.owner_id,
+        root_path="/Posteingang",
+        state="completed",
+        is_backfill=True,
+    )
+    intake = DocumentIntake(
+        principal_id=integration.owner_id,
+        idempotency_key="dropbox:fresh-queued",
+        source="dropbox-corpus",
+        original_filename="fresh.pdf",
+        task_id="fresh-queued-task",
+        state="queued",
+    )
+    db_session.add_all([job, intake])
+    db_session.flush()
+    imported = DropboxImportObject(
+        integration_id=integration.id,
+        dropbox_file_id="id:fresh-queued",
+        revision="rev-1",
+        remote_path="/Posteingang/fresh.pdf",
+        intake_id=intake.id,
+        task_id="fresh-queued-task",
+        state="queued",
+    )
+    db_session.add(imported)
+    db_session.commit()
+
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.vector_index_enabled", True),
+        patch("app.tasks.dropbox_corpus_import.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.dropbox_corpus_import._pending_queue_depth", return_value=0),
+        patch("app.api.intake._queue_document") as queue_document,
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog") as schedule,
+    ):
+        from app.tasks.dropbox_corpus_import import run_dropbox_corpus_ocr_backlog
+
+        result = run_dropbox_corpus_ocr_backlog.run(job.id)
+
+    assert result == {
+        "status": "running",
+        "job_id": job.id,
+        "queued": 0,
+        "failed": 0,
+        "resume_in_seconds": 13,
+    }
+    queue_document.assert_not_called()
+    schedule.assert_called_once_with(job.id, countdown=13)
 
 
 @pytest.mark.unit

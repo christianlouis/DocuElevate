@@ -576,6 +576,7 @@ def test_index_first_page_prefetches_downloads_in_parallel(db_session, tmp_path)
         patch("dropbox.files.FileMetadata", SimpleNamespace),
         patch("app.tasks.dropbox_corpus_import._prefetch_dropbox_entry", side_effect=fake_prefetch) as prefetch,
         patch("app.tasks.dropbox_corpus_import._import_file", side_effect=fake_import) as import_file,
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog"),
     ):
         from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
 
@@ -666,6 +667,7 @@ def test_index_first_prefetch_keeps_a_bounded_lookahead_window(db_session, tmp_p
         patch("app.tasks.dropbox_corpus_import.ThreadPoolExecutor", TrackingExecutor),
         patch("app.tasks.dropbox_corpus_import._prefetch_dropbox_entry", side_effect=fake_prefetch) as prefetch,
         patch("app.tasks.dropbox_corpus_import._import_file", side_effect=fake_import),
+        patch("app.tasks.dropbox_corpus_import.schedule_dropbox_corpus_ocr_backlog"),
     ):
         from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import
 

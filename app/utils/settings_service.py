@@ -2203,6 +2203,22 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "corpus_backfill_reconcile_batch_size": {
+        "category": "Processing",
+        "description": "Maximum stale corpus ledger items reconciled per coordinator pass (default: 10)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_stale_queue_seconds": {
+        "category": "Processing",
+        "description": "Minimum queued age before interrupted corpus work is recovered (default: 900 seconds)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "corpus_backfill_queue_high_watermark": {
         "category": "Processing",
         "description": "Pause corpus backfills at this queued plus worker-reserved Celery depth (default: 50)",

@@ -671,7 +671,6 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             raise
 
         index_only = job.is_backfill and _index_first_enabled(integration)
-        deferred_ocr = _deferred_ocr_enabled(config, index_only=index_only)
         download_concurrency = _index_first_download_concurrency(config, index_only=index_only)
         integration_id = integration.id
         stored_credentials = integration.credentials
@@ -823,7 +822,7 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
 
     if page.has_more:
         schedule_dropbox_corpus_import(job_id)
-    elif deferred_ocr:
+    elif index_only:
         schedule_dropbox_corpus_ocr_backlog(job_id)
     return result
 
@@ -881,7 +880,11 @@ def _claim_deferred_state(db, imported: DropboxImportObject, expected: str, clai
 
 def _recover_stale_deferred_claims(db, integration_id: int, *, stale_before: datetime) -> int:
     """Return abandoned coordinator claims to a recoverable durable state."""
-    mappings = {"ocr_claimed": "needs_ocr", "indexing": "ocr_complete"}
+    mappings = {
+        "ocr_claimed": "needs_ocr",
+        "indexing": "ocr_complete",
+        "requeue_claimed": "queued",
+    }
     recovered = 0
     for claimed, ready in mappings.items():
         rows = (
@@ -902,6 +905,97 @@ def _recover_stale_deferred_claims(db, integration_id: int, *, stale_before: dat
     return recovered
 
 
+def _reconcile_stale_queued(
+    db,
+    integration: UserIntegration,
+    *,
+    stale_before: datetime,
+    limit: int,
+) -> tuple[int, int]:
+    """Recover bounded index-first work abandoned before its ledger advanced.
+
+    Existing FileRecords are never sent through document ingestion again:
+    text-backed records go straight to the idempotent vector task, while
+    textless records enter the deferred OCR pass. Only rows without any
+    FileRecord are requeued from their still-durable staging file.
+    """
+    if limit <= 0:
+        return 0, 0
+
+    candidates = (
+        db.query(DropboxImportObject, DocumentIntake)
+        .join(DocumentIntake, DocumentIntake.id == DropboxImportObject.intake_id)
+        .filter(
+            DropboxImportObject.integration_id == integration.id,
+            DropboxImportObject.state == "queued",
+            DocumentIntake.state == "queued",
+            DocumentIntake.updated_at < stale_before,
+        )
+        .order_by(DocumentIntake.updated_at, DropboxImportObject.id)
+        .limit(limit)
+        .all()
+    )
+    queued = 0
+    gaps = 0
+
+    from app.api.intake import _queue_document
+    from app.tasks.vector_index import index_document_vectors
+
+    for imported, intake in candidates:
+        if not imported.task_id:
+            _set_deferred_ocr_state(db, imported, "requeue_missing", "Corpus task correlation is unavailable")
+            db.commit()
+            gaps += 1
+            continue
+
+        file_id = _deferred_ocr_file_id(db, imported)
+        record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+        if record is not None:
+            if not record.ocr_text or not record.ocr_text.strip():
+                _set_deferred_ocr_state(db, imported, "needs_ocr", "Recovered stale queued document without text")
+                db.commit()
+                continue
+            if not _claim_deferred_state(db, imported, "queued", "indexing"):
+                continue
+            try:
+                index_document_vectors.apply_async(
+                    args=[record.id],
+                    kwargs={"source_task_id": imported.task_id},
+                    priority=settings.corpus_backfill_task_priority,
+                )
+            except Exception as exc:
+                _set_deferred_ocr_state(db, imported, "queued", type(exc).__name__)
+                db.commit()
+                continue
+            queued += 1
+            continue
+
+        staged_path = intake.local_path
+        if not staged_path or not os.path.exists(staged_path):
+            _set_deferred_ocr_state(db, imported, "requeue_missing", "Staged corpus file is unavailable")
+            db.commit()
+            gaps += 1
+            continue
+        if not _claim_deferred_state(db, imported, "queued", "requeue_claimed"):
+            continue
+        try:
+            _queue_document(
+                staged_path,
+                intake.original_filename or os.path.basename(staged_path),
+                None,
+                integration.owner_id if settings.multi_user_enabled else None,
+                index_only=True,
+                task_id=imported.task_id,
+            )
+        except Exception as exc:
+            _set_deferred_ocr_state(db, imported, "queued", type(exc).__name__)
+            db.commit()
+            continue
+        queued += 1
+
+    return queued, gaps
+
+
 @celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_ocr_backlog")
 def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
     """Queue bounded OCR-only work for scanned index-first corpus documents."""
@@ -909,6 +1003,7 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
     recheck_delay = settings.corpus_backfill_ocr_recheck_seconds
     queued = 0
     failed = 0
+    gaps = 0
 
     with SessionLocal() as db:
         job = db.query(DropboxImportJob).filter(DropboxImportJob.id == job_id).first()
@@ -925,8 +1020,10 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
             config = {}
         if job.state != "completed":
             return {"status": "waiting", "job_id": job.id, "detail": "Initial corpus import is not complete"}
-        if not _deferred_ocr_enabled(config, index_only=job.is_backfill and _index_first_enabled(integration)):
+        index_only = job.is_backfill and _index_first_enabled(integration)
+        if not index_only:
             return {"status": "disabled", "job_id": job.id}
+        deferred_ocr = _deferred_ocr_enabled(config, index_only=index_only)
 
         recheck_delay = _bounded_config_int(
             config,
@@ -934,8 +1031,16 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
             settings.corpus_backfill_ocr_recheck_seconds,
             minimum=1,
         )
-        stale_before = datetime.now(timezone.utc) - timedelta(seconds=max(300, recheck_delay * 10))
-        _recover_stale_deferred_claims(db, integration.id, stale_before=stale_before)
+        now = datetime.now(timezone.utc)
+        stale_claim_before = now - timedelta(seconds=max(300, recheck_delay * 10))
+        _recover_stale_deferred_claims(db, integration.id, stale_before=stale_claim_before)
+        stale_queue_seconds = _bounded_config_int(
+            config,
+            "backfill_stale_queue_seconds",
+            settings.corpus_backfill_stale_queue_seconds,
+            minimum=60,
+        )
+        stale_queue_before = now - timedelta(seconds=stale_queue_seconds)
         high_watermark = _bounded_config_int(
             config,
             "backfill_queue_high_watermark",
@@ -945,13 +1050,30 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
         queue_depth = _pending_queue_depth()
         if queue_depth is not None and queue_depth >= high_watermark:
             should_recheck = True
-            result = {
+            result: dict[str, object] = {
                 "status": "paused",
                 "job_id": job.id,
                 "queue_depth": queue_depth,
                 "resume_in_seconds": recheck_delay,
             }
         else:
+            available_slots = high_watermark if queue_depth is None else max(0, high_watermark - queue_depth)
+            reconcile_batch_size = _bounded_config_int(
+                config,
+                "backfill_reconcile_batch_size",
+                settings.corpus_backfill_reconcile_batch_size,
+                minimum=1,
+                maximum=100,
+            )
+            reconciled_queued, reconciled_gaps = _reconcile_stale_queued(
+                db,
+                integration,
+                stale_before=stale_queue_before,
+                limit=min(reconcile_batch_size, available_slots),
+            )
+            queued += reconciled_queued
+            gaps += reconciled_gaps
+            available_slots = max(0, available_slots - reconciled_queued)
             batch_size = _bounded_config_int(
                 config,
                 "backfill_ocr_batch_size",
@@ -959,8 +1081,7 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
                 minimum=1,
                 maximum=100,
             )
-            if queue_depth is not None:
-                batch_size = min(batch_size, max(0, high_watermark - queue_depth))
+            batch_size = min(batch_size, available_slots)
             remaining_slots = batch_size
 
             from app.tasks.vector_index import index_document_vectors
@@ -998,16 +1119,18 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
                 queued += 1
                 remaining_slots -= 1
 
-            candidates = (
-                db.query(DropboxImportObject)
-                .filter(
-                    DropboxImportObject.integration_id == integration.id,
-                    DropboxImportObject.state == "needs_ocr",
+            candidates: list[DropboxImportObject] = []
+            if deferred_ocr:
+                candidates = (
+                    db.query(DropboxImportObject)
+                    .filter(
+                        DropboxImportObject.integration_id == integration.id,
+                        DropboxImportObject.state == "needs_ocr",
+                    )
+                    .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
+                    .limit(remaining_slots)
+                    .all()
                 )
-                .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
-                .limit(remaining_slots)
-                .all()
-            )
 
             from app.tasks.process_with_ocr import process_with_ocr
 
@@ -1048,33 +1171,49 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
                     _set_deferred_ocr_state(db, imported, "needs_ocr", type(exc).__name__)
                     db.commit()
 
+            pending_states = [
+                "ocr_claimed",
+                "ocr_queued",
+                "ocr_retrying",
+                "ocr_complete",
+                "indexing",
+                "index_retrying",
+                "queued",
+                "requeue_claimed",
+            ]
+            if deferred_ocr:
+                pending_states.append("needs_ocr")
             pending = (
                 db.query(DropboxImportObject.id)
                 .filter(
                     DropboxImportObject.integration_id == integration.id,
-                    DropboxImportObject.state.in_(
-                        (
-                            "needs_ocr",
-                            "ocr_claimed",
-                            "ocr_queued",
-                            "ocr_retrying",
-                            "ocr_complete",
-                            "indexing",
-                            "index_retrying",
-                        )
-                    ),
+                    DropboxImportObject.state.in_(pending_states),
                 )
                 .first()
                 is not None
             )
             should_recheck = pending
+            gap_states = ["failed", "needs_conversion", "requeue_missing"]
+            if not deferred_ocr:
+                gap_states.append("needs_ocr")
+            gap_count = (
+                db.query(DropboxImportObject.id)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state.in_(gap_states),
+                )
+                .count()
+            )
+            gaps = max(gaps, gap_count)
             result = {
-                "status": "running" if pending else "completed",
+                "status": "running" if pending else ("completed_with_gaps" if gaps else "completed"),
                 "job_id": job.id,
                 "queued": queued,
                 "failed": failed,
                 "resume_in_seconds": recheck_delay if pending else None,
             }
+            if gaps:
+                result["gaps"] = gaps
 
     if should_recheck:
         schedule_dropbox_corpus_ocr_backlog(job_id, countdown=recheck_delay)
