@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.182.3 (2026-07-15)
+
+### Bug Fixes
+
+- Batch large Qdrant document upserts
+  ([#1051](https://github.com/christianlouis/DocuElevate/pull/1051),
+  [`48fad3c`](https://github.com/christianlouis/DocuElevate/commit/48fad3c07d650d115788ba5fb6f188de7e0f4a5c))
+
+
 ## v0.182.2 (2026-07-15)
 
 ### Bug Fixes
