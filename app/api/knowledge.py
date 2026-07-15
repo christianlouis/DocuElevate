@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
@@ -210,7 +211,23 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
         state="queued",
     )
     db.add(job)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        active = (
+            db.query(KnowledgeResearchJob)
+            .filter(
+                KnowledgeResearchJob.owner_id == owner_id,
+                KnowledgeResearchJob.cache_key == cache_key,
+                KnowledgeResearchJob.state.in_(("queued", "running")),
+            )
+            .order_by(KnowledgeResearchJob.created_at.desc())
+            .first()
+        )
+        if active is None:
+            raise
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=_research_job_payload(active))
     from app.tasks.knowledge_research import run_knowledge_research
 
     try:

@@ -1710,6 +1710,7 @@
   "search.chat_clear": "Clear conversation",
   "search.chat_working": "Searching…",
   "search.chat_researching": "Analyzing {processed} of {total} relevant documents…",
+  "search.chat_research_timeout": "Document research is taking longer than expected. You can retry later; completed results will be reused.",
   "search.chat_index_incomplete": "Index is not complete yet – result covers the currently indexed corpus",
   "search.chat_error": "Document chat is currently unavailable.",
   "search.chat_sources": "Sources",

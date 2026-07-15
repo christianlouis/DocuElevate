@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     # separate from metadata/OCR model selection and is live-reloadable from
     # the database-backed settings service.
     rag_chat_model: str = "gpt-5-nano"
+    knowledge_research_retention_days: int = Field(
+        default=30,
+        ge=1,
+        le=365,
+        description="Days to retain completed, failed, or cancelled document research jobs.",
+    )
 
     # Anthropic Claude settings (used when ai_provider="anthropic")
     anthropic_api_key: Optional[str] = None

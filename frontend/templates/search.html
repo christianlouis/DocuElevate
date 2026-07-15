@@ -465,6 +465,7 @@
     renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }},
     chatWorking: {{ _("search.chat_working") | tojson }},
     chatResearching: {{ _("search.chat_researching") | tojson }},
+    chatResearchTimeout: {{ _("search.chat_research_timeout") | tojson }},
     chatIndexIncomplete: {{ _("search.chat_index_incomplete") | tojson }},
     chatError: {{ _("search.chat_error") | tojson }},
     chatSources: {{ _("search.chat_sources") | tojson }},
@@ -594,7 +595,12 @@
 
   async function waitForResearchJob(jobId) {
     activeResearchJobId = jobId;
+    const deadline = Date.now() + (30 * 60 * 1000);
     while (true) {
+      if (Date.now() >= deadline) {
+        activeResearchJobId = null;
+        throw new Error(searchI18n.chatResearchTimeout);
+      }
       await new Promise(function(resolve) { window.setTimeout(resolve, 1000); });
       const response = await fetch('/api/knowledge/research/' + encodeURIComponent(jobId));
       const data = await response.json();
@@ -629,8 +635,11 @@
   });
   chatClear.addEventListener('click', async function() {
     if (activeResearchJobId) {
-      await fetch('/api/knowledge/research/' + encodeURIComponent(activeResearchJobId) + '/cancel', {method: 'POST'});
-      activeResearchJobId = null;
+      try {
+        await fetch('/api/knowledge/research/' + encodeURIComponent(activeResearchJobId) + '/cancel', {method: 'POST'});
+      } finally {
+        activeResearchJobId = null;
+      }
     }
     chatHistory.length = 0;
     chatLog.innerHTML = '<div class="knowledge-chat-empty" id="knowledge-chat-empty"><i class="fas fa-book-open fa-2x" aria-hidden="true"></i><p><strong>' + escapeHtml({{ _("search.chat_heading") | tojson }}) + '</strong></p><p>' + escapeHtml({{ _("search.chat_intro") | tojson }}) + '</p></div>';

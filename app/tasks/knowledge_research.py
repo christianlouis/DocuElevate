@@ -4,6 +4,8 @@ import hashlib
 import json
 import logging
 import re
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 
 from app.celery_app import celery
@@ -78,6 +80,22 @@ def _deduplicate_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # the deterministic event identity.
         if len(str(item.get("claim") or "")) > len(str(existing.get("claim") or "")):
             existing["claim"] = item.get("claim")
+        for field in (
+            "event_date",
+            "period",
+            "subject",
+            "location",
+            "numeric_value",
+            "unit",
+            "amount",
+            "currency",
+            "booking_reference",
+            "order_reference",
+            "invoice_reference",
+            "reference",
+        ):
+            if existing.get(field) in (None, "") and item.get(field) not in (None, ""):
+                existing[field] = item[field]
     return sorted(
         merged.values(),
         key=lambda item: (
@@ -90,21 +108,28 @@ def _deduplicate_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _numeric(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
-    compact = str(value or "").strip().replace(" ", "")
+    compact = re.sub(r"[\s\u00a0']+", "", str(value or "").strip())
     if not compact:
         return None
     if "," in compact and "." in compact:
-        compact = compact.replace(".", "").replace(",", ".")
-    elif "," in compact:
-        compact = compact.replace(",", ".")
+        decimal_separator = "," if compact.rfind(",") > compact.rfind(".") else "."
+        thousands_separator = "." if decimal_separator == "," else ","
+        compact = compact.replace(thousands_separator, "").replace(decimal_separator, ".")
+    elif "," in compact or "." in compact:
+        separator = "," if "," in compact else "."
+        groups = compact.split(separator)
+        if len(groups) > 2 or (len(groups) == 2 and len(groups[1]) == 3 and len(groups[0]) <= 3):
+            compact = "".join(groups)
+        else:
+            compact = compact.replace(separator, ".")
     match = re.search(r"-?\d+(?:\.\d+)?", compact)
     return float(match.group()) if match else None
 
 
-def _bounded_synthesis_evidence(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _bounded_synthesis_evidence(evidence: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
     """Keep final prompts bounded without changing deterministic reductions."""
     if len(json.dumps(evidence, ensure_ascii=False, default=str)) <= 100_000:
-        return evidence
+        return evidence, False
     maxima = sorted(
         evidence,
         key=lambda item: _numeric(item.get("amount")) or _numeric(item.get("numeric_value")) or float("-inf"),
@@ -113,7 +138,24 @@ def _bounded_synthesis_evidence(evidence: list[dict[str, Any]]) -> list[dict[str
     chronological = sorted(evidence, key=lambda item: str(item.get("event_date") or item.get("period") or ""))
     selected = [*maxima, *chronological[:40], *chronological[-40:]]
     by_key = {str(item.get("event_key")): item for item in selected}
-    return list(by_key.values())
+    return list(by_key.values()), True
+
+
+def _chat_completion_with_retry(provider: Any, **kwargs: Any) -> str:
+    """Retry bounded transient provider failures without logging document text."""
+    for attempt in range(3):
+        try:
+            return cast(str, provider.chat_completion(**kwargs))
+        except Exception as exc:
+            if attempt == 2:
+                raise
+            logger.warning(
+                "Retrying research model call after %s (attempt %d/3)",
+                type(exc).__name__,
+                attempt + 1,
+            )
+            time.sleep(2**attempt)
+    raise RuntimeError("unreachable")
 
 
 def _excerpt(text: str, query: str) -> str:
@@ -211,7 +253,7 @@ def _no_evidence_answer(question: str, *, index_complete: bool) -> str:
     )
 
 
-def _map_batch(question: str, records: list[FileRecord], model: str) -> list[dict[str, Any]]:
+def _map_batch(question: str, records: list[FileRecord], model: str) -> tuple[list[dict[str, Any]], bool]:
     from app.utils.ai_provider import get_ai_provider
 
     documents = "\n\n".join(
@@ -232,7 +274,8 @@ def _map_batch(question: str, records: list[FileRecord], model: str) -> list[dic
     provider = get_ai_provider()
     parsed = None
     for attempt in range(2):
-        response = provider.chat_completion(
+        response = _chat_completion_with_retry(
+            provider,
             messages=[
                 {
                     "role": "system",
@@ -252,7 +295,10 @@ def _map_batch(question: str, records: list[FileRecord], model: str) -> list[dic
             logger.info("Retrying one research map batch after malformed JSON")
     evidence = parsed.get("evidence", []) if isinstance(parsed, dict) else []
     allowed = {record.id for record in records}
-    return [item for item in evidence if isinstance(item, dict) and item.get("document_id") in allowed]
+    return (
+        [item for item in evidence if isinstance(item, dict) and item.get("document_id") in allowed],
+        any(len((record.ocr_text or "").strip()) > _EXCERPT_CHARS for record in records),
+    )
 
 
 def _synthesize(
@@ -265,7 +311,7 @@ def _synthesize(
     from app.api.knowledge import _cited_sources
     from app.utils.ai_provider import get_ai_provider
 
-    synthesis_evidence = _bounded_synthesis_evidence(evidence)
+    synthesis_evidence, truncated = _bounded_synthesis_evidence(evidence)
     cited_document_ids = sorted({file_id for item in synthesis_evidence for file_id in item.get("document_ids", [])})
     number_by_id = {file_id: number for number, file_id in enumerate(cited_document_ids, start=1)}
     sources = [
@@ -300,7 +346,8 @@ def _synthesize(
         + "\n\nDEDUPLICATED EVIDENCE:\n"
         + "\n".join(rows)
     )
-    answer = get_ai_provider().chat_completion(
+    answer = _chat_completion_with_retry(
+        get_ai_provider(),
         messages=[
             {"role": "system", "content": "You are DocuElevate's source-grounded corpus analyst."},
             {"role": "user", "content": prompt},
@@ -308,7 +355,7 @@ def _synthesize(
         model=model,
         temperature=0,
     )
-    return {"answer": answer, "sources": _cited_sources(answer, sources)}
+    return {"answer": answer, "sources": _cited_sources(answer, sources), "truncated": truncated}
 
 
 @celery.task(name="app.tasks.knowledge_research.run_knowledge_research")
@@ -330,6 +377,7 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
             db.commit()
             model = settings.rag_chat_model or settings.ai_model or settings.openai_model
             evidence: list[dict[str, Any]] = []
+            truncated = False
             record_map: dict[int, FileRecord] = {}
             for offset in range(0, len(candidate_ids), _MAP_BATCH):
                 db.refresh(job)
@@ -344,7 +392,9 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                 records = [record for record in records if record.id in accessible_set]
                 record_map.update({cast(int, record.id): record for record in records})
                 if records:
-                    evidence.extend(_map_batch(research_context, records, model))
+                    batch_evidence, batch_truncated = _map_batch(research_context, records, model)
+                    evidence.extend(batch_evidence)
+                    truncated = truncated or batch_truncated
                 job.processed_documents = min(offset + len(records), len(candidate_ids))
                 db.commit()
 
@@ -353,6 +403,7 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                 synthesized = _synthesize(job.question, research_context, reduced, record_map, model)
                 answer = synthesized["answer"]
                 sources = synthesized["sources"]
+                truncated = truncated or bool(synthesized["truncated"])
             else:
                 answer = _no_evidence_answer(job.question, index_complete=indexed_scope >= len(accessible_ids))
                 sources = []
@@ -369,7 +420,7 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                     "processed_documents": job.processed_documents,
                     "deduplicated_events": len(reduced),
                     "index_complete": indexed_scope >= len(accessible_ids),
-                    "truncated": False,
+                    "truncated": truncated,
                     "watermark": {
                         "document_count": len(accessible_ids),
                         "max_document_id": max(accessible_ids, default=0),
@@ -389,3 +440,20 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                 job.error = "Document research failed. Please retry."
                 db.commit()
             return {"state": "failed", "error": str(exc)}
+
+
+@celery.task(name="app.tasks.knowledge_research.cleanup_knowledge_research_jobs")
+def cleanup_knowledge_research_jobs() -> dict[str, int]:
+    """Remove expired terminal jobs, including retained prompts and answers."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.knowledge_research_retention_days)
+    with SessionLocal() as db:
+        deleted = (
+            db.query(KnowledgeResearchJob)
+            .filter(
+                KnowledgeResearchJob.state.in_(("completed", "failed", "cancelled")),
+                KnowledgeResearchJob.updated_at < cutoff,
+            )
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    return {"deleted": deleted}

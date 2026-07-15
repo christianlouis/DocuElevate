@@ -8,11 +8,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
     true,
 )
 
@@ -242,6 +244,16 @@ class KnowledgeResearchJob(Base):
     """Durable owner-scoped state for exhaustive document analytics."""
 
     __tablename__ = "knowledge_research_jobs"
+    __table_args__ = (
+        Index(
+            "uq_knowledge_research_active_owner_cache",
+            "owner_id",
+            "cache_key",
+            unique=True,
+            sqlite_where=text("state IN ('queued', 'running')"),
+            postgresql_where=text("state IN ('queued', 'running')"),
+        ),
+    )
 
     id = Column(String(36), primary_key=True)
     owner_id = Column(String, nullable=False, index=True)

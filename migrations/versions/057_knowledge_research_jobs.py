@@ -39,6 +39,14 @@ def upgrade() -> None:
     op.create_index("ix_knowledge_research_jobs_cache_key", "knowledge_research_jobs", ["cache_key"])
     op.create_index("ix_knowledge_research_jobs_state", "knowledge_research_jobs", ["state"])
     op.create_index("ix_knowledge_research_jobs_created_at", "knowledge_research_jobs", ["created_at"])
+    op.create_index(
+        "uq_knowledge_research_active_owner_cache",
+        "knowledge_research_jobs",
+        ["owner_id", "cache_key"],
+        unique=True,
+        postgresql_where=sa.text("state IN ('queued', 'running')"),
+        sqlite_where=sa.text("state IN ('queued', 'running')"),
+    )
 
 
 def downgrade() -> None:

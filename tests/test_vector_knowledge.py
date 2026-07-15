@@ -515,6 +515,7 @@ def test_document_chat_returns_clear_gateway_error_when_model_fails(client, db_s
     assert response.json()["detail"] == "Document chat model is unavailable"
 
 
+@pytest.mark.integration
 def test_document_chat_uses_cross_document_research_for_counts(client, db_session):
     records = [
         FileRecord(
@@ -548,6 +549,7 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
     delay.assert_called_once_with(job.id)
 
 
+@pytest.mark.integration
 def test_document_chat_does_not_reuse_incomplete_research_cache(client, db_session):
     record = FileRecord(
         id=32,
@@ -579,6 +581,7 @@ def test_document_chat_does_not_reuse_incomplete_research_cache(client, db_sessi
     delay.assert_called_once()
 
 
+@pytest.mark.integration
 def test_research_job_status_and_cancel_are_owner_scoped(client, db_session):
     job = KnowledgeResearchJob(
         id="job-1",
