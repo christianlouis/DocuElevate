@@ -317,6 +317,10 @@ def process_document(
     if owner_id is None and isinstance(default_owner_id, str) and default_owner_id.strip():
         owner_id = default_owner_id
 
+    if index_only and not settings.vector_index_enabled:
+        logger.warning("Index-first processing requested while vector indexing is disabled; using full pipeline")
+        index_only = False
+
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
     log_task_progress(
