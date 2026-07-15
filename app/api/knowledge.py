@@ -145,12 +145,14 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
             "history": history,
             "scope_count": len(accessible_ids),
             "scope_max": max(accessible_ids, default=0),
-            "scope_digest": hashlib.sha256(json.dumps([tuple(row) for row in accessible_rows]).encode()).hexdigest(),
+            "scope_digest": hashlib.blake2b(
+                json.dumps([tuple(row) for row in accessible_rows]).encode(), digest_size=32
+            ).hexdigest(),
         },
         sort_keys=True,
         ensure_ascii=False,
     )
-    cache_key = hashlib.sha256(cache_material.encode()).hexdigest()
+    cache_key = hashlib.blake2b(cache_material.encode(), digest_size=32).hexdigest()
     cached = (
         db.query(KnowledgeResearchJob)
         .filter(
