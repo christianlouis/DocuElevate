@@ -934,6 +934,20 @@ class Settings(BaseSettings):
         ge=1,
         description="Delay between deferred corpus OCR backlog capacity checks. Default: 30 seconds.",
     )
+    corpus_backfill_reconcile_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum stale corpus ledger items reconciled per coordinator pass. Default: 10.",
+    )
+    corpus_backfill_stale_queue_seconds: int = Field(
+        default=900,
+        ge=60,
+        description=(
+            "Minimum age before a queued corpus item can be recovered after a worker or broker interruption. "
+            "Default: 900 seconds."
+        ),
+    )
     corpus_backfill_queue_high_watermark: int = Field(
         default=50,
         ge=1,
