@@ -337,6 +337,10 @@ def _configured_backfill_token_budget(integration: UserIntegration) -> int:
     if enabled is False or str(enabled).strip().lower() in {"0", "false", "no", "off"}:
         return 0
     raw_budget = config.get("backfill_daily_llm_token_budget")
+    if isinstance(raw_budget, (int, float)) and raw_budget < 0:
+        raise CorpusDailyBudgetUnavailable(
+            "Negative corpus backfill token budgets are invalid; use 0 or disable the budget explicitly"
+        )
     try:
         budget = (
             int(raw_budget) if raw_budget not in (None, "") else int(settings.corpus_backfill_daily_llm_token_budget)
