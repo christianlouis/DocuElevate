@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.3 (2026-07-15)
+
+### Bug Fixes
+
+- **research**: Resolve subject aliases and result semantics
+  ([#1115](https://github.com/christianlouis/DocuElevate/pull/1115),
+  [`586b75a`](https://github.com/christianlouis/DocuElevate/commit/586b75ab458de0d3b2f2ff00677af6ff91382a2b))
+
+
 ## v0.184.2 (2026-07-15)
 
 ### Bug Fixes
