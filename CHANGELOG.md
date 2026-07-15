@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.2 (2026-07-15)
+
+### Bug Fixes
+
+- **research**: Version evidence-faithful corpus answers
+  ([#1113](https://github.com/christianlouis/DocuElevate/pull/1113),
+  [`fb0db57`](https://github.com/christianlouis/DocuElevate/commit/fb0db570e1828381a4ccd6a6d616efb5fdb1b091))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`f9ab73f`](https://github.com/christianlouis/DocuElevate/commit/f9ab73f6f1a33e5d697b7bb5ad801abb9cf69736))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5951746`](https://github.com/christianlouis/DocuElevate/commit/595174678ad3996d7c0ab80fda505f2b46e62b9e))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9efcb60`](https://github.com/christianlouis/DocuElevate/commit/9efcb60a1c1448859bbcd936b82623b0960dd781))
+
+
 ## Unreleased
 
 ### Code Style
