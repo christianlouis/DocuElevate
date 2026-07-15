@@ -33,6 +33,7 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
 from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
+from app.tasks.knowledge_research import cleanup_knowledge_research_jobs, run_knowledge_research  # noqa: F401
 from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
@@ -142,6 +143,11 @@ celery.conf.beat_schedule = {
     "apply-pending-subscription-changes": {
         "task": "app.tasks.subscription_tasks.apply_pending_subscription_changes_all",
         "schedule": crontab(hour="0", minute="5"),  # 00:05 UTC daily
+        "options": {"expires": 3600},
+    },
+    "cleanup-knowledge-research-jobs": {
+        "task": "app.tasks.knowledge_research.cleanup_knowledge_research_jobs",
+        "schedule": crontab(hour="3", minute="30"),
         "options": {"expires": 3600},
     },
     # ── Database backup tasks ──────────────────────────────────────────────

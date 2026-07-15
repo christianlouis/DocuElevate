@@ -753,6 +753,14 @@ SETTING_METADATA = {
             "llama3.2",
         ],
     },
+    "knowledge_research_retention_days": {
+        "category": "AI Services",
+        "description": "Days to retain completed, failed, or cancelled document research questions and answers",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "anthropic_api_key": {
         "category": "AI Services",
         "description": "Anthropic API key (required when AI_PROVIDER=anthropic)",

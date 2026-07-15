@@ -8,11 +8,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
     true,
 )
 
@@ -234,6 +236,37 @@ class BulkOperation(Base):
     failed_items = Column(Integer, nullable=False, default=0)
     task_ids = Column(Text, nullable=True)
     result = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class KnowledgeResearchJob(Base):
+    """Durable owner-scoped state for exhaustive document analytics."""
+
+    __tablename__ = "knowledge_research_jobs"
+    __table_args__ = (
+        Index(
+            "uq_knowledge_research_active_owner_cache",
+            "owner_id",
+            "cache_key",
+            unique=True,
+            sqlite_where=text("state IN ('queued', 'running')"),
+            postgresql_where=text("state IN ('queued', 'running')"),
+        ),
+    )
+
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String, nullable=False, index=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    history_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    accessible_file_ids_json = Column(Text, nullable=False)
+    state = Column(String(20), nullable=False, default="queued", server_default="queued", index=True)
+    total_documents = Column(Integer, nullable=False, default=0, server_default="0")
+    processed_documents = Column(Integer, nullable=False, default=0, server_default="0")
+    cancel_requested = Column(Boolean, nullable=False, default=False, server_default="0")
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

@@ -1,19 +1,24 @@
 """Authenticated retrieval API for chunk-level document knowledge."""
 
+import hashlib
+import json
 import logging
 import re
+import uuid
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
 from app.config import settings
 from app.database import get_db
-from app.models import FileRecord
-from app.utils.user_scope import apply_owner_filter
+from app.models import FileRecord, KnowledgeResearchJob
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -38,6 +43,8 @@ _RESEARCH_QUERY_STOPWORDS = {
     "bis",
     "bisher",
     "changed",
+    "current",
+    "davon",
     "der",
     "die",
     "ein",
@@ -61,10 +68,15 @@ _RESEARCH_QUERY_STOPWORDS = {
     "most",
     "oft",
     "often",
+    "of",
     "over",
     "per",
+    "prior",
+    "question",
+    "questions",
     "sich",
     "the",
+    "those",
     "teuerste",
     "time",
     "trend",
@@ -73,10 +85,13 @@ _RESEARCH_QUERY_STOPWORDS = {
     "verändert",
     "war",
     "was",
+    "were",
     "what",
     "wie",
     "wieviele",
     "years",
+    "user",
+    "wurden",
     "jetzt",
 }
 
@@ -97,6 +112,136 @@ class KnowledgeChatRequest(BaseModel):
     history: list[KnowledgeChatMessage] = Field(default_factory=list, max_length=20)
     limit: int = Field(default=8, ge=1, le=20)
     score_threshold: float | None = Field(default=0.25, ge=0.0, le=1.0)
+
+
+def _research_principal(request: Request) -> str:
+    """Return a stable job owner even in explicitly configured single-user mode."""
+    return get_current_owner_id(request) or "__single_user__"
+
+
+def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "job_id": job.id,
+        "state": job.state,
+        "total_documents": job.total_documents,
+        "processed_documents": job.processed_documents,
+        "cancel_requested": job.cancel_requested,
+        "error": job.error,
+    }
+    if job.result_json:
+        payload["result"] = json.loads(job.result_json)
+    return payload
+
+
+def _research_cache_is_complete(job: KnowledgeResearchJob) -> bool:
+    """Reuse analytics only when they covered the whole authorized index scope."""
+    try:
+        result = json.loads(job.result_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return bool((result.get("coverage") or {}).get("index_complete"))
+
+
+def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Session) -> JSONResponse:
+    """Snapshot authorization scope, use safe cache, and queue exhaustive research."""
+    accessible_rows = (
+        apply_owner_filter(
+            db.query(FileRecord.id, FileRecord.filehash, func.length(FileRecord.ocr_text)).filter(
+                FileRecord.ocr_text.isnot(None),
+                func.length(func.trim(FileRecord.ocr_text)) > 0,
+            ),
+            request,
+        )
+        .order_by(FileRecord.id.asc())
+        .all()
+    )
+    accessible_ids = [row[0] for row in accessible_rows]
+    owner_id = _research_principal(request)
+    history = [message.model_dump() for message in body.history[-12:]]
+    cache_material = json.dumps(
+        {
+            "owner": owner_id,
+            "question": _normalized_search_text(body.message),
+            "history": history,
+            "scope_count": len(accessible_ids),
+            "scope_max": max(accessible_ids, default=0),
+            "scope_digest": hashlib.blake2b(
+                json.dumps([tuple(row) for row in accessible_rows]).encode(), digest_size=32
+            ).hexdigest(),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    cache_key = hashlib.blake2b(cache_material.encode(), digest_size=32).hexdigest()
+    completed_candidates = (
+        db.query(KnowledgeResearchJob)
+        .filter(
+            KnowledgeResearchJob.owner_id == owner_id,
+            KnowledgeResearchJob.cache_key == cache_key,
+            KnowledgeResearchJob.state == "completed",
+        )
+        .order_by(KnowledgeResearchJob.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    cached = next((job for job in completed_candidates if _research_cache_is_complete(job)), None)
+    if cached is not None:
+        return JSONResponse(status_code=status.HTTP_200_OK, content={**_research_job_payload(cached), "cached": True})
+
+    active = (
+        db.query(KnowledgeResearchJob)
+        .filter(
+            KnowledgeResearchJob.owner_id == owner_id,
+            KnowledgeResearchJob.cache_key == cache_key,
+            KnowledgeResearchJob.state.in_(("queued", "running")),
+        )
+        .order_by(KnowledgeResearchJob.created_at.desc())
+        .first()
+    )
+    if active is not None:
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=_research_job_payload(active))
+
+    job = KnowledgeResearchJob(
+        id=str(uuid.uuid4()),
+        owner_id=owner_id,
+        cache_key=cache_key,
+        question=body.message,
+        history_json=json.dumps(history, ensure_ascii=False),
+        accessible_file_ids_json=json.dumps(accessible_ids),
+        state="queued",
+    )
+    db.add(job)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        active = (
+            db.query(KnowledgeResearchJob)
+            .filter(
+                KnowledgeResearchJob.owner_id == owner_id,
+                KnowledgeResearchJob.cache_key == cache_key,
+                KnowledgeResearchJob.state.in_(("queued", "running")),
+            )
+            .order_by(KnowledgeResearchJob.created_at.desc())
+            .first()
+        )
+        if active is None:
+            raise
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=_research_job_payload(active))
+    from app.tasks.knowledge_research import run_knowledge_research
+
+    try:
+        run_knowledge_research.delay(job.id)
+    except Exception as exc:
+        logger.exception("Could not queue knowledge research job %s: %s", job.id, exc)
+        job.state = "failed"
+        job.error = "Document research could not be queued. Please retry."
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document research queue is unavailable",
+        ) from exc
+    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=_research_job_payload(job))
 
 
 def _require_enabled() -> None:
@@ -541,27 +686,26 @@ def _cited_sources(answer: str, sources: list[dict[str, Any]]) -> list[dict[str,
 
 @router.post("/chat")
 @require_login
-def chat_with_knowledge(request: Request, body: KnowledgeChatRequest, db: DbSession) -> dict[str, Any]:
+def chat_with_knowledge(request: Request, body: KnowledgeChatRequest, db: DbSession) -> Any:
     """Answer a question from owner-scoped document evidence with citations."""
     if _is_research_question(body.message):
-        results, coverage = _rag_research_results(request, db, body)
-    else:
-        retrieval_query = _rag_retrieval_query(body)
-        search_result = _search_knowledge(
-            request,
-            KnowledgeSearchRequest(
-                query=retrieval_query,
-                limit=body.limit,
-                score_threshold=body.score_threshold,
-            ),
-            db,
-        )
-        results = search_result["results"]
-        coverage = {
-            "strategy": "focused_answer",
-            "evidence_documents": len(results),
-            "truncated": False,
-        }
+        return _queue_research_job(request, body, db)
+    retrieval_query = _rag_retrieval_query(body)
+    search_result = _search_knowledge(
+        request,
+        KnowledgeSearchRequest(
+            query=retrieval_query,
+            limit=body.limit,
+            score_threshold=body.score_threshold,
+        ),
+        db,
+    )
+    results = search_result["results"]
+    coverage = {
+        "strategy": "focused_answer",
+        "evidence_documents": len(results),
+        "truncated": False,
+    }
     model = settings.rag_chat_model or settings.ai_model or settings.openai_model
     sources = [
         {
@@ -607,6 +751,43 @@ def chat_with_knowledge(request: Request, body: KnowledgeChatRequest, db: DbSess
         "sources": _cited_sources(answer, sources),
         "coverage": coverage,
     }
+
+
+@router.get("/research/{job_id}")
+@require_login
+def get_research_job(request: Request, job_id: str, db: DbSession) -> dict[str, Any]:
+    """Return progress or a completed result only to the job owner."""
+    job = (
+        db.query(KnowledgeResearchJob)
+        .filter(
+            KnowledgeResearchJob.id == job_id,
+            KnowledgeResearchJob.owner_id == _research_principal(request),
+        )
+        .first()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research job not found")
+    return _research_job_payload(job)
+
+
+@router.post("/research/{job_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+@require_login
+def cancel_research_job(request: Request, job_id: str, db: DbSession) -> dict[str, Any]:
+    """Request cooperative cancellation between bounded map batches."""
+    job = (
+        db.query(KnowledgeResearchJob)
+        .filter(
+            KnowledgeResearchJob.id == job_id,
+            KnowledgeResearchJob.owner_id == _research_principal(request),
+        )
+        .first()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Research job not found")
+    if job.state in {"queued", "running"}:
+        job.cancel_requested = True
+        db.commit()
+    return _research_job_payload(job)
 
 
 @router.get("/documents/{file_id}")
