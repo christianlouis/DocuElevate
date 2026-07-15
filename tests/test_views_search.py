@@ -43,7 +43,7 @@ class TestSearchPage:
         assert 'id="knowledge-chat-input"' in text
         assert "/api/knowledge/chat" in text
         assert "source.source_url" in text
-        assert "data.retrieved_count" in text
+        assert "data.sources.length" in text
 
     def test_search_page_query_too_long(self, client):
         """GET /search?q=<very long> returns 422 for exceeding max_length."""

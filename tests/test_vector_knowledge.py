@@ -354,7 +354,22 @@ def test_keyword_research_scopes_meilisearch_before_ranking(db_session):
     assert [result["document_id"] for result in results] == [101]
     assert total == 1
     assert truncated is False
-    search.assert_called_once_with("London flight", file_ids=[101], page=1, per_page=100)
+    search.assert_called_once_with("london flight", file_ids=[101], page=1, per_page=100)
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("Wie hat sich mein HbA1c über die Jahre verändert?", "hba1c"),
+        ("Wie oft war ich in London per Flugzeug belegbar?", "london flugzeug"),
+        ("Wie oft habe ich in einem Motel One Hotel übernachtet?", "motel one hotel"),
+        ("Was war der teuerste Amazon Kauf bis jetzt?", "amazon kauf"),
+    ],
+)
+def test_research_keyword_query_keeps_domain_terms(question, expected):
+    from app.api.knowledge import _research_keyword_query
+
+    assert _research_keyword_query(question) == expected
 
 
 def test_search_returns_cited_authoritative_document(client, db_session):
@@ -550,7 +565,7 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
         "keyword_matches": 125,
         "truncated": True,
     }
-    keyword_search.assert_called_once_with("Wie oft war ich in London per Flugzeug?", page=1, per_page=100)
+    keyword_search.assert_called_once_with("london flugzeug", page=1, per_page=100)
     assert "Never describe a result as corpus-complete" in completion.call_args.kwargs["messages"][0]["content"]
     assert "'truncated': True" in completion.call_args.kwargs["messages"][-1]["content"]
 
@@ -577,6 +592,20 @@ def test_rag_prompt_has_aggregate_excerpt_budget():
     prompt = messages[-1]["content"]
     assert prompt.count("SOURCE [") == 50
     assert prompt.count("x") - prompt.count("Excerpt") == 60_000
+
+
+def test_document_chat_returns_only_sources_cited_by_answer():
+    from app.api.knowledge import _cited_sources
+
+    sources = [{"number": number, "document_id": number} for number in range(1, 6)]
+
+    assert _cited_sources("Supported by [2] and again by [4].", sources) == [sources[1], sources[3]]
+    assert _cited_sources("Supported by [1, 3] and [4-5].", sources) == [
+        sources[0],
+        sources[2],
+        sources[3],
+        sources[4],
+    ]
 
 
 def test_no_results_answer_uses_browser_or_question_language(client):

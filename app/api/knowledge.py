@@ -30,6 +30,55 @@ _METADATA_EXCERPT_CHARS = 2_400
 _RESEARCH_DOCUMENT_LIMIT = 50
 _RAG_PROMPT_EXCERPT_BUDGET = 60_000
 _KEYWORD_SCOPE_BATCH_SIZE = 5_000
+_RESEARCH_QUERY_STOPWORDS = {
+    "a",
+    "an",
+    "belegbar",
+    "biggest",
+    "bis",
+    "bisher",
+    "changed",
+    "der",
+    "die",
+    "ein",
+    "eine",
+    "einem",
+    "for",
+    "größte",
+    "habe",
+    "hat",
+    "have",
+    "how",
+    "höchste",
+    "ich",
+    "in",
+    "ist",
+    "jahre",
+    "largest",
+    "many",
+    "mein",
+    "meine",
+    "most",
+    "oft",
+    "often",
+    "over",
+    "per",
+    "sich",
+    "the",
+    "teuerste",
+    "time",
+    "trend",
+    "über",
+    "übernachtet",
+    "verändert",
+    "war",
+    "was",
+    "what",
+    "wie",
+    "wieviele",
+    "years",
+    "jetzt",
+}
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -306,6 +355,16 @@ def _focused_research_excerpt(text: str | None, query: str) -> str:
     return "\n…\n".join(windows)[:_METADATA_EXCERPT_CHARS]
 
 
+def _research_keyword_query(query: str) -> str:
+    """Remove question scaffolding while retaining domain and entity terms."""
+    tokens = [
+        token
+        for token in _normalized_search_text(query).split()
+        if token not in _RESEARCH_QUERY_STOPWORDS and len(token) >= 2
+    ]
+    return " ".join(tokens[:12]) or query[:512]
+
+
 def _keyword_research_results(
     request: Request,
     db: Session,
@@ -315,6 +374,7 @@ def _keyword_research_results(
     try:
         from app.utils.meilisearch_client import search_documents
 
+        keyword_query = _research_keyword_query(query)
         user = request.session.get("user")
         requires_owner_scope = settings.multi_user_enabled and not (isinstance(user, dict) and user.get("is_admin"))
         if requires_owner_scope:
@@ -324,7 +384,7 @@ def _keyword_research_results(
             ]
             keyword_pages = [
                 search_documents(
-                    query[:512],
+                    keyword_query,
                     file_ids=accessible_ids[offset : offset + _KEYWORD_SCOPE_BATCH_SIZE],
                     page=1,
                     per_page=100,
@@ -332,7 +392,7 @@ def _keyword_research_results(
                 for offset in range(0, len(accessible_ids), _KEYWORD_SCOPE_BATCH_SIZE)
             ]
         else:
-            keyword_pages = [search_documents(query[:512], page=1, per_page=100)]
+            keyword_pages = [search_documents(keyword_query, page=1, per_page=100)]
     except Exception as exc:
         logger.warning("Keyword research retrieval failed: %s", exc)
         return [], 0, False
@@ -438,6 +498,10 @@ def _rag_messages(
         "Cite every material claim with one or more source numbers such as [1] or [2]. If the sources "
         "do not support an answer, say so clearly and do not guess. Preserve dates, amounts, names, and "
         "uncertainty exactly. For counts, maxima, or trends, deduplicate events and show the evidence used. "
+        "Count real-world occurrences, not documents or transport legs. Treat an outbound and return flight as "
+        "one trip or stay unless the user explicitly asks for flight segments. Merge duplicate receipts, itinerary "
+        "copies, and expense bundles that share dates, booking references, order numbers, or the same event. State "
+        "what was counted and the deduplication key. "
         "Never describe a result as corpus-complete when COVERAGE says truncated=true; in that case use wording "
         "such as 'at least' or 'among the retrieved evidence'. Answer in the user's language."
     )
@@ -459,6 +523,20 @@ def _no_results_answer(request: Request, message: str) -> str:
     if preferred_language.startswith("de") or looks_german:
         return "Ich konnte keine zugänglichen Dokumente finden, die eine Antwort belegen."
     return "I could not find any accessible documents that support an answer."
+
+
+def _cited_sources(answer: str, sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return only sources explicitly cited by the grounded answer."""
+    available_numbers = {int(source["number"]) for source in sources}
+    cited_numbers: set[int] = set()
+    for citation in re.findall(r"\[([\d\s,;–-]+)\]", answer):
+        cited_numbers.update(int(value) for value in re.findall(r"\d+", citation))
+        for start_value, end_value in re.findall(r"(\d+)\s*[-–]\s*(\d+)", citation):
+            start, end = int(start_value), int(end_value)
+            if start <= end and end - start <= len(available_numbers):
+                cited_numbers.update(range(start, end + 1))
+    cited_numbers.intersection_update(available_numbers)
+    return [source for source in sources if source["number"] in cited_numbers]
 
 
 @router.post("/chat")
@@ -526,7 +604,7 @@ def chat_with_knowledge(request: Request, body: KnowledgeChatRequest, db: DbSess
         "answer": answer,
         "model": model,
         "retrieved_count": len(results),
-        "sources": sources,
+        "sources": _cited_sources(answer, sources),
         "coverage": coverage,
     }
 
