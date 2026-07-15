@@ -2169,6 +2169,16 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "corpus_backfill_download_concurrency": {
+        "category": "Processing",
+        "description": (
+            "Parallel Dropbox downloads for opt-in index-first initial backfills; bounded to 8 (default: 1)"
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "corpus_backfill_queue_high_watermark": {
         "category": "Processing",
         "description": "Pause corpus backfills at this queued plus worker-reserved Celery depth (default: 50)",
