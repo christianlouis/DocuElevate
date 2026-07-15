@@ -194,6 +194,18 @@ class TestMeilisearchSearchDocuments:
         assert 'mime_type = "application/pdf"' in search_params["filter"]
         assert 'language = "de"' in search_params["filter"]
 
+    def test_search_with_file_id_allowlist(self):
+        """Owner-scoped callers can filter before Meilisearch ranking."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("London", file_ids=[12, 42], page=1, per_page=10)
+
+        search_params = mock_index.search.call_args.args[1]
+        assert search_params["filter"] == "file_id IN [12, 42]"
+
     def test_search_with_tags_filter(self):
         """search_documents passes tags filter to Meilisearch."""
         mock_client, mock_index = self._make_mock_client(hits=[], total=0)

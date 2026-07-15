@@ -204,6 +204,51 @@
       text-align: center; padding: 3rem 1rem; color: #9ca3af;
     }
     .search-empty i { font-size: 3rem; margin-bottom: 1rem; display: block; }
+    .search-mode-tabs {
+      display: inline-flex; gap: 0.25rem; padding: 0.25rem; margin-bottom: 1rem;
+      border: 1px solid #d1d5db; border-radius: 0.625rem; background: #f9fafb;
+    }
+    .search-mode-tabs button {
+      min-height: 44px; padding: 0.5rem 0.9rem; border: 0;
+      border-radius: 0.45rem; background: transparent; color: #4b5563;
+      font-weight: 600; cursor: pointer;
+    }
+    .search-mode-tabs button.active { background: #fff; color: #1d4ed8; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+    .knowledge-chat { display: none; }
+    .search-container.chat-active .knowledge-chat { display: block; }
+    .search-container.chat-active > .search-box,
+    .search-container.chat-active > .search-filters,
+    .search-container.chat-active > .search-saved-bar,
+    .search-container.chat-active > .search-summary,
+    .search-container.chat-active > .search-bulk-bar,
+    .search-container.chat-active > .search-workspace { display: none !important; }
+    .knowledge-chat-log {
+      min-height: 360px; max-height: 62vh; overflow-y: auto; padding: 1rem;
+      border: 1px solid #d1d5db; border-radius: 0.625rem; background: #f9fafb;
+    }
+    .knowledge-chat-empty { color: #6b7280; text-align: center; padding: 4rem 1rem; }
+    .knowledge-chat-message { max-width: 88%; margin-bottom: 1rem; padding: 0.85rem 1rem; border-radius: 0.75rem; }
+    .knowledge-chat-message.user { margin-left: auto; background: #2563eb; color: #fff; }
+    .knowledge-chat-message.assistant { background: #fff; border: 1px solid #e5e7eb; color: #111827; }
+    .knowledge-chat-answer { white-space: pre-wrap; line-height: 1.55; }
+    .knowledge-chat-meta { margin-top: 0.65rem; color: #6b7280; font-size: 0.75rem; }
+    .knowledge-chat-sources { display: grid; gap: 0.4rem; margin-top: 0.75rem; }
+    .knowledge-chat-source {
+      display: block; padding: 0.55rem 0.7rem; border: 1px solid #dbeafe;
+      border-radius: 0.45rem; background: #eff6ff; color: #1d4ed8; text-decoration: none;
+    }
+    .knowledge-chat-source:hover { background: #dbeafe; }
+    .knowledge-chat-form { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+    .knowledge-chat-form textarea {
+      flex: 1; min-height: 52px; max-height: 160px; resize: vertical; padding: 0.75rem;
+      border: 1px solid #d1d5db; border-radius: 0.5rem; font: inherit;
+    }
+    .knowledge-chat-form button, .knowledge-chat-clear {
+      min-height: 44px; padding: 0.65rem 1rem; border-radius: 0.5rem; cursor: pointer; font-weight: 600;
+    }
+    .knowledge-chat-form button { border: 0; background: #2563eb; color: #fff; }
+    .knowledge-chat-form button:disabled { opacity: 0.55; cursor: wait; }
+    .knowledge-chat-clear { margin-top: 0.5rem; border: 1px solid #d1d5db; background: #fff; color: #4b5563; }
     @media (max-width: 900px) {
       .search-container.preview-active .search-workspace {
         grid-template-columns: minmax(0, 1fr);
@@ -220,6 +265,31 @@
 <div class="container mx-auto px-4 py-8">
   <div class="search-container">
     <h1 class="text-3xl font-bold mb-6"><i class="fas fa-search text-blue-500" aria-hidden="true"></i> {{ _("search.heading") }}</h1>
+
+    <div class="search-mode-tabs" role="tablist" aria-label="{{ _('search.mode_aria') }}">
+      <button type="button" id="search-mode-btn" class="active" role="tab" aria-selected="true">
+        <i class="fas fa-search" aria-hidden="true"></i> {{ _("search.mode_search") }}
+      </button>
+      <button type="button" id="chat-mode-btn" role="tab" aria-selected="false">
+        <i class="fas fa-comments" aria-hidden="true"></i> {{ _("search.mode_chat") }}
+      </button>
+    </div>
+
+    <section class="knowledge-chat" id="knowledge-chat" aria-label="{{ _('search.chat_heading') }}">
+      <div id="knowledge-chat-log" class="knowledge-chat-log" aria-live="polite">
+        <div class="knowledge-chat-empty" id="knowledge-chat-empty">
+          <i class="fas fa-book-open fa-2x" aria-hidden="true"></i>
+          <p><strong>{{ _("search.chat_heading") }}</strong></p>
+          <p>{{ _("search.chat_intro") }}</p>
+        </div>
+      </div>
+      <form id="knowledge-chat-form" class="knowledge-chat-form">
+        <label for="knowledge-chat-input" class="sr-only">{{ _("search.chat_input_label") }}</label>
+        <textarea id="knowledge-chat-input" maxlength="4000" placeholder="{{ _('search.chat_placeholder') }}" required></textarea>
+        <button type="submit" id="knowledge-chat-send"><i class="fas fa-paper-plane" aria-hidden="true"></i> {{ _("search.chat_send") }}</button>
+      </form>
+      <button type="button" id="knowledge-chat-clear" class="knowledge-chat-clear"><i class="fas fa-trash-alt" aria-hidden="true"></i> {{ _("search.chat_clear") }}</button>
+    </section>
 
     <!-- Search box -->
     <div class="search-box" role="search">
@@ -392,7 +462,13 @@
     selectedAllMatching: {{ _("search.bulk_selected_all_matching") | tojson }},
     selectAllFailed: {{ _("search.bulk_select_all_failed") | tojson }},
     operationProgress: {{ _("search.bulk_operation_progress") | tojson }},
-    renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }}
+    renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }},
+    chatWorking: {{ _("search.chat_working") | tojson }},
+    chatError: {{ _("search.chat_error") | tojson }},
+    chatSources: {{ _("search.chat_sources") | tojson }},
+    chatModel: {{ _("search.chat_model") | tojson }},
+    chatCoverageLimited: {{ _("search.chat_coverage_limited") | tojson }},
+    chatDocumentFallback: {{ _("search.chat_document_fallback") | tojson }}
   };
   function formatSearchMessage(template, values) {
     return Object.keys(values).reduce(function(message, key) {
@@ -413,6 +489,14 @@
   const selectedCount = document.getElementById('search-selected-count');
   const bulkStatus = document.getElementById('search-bulk-status');
   const bulkRoutePipeline = document.getElementById('bulk-route-pipeline');
+  const searchModeBtn = document.getElementById('search-mode-btn');
+  const chatModeBtn = document.getElementById('chat-mode-btn');
+  const chatLog = document.getElementById('knowledge-chat-log');
+  const chatForm = document.getElementById('knowledge-chat-form');
+  const chatInput = document.getElementById('knowledge-chat-input');
+  const chatSend = document.getElementById('knowledge-chat-send');
+  const chatClear = document.getElementById('knowledge-chat-clear');
+  const chatHistory = [];
 
   // Filter elements
   const filterDocType    = document.getElementById('filter-document-type');
@@ -431,6 +515,96 @@
   const visibleSearchResultIds = [];
   const searchResultCache = new Map();
   let bulkRoutePipelinesLoaded = false;
+
+  function setSearchMode(mode) {
+    const chatActive = mode === 'chat';
+    searchContainer.classList.toggle('chat-active', chatActive);
+    searchModeBtn.classList.toggle('active', !chatActive);
+    chatModeBtn.classList.toggle('active', chatActive);
+    searchModeBtn.setAttribute('aria-selected', String(!chatActive));
+    chatModeBtn.setAttribute('aria-selected', String(chatActive));
+    if (chatActive) chatInput.focus();
+  }
+
+  function appendChatMessage(role, content, data) {
+    const empty = document.getElementById('knowledge-chat-empty');
+    if (empty) empty.remove();
+    const message = document.createElement('article');
+    message.className = 'knowledge-chat-message ' + role;
+    const answer = document.createElement('div');
+    answer.className = 'knowledge-chat-answer';
+    answer.textContent = content;
+    message.appendChild(answer);
+    if (data && role === 'assistant') {
+      const meta = document.createElement('div');
+      meta.className = 'knowledge-chat-meta';
+      meta.textContent = searchI18n.chatModel + ': ' + data.model + ' · ' + searchI18n.chatSources + ': ' + data.retrieved_count;
+      if (data.coverage && data.coverage.truncated) {
+        meta.textContent += ' · ' + searchI18n.chatCoverageLimited;
+      }
+      message.appendChild(meta);
+      if (Array.isArray(data.sources) && data.sources.length) {
+        const sources = document.createElement('div');
+        sources.className = 'knowledge-chat-sources';
+        data.sources.forEach(function(source) {
+          const link = document.createElement('a');
+          link.className = 'knowledge-chat-source';
+          if (source.source_url) link.href = source.source_url;
+          link.textContent = '[' + source.number + '] ' + (source.title || source.filename || (searchI18n.chatDocumentFallback + ' ' + source.document_id));
+          sources.appendChild(link);
+        });
+        message.appendChild(sources);
+      }
+    }
+    chatLog.appendChild(message);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  async function sendKnowledgeChat(message) {
+    appendChatMessage('user', message);
+    chatSend.disabled = true;
+    const originalLabel = chatSend.innerHTML;
+    chatSend.textContent = searchI18n.chatWorking;
+    try {
+      const response = await fetch('/api/knowledge/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: message, history: chatHistory.slice(-12), limit: 8})
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || searchI18n.chatError);
+      appendChatMessage('assistant', data.answer, data);
+      chatHistory.push({role: 'user', content: message});
+      chatHistory.push({role: 'assistant', content: data.answer});
+    } catch (error) {
+      appendChatMessage('assistant', searchI18n.chatError + ' ' + (error.message || ''));
+    } finally {
+      chatSend.disabled = false;
+      chatSend.innerHTML = originalLabel;
+      chatInput.focus();
+    }
+  }
+
+  searchModeBtn.addEventListener('click', function() { setSearchMode('search'); });
+  chatModeBtn.addEventListener('click', function() { setSearchMode('chat'); });
+  chatForm.addEventListener('submit', function(event) {
+    event.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message || chatSend.disabled) return;
+    chatInput.value = '';
+    sendKnowledgeChat(message);
+  });
+  chatInput.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      chatForm.requestSubmit();
+    }
+  });
+  chatClear.addEventListener('click', function() {
+    chatHistory.length = 0;
+    chatLog.innerHTML = '<div class="knowledge-chat-empty" id="knowledge-chat-empty"><i class="fas fa-book-open fa-2x" aria-hidden="true"></i><p><strong>' + escapeHtml({{ _("search.chat_heading") | tojson }}) + '</strong></p><p>' + escapeHtml({{ _("search.chat_intro") | tojson }}) + '</p></div>';
+    chatInput.focus();
+  });
 
   /** Collect active filter values into an object. */
   function getActiveFilters() {

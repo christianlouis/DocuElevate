@@ -218,6 +218,7 @@ def delete_document(file_id: int) -> bool:
 def search_documents(
     query: str,
     *,
+    file_ids: Optional[list[int]] = None,
     mime_type: Optional[str] = None,
     document_type: Optional[str] = None,
     language: Optional[str] = None,
@@ -235,6 +236,8 @@ def search_documents(
 
     Args:
         query: Full-text search query string.
+        file_ids: Optional allowlist of document IDs. This is used to scope
+            retrieval before ranking in multi-user contexts.
         mime_type: Optional MIME-type filter.
         document_type: Optional document type filter.
         language: Optional language filter (ISO 639-1, e.g. "de").
@@ -271,6 +274,10 @@ def search_documents(
 
         # Build filter expressions
         filters: list[str] = []
+        if file_ids is not None:
+            if not file_ids:
+                return empty
+            filters.append(f"file_id IN [{', '.join(str(file_id) for file_id in file_ids)}]")
         if mime_type:
             filters.append(f'mime_type = "{_escape_filter_value(mime_type)}"')
         if document_type:

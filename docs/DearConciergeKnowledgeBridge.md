@@ -87,6 +87,11 @@ subsequent polls continue from Dropbox's change cursor.
 ### KB-5: Retrieval and MCP
 
 - Semantic search returns ranked cited passages and never returns unauthorized payloads.
+- Interactive document chat answers only from accessible evidence, returns numbered
+  source links, and uses a separately configurable RAG model.
+- Cross-document questions about counts, maxima, and trends combine semantic and
+  full-text candidates. Limited retrieval is disclosed and must not be presented as a
+  corpus-complete result.
 - A cited document endpoint returns authoritative OCR text and metadata for follow-up.
 - OAuth-authenticated browser clients and Bearer-token clients use the same endpoints.
 - The MCP server is a stateless adapter exposing `search_documents` and `get_document`;
