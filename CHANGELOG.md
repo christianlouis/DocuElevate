@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.2 (2026-07-15)
+
+### Bug Fixes
+
+- Rerank document knowledge search
+  ([#1065](https://github.com/christianlouis/DocuElevate/pull/1065),
+  [`adf25a6`](https://github.com/christianlouis/DocuElevate/commit/adf25a68b48556b10b42e171074ccc1509d3b8c8))
+
+
 ## v0.183.1 (2026-07-15)
 
 ### Bug Fixes
