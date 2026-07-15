@@ -413,6 +413,20 @@ def test_initial_backfill_negative_budget_fails_closed():
 
 
 @pytest.mark.unit
+def test_initial_backfill_fractional_negative_budget_fails_closed():
+    job = SimpleNamespace(is_backfill=True)
+    integration = SimpleNamespace(
+        config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": -0.5})
+    )
+    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
+        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
+
+        with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+            _reserve_job_llm_tokens(job, integration)
+    reserve.assert_not_called()
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "config",
     [
