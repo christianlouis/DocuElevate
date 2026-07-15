@@ -548,6 +548,37 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
     delay.assert_called_once_with(job.id)
 
 
+def test_document_chat_does_not_reuse_incomplete_research_cache(client, db_session):
+    record = FileRecord(
+        id=32,
+        owner_id=None,
+        filehash="flight-32",
+        original_filename="flight-32.pdf",
+        document_title="London flight",
+        local_filename="/tmp/flight-32.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Flight booking to London",
+    )
+    db_session.add(record)
+    db_session.commit()
+    request = {"message": "Wie oft war ich in London per Flugzeug?"}
+    with patch("app.tasks.knowledge_research.run_knowledge_research.delay"):
+        first_response = client.post("/api/knowledge/chat", json=request)
+
+    first_job = db_session.query(KnowledgeResearchJob).filter_by(id=first_response.json()["job_id"]).one()
+    first_job.state = "completed"
+    first_job.result_json = '{"coverage":{"index_complete":false},"answer":"partial"}'
+    db_session.commit()
+
+    with patch("app.tasks.knowledge_research.run_knowledge_research.delay") as delay:
+        second_response = client.post("/api/knowledge/chat", json=request)
+
+    assert second_response.status_code == 202
+    assert second_response.json()["job_id"] != first_job.id
+    delay.assert_called_once()
+
+
 def test_research_job_status_and_cancel_are_owner_scoped(client, db_session):
     job = KnowledgeResearchJob(
         id="job-1",

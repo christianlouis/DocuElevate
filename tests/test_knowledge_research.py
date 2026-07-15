@@ -3,7 +3,12 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.tasks.knowledge_research import _candidate_ids, _deduplicate_evidence
+from app.tasks.knowledge_research import (
+    _candidate_ids,
+    _contextual_research_question,
+    _deduplicate_evidence,
+    _no_evidence_answer,
+)
 
 
 def test_candidate_retrieval_pages_every_authorized_match():
@@ -52,3 +57,23 @@ def test_map_batch_rejects_evidence_for_documents_outside_batch():
         result = _map_batch("HbA1c trend", [record], "gpt-5-nano")
 
     assert [item["document_id"] for item in result] == [7]
+
+
+def test_follow_up_research_includes_bounded_conversation_context():
+    history = '[{"role":"user","content":"How many London trips?"},{"role":"assistant","content":"Two."}]'
+
+    contextual = _contextual_research_question("How many of those were in 2024?", history)
+
+    assert "How many London trips?" in contextual
+    assert "How many of those were in 2024?" in contextual
+    from app.api.knowledge import _research_keyword_query
+
+    assert _research_keyword_query(contextual) == "london trips 2024"
+
+
+def test_empty_research_answer_is_localized_and_qualifies_incomplete_index():
+    answer = _no_evidence_answer("Wie oft war ich in London?", index_complete=False)
+
+    assert "noch unvollständig" in answer
+    assert "nicht abschließend" in answer
+    assert _no_evidence_answer("How many London trips?", index_complete=True).startswith("I could not")

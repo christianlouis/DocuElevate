@@ -171,6 +171,46 @@ def _candidate_ids(accessible_ids: list[int], query: str) -> tuple[list[int], in
     return sorted(candidates), indexed_scope
 
 
+def _contextual_research_question(question: str, history_json: str) -> str:
+    """Resolve follow-up analytics against a small, bounded conversation context."""
+    try:
+        history = json.loads(history_json or "[]")
+    except (TypeError, json.JSONDecodeError):
+        history = []
+    lines = []
+    for message in history[-6:] if isinstance(history, list) else []:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        content = message.get("content")
+        if role == "user" and isinstance(content, str) and content.strip():
+            lines.append(content.strip())
+    if not lines:
+        return question
+    context = "\n".join(lines)[-6_000:]
+    return f"PRIOR USER QUESTIONS:\n{context}\n\nCURRENT QUESTION:\n{question}"[-8_000:]
+
+
+def _no_evidence_answer(question: str, *, index_complete: bool) -> str:
+    """Return a localized fallback that accurately qualifies index coverage."""
+    looks_german = bool(re.search(r"\b(wie|was|wann|wo|welche|mein|meine|über|belegbar)\b", question, re.IGNORECASE))
+    if looks_german:
+        if index_complete:
+            return (
+                "Ich konnte im vollständig indexierten, zugänglichen Dokumentbestand keine belastbaren Belege finden."
+            )
+        return (
+            "Ich konnte in den derzeit indexierten, zugänglichen Dokumenten keine belastbaren Belege finden. "
+            "Der Index ist noch unvollständig; das Ergebnis ist daher nicht abschließend."
+        )
+    if index_complete:
+        return "I could not find reliable evidence in the fully indexed, accessible document corpus."
+    return (
+        "I could not find reliable evidence in the currently indexed, accessible documents. "
+        "The index is still incomplete, so this result is not final."
+    )
+
+
 def _map_batch(question: str, records: list[FileRecord], model: str) -> list[dict[str, Any]]:
     from app.utils.ai_provider import get_ai_provider
 
@@ -216,7 +256,11 @@ def _map_batch(question: str, records: list[FileRecord], model: str) -> list[dic
 
 
 def _synthesize(
-    question: str, evidence: list[dict[str, Any]], records: dict[int, FileRecord], model: str
+    question: str,
+    research_context: str,
+    evidence: list[dict[str, Any]],
+    records: dict[int, FileRecord],
+    model: str,
 ) -> dict[str, Any]:
     from app.api.knowledge import _cited_sources
     from app.utils.ai_provider import get_ai_provider
@@ -248,8 +292,11 @@ def _synthesize(
         "compared and the deduplication key. For trends, list measurements chronologically. For maxima, name the item, "
         "amount and date. Do not count documents; count real-world events. Do not guess. The deterministic reducer found "
         f"{len(evidence)} unique real-world events from {len({file_id for item in evidence for file_id in item.get('document_ids', [])})} evidence documents. "
-        "If only a bounded evidence sample follows, use that reducer count but do not imply every event is displayed.\n\nQUESTION:\n"
+        "If only a bounded evidence sample follows, use that reducer count but do not imply every event is displayed.\n\n"
+        "CURRENT QUESTION:\n"
         + question
+        + "\n\nCONVERSATION-AWARE RESEARCH CONTEXT:\n"
+        + research_context
         + "\n\nDEDUPLICATED EVIDENCE:\n"
         + "\n".join(rows)
     )
@@ -277,7 +324,8 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
         try:
             accessible_ids = [int(value) for value in json.loads(job.accessible_file_ids_json)]
             accessible_set = set(accessible_ids)
-            candidate_ids, indexed_scope = _candidate_ids(accessible_ids, job.question)
+            research_context = _contextual_research_question(job.question, job.history_json)
+            candidate_ids, indexed_scope = _candidate_ids(accessible_ids, research_context)
             job.total_documents = len(candidate_ids)
             db.commit()
             model = settings.rag_chat_model or settings.ai_model or settings.openai_model
@@ -296,17 +344,17 @@ def run_knowledge_research(job_id: str) -> dict[str, Any]:
                 records = [record for record in records if record.id in accessible_set]
                 record_map.update({cast(int, record.id): record for record in records})
                 if records:
-                    evidence.extend(_map_batch(job.question, records, model))
+                    evidence.extend(_map_batch(research_context, records, model))
                 job.processed_documents = min(offset + len(records), len(candidate_ids))
                 db.commit()
 
             reduced = _deduplicate_evidence(evidence)
             if reduced:
-                synthesized = _synthesize(job.question, reduced, record_map, model)
+                synthesized = _synthesize(job.question, research_context, reduced, record_map, model)
                 answer = synthesized["answer"]
                 sources = synthesized["sources"]
             else:
-                answer = "Ich konnte im vollständig durchsuchten, zugänglichen Dokumentbestand keine belastbaren Belege finden."
+                answer = _no_evidence_answer(job.question, index_complete=indexed_scope >= len(accessible_ids))
                 sources = []
             result = {
                 "answer": answer,

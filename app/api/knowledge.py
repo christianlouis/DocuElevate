@@ -42,6 +42,8 @@ _RESEARCH_QUERY_STOPWORDS = {
     "bis",
     "bisher",
     "changed",
+    "current",
+    "davon",
     "der",
     "die",
     "ein",
@@ -65,10 +67,15 @@ _RESEARCH_QUERY_STOPWORDS = {
     "most",
     "oft",
     "often",
+    "of",
     "over",
     "per",
+    "prior",
+    "question",
+    "questions",
     "sich",
     "the",
+    "those",
     "teuerste",
     "time",
     "trend",
@@ -77,10 +84,13 @@ _RESEARCH_QUERY_STOPWORDS = {
     "verändert",
     "war",
     "was",
+    "were",
     "what",
     "wie",
     "wieviele",
     "years",
+    "user",
+    "wurden",
     "jetzt",
 }
 
@@ -122,6 +132,15 @@ def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
     return payload
 
 
+def _research_cache_is_complete(job: KnowledgeResearchJob) -> bool:
+    """Reuse analytics only when they covered the whole authorized index scope."""
+    try:
+        result = json.loads(job.result_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        return False
+    return bool((result.get("coverage") or {}).get("index_complete"))
+
+
 def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Session) -> JSONResponse:
     """Snapshot authorization scope, use safe cache, and queue exhaustive research."""
     accessible_rows = (
@@ -153,7 +172,7 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
         ensure_ascii=False,
     )
     cache_key = hashlib.blake2b(cache_material.encode(), digest_size=32).hexdigest()
-    cached = (
+    completed_candidates = (
         db.query(KnowledgeResearchJob)
         .filter(
             KnowledgeResearchJob.owner_id == owner_id,
@@ -161,8 +180,10 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
             KnowledgeResearchJob.state == "completed",
         )
         .order_by(KnowledgeResearchJob.created_at.desc())
-        .first()
+        .limit(20)
+        .all()
     )
+    cached = next((job for job in completed_candidates if _research_cache_is_complete(job)), None)
     if cached is not None:
         return JSONResponse(status_code=status.HTTP_200_OK, content={**_research_job_payload(cached), "cached": True})
 
