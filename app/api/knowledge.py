@@ -6,6 +6,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
@@ -19,6 +20,8 @@ router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 DbSession = Annotated[Session, Depends(get_db)]
 
 _SEARCH_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+_METADATA_CANDIDATE_LIMIT = 250
+_METADATA_EXCERPT_CHARS = 2_400
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -57,6 +60,65 @@ def _search_token_weight(token: str) -> float:
     return 1.0
 
 
+def _escaped_like_pattern(token: str) -> str:
+    """Return a literal SQL LIKE substring pattern for user-provided text."""
+    escaped = token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def _metadata_candidates(db: Session, request: Request, query: str) -> list[FileRecord]:
+    """Find owner-scoped exact metadata candidates outside Qdrant's semantic window."""
+    normalized_query = _normalized_search_text(query)
+    query_tokens = sorted(
+        set(normalized_query.split()),
+        key=lambda token: (_search_token_weight(token), len(token), token),
+        reverse=True,
+    )[:12]
+    if not query_tokens:
+        return []
+
+    # Require every distinctive query term to occur in either authoritative
+    # title or filename. This stays selective for a large multi-user corpus,
+    # while the raw equality clauses preserve exact punctuation-heavy names.
+    token_clauses = []
+    for token in query_tokens:
+        pattern = _escaped_like_pattern(token)
+        token_clauses.append(
+            or_(
+                FileRecord.document_title.ilike(pattern, escape="\\"),
+                FileRecord.original_filename.ilike(pattern, escape="\\"),
+            )
+        )
+    raw_query = query.strip().casefold()
+    metadata_match = or_(
+        func.lower(FileRecord.document_title) == raw_query,
+        func.lower(FileRecord.original_filename) == raw_query,
+        and_(*token_clauses),
+    )
+    records = db.query(FileRecord).filter(
+        metadata_match,
+        FileRecord.ocr_text.isnot(None),
+        func.length(func.trim(FileRecord.ocr_text)) > 0,
+    )
+    return apply_owner_filter(records, request).limit(_METADATA_CANDIDATE_LIMIT).all()
+
+
+def _metadata_hit(record: FileRecord) -> dict[str, Any]:
+    """Build a bounded, source-backed fallback passage for a metadata match."""
+    text = (record.ocr_text or "").strip()[:_METADATA_EXCERPT_CHARS]
+    return {
+        "score": 0.0,
+        "payload": {
+            "document_id": record.id,
+            "text": text,
+            "chunk_index": None,
+            "chunk_count": None,
+            "token_start": None,
+            "token_end": None,
+        },
+    }
+
+
 def _hybrid_search_score(query: str, hit: dict[str, Any], record: FileRecord) -> tuple[float, float]:
     """Blend semantic similarity with exact evidence from authoritative metadata."""
     try:
@@ -73,8 +135,20 @@ def _hybrid_search_score(query: str, hit: dict[str, Any], record: FileRecord) ->
     token_coverage = matched_weight / query_weight if query_weight else 0.0
 
     normalized_title = _normalized_search_text(record.document_title)
-    exact_title_bonus = 1.0 if normalized_query and normalized_query in normalized_title else 0.0
-    hybrid_score = min(1.0, semantic_score + (0.30 * token_coverage) + (0.10 * exact_title_bonus))
+    normalized_filename = _normalized_search_text(record.original_filename)
+    exact_title_bonus = 0.60 if normalized_query and normalized_query == normalized_title else 0.0
+    exact_filename_bonus = 0.65 if normalized_query and normalized_query == normalized_filename else 0.0
+    phrase_bonus = (
+        0.15
+        if normalized_query
+        and not exact_title_bonus
+        and (normalized_query in normalized_title or normalized_query in normalized_filename)
+        else 0.0
+    )
+    hybrid_score = min(
+        1.0,
+        semantic_score + (0.30 * token_coverage) + exact_title_bonus + exact_filename_bonus + phrase_bonus,
+    )
     return hybrid_score, semantic_score
 
 
@@ -106,6 +180,9 @@ def search_knowledge(request: Request, body: KnowledgeSearchRequest, db: DbSessi
         if isinstance(value, int):
             document_ids.append(value)
     accessible = _accessible_records(db, request, list(set(document_ids)))
+    metadata_records = _metadata_candidates(db, request, body.query)
+    for record in metadata_records:
+        accessible[record.id] = record
 
     ranked_hits = []
     for original_rank, hit in enumerate(raw_hits):
@@ -115,12 +192,20 @@ def search_knowledge(request: Request, body: KnowledgeSearchRequest, db: DbSessi
         if record is None:
             continue
         hybrid_score, semantic_score = _hybrid_search_score(body.query, hit, record)
-        ranked_hits.append((hybrid_score, semantic_score, -original_rank, hit, record))
+        ranked_hits.append((hybrid_score, semantic_score, -original_rank, hit, record, "semantic"))
+
+    semantic_document_ids = set(document_ids)
+    for metadata_rank, record in enumerate(metadata_records):
+        if record.id in semantic_document_ids:
+            continue
+        hit = _metadata_hit(record)
+        hybrid_score, semantic_score = _hybrid_search_score(body.query, hit, record)
+        ranked_hits.append((hybrid_score, semantic_score, -metadata_rank, hit, record, "metadata"))
 
     ranked_hits.sort(key=lambda item: item[:3], reverse=True)
     results = []
     seen_documents: set[int] = set()
-    for hybrid_score, semantic_score, _original_rank, hit, record in ranked_hits:
+    for hybrid_score, semantic_score, _original_rank, hit, record, match_source in ranked_hits:
         if record.id in seen_documents:
             continue
         seen_documents.add(record.id)
@@ -130,6 +215,7 @@ def search_knowledge(request: Request, body: KnowledgeSearchRequest, db: DbSessi
                 "document_id": record.id,
                 "score": hybrid_score,
                 "semantic_score": semantic_score,
+                "match_source": match_source,
                 "text": payload.get("text", ""),
                 "chunk_index": payload.get("chunk_index"),
                 "chunk_count": payload.get("chunk_count"),
