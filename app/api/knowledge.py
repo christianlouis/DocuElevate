@@ -22,12 +22,14 @@ DbSession = Annotated[Session, Depends(get_db)]
 _SEARCH_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _RESEARCH_QUESTION_RE = re.compile(
     r"\b(wie oft|wie viele|teuerst|höchst|über die jahre|im verlauf|trend|how many|how often|"
-    r"most expensive|highest|over (?:the )?(?:years|time))\b",
+    r"most expensive|highest|largest|biggest|over (?:the )?(?:years|time))\b",
     re.IGNORECASE,
 )
 _METADATA_CANDIDATE_LIMIT = 250
 _METADATA_EXCERPT_CHARS = 2_400
 _RESEARCH_DOCUMENT_LIMIT = 50
+_RAG_PROMPT_EXCERPT_BUDGET = 60_000
+_KEYWORD_SCOPE_BATCH_SIZE = 5_000
 
 
 class KnowledgeSearchRequest(BaseModel):
@@ -308,17 +310,36 @@ def _keyword_research_results(
     request: Request,
     db: Session,
     query: str,
-) -> tuple[list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int, bool]:
     """Add high-recall full-text candidates for corpus-wide comparison questions."""
     try:
         from app.utils.meilisearch_client import search_documents
 
-        keyword_result = search_documents(query[:512], page=1, per_page=100)
+        user = request.session.get("user")
+        requires_owner_scope = settings.multi_user_enabled and not (isinstance(user, dict) and user.get("is_admin"))
+        if requires_owner_scope:
+            accessible_ids = [
+                row[0]
+                for row in apply_owner_filter(db.query(FileRecord.id), request).order_by(FileRecord.id.asc()).all()
+            ]
+            keyword_pages = [
+                search_documents(
+                    query[:512],
+                    file_ids=accessible_ids[offset : offset + _KEYWORD_SCOPE_BATCH_SIZE],
+                    page=1,
+                    per_page=100,
+                )
+                for offset in range(0, len(accessible_ids), _KEYWORD_SCOPE_BATCH_SIZE)
+            ]
+        else:
+            keyword_pages = [search_documents(query[:512], page=1, per_page=100)]
     except Exception as exc:
         logger.warning("Keyword research retrieval failed: %s", exc)
-        return [], 0
+        return [], 0, False
 
-    file_ids = [value for hit in keyword_result.get("results", []) if isinstance((value := hit.get("file_id")), int)]
+    keyword_hits = [hit for page in keyword_pages for hit in page.get("results", [])]
+    keyword_hits.sort(key=lambda hit: float(hit.get("ranking_score") or 0.0), reverse=True)
+    file_ids = [value for hit in keyword_hits if isinstance((value := hit.get("file_id")), int)]
     records = _accessible_records(db, request, file_ids)
     results = []
     for rank, file_id in enumerate(file_ids):
@@ -343,7 +364,12 @@ def _keyword_research_results(
                 "source_url": f"/files/{record.id}",
             }
         )
-    return results, int(keyword_result.get("total") or len(results))
+    # The index-wide total may include documents that the caller cannot access.
+    # Return only the authorized count and infer possible pagination from a full
+    # result page without exposing cross-owner corpus statistics.
+    authorized_total = sum(int(page.get("total") or 0) for page in keyword_pages)
+    page_truncated = any(int(page.get("total") or 0) > len(page.get("results", [])) for page in keyword_pages)
+    return results, authorized_total, page_truncated
 
 
 def _rag_research_results(
@@ -362,18 +388,22 @@ def _rag_research_results(
         ),
         db,
     )
-    keyword_results, keyword_total = _keyword_research_results(request, db, body.message)
+    keyword_results, keyword_total, keyword_page_full = _keyword_research_results(request, db, body.message)
     combined: dict[int, dict[str, Any]] = {}
     for result in [*semantic_result["results"], *keyword_results]:
         existing = combined.get(result["document_id"])
         if existing is None or float(result.get("score") or 0.0) > float(existing.get("score") or 0.0):
             combined[result["document_id"]] = result
-    results = list(combined.values())[:_RESEARCH_DOCUMENT_LIMIT]
+    results = sorted(
+        combined.values(),
+        key=lambda result: float(result.get("score") or 0.0),
+        reverse=True,
+    )[:_RESEARCH_DOCUMENT_LIMIT]
     return results, {
         "strategy": "cross_document_research",
         "evidence_documents": len(results),
         "keyword_matches": keyword_total,
-        "truncated": keyword_total > len(keyword_results) or len(combined) > _RESEARCH_DOCUMENT_LIMIT,
+        "truncated": keyword_page_full or len(combined) > _RESEARCH_DOCUMENT_LIMIT,
     }
 
 
@@ -383,9 +413,17 @@ def _rag_messages(
     coverage: dict[str, Any],
 ) -> list[dict[str, str]]:
     sources = []
+    remaining_excerpt_chars = _RAG_PROMPT_EXCERPT_BUDGET
+    per_source_excerpt_chars = min(
+        _METADATA_EXCERPT_CHARS,
+        max(1, _RAG_PROMPT_EXCERPT_BUDGET // max(len(results), 1)),
+    )
     for number, result in enumerate(results, start=1):
+        if remaining_excerpt_chars <= 0:
+            break
         label = result.get("title") or result.get("filename") or f"Document {result['document_id']}"
-        excerpt = str(result.get("text") or "")[:_METADATA_EXCERPT_CHARS]
+        excerpt = str(result.get("text") or "")[: min(per_source_excerpt_chars, remaining_excerpt_chars)]
+        remaining_excerpt_chars -= len(excerpt)
         sources.append(
             f"SOURCE [{number}]\n"
             f"Title: {label}\n"
@@ -412,6 +450,15 @@ def _rag_messages(
         }
     )
     return messages
+
+
+def _no_results_answer(request: Request, message: str) -> str:
+    """Return a localized deterministic fallback without invoking an ungrounded model."""
+    preferred_language = request.headers.get("accept-language", "").casefold()
+    looks_german = bool(re.search(r"\b(wie|was|wann|wo|welche|mein|meine|über|belegbar)\b", message, re.IGNORECASE))
+    if preferred_language.startswith("de") or looks_german:
+        return "Ich konnte keine zugänglichen Dokumente finden, die eine Antwort belegen."
+    return "I could not find any accessible documents that support an answer."
 
 
 @router.post("/chat")
@@ -453,7 +500,7 @@ def chat_with_knowledge(request: Request, body: KnowledgeChatRequest, db: DbSess
     ]
     if not results:
         return {
-            "answer": "I could not find any accessible documents that support an answer.",
+            "answer": _no_results_answer(request, body.message),
             "model": model,
             "retrieved_count": 0,
             "sources": [],

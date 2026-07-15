@@ -313,6 +313,50 @@ def test_owner_filter_removes_unauthorized_vector_hits(db_session):
     assert list(accessible) == [1]
 
 
+def test_keyword_research_scopes_meilisearch_before_ranking(db_session):
+    own = FileRecord(
+        id=101,
+        owner_id="alice@example.com",
+        filehash="alice-london",
+        original_filename="alice-flight.pdf",
+        local_filename="/tmp/alice-flight.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Flight booking to London",
+    )
+    other = FileRecord(
+        id=102,
+        owner_id="bob@example.com",
+        filehash="bob-london",
+        original_filename="bob-flight.pdf",
+        local_filename="/tmp/bob-flight.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="Flight booking to London",
+    )
+    db_session.add_all([own, other])
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {"user": {"email": "alice@example.com"}}
+
+    keyword_page = {
+        "results": [{"file_id": 101, "ranking_score": 0.9}],
+        "total": 1,
+    }
+    with (
+        patch("app.api.knowledge.settings.multi_user_enabled", True),
+        patch("app.utils.meilisearch_client.search_documents", return_value=keyword_page) as search,
+    ):
+        from app.api.knowledge import _keyword_research_results
+
+        results, total, truncated = _keyword_research_results(request, db_session, "London flight")
+
+    assert [result["document_id"] for result in results] == [101]
+    assert total == 1
+    assert truncated is False
+    search.assert_called_once_with("London flight", file_ids=[101], page=1, per_page=100)
+
+
 def test_search_returns_cited_authoritative_document(client, db_session):
     record = FileRecord(
         id=3,
@@ -509,6 +553,46 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
     keyword_search.assert_called_once_with("Wie oft war ich in London per Flugzeug?", page=1, per_page=100)
     assert "Never describe a result as corpus-complete" in completion.call_args.kwargs["messages"][0]["content"]
     assert "'truncated': True" in completion.call_args.kwargs["messages"][-1]["content"]
+
+
+def test_rag_prompt_has_aggregate_excerpt_budget():
+    from app.api.knowledge import KnowledgeChatRequest, _rag_messages
+
+    results = [
+        {
+            "document_id": number,
+            "title": f"Document {number}",
+            "filename": f"document-{number}.pdf",
+            "source_url": f"/files/{number}",
+            "text": "x" * 2400,
+        }
+        for number in range(1, 51)
+    ]
+    messages = _rag_messages(
+        KnowledgeChatRequest(message="What is the largest value?"),
+        results,
+        {"strategy": "cross_document_research", "truncated": True},
+    )
+
+    prompt = messages[-1]["content"]
+    assert prompt.count("SOURCE [") == 50
+    assert prompt.count("x") - prompt.count("Excerpt") == 60_000
+
+
+def test_no_results_answer_uses_browser_or_question_language(client):
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]),
+    ):
+        german = client.post("/api/knowledge/chat", json={"message": "Was steht dazu in meinen Dokumenten?"})
+        english = client.post(
+            "/api/knowledge/chat",
+            json={"message": "What do my documents say?"},
+            headers={"Accept-Language": "en"},
+        )
+
+    assert german.json()["answer"].startswith("Ich konnte keine")
+    assert english.json()["answer"].startswith("I could not find")
 
 
 def test_search_reranks_exact_metadata_and_deduplicates_documents(client, db_session):

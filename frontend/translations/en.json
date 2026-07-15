@@ -1713,6 +1713,7 @@
   "search.chat_sources": "Sources",
   "search.chat_model": "Model",
   "search.chat_coverage_limited": "Result set limited – answer is an evidence-backed lower bound",
+  "search.chat_document_fallback": "Document",
   "search.input_aria_label": "Search documents",
   "search.input_placeholder": "Search documents by content, sender, tags, type...",
   "search.loading_indicator": "Searching…",

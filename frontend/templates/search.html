@@ -467,7 +467,8 @@
     chatError: {{ _("search.chat_error") | tojson }},
     chatSources: {{ _("search.chat_sources") | tojson }},
     chatModel: {{ _("search.chat_model") | tojson }},
-    chatCoverageLimited: {{ _("search.chat_coverage_limited") | tojson }}
+    chatCoverageLimited: {{ _("search.chat_coverage_limited") | tojson }},
+    chatDocumentFallback: {{ _("search.chat_document_fallback") | tojson }}
   };
   function formatSearchMessage(template, values) {
     return Object.keys(values).reduce(function(message, key) {
@@ -548,8 +549,8 @@
         data.sources.forEach(function(source) {
           const link = document.createElement('a');
           link.className = 'knowledge-chat-source';
-          link.href = source.source_url;
-          link.textContent = '[' + source.number + '] ' + (source.title || source.filename || ('Document ' + source.document_id));
+          if (source.source_url) link.href = source.source_url;
+          link.textContent = '[' + source.number + '] ' + (source.title || source.filename || (searchI18n.chatDocumentFallback + ' ' + source.document_id));
           sources.appendChild(link);
         });
         message.appendChild(sources);
@@ -562,7 +563,7 @@
   async function sendKnowledgeChat(message) {
     appendChatMessage('user', message);
     chatSend.disabled = true;
-    const originalLabel = chatSend.textContent;
+    const originalLabel = chatSend.innerHTML;
     chatSend.textContent = searchI18n.chatWorking;
     try {
       const response = await fetch('/api/knowledge/chat', {
@@ -579,7 +580,7 @@
       appendChatMessage('assistant', searchI18n.chatError + ' ' + (error.message || ''));
     } finally {
       chatSend.disabled = false;
-      chatSend.textContent = originalLabel;
+      chatSend.innerHTML = originalLabel;
       chatInput.focus();
     }
   }
