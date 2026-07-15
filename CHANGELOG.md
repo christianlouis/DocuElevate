@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.183.8 (2026-07-15)
+
+### Bug Fixes
+
+- Bound corpus prefetch lookahead ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+- Register corpus concurrency setting
+  ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f54d779`](https://github.com/christianlouis/DocuElevate/commit/f54d779065f7b1604de8439a97d8e0c592cba839))
+
+### Performance Improvements
+
+- Parallelize index-first Dropbox downloads
+  ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+- Reuse Dropbox clients per prefetch worker
+  ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+
 ## Unreleased
 
 
