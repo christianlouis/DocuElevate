@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.4 (2026-07-15)
+
+### Bug Fixes
+
+- **research**: Ground evidence in cited documents
+  ([#1116](https://github.com/christianlouis/DocuElevate/pull/1116),
+  [`507addd`](https://github.com/christianlouis/DocuElevate/commit/507addd5a29d87cf7853d9468d05986b9a7994b3))
+
+
 ## v0.184.3 (2026-07-15)
 
 ### Bug Fixes
