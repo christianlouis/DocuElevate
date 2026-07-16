@@ -31,7 +31,7 @@ DbSession = Annotated[Session, Depends(get_db)]
 
 _SEARCH_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _RESEARCH_QUESTION_RE = re.compile(
-    r"\b(wie oft|wie viele|teuerst|höchst|über die jahre|im verlauf|trend|how many|how often|"
+    r"\b(wie oft|wie viele|teuerst\w*|höchst\w*|größt\w*|über die jahre|im verlauf|trend|how many|how often|"
     r"most expensive|highest|largest|biggest|over (?:the )?(?:years|time))\b",
     re.IGNORECASE,
 )
