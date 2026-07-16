@@ -2,6 +2,7 @@
 
 import logging
 import os
+from typing import cast
 
 # Import the shared Celery instance
 from app.celery_app import celery
@@ -20,6 +21,7 @@ from app.tasks.send_to_all import (
 
 # Import database and logging utils from main
 from app.utils import log_task_progress
+from app.utils.file_privacy import apply_first_matching_privacy_rule, queue_privacy_reconciliation
 
 # Import notification utilities
 from app.utils.notification import notify_file_processed
@@ -57,6 +59,7 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
 
     # 2. Resolve file_id and owner_id from the database
     owner_id = None
+    privacy_changed_file_id = None
     if file_id is None:
         with SessionLocal() as db:
             # Only as a last resort, try to find by exact match on local_filename
@@ -65,11 +68,23 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
             if file_record:
                 file_id = file_record.id
                 owner_id = file_record.owner_id
+                if apply_first_matching_privacy_rule(db, file_record):
+                    db.commit()
+                    privacy_changed_file_id = cast(int, file_record.id)
     else:
         with SessionLocal() as db:
             file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
             if file_record:
                 owner_id = file_record.owner_id
+                if apply_first_matching_privacy_rule(db, file_record):
+                    db.commit()
+                    privacy_changed_file_id = cast(int, file_record.id)
+
+    # Apply the owner's automatic privacy rules before the document becomes
+    # searchable or notifications announce completion.  This changes only the
+    # canonical privacy flag and never affects destination routing below.
+    if privacy_changed_file_id is not None:
+        queue_privacy_reconciliation([privacy_changed_file_id])
 
     # 3. Determine configured destinations for notification
     configured_destinations = []

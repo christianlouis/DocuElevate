@@ -37,6 +37,7 @@ from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
 from app.api.pipelines import router as pipelines_router
 from app.api.plans import router as plans_router
+from app.api.privacy_rules import router as privacy_rules_router
 from app.api.process import router as process_router
 from app.api.profile import router as profile_router
 from app.api.qr_auth import router as qr_auth_router
@@ -101,6 +102,7 @@ router.include_router(onboarding_router)
 router.include_router(billing_router)
 router.include_router(pipelines_router)
 router.include_router(profile_router)
+router.include_router(privacy_rules_router)
 router.include_router(routing_rules_router)
 router.include_router(imap_accounts_router)
 router.include_router(imap_profiles_router)

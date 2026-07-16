@@ -26,6 +26,7 @@ from app.views.onboarding import router as onboarding_router
 from app.views.onedrive import router as onedrive_router
 from app.views.pipelines import router as pipelines_router  # Processing pipelines
 from app.views.plans import router as plans_router  # Admin Plan Designer
+from app.views.privacy_rules import router as privacy_rules_router
 from app.views.profile import router as profile_router  # User self-service profile
 from app.views.qr_login import router as qr_login_router  # QR code mobile login
 from app.views.queue import router as queue_router
@@ -64,6 +65,7 @@ router.include_router(plans_router)  # Admin Plan Designer
 router.include_router(onboarding_router)  # User onboarding wizard
 router.include_router(pipelines_router)  # Processing pipelines
 router.include_router(profile_router)  # User self-service profile settings
+router.include_router(privacy_rules_router)  # Owner-controlled document privacy rules
 router.include_router(qr_login_router)  # QR code mobile login page
 router.include_router(imap_accounts_router)  # Per-user IMAP ingestion accounts
 router.include_router(integrations_router)  # Unified integrations dashboard

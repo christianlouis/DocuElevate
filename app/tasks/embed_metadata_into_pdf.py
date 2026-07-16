@@ -241,6 +241,13 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
 
                     _dispatch_metadata_updated_webhook(file_record, metadata, task_id)
 
+                    # Privacy must be decided after searchable content has been
+                    # persisted but before the first search-index write.
+                    from app.utils.file_privacy import apply_first_matching_privacy_rule
+
+                    if apply_first_matching_privacy_rule(db, file_record):
+                        db.commit()
+
                     # Index into Meilisearch for full-text search (non-blocking, best-effort)
                     try:
                         from app.utils.meilisearch_client import index_document

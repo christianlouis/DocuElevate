@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import DocumentIntake, DropboxImportObject, FileRecord
 from app.tasks.retry_config import BaseTaskWithRetry
+from app.utils.file_privacy import apply_first_matching_privacy_rule, queue_privacy_reconciliation
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -47,6 +48,12 @@ def index_document_vectors(self, file_id: int, source_task_id: str | None = None
             db.commit()
             return {"status": "skipped", "detail": "No OCR text available"}
 
+        privacy_changed = apply_first_matching_privacy_rule(db, file_record)
+        if privacy_changed:
+            # Commit the canonical authorization state before any Qdrant
+            # payload can become searchable.
+            db.commit()
+
         from app.utils.vector_index import QdrantVectorIndex
 
         try:
@@ -64,6 +71,10 @@ def index_document_vectors(self, file_id: int, source_task_id: str | None = None
             raise
         _set_source_state(db, source_task_id, "indexed")
         db.commit()
+        if privacy_changed:
+            # Qdrant was written with the committed flag above; refresh any
+            # pre-existing Meilisearch copy as a derived-store follow-up.
+            queue_privacy_reconciliation([file_id])
         logger.info("Indexed %d vector chunks for file %s", count, file_id)
         return {"status": "success", "file_id": file_id, "chunks_indexed": count}
 

@@ -336,6 +336,28 @@ class QdrantVectorIndex:
             expected=(200, 404),
         )
 
+    def set_document_privacy(self, document_id: int, *, owner_id: str | None, is_private: bool) -> bool:
+        """Update privacy payloads without recomputing document embeddings.
+
+        A missing collection means no vector payload exists yet and is a clean
+        no-op, not a privacy failure.
+        """
+        response = self._request(
+            "POST",
+            f"/collections/{self.collection}/points/payload?wait=true",
+            {
+                "payload": {"is_private": bool(is_private)},
+                "filter": {
+                    "must": [
+                        {"key": "document_id", "match": {"value": document_id}},
+                        self._owner_condition(owner_id),
+                    ]
+                },
+            },
+            expected=(200, 201, 404),
+        )
+        return response.status_code != 404
+
     def search(
         self,
         query: str,
