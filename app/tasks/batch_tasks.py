@@ -28,6 +28,7 @@ the admin UI can display last-run times and statuses.
 import json
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -598,11 +599,14 @@ def _get_all_search_index_ids(index: object) -> set[int]:
             }
         )
         documents = result.results
-        existing_ids.update(
-            int(document["file_id"])
-            for document in documents
-            if "file_id" in document and str(document["file_id"]).isdigit()
-        )
+        for document in documents:
+            value = document.get("file_id") if isinstance(document, Mapping) else getattr(document, "file_id", None)
+            try:
+                file_id = int(value)
+            except (TypeError, ValueError):
+                continue
+            if file_id > 0:
+                existing_ids.add(file_id)
         if len(documents) < _SEARCH_ID_PAGE_SIZE:
             break
         offset += _SEARCH_ID_PAGE_SIZE
