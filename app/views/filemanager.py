@@ -77,6 +77,19 @@ def _db_path_set(db: Session, request: Request | None = None) -> Set[str]:
     return paths
 
 
+def _hidden_db_path_set(db: Session, request: Request) -> Set[str]:
+    """Return paths referenced by at least one document inaccessible to the caller."""
+    accessible_ids = {row[0] for row in apply_owner_filter(db.query(FileRecord.id), request).all()}
+    paths: Set[str] = set()
+    for record in db.query(FileRecord).all():
+        if record.id in accessible_ids:
+            continue
+        for path in (record.local_filename, record.original_file_path, record.processed_file_path):
+            if path:
+                paths.add(str(Path(path).resolve()))
+    return paths
+
+
 def _file_icon(mime_type: str, is_dir: bool) -> str:
     """Return a Font Awesome class for a file/directory."""
     if is_dir:
@@ -251,9 +264,8 @@ async def filemanager(request: Request, db: Session = Depends(get_db)):
     view = request.query_params.get("view", "filesystem")
 
     # Build the DB path set once (used by all views)
-    all_db_paths = _db_path_set(db)
     db_paths = _db_path_set(db, request)
-    hidden_paths = all_db_paths - db_paths
+    hidden_paths = _hidden_db_path_set(db, request)
 
     # ── Filesystem view ───────────────────────────────────────────────────
     rel_path = request.query_params.get("path", "").lstrip("/").lstrip(".")
@@ -351,7 +363,7 @@ async def filemanager_download(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="File not found")
 
     target_path = str(target.resolve())
-    if target_path in (_db_path_set(db) - _db_path_set(db, request)):
+    if target_path in _hidden_db_path_set(db, request):
         raise HTTPException(status_code=404, detail="File not found")
 
     mime_type, _ = mimetypes.guess_type(target.name)

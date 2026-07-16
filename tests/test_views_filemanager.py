@@ -576,7 +576,16 @@ class TestFilemanagerDownloadRoute:
             mime_type="text/plain",
             is_private=True,
         )
-        db_session.add(record)
+        accessible_alias = FileRecord(
+            owner_id="admin",
+            filehash="private-filemanager-download-alias",
+            original_filename="shared-alias.txt",
+            local_filename=str(test_file),
+            file_size=test_file.stat().st_size,
+            mime_type="text/plain",
+            is_private=False,
+        )
+        db_session.add_all([record, accessible_alias])
         db_session.commit()
         client.cookies.set("session", _make_admin_session_cookie())
         try:
