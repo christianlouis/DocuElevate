@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.12 (2026-07-16)
+
+### Bug Fixes
+
+- Reset database pool in Celery child processes
+  ([#1150](https://github.com/christianlouis/DocuElevate/pull/1150),
+  [`33ffe23`](https://github.com/christianlouis/DocuElevate/commit/33ffe231f3d20ccafb612097d22399820bc2de16))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9fc114d`](https://github.com/christianlouis/DocuElevate/commit/9fc114d6a24acad8ba477b10f99201ec8d3f6693))
+
+
 ## Unreleased
 
 
