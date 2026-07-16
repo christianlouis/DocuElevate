@@ -25,6 +25,11 @@ _SEARCH_PAGE = 100
 _MAP_BATCH = 10
 _EXCERPT_CHARS = 6_000
 _RESEARCH_DB_MAX_RETRIES = 2
+_LEXICAL_RESULTS_PER_SCOPE = 100
+_SYNTHESIS_RESERVE_SECONDS = 12
+_RETRIEVAL_SAFETY_LIMIT = 1_000
+_RESEARCH_SAFETY_SECONDS = 5 * 60
+_SEMANTIC_RELATIVE_SCORE = 0.85
 
 _NON_EVENT_EVIDENCE_TERMS = {
     "advertisement",
@@ -266,6 +271,18 @@ def _chat_completion_with_retry(provider: Any, **kwargs: Any) -> str:
     raise RuntimeError("unreachable")
 
 
+def _fast_reasoning_kwargs(model: str) -> dict[str, str]:
+    """Avoid spending the answer budget on unnecessary GPT-5 reasoning."""
+    normalized = model.casefold().split("/")[-1]
+    return {"reasoning_effort": "minimal"} if normalized.startswith("gpt-5") else {}
+
+
+def _should_stop_mapping(elapsed_seconds: float, target_seconds: int, has_evidence: bool) -> bool:
+    """Treat the response target as an SLO, stopping only with usable evidence."""
+    target_map_seconds = max(1, target_seconds - _SYNTHESIS_RESERVE_SECONDS)
+    return has_evidence and elapsed_seconds >= target_map_seconds
+
+
 def _excerpt(text: str, query: str) -> str:
     value = (text or "").strip()
     if len(value) <= _EXCERPT_CHARS:
@@ -300,43 +317,175 @@ def _excerpt(text: str, query: str) -> str:
     return "\n…\n".join(windows)[:_EXCERPT_CHARS]
 
 
-def _candidate_ids(accessible_ids: list[int], query: str) -> tuple[list[int], int]:
-    """Page every Meilisearch hit within the immutable authorized scope."""
+def _fallback_research_plan(query: str) -> dict[str, Any]:
+    """Return a safe deterministic plan when the short LLM request fails."""
     from app.api.knowledge import _research_keyword_query
-    from app.utils.meilisearch_client import search_documents
 
     keyword_query = _research_keyword_query(query)
-    candidates: set[int] = set()
+    return {
+        "lexical_queries": [keyword_query] if keyword_query else [],
+        "semantic_query": query[-1_500:],
+        "aggregation": "answer_question",
+        "evidence_types": [],
+        "exclude_terms": [],
+    }
+
+
+def _plan_research(query: str, model: str) -> dict[str, Any]:
+    """Use one small structured request to plan lexical and semantic retrieval."""
+    from app.utils.ai_provider import get_ai_provider
+
+    prompt = (
+        "Plan document retrieval for the question below. Do not answer it and do not request document text. "
+        "Return JSON only with: lexical_queries (1-3 short Meilisearch queries), semantic_query, aggregation, "
+        'evidence_types, exclude_terms. Preserve exact named entities as quoted phrases, for example "Motel One". '
+        "Remove conversational filler and generic counting words. Prefer booking confirmations, invoices, tickets, "
+        "lab results or receipts that prove the requested real-world event; exclude advertising and generic reference text.\n\n"
+        f"QUESTION:\n{query[-2_000:]}"
+    )
+    fallback = _fallback_research_plan(query)
+    try:
+        planner_kwargs: dict[str, Any] = {}
+        if model.casefold().split("/")[-1].startswith("gpt-5"):
+            planner_kwargs = {"reasoning_effort": "minimal", "max_completion_tokens": 300}
+        raw = get_ai_provider().chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a concise retrieval query planner."},
+                {"role": "user", "content": prompt},
+            ],
+            model=model,
+            temperature=0,
+            **planner_kwargs,
+        )
+        payload = _parse_json_response(raw)
+        if not isinstance(payload, dict):
+            return fallback
+        raw_lexical_queries = payload.get("lexical_queries", [])
+        if isinstance(raw_lexical_queries, str):
+            raw_lexical_queries = [raw_lexical_queries]
+        if not isinstance(raw_lexical_queries, list):
+            raw_lexical_queries = []
+        lexical_queries = [
+            " ".join(value.split())[:180] for value in raw_lexical_queries if isinstance(value, str) and value.strip()
+        ][:3]
+        semantic_query = payload.get("semantic_query")
+        evidence_types = payload.get("evidence_types", [])
+        if isinstance(evidence_types, str):
+            evidence_types = [evidence_types]
+        exclude_terms = payload.get("exclude_terms", [])
+        if isinstance(exclude_terms, str):
+            exclude_terms = [exclude_terms]
+        return {
+            "lexical_queries": lexical_queries or fallback["lexical_queries"],
+            "semantic_query": " ".join(semantic_query.split())[:1_500]
+            if isinstance(semantic_query, str) and semantic_query.strip()
+            else fallback["semantic_query"],
+            "aggregation": str(payload.get("aggregation") or fallback["aggregation"])[:80],
+            "evidence_types": [str(value)[:80] for value in evidence_types[:8]]
+            if isinstance(evidence_types, list)
+            else [],
+            "exclude_terms": [str(value)[:80] for value in exclude_terms[:8]]
+            if isinstance(exclude_terms, list)
+            else [],
+        }
+    except Exception as exc:
+        logger.info("Research query planner unavailable; using deterministic plan: %s", type(exc).__name__)
+        return fallback
+
+
+def _candidate_ids(
+    accessible_ids: list[int],
+    query: str,
+    *,
+    plan: dict[str, Any] | None = None,
+) -> tuple[list[int], int, bool]:
+    """Rank adaptively qualified candidates inside the authorized scope."""
+    from app.utils.meilisearch_client import search_documents
+
+    plan = plan or _fallback_research_plan(query)
+    lexical_queries = [value for value in plan.get("lexical_queries", []) if isinstance(value, str) and value.strip()]
+    candidate_scores: dict[int, float] = {}
     indexed_scope = 0
+    retrieval_truncated = False
+    lexical_saturated = False
     for offset in range(0, len(accessible_ids), _SCOPE_BATCH):
         scope = accessible_ids[offset : offset + _SCOPE_BATCH]
         scope_status = search_documents("", file_ids=scope, page=1, per_page=1)
         indexed_scope += int(scope_status.get("total") or 0)
-        page = 1
-        while True:
-            result = search_documents(keyword_query, file_ids=scope, page=page, per_page=_SEARCH_PAGE)
-            for hit in result.get("results", []):
-                file_id = hit.get("file_id")
-                if isinstance(file_id, int):
-                    candidates.add(file_id)
-            pages = max(1, int(result.get("pages") or 1))
-            if page >= pages:
+        if lexical_saturated:
+            continue
+        for query_number, lexical_query in enumerate(lexical_queries):
+            page = 1
+            while True:
+                result = search_documents(
+                    lexical_query,
+                    file_ids=scope,
+                    page=page,
+                    per_page=_LEXICAL_RESULTS_PER_SCOPE,
+                )
+                page_scores = []
+                for hit in result.get("results", []):
+                    ranking_score = float(hit.get("ranking_score") or 0.0)
+                    page_scores.append(ranking_score)
+                    file_id = hit.get("file_id")
+                    if isinstance(file_id, int) and ranking_score >= settings.rag_research_lexical_min_score:
+                        query_weight = 1.0 - (query_number * 0.1)
+                        candidate_scores[file_id] = max(
+                            candidate_scores.get(file_id, 0.0),
+                            query_weight + ranking_score,
+                        )
+                pages = max(1, int(result.get("pages") or 1))
+                more_lexical_results = (
+                    page < pages or query_number + 1 < len(lexical_queries) or offset + len(scope) < len(accessible_ids)
+                )
+                if len(candidate_scores) >= _RETRIEVAL_SAFETY_LIMIT and more_lexical_results:
+                    retrieval_truncated = True
+                    lexical_saturated = True
+                    break
+                if page >= pages or (page_scores and max(page_scores) < settings.rag_research_lexical_min_score):
+                    break
+                page += 1
+            if lexical_saturated:
                 break
-            page += 1
 
     # Semantic retrieval helps bridge user vocabulary to indexed document
     # vocabulary; authorization remains the immutable ID snapshot.
-    try:
-        from app.utils.vector_index import QdrantVectorIndex
+    if settings.vector_index_enabled:
+        try:
+            from app.utils.vector_index import QdrantVectorIndex
 
-        accessible = set(accessible_ids)
-        for hit in QdrantVectorIndex().search(query, limit=250, score_threshold=0.15):
-            file_id = (hit.get("payload") or {}).get("document_id")
-            if isinstance(file_id, int) and file_id in accessible:
-                candidates.add(file_id)
-    except Exception as exc:
-        logger.info("Semantic expansion unavailable for research job: %s", exc)
-    return sorted(candidates), indexed_scope
+            accessible = set(accessible_ids)
+            semantic_query = str(plan.get("semantic_query") or query)
+            semantic_hits = QdrantVectorIndex().search(
+                semantic_query,
+                limit=250,
+                score_threshold=settings.rag_research_semantic_min_score,
+                document_ids=accessible_ids,
+            )
+            top_semantic_score = max((float(hit.get("score") or 0.0) for hit in semantic_hits), default=0.0)
+            adaptive_semantic_cutoff = max(
+                settings.rag_research_semantic_min_score,
+                top_semantic_score * _SEMANTIC_RELATIVE_SCORE,
+            )
+            for hit in semantic_hits:
+                file_id = (hit.get("payload") or {}).get("document_id")
+                score = float(hit.get("score") or 0.0)
+                if isinstance(file_id, int) and file_id in accessible and score >= adaptive_semantic_cutoff:
+                    candidate_scores[file_id] = max(
+                        candidate_scores.get(file_id, 0.0),
+                        score,
+                    )
+        except Exception as exc:
+            logger.info("Semantic expansion unavailable for research job: %s", exc)
+    ranked = sorted(candidate_scores, key=lambda file_id: (-candidate_scores[file_id], file_id))
+    if len(ranked) > _RETRIEVAL_SAFETY_LIMIT:
+        retrieval_truncated = True
+        logger.warning(
+            "Research planner produced %d qualified candidates; applying technical safety limit %d",
+            len(ranked),
+            _RETRIEVAL_SAFETY_LIMIT,
+        )
+    return ranked[:_RETRIEVAL_SAFETY_LIMIT], indexed_scope, retrieval_truncated
 
 
 def _contextual_research_question(question: str, history_json: str, *, include_subject_hint: bool = True) -> str:
@@ -434,6 +583,7 @@ def _map_batch(question: str, records: list[FileRecord], model: str) -> tuple[li
             ],
             model=model,
             temperature=0,
+            **_fast_reasoning_kwargs(model),
         )
         try:
             parsed = _parse_json_response(response)
@@ -520,6 +670,7 @@ def _synthesize(
         ],
         model=model,
         temperature=0,
+        **_fast_reasoning_kwargs(model),
     )
     allowed_numbers = set(number_by_id.values())
     invalid_numbers = {int(value) for value in re.findall(r"\[(\d+)]", answer) if int(value) not in allowed_numbers}
@@ -539,6 +690,7 @@ def _synthesize(
             ],
             model=model,
             temperature=0,
+            **_fast_reasoning_kwargs(model),
         )
         invalid_numbers = {int(value) for value in re.findall(r"\[(\d+)]", answer) if int(value) not in allowed_numbers}
         if invalid_numbers:
@@ -546,9 +698,15 @@ def _synthesize(
     return {"answer": answer, "sources": _cited_sources(answer, sources), "truncated": truncated}
 
 
-@celery.task(bind=True, name="app.tasks.knowledge_research.run_knowledge_research")
+@celery.task(
+    bind=True,
+    name="app.tasks.knowledge_research.run_knowledge_research",
+    soft_time_limit=_RESEARCH_SAFETY_SECONDS,
+    time_limit=_RESEARCH_SAFETY_SECONDS + 30,
+)
 def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
-    """Run a resumable-at-job-level exhaustive map/deduplicate/reduce analysis."""
+    """Run a planned, bounded and owner-scoped map/deduplicate/reduce analysis."""
+    research_started = time.monotonic()
     with SessionLocal() as db:
         job: KnowledgeResearchJob | None = None
         try:
@@ -564,14 +722,36 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
             retrieval_context = _contextual_research_question(
                 job.question, job.history_json, include_subject_hint=False
             )
-            candidate_ids, indexed_scope = _candidate_ids(accessible_ids, retrieval_context)
-            job.total_documents = len(candidate_ids)
-            db.commit()
             model = settings.rag_chat_model or settings.ai_model or settings.openai_model
+            planner_model = settings.rag_query_planner_model or model
+            plan = _plan_research(retrieval_context, planner_model)
+            candidate_ids, indexed_scope, retrieval_truncated = _candidate_ids(
+                accessible_ids,
+                retrieval_context,
+                plan=plan,
+            )
+            job.total_documents = len(candidate_ids)
+            job.processed_documents = 0
+            db.commit()
             evidence: list[dict[str, Any]] = []
-            truncated = False
+            truncated = retrieval_truncated
             record_map: dict[int, FileRecord] = {}
+            qualified_evidence_found = False
             for offset in range(0, len(candidate_ids), _MAP_BATCH):
+                elapsed = time.monotonic() - research_started
+                if elapsed >= _RESEARCH_SAFETY_SECONDS:
+                    truncated = True
+                    break
+                # The response-time target is an SLO, not a hard cutoff. Once
+                # evidence exists, reserve time for synthesis; if no evidence
+                # exists yet, continue searching beyond the target.
+                if _should_stop_mapping(
+                    elapsed,
+                    settings.rag_research_target_seconds,
+                    qualified_evidence_found,
+                ):
+                    truncated = True
+                    break
                 db.refresh(job)
                 if job.cancel_requested:
                     job.state = "cancelled"
@@ -587,8 +767,22 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
                     batch_evidence, batch_truncated = _map_batch(research_context, records, model)
                     evidence.extend(batch_evidence)
                     truncated = truncated or batch_truncated
-                job.processed_documents = min(offset + len(records), len(candidate_ids))
+                    qualified_evidence_found = bool(
+                        _filter_evidence_for_question(
+                            job.question,
+                            evidence,
+                            record_map,
+                            _subject_hint_from_history(job.history_json),
+                        )
+                    )
+                job.processed_documents = min(
+                    job.processed_documents + len(records),
+                    len(candidate_ids),
+                )
                 db.commit()
+
+            if job.processed_documents < len(candidate_ids):
+                truncated = True
 
             relevant_evidence = _filter_evidence_for_question(
                 job.question,
@@ -603,7 +797,10 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
                 sources = synthesized["sources"]
                 truncated = truncated or bool(synthesized["truncated"])
             else:
-                answer = _no_evidence_answer(job.question, index_complete=indexed_scope >= len(accessible_ids))
+                answer = _no_evidence_answer(
+                    job.question,
+                    index_complete=indexed_scope >= len(accessible_ids) and not truncated,
+                )
                 sources = []
             result = {
                 "answer": answer,
@@ -611,7 +808,7 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
                 "retrieved_count": len(candidate_ids),
                 "sources": sources,
                 "coverage": {
-                    "strategy": "exhaustive_corpus_research",
+                    "strategy": "planned_bounded_corpus_research",
                     "accessible_documents": len(accessible_ids),
                     "indexed_documents": indexed_scope,
                     "candidate_documents": len(candidate_ids),
@@ -619,6 +816,14 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
                     "deduplicated_events": len(reduced),
                     "index_complete": indexed_scope >= len(accessible_ids),
                     "truncated": truncated,
+                    "retrieval_truncated": retrieval_truncated,
+                    "target_seconds": settings.rag_research_target_seconds,
+                    "elapsed_seconds": round(time.monotonic() - research_started, 1),
+                    "retrieval_plan": {
+                        "aggregation": plan.get("aggregation"),
+                        "lexical_query_count": len(plan.get("lexical_queries") or []),
+                        "semantic": bool(plan.get("semantic_query")),
+                    },
                     "watermark": {
                         "document_count": len(accessible_ids),
                         "max_document_id": max(accessible_ids, default=0),

@@ -8,6 +8,7 @@ This module provides functionality to:
 """
 
 import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -752,6 +753,45 @@ SETTING_METADATA = {
             "gemini-1.5-pro",
             "llama3.2",
         ],
+    },
+    "rag_query_planner_model": {
+        "category": "AI Services",
+        "description": "Optional model for the short document-retrieval planning request; empty reuses the RAG chat model",
+        "type": "model_picker",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "suggested_models": ["gpt-5-nano", "gpt-5-mini", "gpt-4o-mini", "gpt-4o"],
+    },
+    "rag_research_target_seconds": {
+        "category": "AI Services",
+        "description": "Target response seconds for adaptive document research (p90 SLO, not a hard timeout)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 15,
+        "max": 300,
+    },
+    "rag_research_lexical_min_score": {
+        "category": "AI Services",
+        "description": "Minimum Meilisearch ranking score for planned research candidates",
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 0.0,
+        "max": 1.0,
+    },
+    "rag_research_semantic_min_score": {
+        "category": "AI Services",
+        "description": "Minimum Qdrant similarity score for semantic research expansion",
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 0.0,
+        "max": 1.0,
     },
     "knowledge_research_retention_days": {
         "category": "AI Services",
@@ -3853,13 +3893,35 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
 
     elif setting_type == "integer":
         try:
-            int(value)
+            num = int(value)
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
         except ValueError:
             return False, f"{key} must be an integer"
+
+    elif setting_type == "float":
+        try:
+            num = float(value)
+            if not math.isfinite(num):
+                return False, f"{key} must be a finite number"
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
+        except (TypeError, ValueError):
+            return False, f"{key} must be a number"
 
     elif setting_type == "slider":
         try:
             num = float(value)
+            if not math.isfinite(num):
+                return False, f"{key} must be a finite number"
             min_val = metadata.get("min")
             max_val = metadata.get("max")
             if min_val is not None and num < min_val:

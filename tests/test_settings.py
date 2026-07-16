@@ -220,6 +220,20 @@ class TestSettingsService:
         assert is_valid is False
         assert "must be a number" in error
 
+    def test_validate_float_value(self):
+        """Float settings reject invalid and out-of-range values."""
+        is_valid, error = validate_setting_value("rag_research_lexical_min_score", "0.65")
+        assert is_valid is True
+        assert error is None
+
+        is_valid, error = validate_setting_value("rag_research_lexical_min_score", "abc")
+        assert is_valid is False
+        assert "must be a number" in error
+
+        is_valid, error = validate_setting_value("rag_research_lexical_min_score", "1.5")
+        assert is_valid is False
+        assert "must be <= 1.0" in error
+
     def test_s3_storage_class_has_dropdown_options(self):
         """Test that s3_storage_class uses a dropdown with valid options."""
         meta = SETTING_METADATA["s3_storage_class"]

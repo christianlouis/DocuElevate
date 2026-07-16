@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Bump whenever retrieval, reduction, or synthesis semantics change so a
 # deployment cannot serve answers produced by an older research algorithm.
-_RESEARCH_CACHE_VERSION = 5
+_RESEARCH_CACHE_VERSION = 6
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -42,6 +43,8 @@ _KEYWORD_SCOPE_BATCH_SIZE = 5_000
 _RESEARCH_QUERY_STOPWORDS = {
     "a",
     "an",
+    "auf",
+    "basis",
     "belegbar",
     "biggest",
     "bis",
@@ -58,6 +61,7 @@ _RESEARCH_QUERY_STOPWORDS = {
     "größte",
     "habe",
     "hat",
+    "hast",
     "have",
     "how",
     "höchste",
@@ -79,6 +83,7 @@ _RESEARCH_QUERY_STOPWORDS = {
     "question",
     "questions",
     "sich",
+    "summe",
     "the",
     "those",
     "teuerste",
@@ -93,6 +98,7 @@ _RESEARCH_QUERY_STOPWORDS = {
     "what",
     "wie",
     "wieviele",
+    "viele",
     "years",
     "user",
     "wurden",
@@ -136,6 +142,14 @@ def _research_subject_hint(request: Request) -> str | None:
 
 
 def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
+    created_at = job.created_at
+    if created_at is not None and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    elapsed_until = datetime.now(timezone.utc)
+    if job.state in {"completed", "failed", "cancelled"} and job.updated_at is not None:
+        elapsed_until = job.updated_at
+        if elapsed_until.tzinfo is None:
+            elapsed_until = elapsed_until.replace(tzinfo=timezone.utc)
     payload: dict[str, Any] = {
         "job_id": job.id,
         "state": job.state,
@@ -143,6 +157,7 @@ def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
         "processed_documents": job.processed_documents,
         "cancel_requested": job.cancel_requested,
         "error": job.error,
+        "elapsed_seconds": max(0, int((elapsed_until - created_at).total_seconds())) if created_at is not None else 0,
     }
     if job.result_json:
         payload["result"] = json.loads(job.result_json)
@@ -155,7 +170,8 @@ def _research_cache_is_complete(job: KnowledgeResearchJob) -> bool:
         result = json.loads(job.result_json or "{}")
     except (TypeError, json.JSONDecodeError):
         return False
-    return bool((result.get("coverage") or {}).get("index_complete"))
+    coverage = result.get("coverage") or {}
+    return bool(coverage.get("index_complete") and not coverage.get("truncated"))
 
 
 def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Session) -> JSONResponse:

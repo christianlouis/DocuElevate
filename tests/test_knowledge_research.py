@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.api.knowledge import _research_cache_is_complete, _research_job_payload
 from app.models import KnowledgeResearchJob
 from app.tasks.knowledge_research import (
     _bounded_synthesis_evidence,
@@ -19,6 +20,8 @@ from app.tasks.knowledge_research import (
     _filter_evidence_for_question,
     _no_evidence_answer,
     _numeric,
+    _plan_research,
+    _should_stop_mapping,
     _synthesize,
     cleanup_knowledge_research_jobs,
     run_knowledge_research,
@@ -54,23 +57,192 @@ def test_research_retries_transient_database_disconnect():
     assert retry.call_args.kwargs["max_retries"] == 2
 
 
-def test_candidate_retrieval_pages_every_authorized_match():
+def test_candidate_retrieval_pages_qualified_matches_per_scope():
+    calls = []
+
     def search(query, *, file_ids, page, per_page):
+        calls.append((query, page, per_page))
         assert file_ids == [1, 2, 3]
         if query == "":
             return {"results": [], "total": 3, "pages": 3}
         if page == 1:
-            return {"results": [{"file_id": 1}, {"file_id": 2}], "total": 3, "pages": 2}
-        return {"results": [{"file_id": 3}], "total": 3, "pages": 2}
+            return {
+                "results": [
+                    {"file_id": 1, "ranking_score": 0.9},
+                    {"file_id": 2, "ranking_score": 0.8},
+                ],
+                "total": 3,
+                "pages": 2,
+            }
+        return {"results": [{"file_id": 3, "ranking_score": 0.7}], "total": 3, "pages": 2}
 
     with (
         patch("app.utils.meilisearch_client.search_documents", side_effect=search),
         patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]),
     ):
-        candidates, indexed = _candidate_ids([1, 2, 3], "Wie oft war ich in London per Flugzeug?")
+        candidates, indexed, retrieval_truncated = _candidate_ids([1, 2, 3], "Wie oft war ich in London per Flugzeug?")
 
     assert candidates == [1, 2, 3]
     assert indexed == 3
+    assert retrieval_truncated is False
+    assert [page for query, page, _per_page in calls if query] == [1, 2]
+
+
+def test_research_planner_keeps_exact_entity_and_returns_small_plan():
+    calls = []
+    provider = SimpleNamespace(
+        chat_completion=lambda **kwargs: (
+            calls.append(kwargs)
+            or (
+                '{"lexical_queries":["\\"Motel One\\"","Motel One Rechnung"],'
+                '"semantic_query":"Motel One booking confirmation hotel stay",'
+                '"aggregation":"count stays and nights","evidence_types":["hotel_booking"],'
+                '"exclude_terms":["advertising"]}'
+            )
+        ),
+    )
+
+    with patch("app.utils.ai_provider.get_ai_provider", return_value=provider):
+        plan = _plan_research(
+            "Wie oft war ich auf Basis der Buchungsdaten in einem Motel One Hotel?",
+            "gpt-5-nano",
+        )
+
+    assert plan["lexical_queries"][0] == '"Motel One"'
+    assert plan["aggregation"] == "count stays and nights"
+    assert len(plan["lexical_queries"]) == 2
+    assert calls[0]["reasoning_effort"] == "minimal"
+    assert calls[0]["max_completion_tokens"] == 300
+
+
+def test_research_planner_omits_gpt5_only_kwargs_for_other_models():
+    calls = []
+    provider = SimpleNamespace(
+        chat_completion=lambda **kwargs: (
+            calls.append(kwargs) or '{"lexical_queries":["invoice"],"semantic_query":"invoice"}'
+        )
+    )
+
+    with patch("app.utils.ai_provider.get_ai_provider", return_value=provider):
+        _plan_research("Find invoices", "gpt-4o-mini")
+
+    assert "reasoning_effort" not in calls[0]
+    assert "max_completion_tokens" not in calls[0]
+
+
+def test_candidate_retrieval_uses_adaptive_relevance_threshold():
+    def search(query, *, file_ids, page, per_page):
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        return {
+            "results": [{"file_id": file_id, "ranking_score": file_id / 10} for file_id in file_ids],
+            "total": len(file_ids),
+            "pages": 1,
+        }
+
+    with (
+        patch("app.tasks.knowledge_research.settings.rag_research_lexical_min_score", 0.15),
+        patch("app.tasks.knowledge_research.settings.rag_research_semantic_min_score", 0.35),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]),
+    ):
+        candidates, indexed, retrieval_truncated = _candidate_ids(
+            [1, 2, 3],
+            "Motel One",
+            plan={"lexical_queries": ['"Motel One"'], "semantic_query": "Motel One stay"},
+        )
+
+    assert candidates == [3, 2]
+    assert indexed == 3
+    assert retrieval_truncated is False
+
+
+def test_candidate_retrieval_uses_relative_semantic_threshold():
+    vector_hits = [
+        {"score": 0.90, "payload": {"document_id": 1}},
+        {"score": 0.80, "payload": {"document_id": 2}},
+        {"score": 0.60, "payload": {"document_id": 3}},
+    ]
+
+    def search(query, *, file_ids, page, per_page):
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        return {"results": [], "total": 0, "pages": 1}
+
+    with (
+        patch("app.tasks.knowledge_research.settings.vector_index_enabled", True),
+        patch("app.tasks.knowledge_research.settings.rag_research_semantic_min_score", 0.35),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=vector_hits) as vector_search,
+    ):
+        candidates, _indexed, retrieval_truncated = _candidate_ids(
+            [1, 2, 3],
+            "Motel One",
+            plan={"lexical_queries": [], "semantic_query": "Motel One stay"},
+        )
+
+    assert candidates == [1, 2]
+    assert retrieval_truncated is False
+    vector_search.assert_called_once_with(
+        "Motel One stay",
+        limit=250,
+        score_threshold=0.35,
+        document_ids=[1, 2, 3],
+    )
+
+
+def test_candidate_retrieval_reports_technical_safety_truncation():
+    def search(query, *, file_ids, page, per_page):
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        return {
+            "results": [{"file_id": file_id, "ranking_score": 0.9} for file_id in file_ids[page - 1 : page]],
+            "total": len(file_ids),
+            "pages": len(file_ids),
+        }
+
+    with (
+        patch("app.tasks.knowledge_research._RETRIEVAL_SAFETY_LIMIT", 2),
+        patch("app.tasks.knowledge_research.settings.vector_index_enabled", False),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+    ):
+        candidates, indexed, retrieval_truncated = _candidate_ids(
+            [1, 2, 3, 4],
+            "Motel One",
+            plan={"lexical_queries": ['"Motel One"'], "semantic_query": "Motel One stay"},
+        )
+
+    assert candidates == [1, 2]
+    assert indexed == 4
+    assert retrieval_truncated is True
+
+
+def test_research_target_is_not_a_hard_timeout_without_evidence():
+    assert _should_stop_mapping(48, 60, has_evidence=True) is True
+    assert _should_stop_mapping(60, 60, has_evidence=False) is False
+
+
+def test_terminal_research_elapsed_time_does_not_keep_growing():
+    created_at = datetime(2026, 7, 16, 8, 0, tzinfo=timezone.utc)
+    job = SimpleNamespace(
+        id="job-1",
+        state="completed",
+        total_documents=12,
+        processed_documents=12,
+        cancel_requested=False,
+        error=None,
+        result_json=None,
+        created_at=created_at,
+        updated_at=created_at + timedelta(seconds=42),
+    )
+
+    assert _research_job_payload(job)["elapsed_seconds"] == 42
+
+
+def test_truncated_research_result_is_not_reused_as_complete():
+    job = SimpleNamespace(result_json='{"coverage":{"index_complete":true,"truncated":true}}')
+
+    assert _research_cache_is_complete(job) is False
 
 
 def test_candidate_retrieval_splits_scopes_at_search_result_cap():
@@ -81,7 +253,7 @@ def test_candidate_retrieval_splits_scopes_at_search_result_cap():
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}
         return {
-            "results": [{"file_id": file_id} for file_id in file_ids],
+            "results": [{"file_id": file_id, "ranking_score": 0.9} for file_id in file_ids],
             "total": len(file_ids),
             "pages": 1,
         }
@@ -91,13 +263,14 @@ def test_candidate_retrieval_splits_scopes_at_search_result_cap():
         patch("app.utils.meilisearch_client.search_documents", side_effect=search),
         patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]),
     ):
-        candidates, indexed = _candidate_ids(
+        candidates, indexed, retrieval_truncated = _candidate_ids(
             [1, 2, 3, 4, 5],
             "Wie oft war ich in London per Flugzeug?",
         )
 
     assert candidates == [1, 2, 3, 4, 5]
     assert indexed == 5
+    assert retrieval_truncated is False
     assert [file_ids for query, file_ids, _page, _per_page in scopes if query == ""] == [
         [1, 2],
         [3, 4],
