@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user, require_login
 from app.config import settings
 from app.database import get_db
-from app.models import FileRecord, KnowledgeResearchJob
+from app.models import FileRecord, FileShare, KnowledgeResearchJob
 from app.utils.user_scope import apply_owner_filter, get_current_owner_id
 
 logger = logging.getLogger(__name__)
@@ -296,6 +296,30 @@ def _accessible_records(db: Session, request: Request, document_ids: list[int]) 
     return {record.id: record for record in records}
 
 
+def _qdrant_authorization_scope(db: Session, request: Request) -> dict[str, Any]:
+    """Build a pre-ranking Qdrant scope matching relational access rules."""
+    if not settings.multi_user_enabled:
+        return {}
+    user = get_current_user(request)
+    if isinstance(user, dict) and user.get("is_admin"):
+        return {}
+    owner_id = get_current_owner_id(request)
+    if owner_id is None:
+        return {"document_ids": []}
+    shared_document_ids = [
+        row[0]
+        for row in db.query(FileShare.file_id)
+        .filter(FileShare.shared_with_user_id == owner_id)
+        .order_by(FileShare.file_id.asc())
+        .all()
+    ]
+    return {
+        "owner_id": owner_id,
+        "shared_document_ids": shared_document_ids,
+        "include_unowned": settings.unowned_docs_visible_to_all,
+    }
+
+
 def _normalized_search_text(value: str | None) -> str:
     """Return comparable Unicode words without punctuation or filename separators."""
     return " ".join(_SEARCH_TOKEN_RE.findall((value or "").casefold()))
@@ -421,12 +445,14 @@ def _search_knowledge(request: Request, body: KnowledgeSearchRequest, db: Sessio
     try:
         from app.utils.vector_index import QdrantVectorIndex
 
-        # Over-fetch because Qdrant ranks globally; DocuElevate applies its
-        # authoritative owner/share checks before returning any payload.
+        # Filter inside Qdrant before ranking so another tenant cannot crowd
+        # out this caller's results. The relational check below remains the
+        # authoritative defense-in-depth boundary.
         raw_hits = QdrantVectorIndex().search(
             body.query,
             limit=min(max(body.limit * 10, 50), 250),
             score_threshold=body.score_threshold,
+            **_qdrant_authorization_scope(db, request),
         )
     except Exception as exc:
         logger.exception("Knowledge search failed: %s", exc)
@@ -886,7 +912,7 @@ def reindex_knowledge(
 
 @router.get("/status")
 @require_login
-def knowledge_status(request: Request) -> dict[str, Any]:
+def knowledge_status(request: Request, db: DbSession) -> dict[str, Any]:
     """Report configuration and Qdrant collection health without secrets."""
     if not settings.vector_index_enabled:
         return {"enabled": False, "collection": settings.vector_index_collection}
@@ -897,7 +923,7 @@ def knowledge_status(request: Request) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("Vector index status check failed: %s", exc)
         index_status = {"available": False, "collection_exists": False, "points_count": 0}
-    return {
+    result = {
         "enabled": True,
         "collection": settings.vector_index_collection,
         "embedding_model": settings.embedding_model,
@@ -905,3 +931,12 @@ def knowledge_status(request: Request) -> dict[str, Any]:
         "chunk_overlap_tokens": settings.vector_chunk_overlap_tokens,
         **index_status,
     }
+    user = get_current_user(request)
+    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
+    if settings.multi_user_enabled and not is_admin:
+        # Qdrant reports the global point count for the shared collection.
+        # Ordinary users receive only the size of their relationally
+        # authorized document scope, never another tenant's corpus metrics.
+        result.pop("points_count", None)
+        result["documents_accessible"] = apply_owner_filter(db.query(FileRecord.id), request).count()
+    return result

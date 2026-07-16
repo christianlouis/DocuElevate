@@ -197,9 +197,12 @@ operator-managed vector-index connection, so the user integration needs only
 
 #### Source-backed semantic retrieval
 
-Vector retrieval is available only when `VECTOR_INDEX_ENABLED=true`. Qdrant results
-are always checked against DocuElevate's authoritative owner/share rules before any
-passage is returned.
+Vector retrieval is available only when `VECTOR_INDEX_ENABLED=true`. A SaaS deployment
+uses one private Qdrant collection with indexed `owner_id` and `document_id` payloads.
+Owner, explicit-share, and optional unowned-document filters are applied inside Qdrant
+before ranking. Results are then checked again against DocuElevate's authoritative
+relational owner/share rules before any passage is returned. Ordinary users never see
+the collection's global point count through the status endpoint.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

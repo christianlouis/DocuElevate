@@ -8,7 +8,7 @@ import pytest
 import requests
 from starlette.requests import Request
 
-from app.models import FileRecord, KnowledgeResearchJob
+from app.models import FileRecord, FileShare, KnowledgeResearchJob
 
 
 def _file(file_id: int = 7, owner_id: str | None = None) -> SimpleNamespace:
@@ -61,6 +61,10 @@ def test_index_replaces_document_after_embeddings_are_ready():
     assert all(point["payload"]["document_id"] == 7 for point in upsert["points"])
     index_version = upsert["points"][0]["payload"]["index_version"]
     cleanup = request.call_args_list[1].args[2]["filter"]
+    assert cleanup["must"] == [
+        {"key": "document_id", "match": {"value": 7}},
+        {"is_null": {"key": "owner_id"}},
+    ]
     assert cleanup["must_not"] == [{"key": "index_version", "match": {"value": index_version}}]
 
 
@@ -215,7 +219,14 @@ def test_qdrant_collection_creation_and_dimension_guard():
 
     missing = SimpleNamespace(status_code=404)
     with patch.object(
-        QdrantVectorIndex, "_request", side_effect=[missing, SimpleNamespace(status_code=201)]
+        QdrantVectorIndex,
+        "_request",
+        side_effect=[
+            missing,
+            SimpleNamespace(status_code=201),
+            SimpleNamespace(status_code=200),
+            SimpleNamespace(status_code=200),
+        ],
     ) as request:
         QdrantVectorIndex().ensure_collection(1536)
     assert request.call_args_list == [
@@ -224,6 +235,18 @@ def test_qdrant_collection_creation_and_dimension_guard():
             "PUT",
             "/collections/docuelevate_documents",
             {"vectors": {"size": 1536, "distance": "Cosine"}},
+            expected=(200, 201),
+        ),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents/index?wait=true",
+            {"field_name": "owner_id", "field_schema": "keyword"},
+            expected=(200, 201),
+        ),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents/index?wait=true",
+            {"field_name": "document_id", "field_schema": "integer"},
             expected=(200, 201),
         ),
     ]
@@ -262,6 +285,47 @@ def test_qdrant_search_uses_legacy_fallback_and_normalizes_results():
     assert request.call_args_list[0].args[2]["filter"] == {"must": [{"key": "document_id", "match": {"any": [7, 8]}}]}
     assert request.call_args_list[1].args[2]["vector"] == [0.1, 0.2]
     assert "query" not in request.call_args_list[1].args[2]
+
+
+def test_qdrant_search_filters_owner_shares_and_unowned_before_ranking():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    response = SimpleNamespace(status_code=200, json=lambda: {"result": {"points": []}})
+    with (
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[0.1, 0.2]]),
+        patch.object(QdrantVectorIndex, "_request", return_value=response) as request,
+    ):
+        QdrantVectorIndex().search(
+            "query",
+            limit=5,
+            owner_id="alice@example.com",
+            shared_document_ids=[8, 9],
+            include_unowned=True,
+        )
+
+    assert request.call_args.args[2]["filter"] == {
+        "should": [
+            {"key": "owner_id", "match": {"value": "alice@example.com"}},
+            {"key": "document_id", "match": {"any": [8, 9]}},
+            {"is_null": {"key": "owner_id"}},
+        ]
+    }
+
+
+def test_qdrant_document_cleanup_is_owner_scoped():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    with patch.object(QdrantVectorIndex, "_request") as request:
+        QdrantVectorIndex().delete_documents([7, 8], owner_id="alice@example.com")
+
+    assert request.call_args.args[2] == {
+        "filter": {
+            "must": [
+                {"key": "document_id", "match": {"any": [7, 8]}},
+                {"key": "owner_id", "match": {"value": "alice@example.com"}},
+            ]
+        }
+    }
 
 
 def test_qdrant_status_handles_missing_and_existing_collection():
@@ -318,6 +382,98 @@ def test_owner_filter_removes_unauthorized_vector_hits(db_session):
         accessible = _accessible_records(db_session, request, [1, 2])
 
     assert list(accessible) == [1]
+
+
+def test_knowledge_search_passes_authorized_scope_to_qdrant(db_session):
+    own = FileRecord(
+        id=11,
+        owner_id="alice@example.com",
+        filehash="alice-owned",
+        original_filename="owned.pdf",
+        local_filename="/tmp/owned.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="owned evidence",
+    )
+    shared = FileRecord(
+        id=12,
+        owner_id="bob@example.com",
+        filehash="bob-shared",
+        original_filename="shared.pdf",
+        local_filename="/tmp/shared.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="shared evidence",
+    )
+    denied = FileRecord(
+        id=13,
+        owner_id="bob@example.com",
+        filehash="bob-denied",
+        original_filename="denied.pdf",
+        local_filename="/tmp/denied.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+        ocr_text="denied evidence",
+    )
+    db_session.add_all([own, shared, denied])
+    db_session.add(
+        FileShare(
+            file_id=12,
+            owner_id="bob@example.com",
+            shared_with_user_id="alice@example.com",
+            role="viewer",
+        )
+    )
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {"user": {"email": "alice@example.com"}}
+    hits = [
+        {"score": 0.9, "payload": {"document_id": 11, "text": "owned"}},
+        {"score": 0.8, "payload": {"document_id": 12, "text": "shared"}},
+        {"score": 1.0, "payload": {"document_id": 13, "text": "must be removed"}},
+    ]
+
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.api.knowledge.settings.multi_user_enabled", True),
+        patch("app.api.knowledge.settings.unowned_docs_visible_to_all", False),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=hits) as search,
+    ):
+        from app.api.knowledge import KnowledgeSearchRequest, _search_knowledge
+
+        result = _search_knowledge(request, KnowledgeSearchRequest(query="evidence", limit=5), db_session)
+
+    assert search.call_args.kwargs["owner_id"] == "alice@example.com"
+    assert search.call_args.kwargs["shared_document_ids"] == [12]
+    assert search.call_args.kwargs["include_unowned"] is False
+    assert [item["document_id"] for item in result["results"]] == [11, 12]
+
+
+def test_knowledge_status_hides_global_point_count_from_tenant(db_session):
+    record = FileRecord(
+        owner_id="alice@example.com",
+        filehash="alice-status",
+        original_filename="status.pdf",
+        local_filename="/tmp/status.pdf",
+        file_size=1,
+        mime_type="application/pdf",
+    )
+    db_session.add(record)
+    db_session.commit()
+    request = Request({"type": "http", "headers": []})
+    request.scope["session"] = {"user": {"email": "alice@example.com"}}
+
+    with (
+        patch("app.api.knowledge.settings.vector_index_enabled", True),
+        patch("app.api.knowledge.settings.multi_user_enabled", True),
+        patch("app.utils.vector_index.QdrantVectorIndex.status", return_value={"points_count": 999}),
+    ):
+        from app.api.knowledge import knowledge_status
+
+        result = knowledge_status(request=request, db=db_session)
+
+    assert "points_count" not in result
+    assert result["documents_accessible"] == 1
 
 
 def test_keyword_research_scopes_meilisearch_before_ranking(db_session):

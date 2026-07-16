@@ -715,6 +715,7 @@ def _upload_vector_database(
     task_id: str,
     *,
     file_id: int | None,
+    integration_owner_id: str,
 ) -> dict[str, Any]:
     """Index one processed document in the operator-managed Qdrant collection."""
     provider = str(cfg.get("provider") or "qdrant").lower()
@@ -732,6 +733,8 @@ def _upload_vector_database(
         record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
         if record is None:
             raise ValueError(f"FileRecord {file_id} not found")
+        if settings.multi_user_enabled and record.owner_id != integration_owner_id:
+            raise ValueError("Vector destination owner does not match the document owner")
         count = QdrantVectorIndex().index_document(record)
 
     logger.info("[%s] Indexed %d Qdrant chunks for file %s", task_id, count, file_id)
@@ -857,7 +860,14 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
 
     try:
         if itype == IntegrationType.VECTOR_DATABASE:
-            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
+            result = handler(
+                file_path,
+                cfg,
+                creds,
+                task_id,
+                file_id=file_id,
+                integration_owner_id=owner_id,
+            )
         else:
             result = handler(file_path, cfg, creds, task_id)
 

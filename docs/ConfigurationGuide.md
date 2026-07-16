@@ -51,6 +51,12 @@ secret manager; do not store them in `.env` files committed to source control.
 | `DOCUMENT_BRIDGE_SHARED_SECRET` | Dedicated intake-secret fallback when no Bearer token is used. | unset |
 | `DOCUMENT_BRIDGE_SOURCE` | Provenance label included in deliveries. | `docuelevate-legacy` |
 
+In multi-user mode, DocuElevate keeps a single operator-managed Qdrant collection and
+isolates tenants with indexed `owner_id` and `document_id` payload filters before
+ranking. Explicitly shared document IDs are added to the caller's filter. Relational
+authorization is checked again before source text is returned, and ordinary users do
+not receive global collection sizes from the knowledge status API.
+
 Example preproduction service configuration (secret values omitted):
 
 ```dotenv

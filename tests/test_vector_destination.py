@@ -28,7 +28,7 @@ def test_vector_connection_uses_operator_qdrant(monkeypatch):
 def test_vector_upload_indexes_file_record(monkeypatch, tmp_path):
     monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.vector_index_enabled", True)
     monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.vector_index_collection", "DocuElevate Preprod")
-    record = SimpleNamespace(id=42, ocr_text="project plan")
+    record = SimpleNamespace(id=42, owner_id="owner-1", ocr_text="project plan")
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = record
     db_context = MagicMock()
@@ -42,12 +42,49 @@ def test_vector_upload_indexes_file_record(monkeypatch, tmp_path):
     ):
         from app.tasks.upload_to_user_integration import _upload_vector_database
 
-        result = _upload_vector_database(str(file_path), {"provider": "qdrant"}, {}, "task-1", file_id=42)
+        result = _upload_vector_database(
+            str(file_path),
+            {"provider": "qdrant"},
+            {},
+            "task-1",
+            file_id=42,
+            integration_owner_id="owner-1",
+        )
 
     index_document.assert_called_once_with(record)
     assert result["status"] == "Completed"
     assert result["chunks_indexed"] == 3
     assert result["collection"] == "DocuElevate Preprod"
+
+
+def test_vector_upload_rejects_cross_tenant_destination(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.vector_index_enabled", True)
+    monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.multi_user_enabled", True)
+    record = SimpleNamespace(id=42, owner_id="julia", ocr_text="private")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = record
+    db_context = MagicMock()
+    db_context.__enter__.return_value = db
+    file_path = tmp_path / "document.pdf"
+    file_path.write_bytes(b"%PDF")
+
+    with (
+        patch("app.tasks.upload_to_user_integration.SessionLocal", return_value=db_context),
+        patch("app.utils.vector_index.QdrantVectorIndex.index_document") as index_document,
+    ):
+        from app.tasks.upload_to_user_integration import _upload_vector_database
+
+        with pytest.raises(ValueError, match="owner does not match"):
+            _upload_vector_database(
+                str(file_path),
+                {"provider": "qdrant"},
+                {},
+                "task-1",
+                file_id=42,
+                integration_owner_id="christian",
+            )
+
+    index_document.assert_not_called()
 
 
 def test_automatic_index_defers_to_vector_destination(monkeypatch):
