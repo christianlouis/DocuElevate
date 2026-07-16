@@ -37,7 +37,6 @@
         <!-- Browse Files button (all devices) -->
         <button
           type="button"
-          onclick="document.getElementById('fileInput').click()"
           class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 mb-4"
           style="min-height:44px;"
         >
@@ -141,7 +140,20 @@
   const statusMessage = document.getElementById("statusMessage");
   const uploadProgress = document.getElementById("uploadProgress");
 
-  dropZone.addEventListener("click", () => fileInput.click());
+  dropZone.addEventListener("click", (event) => {
+    // The hidden input lives inside the drop zone, so its programmatic click
+    // bubbles back here. Ignore that event to open exactly one native picker.
+    if (event.target !== fileInput) {
+      fileInput.click();
+    }
+  });
+
+  dropZone.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInput.click();
+    }
+  });
 
   function handleDragOver(e) {
     e.preventDefault();

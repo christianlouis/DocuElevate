@@ -1,5 +1,6 @@
 """Tests for app/views/wizard.py module."""
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -24,6 +25,13 @@ class TestWizardViews:
         """Test setup wizard third step."""
         response = client.get("/setup?step=3")
         assert response.status_code == 200
+        api_key_input = re.search(r'<input[^>]+name="openai_api_key"[^>]*>', response.text, re.DOTALL)
+        api_key_label = re.search(r'<label[^>]+for="openai_api_key"[^>]*>.*?</label>', response.text, re.DOTALL)
+        assert api_key_input is not None
+        assert api_key_label is not None
+        assert "required" not in api_key_input.group(0)
+        assert "text-red-600" not in api_key_label.group(0)
+        assert "configure AI later" in response.text
 
     def test_setup_wizard_invalid_step(self, client):
         """Test setup wizard with invalid step number."""

@@ -13,7 +13,7 @@ from app.models import FileRecord
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
-from app.utils.ai_provider import get_ai_provider
+from app.utils.ai_provider import get_ai_provider, is_ai_provider_configured
 from app.utils.filename_utils import VALID_FILENAME_RE
 
 logger = logging.getLogger(__name__)
@@ -109,6 +109,20 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
                 file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
                 if file_record:
                     file_id = file_record.id
+
+    if not is_ai_provider_configured():
+        provider = (settings.ai_provider or "openai").lower()
+        message = f"AI provider '{provider}' is not configured; continuing without extracted metadata"
+        logger.info("[%s] %s", task_id, message)
+        log_task_progress(
+            task_id,
+            "extract_metadata_with_gpt",
+            "skipped",
+            message,
+            file_id=file_id,
+        )
+        embed_metadata_into_pdf.delay(filename, cleaned_text, {}, file_id)
+        return {"s3_file": os.path.basename(filename), "metadata": {}, "skipped": True}
 
     model = settings.ai_model or settings.openai_model
     metadata_text, original_tokens, sampled_tokens = _sample_text_for_metadata(

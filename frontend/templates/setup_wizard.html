@@ -93,7 +93,7 @@
           <div class="border-b border-gray-200 pb-6 last:border-b-0">
             <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-900 mb-1">
               {{ setting.label }}
-              {% if setting.default is none or setting.key in ['admin_password'] %}
+              {% if setting.get('required', false) %}
               <span class="text-red-600">*</span>
               {% endif %}
             </label>
@@ -165,7 +165,7 @@
               value="{{ setting.current_value if setting.current_value else '' }}"
               class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="{{ setting.description }}"
-              {% if setting.default is none or setting.key in ['admin_password'] %}required{% endif %}
+              {% if setting.get('required', false) %}required{% endif %}
             />
             {% endif %}
             {% endif %}
@@ -182,6 +182,11 @@
             <p class="mt-2 text-xs text-amber-600">
               <i class="fas fa-exclamation-triangle"></i>
               <strong>Important:</strong> Choose a strong password. This cannot be recovered if lost.
+            </p>
+            {% elif setting.key == 'openai_api_key' %}
+            <p class="mt-2 text-xs text-blue-700">
+              <i class="fas fa-info-circle"></i>
+              {{ _('Optional: Continue without a key and configure AI later. Document processing will run with reduced AI capabilities until then.') }}
             </p>
             {% elif setting.sensitive %}
             <p class="mt-2 text-xs text-gray-500">

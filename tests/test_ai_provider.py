@@ -18,6 +18,7 @@ from app.utils.ai_provider import (
     _require_text_content,
     _resolve_temperature,
     get_ai_provider,
+    is_ai_provider_configured,
 )
 
 # ---------------------------------------------------------------------------
@@ -642,6 +643,58 @@ class TestLiteLLMProvider:
 
         call_kwargs = mock_completion.call_args[1]
         assert "api_base" not in call_kwargs
+
+
+# ---------------------------------------------------------------------------
+# provider configuration detection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestAIProviderConfiguration:
+    """Provider checks must distinguish optional setup from usable AI backends."""
+
+    @staticmethod
+    def _settings(provider: str | None, **overrides):
+        values = {
+            "ai_provider": provider,
+            "openai_api_key": None,
+            "openai_base_url": "https://api.openai.com/v1",
+            "anthropic_api_key": None,
+            "gemini_api_key": None,
+            "ollama_base_url": None,
+            "openrouter_api_key": None,
+            "portkey_api_key": None,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    @pytest.mark.parametrize(
+        ("provider", "overrides", "expected"),
+        [
+            (None, {}, False),
+            ("openai", {"openai_api_key": "sk-key"}, True),
+            ("azure", {}, False),
+            ("azure", {"openai_api_key": "azure-key"}, True),
+            ("litellm", {}, False),
+            ("litellm", {"openai_api_key": "proxy-key"}, True),
+            ("litellm", {"openai_base_url": "http://litellm:4000/v1"}, True),
+            ("anthropic", {}, False),
+            ("anthropic", {"anthropic_api_key": "ant-key"}, True),
+            ("gemini", {}, False),
+            ("gemini", {"gemini_api_key": "gemini-key"}, True),
+            ("ollama", {}, False),
+            ("ollama", {"ollama_base_url": "http://ollama:11434"}, True),
+            ("openrouter", {}, False),
+            ("openrouter", {"openrouter_api_key": "or-key"}, True),
+            ("portkey", {}, False),
+            ("portkey", {"portkey_api_key": "pk-key"}, True),
+            ("unknown", {}, False),
+        ],
+    )
+    def test_detects_provider_configuration(self, provider, overrides, expected):
+        with patch("app.utils.ai_provider.settings", self._settings(provider, **overrides)):
+            assert is_ai_provider_configured() is expected
 
 
 # ---------------------------------------------------------------------------
