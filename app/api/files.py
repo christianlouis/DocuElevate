@@ -1640,7 +1640,12 @@ async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
 
-def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
+def _check_for_exact_duplicate(
+    db: DbSession,
+    target_path: str,
+    safe_filename: str,
+    owner_id: str | None = None,
+) -> dict | None:
     """Check for an exact duplicate of the uploaded file.
 
     Returns a dict with duplicate info when the file's SHA-256 hash matches an
@@ -1652,12 +1657,15 @@ def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: s
 
     try:
         filehash = hash_file(target_path)
-        existing = (
-            db.query(FileRecord)
-            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-            .order_by(FileRecord.id.asc())
-            .first()
-        )
+        query = db.query(FileRecord).filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+        # A global duplicate probe leaks another tenant's document ID and
+        # filename and prevents the new tenant from obtaining an independently
+        # owned record.  Deduplication in multi-user mode is therefore scoped
+        # to the uploading owner.  Storage-level blob deduplication can still
+        # be introduced later behind an opaque, tenant-safe abstraction.
+        if settings.multi_user_enabled:
+            query = query.filter(FileRecord.owner_id == owner_id)
+        existing = query.order_by(FileRecord.id.asc()).first()
         if existing:
             logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
             return {
@@ -1773,7 +1781,7 @@ async def ui_upload(
     # processing task.  When deduplication is enabled and the file already
     # exists, we skip processing entirely, clean up the temp file, and
     # return the existing file's information to the caller.
-    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename)
+    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename, upload_owner_id)
     if exact_duplicate:
         # Remove the just-saved temp file — it's a duplicate.
         try:

@@ -73,6 +73,7 @@ env/
 
 # ── Runtime state files ───────────────────────────────────────────────────────
 *.log
+tmp/
 celerybeat-schedule
 celerybeat.pid
 

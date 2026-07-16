@@ -409,16 +409,18 @@ def process_document(
         else:
             # Check for duplicate only if this is a new file (not reprocessing)
             # IMPORTANT: Only consider it a duplicate if it matches a DIFFERENT file
-            existing = (
-                db.query(FileRecord)
-                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-                .order_by(FileRecord.created_at.asc())
-                .first()
+            existing_query = db.query(FileRecord).filter(
+                FileRecord.filehash == filehash,
+                FileRecord.is_duplicate.is_(False),
             )
+            if settings.multi_user_enabled:
+                existing_query = existing_query.filter(FileRecord.owner_id == owner_id)
+            existing = existing_query.order_by(FileRecord.created_at.asc()).first()
             if existing is None:
-                existing = (
-                    db.query(FileRecord).filter(FileRecord.filehash == filehash).order_by(FileRecord.id.asc()).first()
-                )
+                fallback_query = db.query(FileRecord).filter(FileRecord.filehash == filehash)
+                if settings.multi_user_enabled:
+                    fallback_query = fallback_query.filter(FileRecord.owner_id == owner_id)
+                existing = fallback_query.order_by(FileRecord.id.asc()).first()
 
             # A file is only a duplicate if it matches a different file's hash
             # (not its own hash when reprocessing)

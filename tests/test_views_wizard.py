@@ -13,6 +13,7 @@ class TestWizardViews:
         """Test setup wizard first step."""
         response = client.get("/setup?step=1")
         assert response.status_code == 200
+        assert 'name="csrf_token"' in response.text
 
     def test_setup_wizard_step_2(self, client):
         """Test setup wizard second step."""
