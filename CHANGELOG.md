@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.7 (2026-07-16)
+
+### Bug Fixes
+
+- Bound search reconciliation payloads
+  ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+- Reconcile large search indexes safely
+  ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+- Verify search batch completion ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+
 ## v0.184.6 (2026-07-16)
 
 ### Bug Fixes
