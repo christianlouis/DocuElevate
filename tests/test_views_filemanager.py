@@ -472,6 +472,27 @@ class TestFilemanagerRoute:
         response = client.get("/admin/files?view=database", follow_redirects=False)
         assert response.status_code == 200
 
+    def test_database_view_hides_another_owners_private_file(self, client, db_session):
+        """Admin file-manager listings must respect owner privacy."""
+        record = FileRecord(
+            owner_id="alice@example.com",
+            filehash="private-filemanager-listing",
+            original_filename="private-filemanager.pdf",
+            local_filename="/tmp/private-filemanager.pdf",
+            file_size=12,
+            mime_type="application/pdf",
+            is_private=True,
+        )
+        db_session.add(record)
+        db_session.commit()
+        client.cookies.set("session", _make_admin_session_cookie())
+
+        with patch("app.utils.user_scope.settings.multi_user_enabled", True):
+            response = client.get("/admin/files?view=database", follow_redirects=False)
+
+        assert response.status_code == 200
+        assert b"private-filemanager.pdf" not in response.content
+
     def test_reconcile_view_with_admin_session(self, client):
         """Test reconcile view with admin session."""
         client.cookies.set("session", _make_admin_session_cookie())
@@ -538,6 +559,42 @@ class TestFilemanagerDownloadRoute:
         try:
             response = client.get("/admin/files/download?path=test_download_xyz.txt", follow_redirects=False)
             assert response.status_code == 200
+        finally:
+            test_file.unlink(missing_ok=True)
+
+    def test_download_hides_another_owners_private_file(self, client, db_session):
+        """The raw workdir download route cannot bypass a private file flag."""
+        workdir = Path(os.environ.get("WORKDIR", "/tmp"))
+        test_file = workdir / "private-filemanager-download.txt"
+        test_file.write_text("private content")
+        record = FileRecord(
+            owner_id="alice@example.com",
+            filehash="private-filemanager-download",
+            original_filename=test_file.name,
+            local_filename=str(test_file),
+            file_size=test_file.stat().st_size,
+            mime_type="text/plain",
+            is_private=True,
+        )
+        accessible_alias = FileRecord(
+            owner_id="admin",
+            filehash="private-filemanager-download-alias",
+            original_filename="shared-alias.txt",
+            local_filename=str(test_file),
+            file_size=test_file.stat().st_size,
+            mime_type="text/plain",
+            is_private=False,
+        )
+        db_session.add_all([record, accessible_alias])
+        db_session.commit()
+        client.cookies.set("session", _make_admin_session_cookie())
+        try:
+            with patch("app.utils.user_scope.settings.multi_user_enabled", True):
+                response = client.get(
+                    f"/admin/files/download?path={test_file.name}",
+                    follow_redirects=False,
+                )
+            assert response.status_code == 404
         finally:
             test_file.unlink(missing_ok=True)
 
@@ -749,7 +806,9 @@ class TestFilemanagerDownloadUnit:
             mock_settings.workdir = str(tmp_path)
             mock_request = MagicMock()
             mock_request.query_params.get = MagicMock(return_value="download_me.pdf")
+            mock_db = MagicMock()
+            mock_db.query.return_value.all.return_value = []
 
-            result = await filemanager_download(mock_request)
+            result = await filemanager_download(mock_request, mock_db)
             assert isinstance(result, FileResponse)
             assert result.filename == "download_me.pdf"

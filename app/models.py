@@ -78,6 +78,11 @@ class FileRecord(Base):
     # Legal hold prevents destructive deletion while records are under review or retention.
     legal_hold = Column(Boolean, default=False, nullable=False, index=True)
 
+    # Owner-controlled privacy boundary.  False means the document may be
+    # visible to other authorised members of its tenant/tribe; True means
+    # only the document owner (or an explicit public share link) may read it.
+    is_private = Column(Boolean, default=False, server_default="0", nullable=False, index=True)
+
     # If this is a duplicate, record the ID of the original file for reference
     duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
 

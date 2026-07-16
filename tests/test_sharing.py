@@ -96,6 +96,18 @@ class TestGetFileRole:
         db_session.commit()
         assert get_file_role(f, "carol", db_session) == FILE_SHARE_ROLE_EDITOR
 
+    def test_private_file_ignores_named_share(self, db_session, monkeypatch):
+        from app.config import settings as real_settings
+        from app.utils.user_scope import get_file_role
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        f = _create_file(db_session, owner_id="alice")
+        f.is_private = True
+        db_session.add(FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role="viewer"))
+        db_session.commit()
+        assert get_file_role(f, "alice", db_session) == "owner"
+        assert get_file_role(f, "bob", db_session) is None
+
     def test_unowned_file_returns_viewer_when_setting_allows(self, db_session, monkeypatch):
         from app.utils import user_scope
 
@@ -252,6 +264,20 @@ class TestCreateShare:
         assert data["shared_with_user_id"] == "bob"
         assert data["role"] == "viewer"
         assert data["file_id"] == f.id
+
+    def test_private_file_cannot_create_named_share(self, client, db_session, monkeypatch):
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", False)
+        f = _create_file(db_session, owner_id="alice")
+        f.is_private = True
+        db_session.commit()
+
+        response = client.post(
+            f"/api/files/{f.id}/shares",
+            json={"shared_with_user_id": "bob", "role": "viewer"},
+        )
+        assert response.status_code == 409
 
     def test_owner_can_share_with_editor(self, client, db_session, monkeypatch):
         import app.api.sharing as sharing_mod

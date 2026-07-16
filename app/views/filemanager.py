@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import FileRecord
+from app.utils.user_scope import apply_owner_filter
 from app.views.base import APIRouter, get_db, require_login, templates
 from app.views.settings import require_admin_access
 
@@ -56,20 +57,36 @@ def _safe_path(workdir: str, rel_path: str) -> Path:
     return target
 
 
-def _db_path_set(db: Session) -> Set[str]:
+def _db_path_set(db: Session, request: Request | None = None) -> Set[str]:
     """
     Return the set of all absolute, normalised paths that the DB references
     across local_filename, original_file_path, and processed_file_path.
     """
     paths: Set[str] = set()
-    for row in db.query(
+    query = db.query(
         FileRecord.local_filename,
         FileRecord.original_file_path,
         FileRecord.processed_file_path,
-    ).all():
+    )
+    if request is not None:
+        query = apply_owner_filter(query, request)
+    for row in query.all():
         for p in row:
             if p:
                 paths.add(str(Path(p).resolve()))
+    return paths
+
+
+def _hidden_db_path_set(db: Session, request: Request) -> Set[str]:
+    """Return paths referenced by at least one document inaccessible to the caller."""
+    accessible_ids = {row[0] for row in apply_owner_filter(db.query(FileRecord.id), request).all()}
+    paths: Set[str] = set()
+    for record in db.query(FileRecord).all():
+        if record.id in accessible_ids:
+            continue
+        for path in (record.local_filename, record.original_file_path, record.processed_file_path):
+            if path:
+                paths.add(str(Path(path).resolve()))
     return paths
 
 
@@ -88,7 +105,12 @@ def _file_icon(mime_type: str, is_dir: bool) -> str:
     return "fas fa-file text-gray-400"
 
 
-def _scan_dir(target: Path, workdir_base: Path, db_paths: Set[str]) -> List[Dict[str, Any]]:
+def _scan_dir(
+    target: Path,
+    workdir_base: Path,
+    db_paths: Set[str],
+    hidden_paths: Set[str] | None = None,
+) -> List[Dict[str, Any]]:
     """
     List one directory level; annotate each file with its DB status.
 
@@ -98,6 +120,7 @@ def _scan_dir(target: Path, workdir_base: Path, db_paths: Set[str]) -> List[Dict
       ""        – directories (not checked against DB)
     """
     entries = []
+    hidden_paths = hidden_paths or set()
     for item in sorted(target.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
         try:
             stat = item.stat()
@@ -106,6 +129,8 @@ def _scan_dir(target: Path, workdir_base: Path, db_paths: Set[str]) -> List[Dict
             continue
 
         item_rel = str(item.relative_to(workdir_base))
+        if not item.is_dir() and str(item.resolve()) in hidden_paths:
+            continue
         mime_type, _ = mimetypes.guess_type(item.name)
         mime_type = mime_type or ""
 
@@ -132,14 +157,21 @@ def _scan_dir(target: Path, workdir_base: Path, db_paths: Set[str]) -> List[Dict
     return entries
 
 
-def _walk_all_files(base: Path, db_paths: Set[str]) -> List[Dict[str, Any]]:
+def _walk_all_files(
+    base: Path,
+    db_paths: Set[str],
+    hidden_paths: Set[str] | None = None,
+) -> List[Dict[str, Any]]:
     """
     Walk the entire workdir tree and return every file (not directory).
     Used for the reconciliation view.
     """
     entries = []
+    hidden_paths = hidden_paths or set()
     for item in sorted(base.rglob("*"), key=lambda p: str(p).lower()):
         if item.is_dir():
+            continue
+        if str(item.resolve()) in hidden_paths:
             continue
         try:
             stat = item.stat()
@@ -166,12 +198,15 @@ def _walk_all_files(base: Path, db_paths: Set[str]) -> List[Dict[str, Any]]:
     return entries
 
 
-def _db_records(db: Session, workdir_base: Path) -> List[Dict[str, Any]]:
+def _db_records(db: Session, workdir_base: Path, request: Request | None = None) -> List[Dict[str, Any]]:
     """
     Return every FileRecord annotated with on-disk existence for each stored path.
     """
     rows = []
-    for rec in db.query(FileRecord).order_by(FileRecord.id.desc()).all():
+    query = db.query(FileRecord)
+    if request is not None:
+        query = apply_owner_filter(query, request)
+    for rec in query.order_by(FileRecord.id.desc()).all():
 
         def _check(p: str | None) -> Dict[str, Any]:
             if not p:
@@ -229,7 +264,8 @@ async def filemanager(request: Request, db: Session = Depends(get_db)):
     view = request.query_params.get("view", "filesystem")
 
     # Build the DB path set once (used by all views)
-    db_paths = _db_path_set(db)
+    db_paths = _db_path_set(db, request)
+    hidden_paths = _hidden_db_path_set(db, request)
 
     # ── Filesystem view ───────────────────────────────────────────────────
     rel_path = request.query_params.get("path", "").lstrip("/").lstrip(".")
@@ -246,7 +282,7 @@ async def filemanager(request: Request, db: Session = Depends(get_db)):
 
     fs_entries: List[Dict[str, Any]] = []
     if view == "filesystem" and target.is_dir():
-        fs_entries = _scan_dir(target, workdir_base, db_paths)
+        fs_entries = _scan_dir(target, workdir_base, db_paths, hidden_paths)
 
     # Breadcrumb for filesystem view
     breadcrumbs = []
@@ -264,13 +300,13 @@ async def filemanager(request: Request, db: Session = Depends(get_db)):
     # ── Database view ─────────────────────────────────────────────────────
     db_records: List[Dict[str, Any]] = []
     if view in ("database", "reconcile"):
-        db_records = _db_records(db, workdir_base)
+        db_records = _db_records(db, workdir_base, request)
 
     # ── Reconciliation view ───────────────────────────────────────────────
     orphan_files: List[Dict[str, Any]] = []
     ghost_records: List[Dict[str, Any]] = []
     if view == "reconcile":
-        all_disk = _walk_all_files(workdir_base, db_paths)
+        all_disk = _walk_all_files(workdir_base, db_paths, hidden_paths)
         orphan_files = [f for f in all_disk if f["db_status"] == "orphan"]
         ghost_records = [r for r in db_records if r["health"] == "missing"]
 
@@ -281,7 +317,7 @@ async def filemanager(request: Request, db: Session = Depends(get_db)):
         total_disk = sum(1 for p in workdir_base.rglob("*") if p.is_file())
     else:
         total_disk = None  # deferred; not shown on filesystem tab header
-    total_db = db.query(FileRecord).count()
+    total_db = apply_owner_filter(db.query(FileRecord), request).count()
 
     return templates.TemplateResponse(
         "filemanager.html",
@@ -311,7 +347,7 @@ async def filemanager(request: Request, db: Session = Depends(get_db)):
 @router.get("/admin/files/download")
 @require_login
 @require_admin_access
-async def filemanager_download(request: Request):
+async def filemanager_download(request: Request, db: Session = Depends(get_db)):
     """
     Admin-only endpoint to download a file from workdir.
     """
@@ -324,6 +360,10 @@ async def filemanager_download(request: Request):
         raise HTTPException(status_code=400, detail="Invalid path")
 
     if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    target_path = str(target.resolve())
+    if target_path in _hidden_db_path_set(db, request):
         raise HTTPException(status_code=404, detail="File not found")
 
     mime_type, _ = mimetypes.guess_type(target.name)

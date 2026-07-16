@@ -250,6 +250,7 @@ def find_similar_documents(
     file_id: int,
     limit: int = 5,
     threshold: float = 0.3,
+    accessible_file_ids: list[int] | None = None,
 ) -> list[dict[str, Any]]:
     """Find documents similar to the given file using **pre-computed** embeddings.
 
@@ -293,22 +294,21 @@ def find_similar_documents(
     # Fetch only the columns needed for scoring to minimise memory use.
     # yield_per streams rows in chunks so we never materialise all 100k+
     # records at once.
-    candidates = (
-        db.query(
-            FileRecord.id,
-            FileRecord.original_filename,
-            FileRecord.document_title,
-            FileRecord.mime_type,
-            FileRecord.created_at,
-            FileRecord.embedding,
-        )
-        .filter(
-            FileRecord.id != file_id,
-            FileRecord.embedding.isnot(None),
-            FileRecord.embedding != "",
-        )
-        .yield_per(500)
+    candidates = db.query(
+        FileRecord.id,
+        FileRecord.original_filename,
+        FileRecord.document_title,
+        FileRecord.mime_type,
+        FileRecord.created_at,
+        FileRecord.embedding,
+    ).filter(
+        FileRecord.id != file_id,
+        FileRecord.embedding.isnot(None),
+        FileRecord.embedding != "",
     )
+    if accessible_file_ids is not None:
+        candidates = candidates.filter(FileRecord.id.in_(accessible_file_ids))
+    candidates = candidates.yield_per(500)
 
     results: list[dict[str, Any]] = []
     for row in candidates:

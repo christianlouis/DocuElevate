@@ -5,6 +5,7 @@ Tests all view endpoints with success and error cases, proper mocking, and edge 
 Target: Bring coverage from 8.77% to 70%+
 """
 
+import base64
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -12,8 +13,19 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from itsdangerous import TimestampSigner
 
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
+
+TEST_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+
+
+def _make_user_session_cookie(user_id: str) -> str:
+    """Create a signed browser session for an ordinary document owner."""
+    session_data = {"user": {"id": user_id, "is_admin": False}}
+    signer = TimestampSigner(TEST_SESSION_SECRET)
+    data = base64.b64encode(json.dumps(session_data).encode()).decode("utf-8")
+    return signer.sign(data).decode("utf-8")
 
 
 @pytest.mark.unit
@@ -2092,11 +2104,16 @@ class TestOwnerDisplayAndClaim:
         db_session.refresh(file_rec)
         return file_rec
 
+    @staticmethod
+    def _authenticate(client: TestClient, user_id: str) -> None:
+        client.cookies.set("session", _make_user_session_cookie(user_id))
+
     # ── /files/{id} (file_summary.html) ──────────────────────────────────
 
     def test_summary_shows_owner_when_multi_user_enabled(self, client, db_session):
         """Owner ID is rendered in file summary when multi-user mode is on."""
         file_rec = self._make_file(db_session, owner_id="alice@example.com")
+        self._authenticate(client, "alice@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2105,6 +2122,7 @@ class TestOwnerDisplayAndClaim:
     def test_summary_shows_unowned_label_for_unowned_file(self, client, db_session):
         """'Unowned' label is rendered in file summary for files without an owner."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2113,6 +2131,7 @@ class TestOwnerDisplayAndClaim:
     def test_summary_shows_claim_button_for_unowned_file(self, client, db_session):
         """Claim Ownership button appears on file summary for an unowned file."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2121,6 +2140,7 @@ class TestOwnerDisplayAndClaim:
     def test_summary_no_claim_button_when_owned(self, client, db_session):
         """No Claim Ownership button when the file already has an owner."""
         file_rec = self._make_file(db_session, owner_id="bob@example.com")
+        self._authenticate(client, "bob@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2140,6 +2160,7 @@ class TestOwnerDisplayAndClaim:
     def test_detail_shows_owner_when_multi_user_enabled(self, client, db_session):
         """Owner ID is rendered in file detail view when multi-user mode is on."""
         file_rec = self._make_file(db_session, owner_id="charlie@example.com")
+        self._authenticate(client, "charlie@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/detail")
         assert response.status_code == 200
@@ -2148,6 +2169,7 @@ class TestOwnerDisplayAndClaim:
     def test_detail_shows_claim_button_for_unowned_file(self, client, db_session):
         """Claim Ownership button appears in file detail view for an unowned file."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/detail")
         assert response.status_code == 200
@@ -2158,6 +2180,7 @@ class TestOwnerDisplayAndClaim:
     def test_annotations_shows_owner_info(self, client, db_session):
         """Owner info is rendered on the annotations page in multi-user mode."""
         file_rec = self._make_file(db_session, owner_id="dave@example.com")
+        self._authenticate(client, "dave@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/annotations")
         assert response.status_code == 200
@@ -2166,6 +2189,7 @@ class TestOwnerDisplayAndClaim:
     def test_annotations_shows_claim_button_for_unowned_file(self, client, db_session):
         """Claim Ownership button appears on annotations page for unowned file."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/annotations")
         assert response.status_code == 200
@@ -2174,6 +2198,7 @@ class TestOwnerDisplayAndClaim:
     def test_annotations_no_claim_button_when_owned(self, client, db_session):
         """No Claim Ownership button on annotations page when file has an owner."""
         file_rec = self._make_file(db_session, owner_id="eve@example.com")
+        self._authenticate(client, "eve@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/annotations")
         assert response.status_code == 200
@@ -2187,6 +2212,8 @@ class TestOwnerDisplayAndClaim:
         profile = UserProfile(user_id="frank@example.com", display_name="Frank Lastname")
         db_session.add(profile)
         db_session.commit()
+
+        self._authenticate(client, "frank@example.com")
 
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")

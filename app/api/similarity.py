@@ -16,6 +16,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.models import FileRecord
+from app.utils.user_scope import apply_owner_filter
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ def get_similar_documents(
     ```
     """
     # Verify the file exists
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    accessible_query = apply_owner_filter(db.query(FileRecord), request)
+    file_record = accessible_query.filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
@@ -98,7 +100,14 @@ def get_similar_documents(
     try:
         from app.utils.similarity import find_similar_documents
 
-        similar = find_similar_documents(db, file_id, limit=limit, threshold=threshold)
+        accessible_ids = [row[0] for row in apply_owner_filter(db.query(FileRecord.id), request).all()]
+        similar = find_similar_documents(
+            db,
+            file_id,
+            limit=limit,
+            threshold=threshold,
+            accessible_file_ids=accessible_ids,
+        )
 
         return {
             "file_id": file_id,
@@ -142,7 +151,7 @@ def get_embedding_status(
     }
     ```
     """
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
@@ -190,7 +199,7 @@ def trigger_compute_embedding(
     }
     ```
     """
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
@@ -259,11 +268,14 @@ def get_embeddings_overview(
     """
     # Use column-only query to avoid loading full ORM objects into memory
     all_files = (
-        db.query(
-            FileRecord.id,
-            FileRecord.original_filename,
-            FileRecord.ocr_text,
-            FileRecord.embedding,
+        apply_owner_filter(
+            db.query(
+                FileRecord.id,
+                FileRecord.original_filename,
+                FileRecord.ocr_text,
+                FileRecord.embedding,
+            ),
+            request,
         )
         .order_by(FileRecord.id.desc())
         .all()
@@ -331,7 +343,7 @@ def trigger_compute_all_embeddings(
     ```
     """
     candidates = (
-        db.query(FileRecord)
+        apply_owner_filter(db.query(FileRecord), request)
         .filter(
             FileRecord.ocr_text.isnot(None),
             FileRecord.ocr_text != "",
@@ -397,13 +409,16 @@ def get_similarity_pairs(
 
     # Load all files that have embeddings (columns only for efficiency)
     rows = (
-        db.query(
-            FileRecord.id,
-            FileRecord.original_filename,
-            FileRecord.document_title,
-            FileRecord.mime_type,
-            FileRecord.created_at,
-            FileRecord.embedding,
+        apply_owner_filter(
+            db.query(
+                FileRecord.id,
+                FileRecord.original_filename,
+                FileRecord.document_title,
+                FileRecord.mime_type,
+                FileRecord.created_at,
+                FileRecord.embedding,
+            ),
+            request,
         )
         .filter(
             FileRecord.embedding.isnot(None),
@@ -446,7 +461,7 @@ def get_similarity_pairs(
     offset = (page - 1) * limit
     page_pairs = all_pairs[offset : offset + limit]
 
-    total_files = db.query(FileRecord).count()
+    total_files = apply_owner_filter(db.query(FileRecord), request).count()
 
     return {
         "pairs": page_pairs,

@@ -165,7 +165,9 @@ def list_comments(request: Request, file_id: int, db: DbSession):
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not (is_admin and not file_record.is_private) and not has_file_role(
+        file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     comments = (
@@ -215,7 +217,9 @@ def create_comment(
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not (is_admin and not file_record.is_private) and not has_file_role(
+        file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     if not isinstance(body, str) or not body.strip():
@@ -259,7 +263,7 @@ def create_comment(
         # Auto-share the file with mentioned users that don't have access yet.
         # Only do this in multi-user mode and only when the file has an owner
         # (unowned files are already visible to all authenticated users).
-        if mentions and file_record.owner_id is not None:
+        if mentions and file_record.owner_id is not None and not file_record.is_private:
             from app.config import settings as _settings
 
             if _settings.multi_user_enabled:
@@ -480,7 +484,9 @@ def list_annotations(request: Request, file_id: int, db: DbSession):
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not (is_admin and not file_record.is_private) and not has_file_role(
+        file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     annotations = (
@@ -540,7 +546,9 @@ def create_annotation(
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not (is_admin and not file_record.is_private) and not has_file_role(
+        file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER
+    ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     if not isinstance(content, str) or not content.strip():

@@ -128,6 +128,12 @@ def create_share(
 
     _require_owner(file_record, owner_id, db)
 
+    if file_record.is_private:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Private files are owner-only; make the file tribe-visible before sharing it with a user",
+        )
+
     if role not in FILE_SHARE_ROLES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -336,7 +342,7 @@ def list_shared_with(request: Request, file_id: int, db: DbSession):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     role = get_file_role(file_record, user_id, db)
-    if role is None and not is_admin:
+    if role is None and not (is_admin and not file_record.is_private):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     shares = db.query(FileShare).filter(FileShare.file_id == file_id).all()
