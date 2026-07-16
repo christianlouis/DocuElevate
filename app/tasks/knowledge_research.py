@@ -331,14 +331,41 @@ def _fallback_research_plan(query: str) -> dict[str, Any]:
     }
 
 
+def _entity_first_lexical_queries(
+    payload: dict[str, Any], lexical_queries: list[str]
+) -> list[str]:
+    """Prefer exact named entities over planner-generated compound AND queries."""
+    raw_entities = payload.get("hard_entities", [])
+    if isinstance(raw_entities, str):
+        raw_entities = [raw_entities]
+    entities = [
+        " ".join(value.split()).strip('"')[:120]
+        for value in raw_entities
+        if isinstance(value, str) and value.strip()
+    ] if isinstance(raw_entities, list) else []
+    for query in lexical_queries:
+        entities.extend(re.findall(r'"([^"\r\n]{2,120})"', query))
+
+    exact_queries: list[str] = []
+    for entity in entities:
+        normalized = " ".join(entity.split()).strip('"')
+        if not normalized:
+            continue
+        exact_query = f'"{normalized}"' if " " in normalized else normalized
+        if exact_query not in exact_queries:
+            exact_queries.append(exact_query)
+    return exact_queries[:3] or lexical_queries
+
+
 def _plan_research(query: str, model: str) -> dict[str, Any]:
     """Use one small structured request to plan lexical and semantic retrieval."""
     from app.utils.ai_provider import get_ai_provider
 
     prompt = (
         "Plan document retrieval for the question below. Do not answer it and do not request document text. "
-        "Return JSON only with: lexical_queries (1-3 short Meilisearch queries), semantic_query, aggregation, "
-        'evidence_types, exclude_terms. Preserve exact named entities as quoted phrases, for example "Motel One". '
+        "Return JSON only with: hard_entities, lexical_queries (1-3 short Meilisearch queries), semantic_query, "
+        "aggregation, evidence_types, exclude_terms. Put exact named entities such as Motel One, Amazon, London or "
+        "HbA1c in hard_entities without descriptive words. Preserve them as quoted phrases in lexical_queries. "
         "Remove conversational filler and generic counting words. Prefer booking confirmations, invoices, tickets, "
         "lab results or receipts that prove the requested real-world event; exclude advertising and generic reference text.\n\n"
         f"QUESTION:\n{query[-2_000:]}"
@@ -368,6 +395,7 @@ def _plan_research(query: str, model: str) -> dict[str, Any]:
         lexical_queries = [
             " ".join(value.split())[:180] for value in raw_lexical_queries if isinstance(value, str) and value.strip()
         ][:3]
+        lexical_queries = _entity_first_lexical_queries(payload, lexical_queries)
         semantic_query = payload.get("semantic_query")
         evidence_types = payload.get("evidence_types", [])
         if isinstance(evidence_types, str):
@@ -525,11 +553,19 @@ def _subject_hint_from_history(history_json: str) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def _no_evidence_answer(question: str, *, index_complete: bool) -> str:
+def _no_evidence_answer(
+    question: str, *, index_complete: bool, analysis_truncated: bool = False
+) -> str:
     """Return a localized fallback that accurately qualifies index coverage."""
     looks_german = bool(re.search(r"\b(wie|was|wann|wo|welche|mein|meine|über|belegbar)\b", question, re.IGNORECASE))
     if looks_german:
         if index_complete:
+            if analysis_truncated:
+                return (
+                    "Ich konnte in der begrenzten Auswertung des vollständig indexierten, zugänglichen "
+                    "Dokumentbestands keine belastbaren Belege finden. Der Index ist vollständig, aber die "
+                    "Auswertung nutzte nur begrenzte Textausschnitte; das Ergebnis ist daher nicht abschließend."
+                )
             return (
                 "Ich konnte im vollständig indexierten, zugänglichen Dokumentbestand keine belastbaren Belege finden."
             )
@@ -538,6 +574,12 @@ def _no_evidence_answer(question: str, *, index_complete: bool) -> str:
             "Der Index ist noch unvollständig; das Ergebnis ist daher nicht abschließend."
         )
     if index_complete:
+        if analysis_truncated:
+            return (
+                "I could not find reliable evidence in the bounded analysis of the fully indexed, accessible "
+                "document corpus. The index is complete, but only bounded text excerpts were analyzed, so this "
+                "result is not final."
+            )
         return "I could not find reliable evidence in the fully indexed, accessible document corpus."
     return (
         "I could not find reliable evidence in the currently indexed, accessible documents. "
@@ -799,7 +841,8 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
             else:
                 answer = _no_evidence_answer(
                     job.question,
-                    index_complete=indexed_scope >= len(accessible_ids) and not truncated,
+                    index_complete=indexed_scope >= len(accessible_ids),
+                    analysis_truncated=truncated,
                 )
                 sources = []
             result = {
