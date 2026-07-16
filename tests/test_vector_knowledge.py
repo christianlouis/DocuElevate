@@ -547,6 +547,20 @@ def test_research_keyword_query_keeps_domain_terms(question, expected):
     assert _research_keyword_query(question) == expected
 
 
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Was war der teuerste Amazon-Kauf bis jetzt?",
+        "Was war die höchste belegte Rechnung?",
+        "Welches war der größte Einkauf?",
+    ],
+)
+def test_research_classifier_accepts_inflected_german_superlatives(question):
+    from app.api.knowledge import _is_research_question
+
+    assert _is_research_question(question)
+
+
 def test_search_returns_cited_authoritative_document(client, db_session):
     record = FileRecord(
         id=3,
