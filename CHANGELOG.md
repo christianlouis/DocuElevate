@@ -10,6 +10,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.11 (2026-07-16)
+
+### Bug Fixes
+
+- Expose document privacy in single-user mode
+  ([#1149](https://github.com/christianlouis/DocuElevate/pull/1149),
+  [`bdd1fc4`](https://github.com/christianlouis/DocuElevate/commit/bdd1fc434a81b47ed6cf6fae3d4e8e268d38f5f4))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`712e9b0`](https://github.com/christianlouis/DocuElevate/commit/712e9b0595915d7768e2ec8e8cc3bdbf0ee4e36f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4658eb9`](https://github.com/christianlouis/DocuElevate/commit/4658eb9c406b9fd81eaa38a2297338481eb8b005))
+
+- **changelog**: Update changelog [skip ci]
+  ([`de301d0`](https://github.com/christianlouis/DocuElevate/commit/de301d02e18ec3072da4e2c19afff3430ecd672d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0ec6c7d`](https://github.com/christianlouis/DocuElevate/commit/0ec6c7d114089e5a78fa6beb7944d52e4f548c81))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
 ## Unreleased
 
 ### Code Style
