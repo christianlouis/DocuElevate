@@ -111,8 +111,12 @@ def test_research_planner_keeps_exact_entity_and_returns_small_plan():
         )
 
     assert plan["lexical_queries"][0] == '"Motel One"'
+    assert plan["lexical_queries"][1:] == [
+        "Motel One Buchungen Aufenthalte Nächte",
+        '"Motel One" Buchungen Belege',
+    ]
     assert plan["aggregation"] == "count stays and nights"
-    assert len(plan["lexical_queries"]) == 1
+    assert len(plan["lexical_queries"]) == 3
     assert calls[0]["reasoning_effort"] == "minimal"
     assert calls[0]["max_completion_tokens"] == 300
 

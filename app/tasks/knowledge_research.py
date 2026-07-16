@@ -332,7 +332,7 @@ def _fallback_research_plan(query: str) -> dict[str, Any]:
 
 
 def _entity_first_lexical_queries(payload: dict[str, Any], lexical_queries: list[str]) -> list[str]:
-    """Prefer exact named entities over planner-generated compound AND queries."""
+    """Probe exact named entities first, then retain qualified planner queries."""
     raw_entities = payload.get("hard_entities", [])
     if isinstance(raw_entities, str):
         raw_entities = [raw_entities]
@@ -352,7 +352,8 @@ def _entity_first_lexical_queries(payload: dict[str, Any], lexical_queries: list
         exact_query = f'"{normalized}"' if " " in normalized else normalized
         if exact_query not in exact_queries:
             exact_queries.append(exact_query)
-    return exact_queries[:3] or lexical_queries
+    prioritized_queries = exact_queries + [query for query in lexical_queries if query not in exact_queries]
+    return prioritized_queries[:3]
 
 
 def _plan_research(query: str, model: str) -> dict[str, Any]:
