@@ -672,11 +672,7 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_
                 ~FileRecord.id.in_(existing_ids) if existing_ids else True  # type: ignore[arg-type]
             )
             missing_count = missing_query.count()
-            candidates = (
-                missing_query.order_by(FileRecord.id.asc())
-                .limit(batch_size)
-                .all()
-            )
+            candidates = missing_query.order_by(FileRecord.id.asc()).limit(batch_size).all()
 
         batches: list[list[tuple[FileRecord, str, dict]]] = []
         current_batch: list[tuple[FileRecord, str, dict]] = []
@@ -715,10 +711,7 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_
             )
             continued = True
 
-        detail = (
-            f"Indexed {indexed} document(s) into Meilisearch; {skipped} skipped; "
-            f"approximately {remaining} remain."
-        )
+        detail = f"Indexed {indexed} document(s) into Meilisearch; {skipped} skipped; approximately {remaining} remain."
         logger.info("[batch] sync_search_index: %s", detail)
         _update_job_status(job_name, "success", detail)
         return {

@@ -223,6 +223,7 @@ def index_documents(documents: Sequence[tuple["FileRecord", str, dict]]) -> int:
         logger.warning("Meilisearch batch indexing failed for %s document(s): %s", len(documents), exc)
         return 0
 
+
 def delete_document(file_id: int) -> bool:
     """Remove a document from the Meilisearch index.
 
