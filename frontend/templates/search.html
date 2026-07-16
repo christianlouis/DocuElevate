@@ -248,6 +248,24 @@
     }
     .knowledge-chat-form button { border: 0; background: #2563eb; color: #fff; }
     .knowledge-chat-form button:disabled { opacity: 0.55; cursor: wait; }
+    .knowledge-chat-progress {
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.65rem 0.75rem;
+      align-items: center; margin-top: 0.75rem; padding: 0.8rem 0.9rem;
+      border: 1px solid #bfdbfe; border-radius: 0.625rem; background: #eff6ff; color: #1e3a8a;
+    }
+    .knowledge-chat-progress[hidden] { display: none; }
+    .knowledge-chat-progress-icon { color: #2563eb; }
+    .knowledge-chat-progress-copy { min-width: 0; }
+    .knowledge-chat-progress-phase { display: block; font-weight: 700; }
+    .knowledge-chat-progress-detail { display: block; margin-top: 0.15rem; color: #475569; font-size: 0.8rem; }
+    .knowledge-chat-progress-elapsed { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+    .knowledge-chat-progress-bar {
+      grid-column: 2 / 4; width: 100%; height: 0.45rem; overflow: hidden;
+      border: 0; border-radius: 999px; background: #dbeafe; color: #2563eb;
+    }
+    .knowledge-chat-progress-bar::-webkit-progress-bar { background: #dbeafe; border-radius: 999px; }
+    .knowledge-chat-progress-bar::-webkit-progress-value { background: #2563eb; border-radius: 999px; }
+    .knowledge-chat-progress-bar::-moz-progress-bar { background: #2563eb; border-radius: 999px; }
     .knowledge-chat-clear { margin-top: 0.5rem; border: 1px solid #d1d5db; background: #fff; color: #4b5563; }
     @media (max-width: 900px) {
       .search-container.preview-active .search-workspace {
@@ -288,6 +306,15 @@
         <textarea id="knowledge-chat-input" maxlength="4000" placeholder="{{ _('search.chat_placeholder') }}" required></textarea>
         <button type="submit" id="knowledge-chat-send"><i class="fas fa-paper-plane" aria-hidden="true"></i> {{ _("search.chat_send") }}</button>
       </form>
+      <div id="knowledge-chat-progress" class="knowledge-chat-progress" role="status" aria-live="polite" hidden>
+        <i class="fas fa-circle-notch fa-spin knowledge-chat-progress-icon" aria-hidden="true"></i>
+        <div class="knowledge-chat-progress-copy">
+          <strong id="knowledge-chat-progress-phase" class="knowledge-chat-progress-phase">{{ _("search.chat_planning") }}</strong>
+          <span id="knowledge-chat-progress-detail" class="knowledge-chat-progress-detail">{{ _("search.chat_planning_detail") }}</span>
+        </div>
+        <span id="knowledge-chat-progress-elapsed" class="knowledge-chat-progress-elapsed">0s</span>
+        <progress id="knowledge-chat-progress-bar" class="knowledge-chat-progress-bar" aria-label="{{ _('search.chat_progress_aria') }}"></progress>
+      </div>
       <button type="button" id="knowledge-chat-clear" class="knowledge-chat-clear"><i class="fas fa-trash-alt" aria-hidden="true"></i> {{ _("search.chat_clear") }}</button>
     </section>
 
@@ -465,6 +492,12 @@
     renamingSavedSearch: {{ _("search.saved_rename_prompt") | tojson }},
     chatWorking: {{ _("search.chat_working") | tojson }},
     chatResearching: {{ _("search.chat_researching") | tojson }},
+    chatPlanning: {{ _("search.chat_planning") | tojson }},
+    chatPlanningDetail: {{ _("search.chat_planning_detail") | tojson }},
+    chatEvaluating: {{ _("search.chat_evaluating") | tojson }},
+    chatEvaluatingDetail: {{ _("search.chat_evaluating_detail") | tojson }},
+    chatFinalizing: {{ _("search.chat_finalizing") | tojson }},
+    chatFinalizingDetail: {{ _("search.chat_finalizing_detail") | tojson }},
     chatResearchTimeout: {{ _("search.chat_research_timeout") | tojson }},
     chatIndexIncomplete: {{ _("search.chat_index_incomplete") | tojson }},
     chatError: {{ _("search.chat_error") | tojson }},
@@ -499,6 +532,11 @@
   const chatInput = document.getElementById('knowledge-chat-input');
   const chatSend = document.getElementById('knowledge-chat-send');
   const chatClear = document.getElementById('knowledge-chat-clear');
+  const chatProgress = document.getElementById('knowledge-chat-progress');
+  const chatProgressPhase = document.getElementById('knowledge-chat-progress-phase');
+  const chatProgressDetail = document.getElementById('knowledge-chat-progress-detail');
+  const chatProgressElapsed = document.getElementById('knowledge-chat-progress-elapsed');
+  const chatProgressBar = document.getElementById('knowledge-chat-progress-bar');
   const chatHistory = [];
   let activeResearchJobId = null;
 
@@ -567,11 +605,32 @@
     chatLog.scrollTop = chatLog.scrollHeight;
   }
 
+  function updateChatProgress(phase, detail, elapsed, processed, total) {
+    chatProgress.hidden = false;
+    chatProgressPhase.textContent = phase;
+    chatProgressDetail.textContent = detail;
+    chatProgressElapsed.textContent = String(elapsed || 0) + 's';
+    if (total > 0) {
+      chatProgressBar.max = total;
+      chatProgressBar.value = Math.min(processed || 0, total);
+    } else {
+      chatProgressBar.removeAttribute('value');
+      chatProgressBar.removeAttribute('max');
+    }
+  }
+
+  function hideChatProgress() {
+    chatProgress.hidden = true;
+    chatProgressBar.removeAttribute('value');
+    chatProgressBar.removeAttribute('max');
+  }
+
   async function sendKnowledgeChat(message) {
     appendChatMessage('user', message);
     chatSend.disabled = true;
     const originalLabel = chatSend.innerHTML;
     chatSend.textContent = searchI18n.chatWorking;
+    updateChatProgress(searchI18n.chatPlanning, searchI18n.chatPlanningDetail, 0, 0, 0);
     try {
       const response = await fetch('/api/knowledge/chat', {
         method: 'POST',
@@ -587,6 +646,7 @@
     } catch (error) {
       appendChatMessage('assistant', searchI18n.chatError + ' ' + (error.message || ''));
     } finally {
+      hideChatProgress();
       chatSend.disabled = false;
       chatSend.innerHTML = originalLabel;
       chatInput.focus();
@@ -595,9 +655,13 @@
 
   async function waitForResearchJob(jobId) {
     activeResearchJobId = jobId;
-    const deadline = Date.now() + (30 * 60 * 1000);
+    const startedAt = Date.now();
+    // 60 seconds is the p90 product target, not a hard cutoff. Keep the
+    // visible timer running and retain a separate five-minute safety limit.
+    const deadline = startedAt + (5 * 60 * 1000);
     while (true) {
       if (Date.now() >= deadline) {
+        await fetch('/api/knowledge/research/' + encodeURIComponent(jobId) + '/cancel', {method: 'POST'});
         activeResearchJobId = null;
         throw new Error(searchI18n.chatResearchTimeout);
       }
@@ -605,10 +669,24 @@
       const response = await fetch('/api/knowledge/research/' + encodeURIComponent(jobId));
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || searchI18n.chatError);
-      chatSend.textContent = formatSearchMessage(searchI18n.chatResearching, {
-        processed: data.processed_documents || 0,
-        total: data.total_documents || '…'
+      const elapsed = Math.max(
+        Math.floor((Date.now() - startedAt) / 1000),
+        data.elapsed_seconds || 0
+      );
+      const processed = data.processed_documents || 0;
+      const total = data.total_documents || 0;
+      const detail = formatSearchMessage(searchI18n.chatEvaluatingDetail, {
+        elapsed: elapsed,
+        processed: processed,
+        total: total || '…'
       });
+      if (total > 0 && processed >= total) {
+        updateChatProgress(searchI18n.chatFinalizing, searchI18n.chatFinalizingDetail, elapsed, processed, total);
+      } else if (total > 0) {
+        updateChatProgress(searchI18n.chatEvaluating, detail, elapsed, processed, total);
+      } else {
+        updateChatProgress(searchI18n.chatPlanning, searchI18n.chatPlanningDetail, elapsed, 0, 0);
+      }
       if (data.state === 'completed' && data.result) {
         activeResearchJobId = null;
         return data.result;
@@ -642,6 +720,7 @@
       }
     }
     chatHistory.length = 0;
+    hideChatProgress();
     chatLog.innerHTML = '<div class="knowledge-chat-empty" id="knowledge-chat-empty"><i class="fas fa-book-open fa-2x" aria-hidden="true"></i><p><strong>' + escapeHtml({{ _("search.chat_heading") | tojson }}) + '</strong></p><p>' + escapeHtml({{ _("search.chat_intro") | tojson }}) + '</p></div>';
     chatInput.focus();
   });

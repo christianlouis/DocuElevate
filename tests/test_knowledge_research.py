@@ -19,6 +19,8 @@ from app.tasks.knowledge_research import (
     _filter_evidence_for_question,
     _no_evidence_answer,
     _numeric,
+    _plan_research,
+    _should_stop_mapping,
     _synthesize,
     cleanup_knowledge_research_jobs,
     run_knowledge_research,
@@ -54,8 +56,11 @@ def test_research_retries_transient_database_disconnect():
     assert retry.call_args.kwargs["max_retries"] == 2
 
 
-def test_candidate_retrieval_pages_every_authorized_match():
+def test_candidate_retrieval_pages_qualified_matches_per_scope():
+    calls = []
+
     def search(query, *, file_ids, page, per_page):
+        calls.append((query, page, per_page))
         assert file_ids == [1, 2, 3]
         if query == "":
             return {"results": [], "total": 3, "pages": 3}
@@ -71,6 +76,85 @@ def test_candidate_retrieval_pages_every_authorized_match():
 
     assert candidates == [1, 2, 3]
     assert indexed == 3
+    assert [page for query, page, _per_page in calls if query] == [1, 2]
+
+
+def test_research_planner_keeps_exact_entity_and_returns_small_plan():
+    provider = SimpleNamespace(
+        chat_completion=lambda **_kwargs: (
+            '{"lexical_queries":["\\"Motel One\\"","Motel One Rechnung"],'
+            '"semantic_query":"Motel One booking confirmation hotel stay",'
+            '"aggregation":"count stays and nights","evidence_types":["hotel_booking"],'
+            '"exclude_terms":["advertising"]}'
+        )
+    )
+
+    with patch("app.utils.ai_provider.get_ai_provider", return_value=provider):
+        plan = _plan_research(
+            "Wie oft war ich auf Basis der Buchungsdaten in einem Motel One Hotel?",
+            "gpt-5-nano",
+        )
+
+    assert plan["lexical_queries"][0] == '"Motel One"'
+    assert plan["aggregation"] == "count stays and nights"
+    assert len(plan["lexical_queries"]) == 2
+
+
+def test_candidate_retrieval_uses_adaptive_relevance_threshold():
+    def search(query, *, file_ids, page, per_page):
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        return {
+            "results": [{"file_id": file_id, "ranking_score": file_id / 10} for file_id in file_ids],
+            "total": len(file_ids),
+            "pages": 1,
+        }
+
+    with (
+        patch("app.tasks.knowledge_research.settings.rag_research_lexical_min_score", 0.15),
+        patch("app.tasks.knowledge_research.settings.rag_research_semantic_min_score", 0.35),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]),
+    ):
+        candidates, indexed = _candidate_ids(
+            [1, 2, 3],
+            "Motel One",
+            plan={"lexical_queries": ['"Motel One"'], "semantic_query": "Motel One stay"},
+        )
+
+    assert candidates == [3, 2]
+    assert indexed == 3
+
+
+def test_candidate_retrieval_uses_relative_semantic_threshold():
+    vector_hits = [
+        {"score": 0.90, "payload": {"document_id": 1}},
+        {"score": 0.80, "payload": {"document_id": 2}},
+        {"score": 0.60, "payload": {"document_id": 3}},
+    ]
+
+    def search(query, *, file_ids, page, per_page):
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        return {"results": [], "total": 0, "pages": 1}
+
+    with (
+        patch("app.tasks.knowledge_research.settings.rag_research_semantic_min_score", 0.35),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=vector_hits),
+    ):
+        candidates, _indexed = _candidate_ids(
+            [1, 2, 3],
+            "Motel One",
+            plan={"lexical_queries": [], "semantic_query": "Motel One stay"},
+        )
+
+    assert candidates == [1, 2]
+
+
+def test_research_target_is_not_a_hard_timeout_without_evidence():
+    assert _should_stop_mapping(48, 60, has_evidence=True) is True
+    assert _should_stop_mapping(60, 60, has_evidence=False) is False
 
 
 def test_candidate_retrieval_splits_scopes_at_search_result_cap():

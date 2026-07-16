@@ -44,6 +44,28 @@ class Settings(BaseSettings):
     # separate from metadata/OCR model selection and is live-reloadable from
     # the database-backed settings service.
     rag_chat_model: str = "gpt-5-nano"
+    # Optional model override for the short retrieval-planning request. When
+    # unset, the RAG chat model is reused; this is a small request, not
+    # necessarily a smaller model.
+    rag_query_planner_model: Optional[str] = None
+    rag_research_target_seconds: int = Field(
+        default=60,
+        ge=15,
+        le=300,
+        description="Target response time used for adaptive research completion (p90 SLO, not a hard timeout).",
+    )
+    rag_research_lexical_min_score: float = Field(
+        default=0.65,
+        ge=0.0,
+        le=1.0,
+        description="Minimum Meilisearch ranking score for planned research candidates.",
+    )
+    rag_research_semantic_min_score: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description="Minimum Qdrant similarity score for semantic research expansion.",
+    )
     knowledge_research_retention_days: int = Field(
         default=30,
         ge=1,
