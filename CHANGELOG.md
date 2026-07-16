@@ -10,6 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.186.0 (2026-07-16)
+
+### Bug Fixes
+
+- Isolate quarantine intake by tribe
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+- Migrate legacy document scopes safely
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+- Preserve tenant-scoped document shares
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+### Features
+
+- Add tenant and tribe isolation foundation
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+
 ## v0.185.1 (2026-07-16)
 
 ### Bug Fixes
