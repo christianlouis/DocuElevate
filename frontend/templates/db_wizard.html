@@ -310,13 +310,8 @@
                    :placeholder="currentDbUrl || 'sqlite:///./app/database.db'"
                    aria-describedby="mig_source_help" />
             <p id="mig_source_help" class="text-xs text-gray-500 mt-1">
-              This is your current database. Pre-filled with the running configuration.
+              Re-enter the source credentials. The current database is shown only as a masked placeholder.
             </p>
-            <button @click="migrate.source = currentDbUrl"
-                    class="mt-1 text-xs text-indigo-600 hover:underline focus:outline-none"
-                    type="button">
-              <i class="fas fa-sync-alt mr-1" aria-hidden="true"></i> Use current database
-            </button>
           </div>
 
           {# Target URL #}
@@ -490,7 +485,7 @@ function dbWizard() {
     copied: false,
 
     migrate: {
-      source: '{{ current_database_url | default("", true) }}',
+      source: '',
       target: '',
       sourceTest: null,
       targetTest: null,

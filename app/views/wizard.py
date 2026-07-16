@@ -43,6 +43,7 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
 
     # Enrich settings with current live values
     from app.config import settings as app_settings
+    from app.utils.config_validator.masking import mask_database_url
     from app.utils.settings_service import get_setting_from_db
 
     enriched_settings = []
@@ -63,6 +64,8 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
         else:
             current_value = ""
             value_source = "none"
+        if key == "database_url" and current_value:
+            current_value = mask_database_url(str(current_value))
         enriched_settings.append({**s, "current_value": current_value, "value_source": value_source})
     current_settings = enriched_settings
 
