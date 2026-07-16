@@ -532,6 +532,20 @@ def test_document_chat_uses_cross_document_research_for_counts(client, db_sessio
         )
         for file_id in (30, 31)
     ]
+    records.append(
+        FileRecord(
+            id=32,
+            owner_id=None,
+            filehash="flight-duplicate",
+            original_filename="flight-duplicate.pdf",
+            document_title="Duplicate London flight",
+            local_filename="/tmp/flight-duplicate.pdf",
+            file_size=1,
+            mime_type="application/pdf",
+            ocr_text="Duplicate flight booking to London",
+            is_duplicate=True,
+        )
+    )
     db_session.add_all(records)
     db_session.commit()
     with patch("app.tasks.knowledge_research.run_knowledge_research.delay") as delay:
