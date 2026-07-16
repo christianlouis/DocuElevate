@@ -154,9 +154,11 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
         )
     )
 
-    # Optionally include unclaimed (owner_id IS NULL) documents
+    # Optionally include unclaimed (owner_id IS NULL) documents, but only for
+    # members of the document's quarantine Tribe. Tenant membership alone must
+    # not make shared intake visible across otherwise isolated Tribes.
     if settings.unowned_docs_visible_to_all:
-        conditions.append(and_(in_member_tenant, FileRecord.is_private.is_(False), FileRecord.owner_id.is_(None)))
+        conditions.append(and_(in_member_tribe, FileRecord.is_private.is_(False), FileRecord.owner_id.is_(None)))
 
     return query.filter(or_(*conditions))
 
