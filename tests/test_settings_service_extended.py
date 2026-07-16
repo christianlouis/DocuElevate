@@ -27,11 +27,11 @@ from app.utils.settings_service import (
 
 @pytest.mark.unit
 class TestSaveSettingDecryptsOldValue:
-    """Tests for save_setting_to_db decrypting old value for audit log."""
+    """Sensitive settings history remains encrypted at rest."""
 
     @patch("app.utils.settings_service.get_setting_metadata")
     def test_save_sensitive_setting_decrypts_old_value_for_audit(self, mock_metadata, db_session):
-        """When updating a sensitive setting, old value is decrypted for the audit log."""
+        """Updating a secret keeps both audit values encrypted."""
         mock_metadata.return_value = {"sensitive": True}
 
         # First, save an encrypted value directly
@@ -42,21 +42,18 @@ class TestSaveSettingDecryptsOldValue:
         with (
             patch("app.utils.encryption.is_encryption_available", return_value=True),
             patch("app.utils.encryption.encrypt_value", return_value="enc:new_encrypted"),
-            patch("app.utils.encryption.decrypt_value", return_value="old_plaintext_key") as mock_decrypt,
         ):
             result = save_setting_to_db(db_session, "openai_api_key", "new_api_key", changed_by="admin")
 
         assert result is True
-        mock_decrypt.assert_called_once_with("enc:old_encrypted")
-
-        # Verify audit log has the decrypted old value
         audit = db_session.query(SettingsAuditLog).filter_by(key="openai_api_key").first()
         assert audit is not None
-        assert audit.old_value == "old_plaintext_key"
+        assert audit.old_value == "enc:old_encrypted"
+        assert audit.new_value == "enc:new_encrypted"
 
     @patch("app.utils.settings_service.get_setting_metadata")
-    def test_save_sensitive_setting_decryption_fails_uses_raw(self, mock_metadata, db_session):
-        """When decryption of old value fails, the raw stored value is used."""
+    def test_save_sensitive_setting_refuses_plaintext_fallback(self, mock_metadata, db_session):
+        """A secret is not persisted when encryption is unavailable."""
         mock_metadata.return_value = {"sensitive": True}
 
         setting = ApplicationSettings(key="openai_api_key", value="enc:corrupted")
@@ -64,55 +61,47 @@ class TestSaveSettingDecryptsOldValue:
         db_session.commit()
 
         with (
-            patch("app.utils.encryption.is_encryption_available", return_value=True),
-            patch("app.utils.encryption.encrypt_value", return_value="enc:new"),
-            patch("app.utils.encryption.decrypt_value", side_effect=Exception("Decryption failed")),
+            patch("app.utils.encryption.is_encryption_available", return_value=False),
         ):
             result = save_setting_to_db(db_session, "openai_api_key", "new_key", changed_by="admin")
 
-        assert result is True
-
-        # Audit log should have the raw encrypted value as fallback
-        audit = db_session.query(SettingsAuditLog).filter_by(key="openai_api_key").first()
-        assert audit is not None
-        assert audit.old_value == "enc:corrupted"
+        assert result is False
+        assert db_session.query(SettingsAuditLog).count() == 0
+        assert db_session.query(ApplicationSettings).filter_by(key="openai_api_key").one().value == "enc:corrupted"
 
 
 @pytest.mark.unit
 class TestDeleteSettingDecryptsOldValue:
-    """Tests for delete_setting_from_db decrypting stored value for audit log."""
+    """Deletion audit rows retain only encrypted secret material."""
 
     @patch("app.utils.settings_service.get_setting_metadata")
     def test_delete_sensitive_setting_decrypts_for_audit(self, mock_metadata, db_session):
-        """When deleting a sensitive setting, old value is decrypted for the audit log."""
+        """Deleting a sensitive setting never decrypts it into history."""
         mock_metadata.return_value = {"sensitive": True}
 
         setting = ApplicationSettings(key="openai_api_key", value="enc:secret_value")
         db_session.add(setting)
         db_session.commit()
 
-        with patch("app.utils.encryption.decrypt_value", return_value="decrypted_secret") as mock_decrypt:
-            result = delete_setting_from_db(db_session, "openai_api_key", changed_by="admin")
+        result = delete_setting_from_db(db_session, "openai_api_key", changed_by="admin")
 
         assert result is True
-        mock_decrypt.assert_called_once_with("enc:secret_value")
 
         audit = db_session.query(SettingsAuditLog).filter_by(key="openai_api_key").first()
         assert audit is not None
-        assert audit.old_value == "decrypted_secret"
+        assert audit.old_value == "enc:secret_value"
         assert audit.action == "delete"
 
     @patch("app.utils.settings_service.get_setting_metadata")
-    def test_delete_sensitive_setting_decryption_fails_uses_raw(self, mock_metadata, db_session):
-        """When decryption fails during delete, the raw value is used in audit."""
+    def test_delete_sensitive_setting_keeps_corrupt_ciphertext_opaque(self, mock_metadata, db_session):
+        """Even unreadable ciphertext is never converted to plaintext history."""
         mock_metadata.return_value = {"sensitive": True}
 
         setting = ApplicationSettings(key="openai_api_key", value="enc:bad_data")
         db_session.add(setting)
         db_session.commit()
 
-        with patch("app.utils.encryption.decrypt_value", side_effect=Exception("Bad key")):
-            result = delete_setting_from_db(db_session, "openai_api_key", changed_by="admin")
+        result = delete_setting_from_db(db_session, "openai_api_key", changed_by="admin")
 
         assert result is True
 

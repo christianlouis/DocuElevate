@@ -219,6 +219,28 @@ class TestRollbackSetting:
         current = get_setting_from_db(db_session, "workdir")
         assert current == "/v1"
 
+    def test_sensitive_rollback_decrypts_history_only_in_memory(self, db_session):
+        from app.models import ApplicationSettings
+        from app.utils.settings_service import get_setting_from_db, rollback_setting, save_setting_to_db
+
+        save_setting_to_db(db_session, "openai_api_key", "secret-v1", changed_by="admin")
+        save_setting_to_db(db_session, "openai_api_key", "secret-v2", changed_by="admin")
+        second_entry = (
+            db_session.query(SettingsAuditLog)
+            .filter_by(key="openai_api_key")
+            .order_by(SettingsAuditLog.id.desc())
+            .first()
+        )
+
+        assert second_entry.old_value.startswith("enc:")
+        assert second_entry.new_value.startswith("enc:")
+        assert "secret-v1" not in second_entry.old_value
+        assert rollback_setting(db_session, "openai_api_key", second_entry.id, changed_by="rollbacker") is True
+        assert get_setting_from_db(db_session, "openai_api_key") == "secret-v1"
+        stored = db_session.query(ApplicationSettings).filter_by(key="openai_api_key").one().value
+        assert stored.startswith("enc:")
+        assert "secret-v1" not in stored
+
     def test_rollback_deletes_setting_when_old_value_is_none(self, db_session):
         """Rolling back the first-ever entry (old_value=None) deletes the setting from DB."""
         from app.utils.settings_service import get_setting_from_db, rollback_setting, save_setting_to_db

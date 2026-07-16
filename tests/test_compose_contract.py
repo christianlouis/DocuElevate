@@ -1,0 +1,50 @@
+"""Contracts for the zero-configuration Docker Compose installation."""
+
+from pathlib import Path
+
+import yaml
+
+COMPOSE_FILE = Path(__file__).parents[1] / "docker-compose.yaml"
+
+
+def _compose() -> dict:
+    return yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+
+
+def test_fresh_install_includes_complete_runtime_stack():
+    services = set(_compose()["services"])
+
+    assert {
+        "api",
+        "worker",
+        "beat",
+        "knowledge-research-worker",
+        "search-index-worker",
+        "postgres",
+        "redis",
+        "gotenberg",
+        "meilisearch",
+        "qdrant",
+    } <= services
+
+
+def test_api_port_and_public_urls_follow_canary_port():
+    compose = _compose()
+    environment = compose["x-docuelevate-service"]["environment"]
+
+    assert compose["services"]["api"]["ports"] == ["${DOCUELEVATE_PORT:-8000}:8000"]
+    assert environment["EXTERNAL_HOSTNAME"] == "localhost:${DOCUELEVATE_PORT:-8000}"
+    assert environment["PUBLIC_BASE_URL"] == "http://localhost:${DOCUELEVATE_PORT:-8000}"
+
+
+def test_fresh_install_uses_named_workdir_volume_by_default():
+    compose = _compose()
+
+    assert "workdir-data" in compose["volumes"]
+    assert "${DOCUELEVATE_WORKDIR:-workdir-data}:/workdir" in compose["x-docuelevate-service"]["volumes"]
+
+
+def test_all_application_processes_share_one_build_image():
+    service_defaults = _compose()["x-docuelevate-service"]
+
+    assert service_defaults["image"] == "${DOCUELEVATE_IMAGE:-docuelevate:local}"

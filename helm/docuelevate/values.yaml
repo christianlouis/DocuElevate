@@ -64,6 +64,9 @@ env:
 # and leave these blank, then mount the Secret yourself.
 # ---------------------------------------------------------------------------
 secrets:
+  # Prefer a Secret created by External Secrets, 1Password Connect or your
+  # platform. When set, the chart does not create or own a Secret.
+  existingSecret: ""
   DATABASE_URL: ""         # e.g. postgresql://user:pass@postgres:5432/docuelevate
   REDIS_URL: ""            # leave blank to use bundled Redis
   SESSION_SECRET: ""       # min 32-char random string — generate with: openssl rand -hex 32
@@ -354,3 +357,18 @@ migrations:
   enabled: true
   # Automatically deleted after successful completion
   ttlSecondsAfterFinished: 120
+
+# ---------------------------------------------------------------------------
+# Declarative post-install setup
+# Runs the same validated, idempotent manifest used by the local agentic CLI.
+# Secret values referenced with fromEnv must exist in secrets.existingSecret
+# (or in the chart-managed Secret for disposable development installs).
+# ---------------------------------------------------------------------------
+agenticSetup:
+  enabled: false
+  manifest: ""
+  # Optional second Secret containing only fromEnv values used by the setup
+  # manifest (for example initial user passwords). It is not injected into the
+  # long-running API or worker pods.
+  existingSecret: ""
+  ttlSecondsAfterFinished: 300

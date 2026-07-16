@@ -86,6 +86,11 @@
           <p class="font-bold">⚠️ Error</p>
           <p>Failed to save settings. Please try again.</p>
         </div>
+        {% elif request.query_params.get('error') == 'required_missing' %}
+        <div class="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+          <p class="font-bold">Required information is missing</p>
+          <p>Complete the required fields before continuing. Existing values can be left unchanged when you re-run setup later.</p>
+        </div>
         {% endif %}
 
         <div class="space-y-6">
@@ -207,10 +212,15 @@
               Setup was previously skipped.
             </span>
             {% elif current_step == 1 %}
-            <a href="/setup/skip" class="text-sm text-gray-600 hover:text-gray-900">
-              <i class="fas fa-forward"></i>
-              Skip setup (advanced users)
-            </a>
+            {% if is_logged_in %}
+            <form method="post" action="/setup/skip" class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
+              <button type="submit" class="text-sm text-gray-600 hover:text-gray-900">
+                <i class="fas fa-forward"></i>
+                Skip setup (administrators only)
+              </button>
+            </form>
+            {% endif %}
             {% endif %}
           </div>
 
@@ -248,10 +258,14 @@
         Fields marked with <span class="text-red-600">*</span> are required.
       </p>
       {% if setup_skipped %}
-      <p class="text-xs text-amber-600 mt-2">
+      <div class="text-xs text-amber-600 mt-2">
         <i class="fas fa-info-circle"></i>
-        You previously skipped the setup wizard. <a href="/setup/undo-skip" class="underline hover:text-amber-800">Click here to re-run it.</a>
-      </p>
+        You previously skipped the setup wizard.
+        <form method="post" action="/setup/undo-skip" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
+          <button type="submit" class="underline hover:text-amber-800">Re-run it now.</button>
+        </form>
+      </div>
       {% endif %}
     </div>
 

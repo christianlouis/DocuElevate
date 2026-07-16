@@ -159,8 +159,9 @@ def is_setup_required() -> bool:
 
     except Exception as e:
         logger.error(f"Error checking if setup required: {e}")
-        # If we can't check, assume setup is not required (fail open)
-        return False
+        # Never expose an installation whose security state could not be
+        # determined. The setup boundary must fail closed.
+        return True
 
 
 def get_missing_required_settings() -> List[str]:

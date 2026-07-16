@@ -39,7 +39,7 @@ spec:
             - name: MEILI_MASTER_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "docuelevate.fullname" . }}-secret
+                  name: {{ include "docuelevate.secretName" . }}
                   key: MEILISEARCH_API_KEY
             {{- end }}
           resources:

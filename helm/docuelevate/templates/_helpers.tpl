@@ -6,6 +6,13 @@ Expand the name of the chart.
 {{- end }}
 
 {{/*
+Name of the Secret injected into every DocuElevate process.
+*/}}
+{{- define "docuelevate.secretName" -}}
+{{- default (printf "%s-secret" (include "docuelevate.fullname" .)) .Values.secrets.existingSecret }}
+{{- end }}
+
+{{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this.
 If release name contains chart name it will be used as a full name.

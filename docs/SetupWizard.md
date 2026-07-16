@@ -78,11 +78,10 @@ Configure the AI provider used for metadata extraction and document understandin
 
 ### Skipping
 
-If you are an advanced user who has already configured settings via environment variables, you can skip the wizard by clicking **Skip for now** or by visiting:
-
-```
-GET /setup/skip
-```
+An authenticated administrator who has already configured the installation by
+other means can skip the wizard using the **Skip setup** action. This is a
+state-changing POST action protected by the normal session and CSRF controls;
+an unauthenticated first-run visitor cannot bypass the required security step.
 
 This writes a `_setup_wizard_skipped` marker to the database so the wizard is not re-shown automatically.
 
@@ -91,7 +90,7 @@ This writes a `_setup_wizard_skipped` marker to the database so the wizard is no
 To re-run the wizard after skipping it:
 
 1. Navigate to **Settings → System** and click **Re-run Setup Wizard**, or
-2. Visit `/setup/undo-skip` directly.
+2. Use **Re-run setup** as an authenticated administrator.
 
 This removes the skip marker and redirects you to Step 1.
 
@@ -99,7 +98,10 @@ This removes the skip marker and redirects you to Step 1.
 
 ## After the Wizard
 
-Once all three steps are complete you are redirected to the home page with a `?setup=complete` confirmation banner.  At that point DocuElevate is operational with the core settings in place.
+Once all three steps are complete, DocuElevate records completion on the
+server, closes the one-time bootstrap session and sends you to the login page.
+The setup URL is administrator-only from then on. A URL query parameter cannot
+bypass an incomplete installation.
 
 **Recommended next steps:**
 

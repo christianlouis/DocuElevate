@@ -50,7 +50,7 @@ spec:
             - configMapRef:
                 name: {{ include "docuelevate.fullname" . }}-config
             - secretRef:
-                name: {{ include "docuelevate.fullname" . }}-secret
+                name: {{ include "docuelevate.secretName" . }}
           {{- with .Values.worker.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

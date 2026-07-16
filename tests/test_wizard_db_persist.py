@@ -100,14 +100,14 @@ class TestSetupWizardUndoSkip:
         assert get_setting_from_db(db_session, "_setup_wizard_skipped") == "true"
 
         # Undo skip via the route
-        response = client.get("/setup/undo-skip", follow_redirects=False)
+        response = client.post("/setup/undo-skip", follow_redirects=False)
 
         # Should redirect
         assert response.status_code in (303, 200)
 
     def test_undo_skip_redirects_to_wizard(self, client):
         """Test that undo-skip redirects to /setup?step=1."""
-        response = client.get("/setup/undo-skip", follow_redirects=False)
+        response = client.post("/setup/undo-skip", follow_redirects=False)
         # The redirect should go to /setup?step=1 or /settings on error
         assert response.status_code in (303, 302)
         location = response.headers.get("location", "")
@@ -118,7 +118,7 @@ class TestSetupWizardUndoSkip:
         """Test that undo-skip calls delete_setting_from_db."""
         mock_delete.return_value = True
         # Just ensure the route exists and does not 404
-        response = client.get("/setup/undo-skip", follow_redirects=False)
+        response = client.post("/setup/undo-skip", follow_redirects=False)
         assert response.status_code != 404
 
 

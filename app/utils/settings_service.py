@@ -3695,14 +3695,21 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str], changed_by: 
         metadata = get_setting_metadata(key)
         storage_value = value
 
-        if metadata.get("sensitive", False) and value:
-            from app.utils.encryption import encrypt_value, is_encryption_available
+        is_sensitive = bool(metadata.get("sensitive", False))
+        if is_sensitive and value:
+            from app.utils.encryption import encrypt_value, is_encrypted, is_encryption_available
 
             if is_encryption_available():
                 storage_value = encrypt_value(value)
+                if not is_encrypted(storage_value):
+                    logger.error("Refusing to store sensitive setting %s because encryption failed", key)
+                    db.rollback()
+                    return False
                 logger.debug(f"Encrypted sensitive setting: {key}")
             else:
-                logger.warning(f"Storing sensitive setting {key} in plaintext (encryption unavailable)")
+                logger.error("Refusing to store sensitive setting %s because encryption is unavailable", key)
+                db.rollback()
+                return False
 
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         old_storage_value = setting.value if setting else None
@@ -3713,24 +3720,13 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str], changed_by: 
             setting = ApplicationSettings(key=key, value=storage_value)
             db.add(setting)
 
-        # Determine human-readable old value for audit log (decrypt if needed)
-        old_display_value = None
-        if old_storage_value is not None:
-            if metadata.get("sensitive", False):
-                try:
-                    from app.utils.encryption import decrypt_value
-
-                    old_display_value = decrypt_value(old_storage_value)
-                except Exception:
-                    old_display_value = old_storage_value
-            else:
-                old_display_value = old_storage_value
-
         # Write audit log entry
         audit_entry = SettingsAuditLog(
             key=key,
-            old_value=old_display_value,
-            new_value=value,
+            # Sensitive history stays encrypted at rest. API responses redact
+            # it, while rollback decrypts only the selected value in memory.
+            old_value=old_storage_value,
+            new_value=storage_value,
             changed_by=changed_by,
             action="update",
         )
@@ -3794,25 +3790,11 @@ def delete_setting_from_db(db: Session, key: str, changed_by: str = "system") ->
     try:
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if setting:
-            # Capture old value for audit log (decrypt if sensitive)
-            metadata = get_setting_metadata(key)
-            old_display_value = None
-            if setting.value is not None:
-                if metadata.get("sensitive", False):
-                    try:
-                        from app.utils.encryption import decrypt_value
-
-                        old_display_value = decrypt_value(setting.value)
-                    except Exception:
-                        old_display_value = setting.value
-                else:
-                    old_display_value = setting.value
-
             db.delete(setting)
 
             audit_entry = SettingsAuditLog(
                 key=key,
-                old_value=old_display_value,
+                old_value=setting.value,
                 new_value=None,
                 changed_by=changed_by,
                 action="delete",
@@ -4056,6 +4038,16 @@ def rollback_setting(db: Session, key: str, history_id: int, changed_by: str = "
             # The old value was empty – remove the current db value to revert to ENV/default
             return delete_setting_from_db(db, key, changed_by=changed_by)
         else:
+            if get_setting_metadata(key).get("sensitive", False):
+                from app.utils.encryption import decrypt_value, is_encrypted
+
+                if not is_encrypted(target_value):
+                    logger.error("Rollback refused for legacy plaintext sensitive history: %s", key)
+                    return False
+                target_value = decrypt_value(target_value)
+                if target_value in {"[ENCRYPTED - Cannot decrypt]", "[DECRYPTION FAILED]"}:
+                    logger.error("Rollback could not decrypt sensitive history: %s", key)
+                    return False
             return save_setting_to_db(db, key, target_value, changed_by=changed_by)
     except SQLAlchemyError as e:
         logger.error(f"Error rolling back setting {key} to history entry {history_id}: {e}")

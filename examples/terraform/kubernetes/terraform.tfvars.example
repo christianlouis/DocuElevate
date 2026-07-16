@@ -1,0 +1,15 @@
+release_name   = "docuelevate-preprod-canary"
+namespace      = "docuelevate-preprod-canary"
+create_namespace = false
+environment      = "preprod"
+image_tag      = "0.186.0"
+external_hostname = "canary-preprod.app.docuelevate.org"
+
+# These Secrets must already exist and should be reconciled by 1Password
+# Connect / External Secrets. Never put their values in this file.
+bootstrap_secret_name = "docuelevate-preprod-canary-bootstrap"
+setup_secret_name     = "docuelevate-preprod-canary-setup"
+
+agentic_setup_manifest_path = "../../agentic-setup.preprod.json"
+ingress_class_name           = "nginx"
+tls_secret_name              = "docuelevate-preprod-canary-tls"
