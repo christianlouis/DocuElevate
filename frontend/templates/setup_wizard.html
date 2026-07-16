@@ -93,7 +93,7 @@
           <div class="border-b border-gray-200 pb-6 last:border-b-0">
             <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-900 mb-1">
               {{ setting.label }}
-              {% if setting.default is none or setting.key in ['admin_password'] %}
+              {% if setting.get('required', false) %}
               <span class="text-red-600">*</span>
               {% endif %}
             </label>
