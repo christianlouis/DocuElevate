@@ -17,7 +17,10 @@ from app.models import FileRecord, KnowledgeResearchJob
 
 logger = logging.getLogger(__name__)
 
-_SCOPE_BATCH = 5_000
+# Meilisearch caps search totals and pagination at 1,000 hits by default.
+# Keep every authorized scope within that boundary so coverage counts and
+# exhaustive keyword pagination cannot silently truncate a larger corpus.
+_SCOPE_BATCH = 1_000
 _SEARCH_PAGE = 100
 _MAP_BATCH = 10
 _EXCERPT_CHARS = 6_000

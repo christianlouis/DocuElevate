@@ -73,6 +73,38 @@ def test_candidate_retrieval_pages_every_authorized_match():
     assert indexed == 3
 
 
+def test_candidate_retrieval_splits_scopes_at_search_result_cap():
+    scopes = []
+
+    def search(query, *, file_ids, page, per_page):
+        scopes.append((query, file_ids, page, per_page))
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        return {
+            "results": [{"file_id": file_id} for file_id in file_ids],
+            "total": len(file_ids),
+            "pages": 1,
+        }
+
+    with (
+        patch("app.tasks.knowledge_research._SCOPE_BATCH", 2),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+        patch("app.utils.vector_index.QdrantVectorIndex.search", return_value=[]),
+    ):
+        candidates, indexed = _candidate_ids(
+            [1, 2, 3, 4, 5],
+            "Wie oft war ich in London per Flugzeug?",
+        )
+
+    assert candidates == [1, 2, 3, 4, 5]
+    assert indexed == 5
+    assert [file_ids for query, file_ids, _page, _per_page in scopes if query == ""] == [
+        [1, 2],
+        [3, 4],
+        [5],
+    ]
+
+
 def test_deduplication_merges_transport_legs_and_duplicate_documents():
     evidence = [
         {"document_id": 1, "evidence_type": "flight_trip", "event_key": "BA-ABC123", "claim": "Outbound"},
