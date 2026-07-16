@@ -581,6 +581,8 @@ _SEARCH_SYNC_BATCH_SIZE: int = 500
 _SEARCH_ID_PAGE_SIZE: int = 1000
 #: Keep individual Meilisearch update payloads bounded because OCR text can be large.
 _SEARCH_INDEX_CHUNK_SIZE: int = 50
+#: Approximate character ceiling per update (well below Meilisearch's HTTP payload limit).
+_SEARCH_INDEX_CHUNK_CHAR_LIMIT: int = 5_000_000
 
 
 def _get_all_search_index_ids(index: object) -> set[int]:
@@ -676,6 +678,7 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_
 
         batches: list[list[tuple[FileRecord, str, dict]]] = []
         current_batch: list[tuple[FileRecord, str, dict]] = []
+        current_batch_characters = 0
         skipped = 0
         for record in candidates:
             metadata: dict = {}
@@ -685,10 +688,17 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_
                 except (json.JSONDecodeError, ValueError):
                     pass
 
-            current_batch.append((record, record.ocr_text or "", metadata))
+            text = record.ocr_text or ""
+            if current_batch and current_batch_characters + len(text) > _SEARCH_INDEX_CHUNK_CHAR_LIMIT:
+                batches.append(current_batch)
+                current_batch = []
+                current_batch_characters = 0
+            current_batch.append((record, text, metadata))
+            current_batch_characters += len(text)
             if len(current_batch) == _SEARCH_INDEX_CHUNK_SIZE:
                 batches.append(current_batch)
                 current_batch = []
+                current_batch_characters = 0
         if current_batch:
             batches.append(current_batch)
 

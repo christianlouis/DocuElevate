@@ -1490,6 +1490,38 @@ class TestSyncSearchIndexAdditional:
         assert index.get_documents.call_args_list[0].args[0]["offset"] == 0
         assert index.get_documents.call_args_list[1].args[0]["offset"] == 2
 
+    def test_splits_bulk_updates_by_ocr_payload_size(self, sj_engine):
+        """Large OCR documents cannot combine into an oversized HTTP payload."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        _make_file_record(session, filehash="hash_payload_1", ocr_text="1234")
+        _make_file_record(session, filehash="hash_payload_2", ocr_text="5678")
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.return_value = MagicMock(results=[])
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as index_documents,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+            patch("app.tasks.batch_tasks._SEARCH_INDEX_CHUNK_CHAR_LIMIT", 5),
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result["indexed"] == 2
+        assert index_documents.call_count == 2
+
 
 @pytest.mark.unit
 class TestReprocessFailedDocumentsMissingFile:
