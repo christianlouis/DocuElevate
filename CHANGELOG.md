@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Model quarantine membership for claim views
+  ([#1156](https://github.com/christianlouis/DocuElevate/pull/1156),
+  [`7683b52`](https://github.com/christianlouis/DocuElevate/commit/7683b525cbb2e73bc56455ad8c00a0ab1e114492))
+
+
 ## v0.186.0 (2026-07-16)
 
 ### Bug Fixes
