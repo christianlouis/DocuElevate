@@ -4,7 +4,13 @@ import logging
 import os
 
 from celery import Celery
-from celery.signals import after_setup_logger, after_setup_task_logger, task_failure, worker_ready
+from celery.signals import (
+    after_setup_logger,
+    after_setup_task_logger,
+    task_failure,
+    worker_process_init,
+    worker_ready,
+)
 
 from app.config import settings
 from app.utils.log_safety import restrict_sensitive_provider_logging
@@ -42,6 +48,24 @@ celery.conf.task_routes = {
     "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     "app.tasks.*": {"queue": "document_processor"},
 }
+
+
+@worker_process_init.connect
+def reset_database_pool_after_fork(**kwargs):
+    """Discard database connections inherited by a prefork worker child.
+
+    ``celery_worker`` reads database-backed schedules while the worker parent is
+    starting.  A prefork child must never reuse a DBAPI connection opened by
+    that parent (or by a sibling), because concurrent use corrupts the wire
+    protocol and can make an otherwise empty fresh installation hang.
+
+    ``close=False`` replaces the child's pool without closing descriptors that
+    still belong to the parent process.
+    """
+    from app.database import engine
+
+    engine.dispose(close=False)
+
 
 # Mapping of document pipeline task names to the positional index of ``file_id``
 # in their ``args`` tuple.  These indices correspond to the task signatures:
