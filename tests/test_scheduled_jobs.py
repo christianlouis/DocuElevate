@@ -1476,9 +1476,11 @@ class TestSyncSearchIndexAdditional:
 
     def test_pages_through_every_existing_document_id(self):
         """Reconciliation is not capped at the first Meilisearch page."""
+        from meilisearch.models.document import Document
+
         from app.tasks.batch_tasks import _get_all_search_index_ids
 
-        first_page = MagicMock(results=[{"file_id": 1}, {"file_id": 2}])
+        first_page = MagicMock(results=[{"file_id": 1}, Document({"file_id": "2"})])
         final_page = MagicMock(results=[{"file_id": 3}])
         index = MagicMock()
         index.get_documents.side_effect = [first_page, final_page]
