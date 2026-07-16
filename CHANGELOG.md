@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.185.1 (2026-07-16)
+
+### Bug Fixes
+
+- Classify inflected German research questions
+  ([#1154](https://github.com/christianlouis/DocuElevate/pull/1154),
+  [`968853b`](https://github.com/christianlouis/DocuElevate/commit/968853bff2d3f9d9d95b424591167229268927ca))
+
+
 ## v0.185.0 (2026-07-16)
 
 ### Documentation
