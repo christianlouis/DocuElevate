@@ -368,9 +368,7 @@ def test_qdrant_search_denies_all_when_user_has_no_tribe_membership():
 
     no_scope = {"key": "tribe_id", "match": {"value": "__no_authorized_tribe__"}}
     conditions = request.call_args.args[2]["filter"]["should"]
-    assert conditions[0] == {
-        "must": [no_scope, {"key": "owner_id", "match": {"value": "alice@example.com"}}]
-    }
+    assert conditions[0] == {"must": [no_scope, {"key": "owner_id", "match": {"value": "alice@example.com"}}]}
     assert all(no_scope in condition["must"] for condition in conditions)
 
 
