@@ -61,9 +61,10 @@ def test_research_retries_transient_database_disconnect():
 def test_candidate_retrieval_pages_qualified_matches_per_scope():
     calls = []
 
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         calls.append((query, page, per_page))
         assert file_ids == [1, 2, 3]
+        assert matching_strategy == (None if query == "" else "all")
         if query == "":
             return {"results": [], "total": 3, "pages": 3}
         if page == 1:
@@ -138,7 +139,7 @@ def test_research_planner_omits_gpt5_only_kwargs_for_other_models():
 
 
 def test_candidate_retrieval_uses_adaptive_relevance_threshold():
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}
         return {
@@ -165,7 +166,7 @@ def test_candidate_retrieval_uses_adaptive_relevance_threshold():
 
 
 def test_candidate_retrieval_prioritizes_documents_matching_qualified_queries():
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}
         if query == '"Motel One"':
@@ -203,7 +204,7 @@ def test_candidate_retrieval_prioritizes_documents_matching_qualified_queries():
 def test_candidate_retrieval_runs_qualified_query_after_broad_query_saturates():
     queries = []
 
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         queries.append((query, page))
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}
@@ -249,7 +250,7 @@ def test_candidate_retrieval_uses_relative_semantic_threshold():
         {"score": 0.60, "payload": {"document_id": 3}},
     ]
 
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}
         return {"results": [], "total": 0, "pages": 1}
@@ -277,7 +278,7 @@ def test_candidate_retrieval_uses_relative_semantic_threshold():
 
 
 def test_candidate_retrieval_reports_technical_safety_truncation():
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}
         return {
@@ -333,7 +334,7 @@ def test_truncated_research_result_is_not_reused_as_complete():
 def test_candidate_retrieval_splits_scopes_at_search_result_cap():
     scopes = []
 
-    def search(query, *, file_ids, page, per_page):
+    def search(query, *, file_ids, page, per_page, matching_strategy=None):
         scopes.append((query, file_ids, page, per_page))
         if query == "":
             return {"results": [], "total": len(file_ids), "pages": 1}

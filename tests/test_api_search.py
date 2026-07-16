@@ -258,6 +258,18 @@ class TestMeilisearchSearchDocuments:
         search_params = mock_index.search.call_args.args[1]
         assert search_params["filter"] == "file_id IN [12, 42]"
 
+    def test_search_can_require_all_query_terms(self):
+        """Research retrieval can prevent broad fallback term matching."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents('"Motel One" booking stay', matching_strategy="all")
+
+        search_params = mock_index.search.call_args.args[1]
+        assert search_params["matchingStrategy"] == "all"
+
     def test_search_with_tags_filter(self):
         """search_documents passes tags filter to Meilisearch."""
         mock_client, mock_index = self._make_mock_client(hits=[], total=0)
