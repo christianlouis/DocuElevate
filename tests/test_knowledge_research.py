@@ -2,9 +2,11 @@
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
 from app.models import KnowledgeResearchJob
 from app.tasks.knowledge_research import (
@@ -19,9 +21,37 @@ from app.tasks.knowledge_research import (
     _numeric,
     _synthesize,
     cleanup_knowledge_research_jobs,
+    run_knowledge_research,
 )
 
 pytestmark = pytest.mark.unit
+
+
+def test_research_retries_transient_database_disconnect():
+    job = SimpleNamespace(
+        state="queued",
+        error=None,
+        question="Wie oft war ich in London?",
+        history_json="[]",
+        accessible_file_ids_json="[]",
+    )
+    session = MagicMock(spec=Session)
+    session.query.return_value.filter.return_value.first.return_value = job
+    session_context = MagicMock()
+    session_context.__enter__.return_value = session
+    disconnect = OperationalError("UPDATE knowledge_research_jobs", {}, Exception("unexpected eof"))
+    session.commit.side_effect = disconnect
+
+    with (
+        patch("app.tasks.knowledge_research.SessionLocal", return_value=session_context),
+        patch.object(run_knowledge_research, "retry", side_effect=RuntimeError("retry scheduled")) as retry,
+        pytest.raises(RuntimeError, match="retry scheduled"),
+    ):
+        run_knowledge_research.run("job-1")
+
+    session.invalidate.assert_called_once_with()
+    assert retry.call_args.kwargs["countdown"] == 1
+    assert retry.call_args.kwargs["max_retries"] == 2
 
 
 def test_candidate_retrieval_pages_every_authorized_match():
@@ -175,6 +205,24 @@ def test_hba1c_filter_rejects_reference_ranges_but_keeps_patient_results():
     assert _filter_evidence_for_question("Wie hat sich mein HbA1c verändert?", evidence) == [evidence[1]]
 
 
+def test_first_person_filter_keeps_aliases_and_rejects_other_people():
+    evidence = [
+        {"evidence_type": "hba1c_measurement", "subject": "Christian Louis", "claim": "6.0%"},
+        {"evidence_type": "hba1c_measurement", "subject": "Louis, Christian", "claim": "6.2%"},
+        {"evidence_type": "hba1c_measurement", "subject": "Krakau, Julia", "claim": "5.3%"},
+        {"evidence_type": "hba1c_measurement", "subject": "Renate Louis", "claim": "5.8%"},
+        {"evidence_type": "hba1c_measurement", "subject": "", "claim": "6.4%"},
+    ]
+
+    filtered = _filter_evidence_for_question(
+        "Wie hat sich mein HbA1c verändert?",
+        evidence,
+        subject_hint="Christian Krakau-Louis",
+    )
+
+    assert filtered == [evidence[0], evidence[1], evidence[4]]
+
+
 def test_occurrence_filter_requires_named_entity_in_cited_source():
     evidence = [
         {"document_id": 1, "evidence_type": "hotel_stay", "claim": "Motel One stay"},
@@ -261,6 +309,25 @@ def test_synthesis_returns_only_sources_cited_by_model():
     assert "do not combine evidence explicitly belonging" in prompts[0]
     assert "primary hotel total must be labeled stays/Aufenthalte" in prompts[0]
     assert "exclude reference, normal and target ranges" in prompts[0]
+    assert "COMPLETE SET OF ALLOWED CITATION MARKERS IS: [1]" in prompts[0]
+
+
+def test_synthesis_regenerates_answers_with_invented_citation_markers():
+    record = SimpleNamespace(document_title="Ticket", original_filename="ticket.pdf")
+    responses = iter(["Five trips plus another trip [0].", "Five proven trips [1]."])
+    provider = SimpleNamespace(chat_completion=lambda **_kwargs: next(responses))
+
+    with patch("app.utils.ai_provider.get_ai_provider", return_value=provider):
+        result = _synthesize(
+            "How many trips?",
+            "How many trips?",
+            [{"event_key": "trip-1", "document_ids": [7]}],
+            {7: record},
+            "gpt-5-nano",
+        )
+
+    assert result["answer"] == "Five proven trips [1]."
+    assert [source["document_id"] for source in result["sources"]] == [7]
 
 
 def test_cleanup_removes_only_expired_terminal_jobs(db_session):
