@@ -9,6 +9,7 @@ metadata fields.
 """
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
@@ -189,6 +190,38 @@ def index_document(file_record: "FileRecord", text: str, metadata: dict) -> bool
         logger.warning(f"Meilisearch indexing failed for file_id={file_record.id}: {exc}")
         return False
 
+
+def index_documents(documents: Sequence[tuple["FileRecord", str, dict]]) -> int:
+    """Index a batch of documents in one Meilisearch update.
+
+    The function waits for Meilisearch to finish the update before returning.
+    This makes a reconciliation run safely resumable: a subsequent run only
+    observes IDs that Meilisearch has actually committed.
+
+    Returns:
+        Number of documents committed to the index, or ``0`` on failure.
+    """
+    if not documents:
+        return 0
+
+    client = get_meilisearch_client()
+    if client is None:
+        return 0
+
+    try:
+        index = _get_or_create_index(client)
+        payload = [_build_document(file_record, text, metadata) for file_record, text, metadata in documents]
+        task = index.add_documents(payload)
+        client.wait_for_task(task.task_uid)
+        logger.info(
+            "Committed %s document(s) to Meilisearch (task_uid=%s)",
+            len(payload),
+            task.task_uid,
+        )
+        return len(payload)
+    except Exception as exc:
+        logger.warning("Meilisearch batch indexing failed for %s document(s): %s", len(documents), exc)
+        return 0
 
 def delete_document(file_id: int) -> bool:
     """Remove a document from the Meilisearch index.

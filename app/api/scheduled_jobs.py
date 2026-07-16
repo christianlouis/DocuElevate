@@ -223,7 +223,7 @@ DEFAULT_JOBS: list[dict[str, Any]] = [
             "Indexes documents that have OCR text or AI metadata but are missing "
             "from the Meilisearch search index. Useful after enabling search on "
             "an existing installation or after an index rebuild. "
-            "Processes up to 100 documents per run. "
+            "Processes up to 500 documents per run using bounded bulk updates. "
             "Runs hourly by default."
         ),
         "task_name": "app.tasks.batch_tasks.sync_search_index",

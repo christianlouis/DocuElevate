@@ -168,7 +168,11 @@ This document provides solutions to common problems encountered when using DocuE
    Check `MEILISEARCH_URL` in your `.env` file (default: `http://meilisearch:7700`).
 
 3. **Rebuild the search index**
-   If documents are missing from search results, reprocessing them will re-index their content.
+   Run the scheduled **Sync Search Index** job. It reconciles already processed
+   documents without running OCR or metadata extraction again. For a large
+   restored corpus, enqueue `app.tasks.batch_tasks.sync_search_index` with
+   `continue_until_complete=true` so the dedicated search worker drains the
+   gap in resumable batches.
 
 ## Pipeline & Routing Issues
 

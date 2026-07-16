@@ -576,11 +576,39 @@ def backfill_missing_metadata(batch_size: int = _METADATA_BACKFILL_BATCH_SIZE) -
 # ---------------------------------------------------------------------------
 
 #: Maximum documents to index per sync run.
-_SEARCH_SYNC_BATCH_SIZE: int = 100
+_SEARCH_SYNC_BATCH_SIZE: int = 500
+#: Page size used while reading IDs already committed to Meilisearch.
+_SEARCH_ID_PAGE_SIZE: int = 1000
+#: Keep individual Meilisearch update payloads bounded because OCR text can be large.
+_SEARCH_INDEX_CHUNK_SIZE: int = 50
+
+
+def _get_all_search_index_ids(index: object) -> set[int]:
+    """Return every numeric file ID currently committed to Meilisearch."""
+    existing_ids: set[int] = set()
+    offset = 0
+    while True:
+        result = index.get_documents(
+            {
+                "fields": ["file_id"],
+                "limit": _SEARCH_ID_PAGE_SIZE,
+                "offset": offset,
+            }
+        )
+        documents = result.results
+        existing_ids.update(
+            int(document["file_id"])
+            for document in documents
+            if "file_id" in document and str(document["file_id"]).isdigit()
+        )
+        if len(documents) < _SEARCH_ID_PAGE_SIZE:
+            break
+        offset += _SEARCH_ID_PAGE_SIZE
+    return existing_ids
 
 
 @celery.task(name="app.tasks.batch_tasks.sync_search_index")
-def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE) -> dict:
+def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_complete: bool = False) -> dict:
     """
     Index documents in Meilisearch that have OCR text or AI metadata but are
     not yet present in the search index.
@@ -595,14 +623,17 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE) -> dict:
     ``ai_metadata``) but are absent from the index, and re-indexes them.
 
     A configurable *batch_size* caps the number of documents indexed per run.
+    When *continue_until_complete* is true, another bounded task is scheduled
+    after a successful batch until the index is reconciled.
 
     Args:
-        batch_size: Maximum number of documents to index per run (default 100).
+        batch_size: Maximum number of documents to index per run (default 500).
+        continue_until_complete: Continue with another bounded task while gaps remain.
 
     Returns:
-        A summary dict with ``indexed`` and ``skipped`` counts.
+        A summary dict with ``indexed``, ``skipped``, and ``remaining`` counts.
     """
-    from app.utils.meilisearch_client import get_meilisearch_client, index_document
+    from app.utils.meilisearch_client import get_meilisearch_client, index_documents
 
     job_name = "sync-search-index"
     logger.info("[batch] Starting sync_search_index (batch_size=%s)", batch_size)
@@ -615,11 +646,10 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE) -> dict:
         return {"indexed": 0, "skipped": 0, "reason": "meilisearch_not_configured"}
 
     try:
-        # Fetch the set of file_ids already in the Meilisearch index.
+        # Fetch every file_id already committed to Meilisearch. A fixed ceiling
+        # silently breaks reconciliation once an installation grows past it.
         index = client.get_index(settings.meilisearch_index_name)
-        # Fetch up to 10 000 IDs — sufficient to determine gaps for most installs.
-        existing_result = index.get_documents({"fields": ["file_id"], "limit": 10000})
-        existing_ids: set[int] = {doc["file_id"] for doc in existing_result.results if "file_id" in doc}
+        existing_ids = _get_all_search_index_ids(index)
     except Exception as exc:
         detail = f"Error fetching existing Meilisearch IDs: {exc}"
         logger.error("[batch] sync_search_index: %s", detail)
@@ -629,19 +659,27 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE) -> dict:
     try:
         with SessionLocal() as db:
             # Files with indexable content that are not already in the index.
-            candidates = (
+            indexable_query = (
                 db.query(FileRecord)
                 .filter(FileRecord.is_duplicate.is_(False))
                 .filter(
                     (FileRecord.ocr_text.isnot(None) & (FileRecord.ocr_text != ""))
                     | (FileRecord.ai_metadata.isnot(None) & (FileRecord.ai_metadata != ""))
                 )
-                .filter(~FileRecord.id.in_(existing_ids) if existing_ids else True)  # type: ignore[arg-type]
+            )
+            indexable_count = indexable_query.count()
+            missing_query = indexable_query.filter(
+                ~FileRecord.id.in_(existing_ids) if existing_ids else True  # type: ignore[arg-type]
+            )
+            missing_count = missing_query.count()
+            candidates = (
+                missing_query.order_by(FileRecord.id.asc())
                 .limit(batch_size)
                 .all()
             )
 
-        indexed = 0
+        batches: list[list[tuple[FileRecord, str, dict]]] = []
+        current_batch: list[tuple[FileRecord, str, dict]] = []
         skipped = 0
         for record in candidates:
             metadata: dict = {}
@@ -651,16 +689,46 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE) -> dict:
                 except (json.JSONDecodeError, ValueError):
                     pass
 
-            success = index_document(record, record.ocr_text or "", metadata)
-            if success:
-                indexed += 1
-            else:
-                skipped += 1
+            current_batch.append((record, record.ocr_text or "", metadata))
+            if len(current_batch) == _SEARCH_INDEX_CHUNK_SIZE:
+                batches.append(current_batch)
+                current_batch = []
+        if current_batch:
+            batches.append(current_batch)
 
-        detail = f"Indexed {indexed} document(s) into Meilisearch; {skipped} skipped (indexing error)."
+        indexed = 0
+        for documents in batches:
+            committed = index_documents(documents)
+            indexed += committed
+            if committed != len(documents):
+                skipped += len(documents) - committed
+                # Do not continue after a failed chunk. The next run can safely
+                # resume from the IDs already committed before the failure.
+                break
+
+        remaining = max(missing_count - indexed, 0)
+        continued = False
+        if continue_until_complete and remaining > 0 and indexed > 0 and skipped == 0:
+            sync_search_index.apply_async(
+                kwargs={"batch_size": batch_size, "continue_until_complete": True},
+                countdown=2,
+            )
+            continued = True
+
+        detail = (
+            f"Indexed {indexed} document(s) into Meilisearch; {skipped} skipped; "
+            f"approximately {remaining} remain."
+        )
         logger.info("[batch] sync_search_index: %s", detail)
         _update_job_status(job_name, "success", detail)
-        return {"indexed": indexed, "skipped": skipped}
+        return {
+            "indexed": indexed,
+            "skipped": skipped,
+            "remaining": remaining,
+            "indexable": indexable_count,
+            "already_indexed": len(existing_ids),
+            "continued": continued,
+        }
 
     except Exception as exc:
         detail = f"Error: {exc}"
