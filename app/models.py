@@ -83,6 +83,11 @@ class FileRecord(Base):
     # only the document owner (or an explicit public share link) may read it.
     is_private = Column(Boolean, default=False, server_default="0", nullable=False, index=True)
 
+    # Explicit owner choice.  NULL keeps the file under automatic privacy
+    # rules; True/False pins the corresponding private flag until the owner
+    # returns the file to automatic handling.
+    privacy_manual_override = Column(Boolean, nullable=True)
+
     # If this is a duplicate, record the ID of the original file for reference
     duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
 
@@ -1229,6 +1234,44 @@ class ClassificationRuleModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_classification_rules_owner_name"),)
+
+
+class PrivacyRuleModel(Base):
+    """Owner-scoped rule that may only set a file's ``is_private`` flag."""
+
+    __tablename__ = "privacy_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    rule_type = Column(String(50), nullable=False)
+    pattern = Column(String(1000), nullable=False)
+    priority = Column(Integer, nullable=False, default=0)
+    case_sensitive = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    policy_version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_privacy_rules_owner_name"),)
+
+
+class PrivacyDecisionAudit(Base):
+    """Immutable reason record for an owner or rule privacy decision."""
+
+    __tablename__ = "privacy_decision_audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK, ondelete="CASCADE"), nullable=False, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    rule_id = Column(Integer, ForeignKey("privacy_rules.id", ondelete="SET NULL"), nullable=True, index=True)
+    source = Column(String(20), nullable=False)
+    is_private = Column(Boolean, nullable=False)
+    policy_version = Column(Integer, nullable=True)
+    evidence = Column(Text, nullable=True)
+    confidence = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class MobileDevice(Base):

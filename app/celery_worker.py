@@ -40,6 +40,7 @@ from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 from app.tasks.process_document import process_document  # noqa: F401
 from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence  # noqa: F401
 from app.tasks.process_with_ocr import process_with_ocr  # noqa: F401
+from app.tasks.reconcile_file_privacy import reconcile_file_privacy  # noqa: F401
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt  # noqa: F401
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages  # noqa: F401
 from app.tasks.send_to_all import send_to_all_destinations  # noqa: F401

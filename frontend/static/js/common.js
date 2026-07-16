@@ -225,6 +225,9 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
           _makeMenuLink('/profile', 'fas fa-user-circle text-blue-400', window.__i18n.profileSettings || 'Profile Settings', 'text-gray-700')
         );
         linksDiv.appendChild(
+          _makeMenuLink('/privacy-rules', 'fas fa-user-shield text-indigo-500', window.__i18n.privacyRules || 'Privacy Rules', 'text-gray-700')
+        );
+        linksDiv.appendChild(
           _makeMenuLink('/subscription', 'fas fa-layer-group text-indigo-400', window.__i18n.mySubscription || 'My Subscription', 'text-gray-700')
         );
         linksDiv.appendChild(
@@ -304,6 +307,17 @@ function _makeMenuLink(href, iconClass, label, extraClasses = '') {
         profileLink.appendChild(profileIcon);
         profileLink.appendChild(document.createTextNode(window.__i18n.profileSettings || 'Profile Settings'));
         mobileAuthSection.appendChild(profileLink);
+
+        const privacyRulesLink = document.createElement('a');
+        privacyRulesLink.href = '/privacy-rules';
+        privacyRulesLink.className =
+          'flex items-center px-3 py-3 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50';
+        const privacyRulesIcon = document.createElement('i');
+        privacyRulesIcon.className = 'fas fa-user-shield mr-2 text-indigo-500';
+        privacyRulesIcon.setAttribute('aria-hidden', 'true');
+        privacyRulesLink.appendChild(privacyRulesIcon);
+        privacyRulesLink.appendChild(document.createTextNode(window.__i18n.privacyRules || 'Privacy Rules'));
+        mobileAuthSection.appendChild(privacyRulesLink);
 
         // Subscription link
         const subLink = document.createElement('a');

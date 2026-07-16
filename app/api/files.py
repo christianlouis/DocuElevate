@@ -10,7 +10,7 @@ import os
 import uuid
 import zipfile
 from datetime import datetime, timezone
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, List, Literal, Optional, cast
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -23,15 +23,17 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
-from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog, SharedLink
+from app.models import BulkOperation, FileProcessingStep, FileRecord, PrivacyRuleModel, ProcessingLog
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
 from app.utils.file_operations import hash_file
+from app.utils.file_privacy import apply_privacy_decision, queue_privacy_reconciliation
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
+from app.utils.privacy_rules import SINGLE_USER_PRIVACY_OWNER, match_rule_to_file
 from app.utils.user_scope import apply_owner_filter, get_current_owner_id, get_file_role
 
 # Set up logging
@@ -134,6 +136,54 @@ def _serialize_bulk_operation(operation: BulkOperation) -> dict:
         "failed_items": operation.failed_items,
         "created_at": operation.created_at.isoformat() if operation.created_at else None,
         "updated_at": operation.updated_at.isoformat() if operation.updated_at else None,
+    }
+
+
+@router.delete("/files/{file_id}/privacy/override")
+@require_login
+def clear_file_privacy_override(request: Request, file_id: int, db: DbSession):
+    """Return a file to owner-scoped automatic privacy handling."""
+    owner_id = get_current_owner_id(request)
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if file_record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if get_file_role(file_record, owner_id, db) != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the file owner can change privacy")
+
+    matched_rule = None
+    matched_evidence = None
+    privacy_owner_id = owner_id or SINGLE_USER_PRIVACY_OWNER
+    rules = (
+        db.query(PrivacyRuleModel)
+        .filter(PrivacyRuleModel.owner_id == privacy_owner_id, PrivacyRuleModel.enabled.is_(True))
+        .order_by(PrivacyRuleModel.priority.desc(), PrivacyRuleModel.id)
+        .all()
+    )
+    for rule in rules:
+        match = match_rule_to_file(rule, file_record)
+        if match.matched:
+            matched_rule = rule
+            matched_evidence = match
+            break
+
+    apply_privacy_decision(
+        db,
+        file_record,
+        is_private=matched_rule is not None,
+        source="rule" if matched_rule else "automatic",
+        manual_override=None,
+        rule=matched_rule,
+        match=matched_evidence,
+        decision_owner_id=privacy_owner_id,
+    )
+    db.commit()
+    db.refresh(file_record)
+    queue_privacy_reconciliation([cast(int, file_record.id)])
+    return {
+        "file_id": file_record.id,
+        "is_private": file_record.is_private,
+        "mode": "automatic",
+        "matched_rule_id": matched_rule.id if matched_rule else None,
     }
 
 
@@ -369,6 +419,7 @@ def list_files_api(
                 "mime_type": f.mime_type,
                 "legal_hold": f.legal_hold,
                 "is_private": f.is_private,
+                "privacy_manual_override": f.privacy_manual_override,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
                 "processing_status": statuses.get(
                     f.id,
@@ -461,6 +512,7 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
             "mime_type": file_record.mime_type,
             "legal_hold": file_record.legal_hold,
             "is_private": file_record.is_private,
+            "privacy_manual_override": file_record.privacy_manual_override,
             "created_at": (file_record.created_at.isoformat() if file_record.created_at else None),
         },
         "processing_status": processing_status,
@@ -483,21 +535,17 @@ def set_file_privacy(request: Request, file_id: int, body: FilePrivacyRequest, d
             detail="Only the file owner can change privacy",
         )
 
-    revoked_links = 0
-    if body.is_private and not file_record.is_private:
-        revoked_at = datetime.now(timezone.utc)
-        revoked_links = (
-            db.query(SharedLink)
-            .filter(SharedLink.file_id == file_id, SharedLink.is_active.is_(True))
-            .update(
-                {SharedLink.is_active: False, SharedLink.revoked_at: revoked_at},
-                synchronize_session="fetch",
-            )
-        )
-
-    file_record.is_private = body.is_private
+    revoked_links = apply_privacy_decision(
+        db,
+        file_record,
+        is_private=body.is_private,
+        source="manual",
+        manual_override=body.is_private,
+        decision_owner_id=owner_id or SINGLE_USER_PRIVACY_OWNER,
+    )
     db.commit()
     db.refresh(file_record)
+    queue_privacy_reconciliation([cast(int, file_record.id)])
     logger.info(
         "File privacy changed: file_id=%s is_private=%s revoked_links=%s",
         file_id,

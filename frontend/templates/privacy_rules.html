@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}{{ _("privacy_rules.page_title") }}{% endblock %}
+
+{% block content %}
+<div x-data="privacyRules()" x-init="loadRules()" class="container mx-auto px-4 py-8 max-w-5xl">
+  <header class="mb-7">
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+      <i class="fas fa-user-shield text-indigo-500" aria-hidden="true"></i>
+      {{ _("privacy_rules.heading") }}
+    </h1>
+    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300 max-w-3xl">{{ _("privacy_rules.subtitle") }}</p>
+  </header>
+
+  <aside class="mb-6 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 p-4 text-sm text-blue-900 dark:text-blue-100">
+    <div class="flex gap-3">
+      <i class="fas fa-circle-info mt-0.5" aria-hidden="true"></i>
+      <div>
+        <p class="font-semibold">{{ _("privacy_rules.boundary_title") }}</p>
+        <p class="mt-1">{{ _("privacy_rules.boundary_body") }}</p>
+      </div>
+    </div>
+  </aside>
+
+  <section class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6" aria-labelledby="new-rule-heading">
+    <h2 id="new-rule-heading" class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ _("privacy_rules.new_heading") }}</h2>
+    <form @submit.prevent="createRule()" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label for="privacy-rule-name" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("privacy_rules.name") }}</label>
+          <input id="privacy-rule-name" x-model.trim="draft.name" required maxlength="255"
+                 class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-indigo-500"
+                 placeholder="{{ _('privacy_rules.name_placeholder') }}">
+        </div>
+        <div>
+          <label for="privacy-rule-type" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("privacy_rules.match_in") }}</label>
+          <select id="privacy-rule-type" x-model="draft.rule_type"
+                  class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-indigo-500">
+            <option value="content_keyword">{{ _("privacy_rules.type_content") }}</option>
+            <option value="filename_pattern">{{ _("privacy_rules.type_filename") }}</option>
+            <option value="metadata_match">{{ _("privacy_rules.type_metadata") }}</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label for="privacy-rule-description" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("privacy_rules.description") }}</label>
+        <input id="privacy-rule-description" x-model.trim="draft.description" maxlength="2000"
+               class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-indigo-500"
+               placeholder="{{ _('privacy_rules.description_placeholder') }}">
+      </div>
+      <div>
+        <label for="privacy-rule-pattern" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("privacy_rules.pattern") }}</label>
+        <input id="privacy-rule-pattern" x-model.trim="draft.pattern" required maxlength="1000"
+               class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-indigo-500"
+               :placeholder="patternPlaceholder()">
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-text="patternHelp()"></p>
+      </div>
+      <p x-show="error" x-text="error" class="text-sm text-red-600 dark:text-red-400" role="alert"></p>
+      <div class="flex justify-end">
+        <button type="submit" :disabled="saving || !draft.name || !draft.pattern"
+                class="inline-flex min-h-10 items-center rounded-md bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 focus:ring-2 focus:ring-indigo-500">
+          <i class="fas fa-lock mr-2" aria-hidden="true"></i>
+          <span x-text="saving ? '{{ _('privacy_rules.saving') }}' : '{{ _('privacy_rules.save') }}'"></span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <section class="space-y-4" aria-labelledby="rules-heading">
+    <h2 id="rules-heading" class="text-lg font-semibold text-gray-900 dark:text-white">{{ _("privacy_rules.existing_heading") }}</h2>
+    <p x-show="loading" class="text-sm text-gray-500"><i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>{{ _("common.loading") }}</p>
+    <div x-show="!loading && rules.length === 0" class="bg-white dark:bg-gray-800 shadow rounded-lg p-8 text-center text-gray-500 dark:text-gray-400">
+      <i class="fas fa-shield-halved text-3xl mb-3" aria-hidden="true"></i>
+      <p>{{ _("privacy_rules.empty") }}</p>
+    </div>
+
+    <template x-for="rule in rules" :key="rule.id">
+      <article class="bg-white dark:bg-gray-800 shadow rounded-lg p-5">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="font-semibold text-gray-900 dark:text-white" x-text="rule.name"></h3>
+              <span class="rounded-full px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200">{{ _("privacy_rules.active") }}</span>
+            </div>
+            <p x-show="rule.description" x-text="rule.description" class="mt-1 text-sm text-gray-600 dark:text-gray-300"></p>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400"><code x-text="rule.pattern"></code></p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" @click="preview(rule)" :disabled="busyRule === rule.id"
+                    class="min-h-10 rounded-md border border-indigo-300 px-3 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 disabled:opacity-50">
+              <i class="fas fa-eye mr-1" aria-hidden="true"></i>{{ _("privacy_rules.preview") }}
+            </button>
+            <button type="button" @click="removeRule(rule)" :disabled="busyRule === rule.id"
+                    class="min-h-10 rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50">
+              <i class="fas fa-trash mr-1" aria-hidden="true"></i>{{ _("common.delete") }}
+            </button>
+          </div>
+        </div>
+
+        <div x-show="previewRuleId === rule.id" class="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+          <p class="font-medium text-gray-900 dark:text-white">
+            <span x-text="previewData ? previewData.match_count : 0"></span> {{ _("privacy_rules.matches") }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ _("privacy_rules.preview_help") }}</p>
+          <ul x-show="previewData && previewData.matches.length" class="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
+            <template x-for="item in (previewData ? previewData.matches : [])" :key="item.file_id">
+              <li class="py-2 text-sm flex justify-between gap-3">
+                <span class="truncate" x-text="item.title || item.filename || ('#' + item.file_id)"></span>
+                <span x-show="item.manual_override" class="shrink-0 text-xs text-amber-700 dark:text-amber-300">{{ _("privacy_rules.manual_wins") }}</span>
+              </li>
+            </template>
+          </ul>
+          <div class="mt-4 flex justify-end">
+            <button type="button" @click="applyExisting(rule)" :disabled="busyRule === rule.id || !previewData || previewData.match_count === 0"
+                    class="min-h-10 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 focus:ring-2 focus:ring-red-500">
+              <i class="fas fa-user-lock mr-2" aria-hidden="true"></i>{{ _("privacy_rules.apply_existing") }}
+            </button>
+          </div>
+        </div>
+      </article>
+    </template>
+  </section>
+</div>
+
+<script>
+function privacyRules() {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  return {
+    rules: [], loading: false, saving: false, busyRule: null, error: '', previewRuleId: null, previewData: null,
+    draft: {name: '', description: '', rule_type: 'content_keyword', pattern: ''},
+    patternPlaceholder() {
+      if (this.draft.rule_type === 'filename_pattern') return {{ _("privacy_rules.filename_placeholder") | tojson }};
+      if (this.draft.rule_type === 'metadata_match') return {{ _("privacy_rules.metadata_placeholder") | tojson }};
+      return {{ _("privacy_rules.keyword_placeholder") | tojson }};
+    },
+    patternHelp() {
+      if (this.draft.rule_type === 'filename_pattern') return {{ _("privacy_rules.filename_help") | tojson }};
+      if (this.draft.rule_type === 'metadata_match') return {{ _("privacy_rules.metadata_help") | tojson }};
+      return {{ _("privacy_rules.keyword_help") | tojson }};
+    },
+    headers(json = false) { return {'X-CSRF-Token': csrf, ...(json ? {'Content-Type': 'application/json'} : {})}; },
+    async loadRules() {
+      this.loading = true;
+      try { const r = await fetch('/api/privacy-rules/', {headers: this.headers()}); if (!r.ok) throw new Error(); this.rules = await r.json(); }
+      catch (_) { this.error = {{ _("privacy_rules.load_failed") | tojson }}; }
+      finally { this.loading = false; }
+    },
+    async createRule() {
+      this.saving = true; this.error = '';
+      try {
+        const r = await fetch('/api/privacy-rules/', {method: 'POST', headers: this.headers(true), body: JSON.stringify(this.draft)});
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || {{ _("privacy_rules.save_failed") | tojson }}); }
+        this.draft = {name: '', description: '', rule_type: 'content_keyword', pattern: ''}; await this.loadRules();
+      } catch (e) { this.error = e.message; } finally { this.saving = false; }
+    },
+    async preview(rule) {
+      this.busyRule = rule.id; this.previewRuleId = rule.id; this.previewData = null;
+      try { const r = await fetch(`/api/privacy-rules/${rule.id}/preview`, {method: 'POST', headers: this.headers()}); if (!r.ok) throw new Error(); this.previewData = await r.json(); }
+      catch (_) { this.error = {{ _("privacy_rules.preview_failed") | tojson }}; } finally { this.busyRule = null; }
+    },
+    async applyExisting(rule) {
+      if (!window.confirm({{ _("privacy_rules.apply_confirm") | tojson }})) return;
+      this.busyRule = rule.id;
+      try {
+        const r = await fetch(`/api/privacy-rules/${rule.id}/apply`, {method: 'POST', headers: this.headers()}); if (!r.ok) throw new Error();
+        const result = await r.json(); window.alert({{ _("privacy_rules.applied_prefix") | tojson }} + ' ' + result.changed_count); await this.preview(rule);
+      } catch (_) { this.error = {{ _("privacy_rules.apply_failed") | tojson }}; this.busyRule = null; }
+    },
+    async removeRule(rule) {
+      if (!window.confirm({{ _("privacy_rules.delete_confirm") | tojson }})) return;
+      this.busyRule = rule.id;
+      try { const r = await fetch(`/api/privacy-rules/${rule.id}`, {method: 'DELETE', headers: this.headers()}); if (!r.ok) throw new Error(); await this.loadRules(); }
+      catch (_) { this.error = {{ _("privacy_rules.delete_failed") | tojson }}; } finally { this.busyRule = null; }
+    }
+  };
+}
+</script>
+{% endblock %}
