@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.6 (2026-07-16)
+
+### Bug Fixes
+
+- **helm**: Add knowledge research worker
+  ([#1123](https://github.com/christianlouis/DocuElevate/pull/1123),
+  [`1fed0b2`](https://github.com/christianlouis/DocuElevate/commit/1fed0b21c0b7f1f74569e674d61a2e25eda508fa))
+
+- **research**: Isolate interactive jobs from backfill queue
+  ([#1123](https://github.com/christianlouis/DocuElevate/pull/1123),
+  [`1fed0b2`](https://github.com/christianlouis/DocuElevate/commit/1fed0b21c0b7f1f74569e674d61a2e25eda508fa))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1123](https://github.com/christianlouis/DocuElevate/pull/1123),
+  [`1fed0b2`](https://github.com/christianlouis/DocuElevate/commit/1fed0b21c0b7f1f74569e674d61a2e25eda508fa))
+
+
 ## v0.184.5 (2026-07-16)
 
 ### Bug Fixes
