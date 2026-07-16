@@ -9,12 +9,23 @@ import requests
 from starlette.requests import Request
 
 from app.models import FileRecord, FileShare, KnowledgeResearchJob
+from app.utils.tribe_scope import ensure_document_scope
+
+
+def _assign_personal_scope(db_session, owner_id: str, *records: FileRecord) -> tuple[str, str]:
+    tenant_id, tribe_id = ensure_document_scope(db_session, owner_id)
+    for record in records:
+        record.tenant_id = tenant_id
+        record.tribe_id = tribe_id
+    return tenant_id, tribe_id
 
 
 def _file(file_id: int = 7, owner_id: str | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         id=file_id,
         owner_id=owner_id,
+        tenant_id="default",
+        tribe_id="default-quarantine",
         filehash="file-hash",
         original_filename="project-plan.pdf",
         document_title="Project plan",
@@ -227,6 +238,8 @@ def test_qdrant_collection_creation_and_dimension_guard():
             SimpleNamespace(status_code=200),
             SimpleNamespace(status_code=200),
             SimpleNamespace(status_code=200),
+            SimpleNamespace(status_code=200),
+            SimpleNamespace(status_code=200),
         ],
     ) as request:
         QdrantVectorIndex().ensure_collection(1536)
@@ -236,6 +249,18 @@ def test_qdrant_collection_creation_and_dimension_guard():
             "PUT",
             "/collections/docuelevate_documents",
             {"vectors": {"size": 1536, "distance": "Cosine"}},
+            expected=(200, 201),
+        ),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents/index?wait=true",
+            {"field_name": "tenant_id", "field_schema": "keyword"},
+            expected=(200, 201),
+        ),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents/index?wait=true",
+            {"field_name": "tribe_id", "field_schema": "keyword"},
             expected=(200, 201),
         ),
         call(
@@ -324,6 +349,31 @@ def test_qdrant_search_filters_owner_shares_and_unowned_before_ranking():
     }
 
 
+def test_qdrant_search_denies_all_when_user_has_no_tribe_membership():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    response = SimpleNamespace(status_code=200, json=lambda: {"result": {"points": []}})
+    with (
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[0.1, 0.2]]),
+        patch.object(QdrantVectorIndex, "_request", return_value=response) as request,
+    ):
+        QdrantVectorIndex().search(
+            "query",
+            limit=5,
+            owner_id="alice@example.com",
+            shared_document_ids=[8],
+            include_unowned=True,
+            tribe_scopes=[],
+        )
+
+    no_scope = {"key": "tribe_id", "match": {"value": "__no_authorized_tribe__"}}
+    conditions = request.call_args.args[2]["filter"]["should"]
+    assert conditions[0] == {
+        "must": [no_scope, {"key": "owner_id", "match": {"value": "alice@example.com"}}]
+    }
+    assert all(no_scope in condition["must"] for condition in conditions)
+
+
 def test_qdrant_document_cleanup_is_owner_scoped():
     from app.utils.vector_index import QdrantVectorIndex
 
@@ -383,6 +433,8 @@ def test_owner_filter_removes_unauthorized_vector_hits(db_session):
         file_size=1,
         mime_type="application/pdf",
     )
+    _assign_personal_scope(db_session, "alice@example.com", own)
+    _assign_personal_scope(db_session, "bob@example.com", other)
     db_session.add_all([own, other])
     db_session.commit()
     request = Request({"type": "http", "headers": []})
@@ -427,6 +479,8 @@ def test_knowledge_search_passes_authorized_scope_to_qdrant(db_session):
         mime_type="application/pdf",
         ocr_text="denied evidence",
     )
+    _assign_personal_scope(db_session, "alice@example.com", own, shared)
+    _assign_personal_scope(db_session, "bob@example.com", denied)
     db_session.add_all([own, shared, denied])
     db_session.add(
         FileShare(
@@ -470,6 +524,7 @@ def test_knowledge_status_hides_global_point_count_from_tenant(db_session):
         file_size=1,
         mime_type="application/pdf",
     )
+    _assign_personal_scope(db_session, "alice@example.com", record)
     db_session.add(record)
     db_session.commit()
     request = Request({"type": "http", "headers": []})
@@ -509,6 +564,8 @@ def test_keyword_research_scopes_meilisearch_before_ranking(db_session):
         mime_type="application/pdf",
         ocr_text="Flight booking to London",
     )
+    _assign_personal_scope(db_session, "alice@example.com", own)
+    _assign_personal_scope(db_session, "bob@example.com", other)
     db_session.add_all([own, other])
     db_session.commit()
     request = Request({"type": "http", "headers": []})
@@ -1050,6 +1107,8 @@ def test_metadata_candidates_preserve_owner_isolation(db_session):
         mime_type="application/pdf",
         ocr_text="Bob source text",
     )
+    _assign_personal_scope(db_session, "alice@example.com", own)
+    _assign_personal_scope(db_session, "bob@example.com", other)
     db_session.add_all([own, other])
     db_session.commit()
     request = Request({"type": "http", "headers": []})

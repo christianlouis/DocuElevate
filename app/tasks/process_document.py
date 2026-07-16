@@ -426,6 +426,9 @@ def process_document(
             # (not its own hash when reprocessing)
             if existing and existing.id != file_id and settings.enable_deduplication:
                 logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
+                from app.utils.tribe_scope import ensure_document_scope
+
+                tenant_id, tribe_id = ensure_document_scope(db, owner_id)
                 duplicate_record = FileRecord(
                     filehash=filehash,
                     original_filename=original_filename,
@@ -435,6 +438,8 @@ def process_document(
                     is_duplicate=True,
                     duplicate_of_id=existing.id,
                     owner_id=owner_id,
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
                 )
                 db.add(duplicate_record)
                 db.commit()
@@ -483,6 +488,9 @@ def process_document(
             # Not a duplicate (or deduplication disabled) -> insert a new record
             logger.info(f"[{task_id}] Creating new file record in database")
             log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
+            from app.utils.tribe_scope import ensure_document_scope
+
+            tenant_id, tribe_id = ensure_document_scope(db, owner_id)
             new_record = FileRecord(
                 filehash=filehash,
                 original_filename=original_filename,
@@ -491,6 +499,8 @@ def process_document(
                 mime_type=mime_type,
                 is_duplicate=False,
                 owner_id=owner_id,
+                tenant_id=tenant_id,
+                tribe_id=tribe_id,
             )
             db.add(new_record)
             db.commit()

@@ -159,6 +159,13 @@ wins until the owner returns the file to automatic handling.
 | `POST` | `/api/privacy-rules/{rule_id}/preview` | Preview owner-file matches without mutation |
 | `POST` | `/api/privacy-rules/{rule_id}/apply` | Mark matching owner files private, skipping manual overrides |
 
+The access decision is evaluated in this order: authenticated tenant and Tribe
+membership first, then the file's canonical `is_private` flag. A non-private
+file is visible only to authorised members of its one Tribe; it is never global
+or internet-public. A private file remains owner-only in authenticated document
+access. Administrator status does not bypass either boundary. Explicit share
+links remain a separate, owner-controlled access path.
+
 Privacy is committed before Meilisearch or Qdrant indexing. Derived index payloads
 are reconciled asynchronously, while the relational database remains authoritative.
 

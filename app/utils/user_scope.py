@@ -10,12 +10,12 @@ documents are visible to all users (single-user / shared mode).
 import logging
 
 from fastapi import Request
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Query, Session
 from sqlalchemy.sql import false
 
 from app.config import settings
-from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare
+from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare, TribeMembership
 
 logger = logging.getLogger(__name__)
 
@@ -121,26 +121,32 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     if not settings.multi_user_enabled:
         return query
 
-    user = request.session.get("user")
     owner_id = get_current_owner_id(request)
     if owner_id is None:
         # No authenticated user — return empty result set
         return query.filter(false())
 
-    # A private document is owner-only.  This condition intentionally also
-    # applies to administrators: an operational role must not silently
-    # override a user's privacy choice.
-    if isinstance(user, dict) and user.get("is_admin"):
-        return query.filter(or_(FileRecord.owner_id == owner_id, FileRecord.is_private.is_(False)))
+    # Tenant/Tribe membership is evaluated before visibility.  Platform or
+    # Tribe administration never widens this boundary and never overrides an
+    # owner's private flag.
+    member_scopes = select(TribeMembership.tenant_id, TribeMembership.tribe_id).where(
+        TribeMembership.user_id == owner_id
+    )
+    in_member_tribe = tuple_(FileRecord.tenant_id, FileRecord.tribe_id).in_(member_scopes)
 
-    # Build filter: user's own documents + non-private documents shared with them
-    conditions = [FileRecord.owner_id == owner_id]
+    # The owner can read their document only inside a current membership; any
+    # member of the same Tribe can read a non-private document.
+    conditions = [
+        and_(in_member_tribe, FileRecord.owner_id == owner_id),
+        and_(in_member_tribe, FileRecord.is_private.is_(False)),
+    ]
 
     # Include files explicitly shared with this user
     from sqlalchemy import select as sa_select
 
     conditions.append(
         and_(
+            in_member_tribe,
             FileRecord.is_private.is_(False),
             FileRecord.id.in_(sa_select(FileShare.file_id).where(FileShare.shared_with_user_id == owner_id)),
         )
@@ -148,7 +154,7 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
 
     # Optionally include unclaimed (owner_id IS NULL) documents
     if settings.unowned_docs_visible_to_all:
-        conditions.append(and_(FileRecord.is_private.is_(False), FileRecord.owner_id.is_(None)))
+        conditions.append(and_(in_member_tribe, FileRecord.is_private.is_(False), FileRecord.owner_id.is_(None)))
 
     return query.filter(or_(*conditions))
 
@@ -182,7 +188,19 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
     if user_id is None:
         return None
 
-    # Owner always has full access
+    membership = (
+        db.query(TribeMembership.id)
+        .filter(
+            TribeMembership.user_id == user_id,
+            TribeMembership.tenant_id == file_record.tenant_id,
+            TribeMembership.tribe_id == file_record.tribe_id,
+        )
+        .first()
+    )
+
+    if membership is None:
+        return None
+
     if file_record.owner_id == user_id:
         return "owner"
 
@@ -190,10 +208,6 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
     # unclaimed-document discovery.
     if file_record.is_private:
         return None
-
-    # Unclaimed document — limited access when setting allows it
-    if file_record.owner_id is None and settings.unowned_docs_visible_to_all:
-        return FILE_SHARE_ROLE_VIEWER
 
     # Check for an explicit share
     share = (
@@ -203,6 +217,14 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
     )
     if share:
         return share.role
+
+    # Every non-private document is visible to authorised Tribe members.
+    if not file_record.is_private:
+        return FILE_SHARE_ROLE_VIEWER
+
+    # Unclaimed document — limited access when setting allows it
+    if file_record.owner_id is None and settings.unowned_docs_visible_to_all:
+        return FILE_SHARE_ROLE_VIEWER
 
     return None
 

@@ -25,6 +25,47 @@ _FILES_ID_FK = "files.id"
 _PIPELINES_ID_FK = "pipelines.id"
 _ROUTING_RULES_TABLE = "pipeline_routing_rules"
 
+DEFAULT_TENANT_ID = "default"
+QUARANTINE_TRIBE_ID = "default-quarantine"
+
+
+class Tenant(Base):
+    """Hard security boundary for independent DocuElevate customers."""
+
+    __tablename__ = "tenants"
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Tribe(Base):
+    """Collaboration boundary inside exactly one tenant."""
+
+    __tablename__ = "tribes"
+
+    id = Column(String(64), primary_key=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_tribes_tenant_name"),)
+
+
+class TribeMembership(Base):
+    """User membership and delegated role within a Tribe."""
+
+    __tablename__ = "tribe_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="member", server_default="member")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("tribe_id", "user_id", name="uq_tribe_memberships_tribe_user"),)
+
 
 class DocumentMetadata(Base):
     __tablename__ = "documents"
@@ -46,6 +87,27 @@ class FileRecord(Base):
     # Stores the user's unique identifier (e.g. email or OAuth sub claim).
     # NULL means the file belongs to the shared/global space (single-user mode).
     owner_id = Column(String, nullable=True, index=True)
+
+    # Every document is bound to one Tribe inside one tenant before it can be
+    # exposed.  Server defaults keep direct/offline record creation safe by
+    # placing it in the non-member quarantine; normal ingestion assigns the
+    # owner's personal/shared Tribe explicitly.
+    tenant_id = Column(
+        String(64),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        default=DEFAULT_TENANT_ID,
+        server_default=DEFAULT_TENANT_ID,
+        index=True,
+    )
+    tribe_id = Column(
+        String(64),
+        ForeignKey("tribes.id"),
+        nullable=False,
+        default=QUARANTINE_TRIBE_ID,
+        server_default=QUARANTINE_TRIBE_ID,
+        index=True,
+    )
 
     # Hash of the file content (e.g. SHA-256)
     # Note: duplicates are allowed so filehash is not unique

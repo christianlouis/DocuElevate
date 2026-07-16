@@ -69,9 +69,6 @@ def list_shares(request: Request, file_id: int, db: DbSession):
         A list of share objects.
     """
     user_id = get_current_owner_id(request)
-    user = request.session.get("user")
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
@@ -80,7 +77,7 @@ def list_shares(request: Request, file_id: int, db: DbSession):
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if role != "owner" and not is_admin:
+    if role != "owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the file owner can view shares",
@@ -334,15 +331,12 @@ def list_shared_with(request: Request, file_id: int, db: DbSession):
         A list of ``{share_id, user_id, display_name, role}`` objects.
     """
     user_id = get_current_owner_id(request)
-    user = request.session.get("user")
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     role = get_file_role(file_record, user_id, db)
-    if role is None and not (is_admin and not file_record.is_private):
+    if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     shares = db.query(FileShare).filter(FileShare.file_id == file_id).all()

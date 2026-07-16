@@ -2,7 +2,15 @@
 
 import pytest
 
-from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare, UserProfile
+from app.models import (
+    FILE_SHARE_ROLE_EDITOR,
+    FILE_SHARE_ROLE_VIEWER,
+    FileRecord,
+    FileShare,
+    TribeMembership,
+    UserProfile,
+)
+from app.utils.tribe_scope import ensure_document_scope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -11,6 +19,7 @@ from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecor
 
 def _create_file(db_session, owner_id="owner1") -> FileRecord:
     """Create a minimal owned FileRecord."""
+    tenant_id, tribe_id = ensure_document_scope(db_session, owner_id)
     f = FileRecord(
         owner_id=owner_id,
         filehash="sharehash",
@@ -18,6 +27,8 @@ def _create_file(db_session, owner_id="owner1") -> FileRecord:
         local_filename="shared.pdf",
         file_size=1024,
         mime_type="application/pdf",
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     db_session.add(f)
     db_session.commit()
@@ -27,6 +38,7 @@ def _create_file(db_session, owner_id="owner1") -> FileRecord:
 
 def _create_unowned_file(db_session) -> FileRecord:
     """Create a FileRecord with no owner."""
+    tenant_id, tribe_id = ensure_document_scope(db_session, None)
     f = FileRecord(
         owner_id=None,
         filehash="unownedhash",
@@ -34,6 +46,8 @@ def _create_unowned_file(db_session) -> FileRecord:
         local_filename="unowned.pdf",
         file_size=512,
         mime_type="application/pdf",
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     db_session.add(f)
     db_session.commit()
@@ -47,6 +61,18 @@ def _create_profile(db_session, user_id: str, display_name: str | None = None) -
     db_session.commit()
     db_session.refresh(p)
     return p
+
+
+def _add_tribe_member(db_session, file_record: FileRecord, user_id: str) -> None:
+    db_session.add(
+        TribeMembership(
+            tenant_id=file_record.tenant_id,
+            tribe_id=file_record.tribe_id,
+            user_id=user_id,
+            role="member",
+        )
+    )
+    db_session.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +106,7 @@ class TestGetFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
         db_session.add(share)
         db_session.commit()
@@ -91,6 +118,7 @@ class TestGetFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "carol")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="carol", role=FILE_SHARE_ROLE_EDITOR)
         db_session.add(share)
         db_session.commit()
@@ -115,7 +143,7 @@ class TestGetFileRole:
         monkeypatch.setattr(user_scope.settings, "unowned_docs_visible_to_all", True)
         f = _create_unowned_file(db_session)
         role = user_scope.get_file_role(f, "anyone", db_session)
-        assert role == FILE_SHARE_ROLE_VIEWER
+        assert role is None
 
     def test_none_user_returns_none(self, db_session, monkeypatch):
         from app.config import settings as real_settings
@@ -165,6 +193,7 @@ class TestHasFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
         db_session.add(share)
         db_session.commit()
@@ -176,6 +205,7 @@ class TestHasFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "carol")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="carol", role=FILE_SHARE_ROLE_EDITOR)
         db_session.add(share)
         db_session.commit()
@@ -550,6 +580,7 @@ class TestListSharedWith:
         monkeypatch.setattr(sharing_mod, "get_current_owner_id", lambda req: "bob")
 
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role="viewer")
         db_session.add(share)
         db_session.commit()
@@ -691,6 +722,7 @@ class TestDeleteFileOwnerOnly:
         monkeypatch.setattr(user_scope_mod, "get_current_owner_id", lambda req: "bob")
 
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role="viewer")
         db_session.add(share)
         db_session.commit()
@@ -709,6 +741,7 @@ class TestDeleteFileOwnerOnly:
         monkeypatch.setattr(user_scope_mod, "get_current_owner_id", lambda req: "carol")
 
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "carol")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="carol", role="editor")
         db_session.add(share)
         db_session.commit()
