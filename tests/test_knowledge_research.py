@@ -94,7 +94,9 @@ def test_research_planner_keeps_exact_entity_and_returns_small_plan():
         chat_completion=lambda **kwargs: (
             calls.append(kwargs)
             or (
-                '{"lexical_queries":["\\"Motel One\\"","Motel One Rechnung"],'
+                '{"hard_entities":["Motel One"],'
+                '"lexical_queries":["Motel One Buchungen Aufenthalte Nächte",'
+                '"\\"Motel One\\" Buchungen Belege"],'
                 '"semantic_query":"Motel One booking confirmation hotel stay",'
                 '"aggregation":"count stays and nights","evidence_types":["hotel_booking"],'
                 '"exclude_terms":["advertising"]}'
@@ -109,8 +111,12 @@ def test_research_planner_keeps_exact_entity_and_returns_small_plan():
         )
 
     assert plan["lexical_queries"][0] == '"Motel One"'
+    assert plan["lexical_queries"][1:] == [
+        "Motel One Buchungen Aufenthalte Nächte",
+        '"Motel One" Buchungen Belege',
+    ]
     assert plan["aggregation"] == "count stays and nights"
-    assert len(plan["lexical_queries"]) == 2
+    assert len(plan["lexical_queries"]) == 3
     assert calls[0]["reasoning_effort"] == "minimal"
     assert calls[0]["max_completion_tokens"] == 300
 
@@ -349,6 +355,18 @@ def test_empty_research_answer_is_localized_and_qualifies_incomplete_index():
     assert "noch unvollständig" in answer
     assert "nicht abschließend" in answer
     assert _no_evidence_answer("How many London trips?", index_complete=True).startswith("I could not")
+
+
+def test_empty_research_answer_separates_complete_index_from_bounded_analysis():
+    answer = _no_evidence_answer(
+        "Wie oft war ich im Motel One?",
+        index_complete=True,
+        analysis_truncated=True,
+    )
+
+    assert "Index ist vollständig" in answer
+    assert "begrenzte Textausschnitte" in answer
+    assert "Index ist noch unvollständig" not in answer
 
 
 @pytest.mark.parametrize(

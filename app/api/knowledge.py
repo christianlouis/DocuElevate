@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Bump whenever retrieval, reduction, or synthesis semantics change so a
 # deployment cannot serve answers produced by an older research algorithm.
-_RESEARCH_CACHE_VERSION = 6
+_RESEARCH_CACHE_VERSION = 7
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 DbSession = Annotated[Session, Depends(get_db)]
 
