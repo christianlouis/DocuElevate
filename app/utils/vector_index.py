@@ -215,7 +215,9 @@ class QdrantVectorIndex:
         tribe_scopes: list[tuple[str, str]] | None = None,
     ) -> dict[str, Any] | None:
         scope_filter: dict[str, Any] | None = None
+        tenant_filter: dict[str, Any] | None = None
         if tribe_scopes is not None:
+            tenant_ids = sorted({tenant_id for tenant_id, _tribe_id in tribe_scopes})
             scope_filter = (
                 {
                     "should": [
@@ -230,6 +232,11 @@ class QdrantVectorIndex:
                 }
                 if tribe_scopes
                 else {"key": "tribe_id", "match": {"value": "__no_authorized_tribe__"}}
+            )
+            tenant_filter = (
+                {"key": "tenant_id", "match": {"any": tenant_ids}}
+                if tenant_ids
+                else {"key": "tenant_id", "match": {"value": "__no_authorized_tenant__"}}
             )
 
         conditions: list[dict[str, Any]] = []
@@ -292,9 +299,20 @@ class QdrantVectorIndex:
                 cls._owner_condition(None),
                 {"key": "is_private", "match": {"value": False}},
             ]
-            if scope_filter is not None:
-                unowned_conditions.insert(0, scope_filter)
+            if tenant_filter is not None:
+                unowned_conditions.insert(0, tenant_filter)
             conditions.append({"must": unowned_conditions})
+            if tribe_scopes:
+                conditions.append(
+                    {
+                        "must": [
+                            {"is_null": {"key": "tenant_id"}},
+                            {"is_null": {"key": "tribe_id"}},
+                            cls._owner_condition(None),
+                            {"key": "is_private", "match": {"value": False}},
+                        ]
+                    }
+                )
         return {"should": conditions} if conditions else None
 
     def index_document(self, file_record: Any) -> int:

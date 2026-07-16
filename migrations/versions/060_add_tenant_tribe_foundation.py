@@ -83,9 +83,24 @@ def upgrade() -> None:
     )
 
     bind = op.get_bind()
-    owners = [row[0] for row in bind.execute(sa.text("SELECT DISTINCT owner_id FROM files WHERE owner_id IS NOT NULL"))]
-    profile_owners = [row[0] for row in bind.execute(sa.text("SELECT user_id FROM user_profiles"))]
-    share_recipients = [row[0] for row in bind.execute(sa.text("SELECT DISTINCT shared_with_user_id FROM file_shares"))]
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    file_columns = {column["name"] for column in inspector.get_columns("files")}
+    owners = (
+        [row[0] for row in bind.execute(sa.text("SELECT DISTINCT owner_id FROM files WHERE owner_id IS NOT NULL"))]
+        if "owner_id" in file_columns
+        else []
+    )
+    profile_owners = (
+        [row[0] for row in bind.execute(sa.text("SELECT user_id FROM user_profiles"))]
+        if "user_profiles" in tables
+        else []
+    )
+    share_recipients = (
+        [row[0] for row in bind.execute(sa.text("SELECT DISTINCT shared_with_user_id FROM file_shares"))]
+        if "file_shares" in tables
+        else []
+    )
     for owner_id in sorted(set(owners + profile_owners + share_recipients)):
         tribe_id = _personal_tribe_id(owner_id)
         bind.execute(
@@ -99,10 +114,11 @@ def upgrade() -> None:
             ),
             {"tenant": DEFAULT_TENANT_ID, "tribe": tribe_id, "user": owner_id},
         )
-        bind.execute(
-            sa.text("UPDATE files SET tribe_id=:tribe WHERE owner_id=:owner"),
-            {"tribe": tribe_id, "owner": owner_id},
-        )
+        if "owner_id" in file_columns:
+            bind.execute(
+                sa.text("UPDATE files SET tribe_id=:tribe WHERE owner_id=:owner"),
+                {"tribe": tribe_id, "owner": owner_id},
+            )
 
     op.create_index("ix_files_tenant_id", "files", ["tenant_id"])
     op.create_index("ix_files_tribe_id", "files", ["tribe_id"])

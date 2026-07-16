@@ -367,9 +367,11 @@ def test_qdrant_search_denies_all_when_user_has_no_tribe_membership():
         )
 
     no_scope = {"key": "tribe_id", "match": {"value": "__no_authorized_tribe__"}}
+    no_tenant = {"key": "tenant_id", "match": {"value": "__no_authorized_tenant__"}}
     conditions = request.call_args.args[2]["filter"]["should"]
     assert conditions[0] == {"must": [no_scope, {"key": "owner_id", "match": {"value": "alice@example.com"}}]}
-    assert all(no_scope in condition["must"] for condition in conditions)
+    assert no_scope in conditions[1]["must"]
+    assert no_tenant in conditions[2]["must"]
 
 
 def test_qdrant_search_keeps_legacy_owner_points_during_scope_transition():

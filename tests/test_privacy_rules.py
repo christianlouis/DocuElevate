@@ -13,9 +13,11 @@ from app.utils.privacy_rules import (
     RULE_TYPE_METADATA,
     match_privacy_rule,
 )
+from app.utils.tribe_scope import ensure_document_scope
 
 
 def _file(db, *, owner: str, name: str, text: str = "", metadata: str | None = None) -> FileRecord:
+    tenant_id, tribe_id = ensure_document_scope(db, owner)
     record = FileRecord(
         owner_id=owner,
         filehash=f"hash-{owner}-{name}",
@@ -28,6 +30,8 @@ def _file(db, *, owner: str, name: str, text: str = "", metadata: str | None = N
         ocr_text=text,
         ai_metadata=metadata,
         pipeline_id=None,
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     db.add(record)
     db.commit()
