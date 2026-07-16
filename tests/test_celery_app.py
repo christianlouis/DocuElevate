@@ -62,6 +62,15 @@ class TestCeleryAppConfig:
             "priority_steps": list(range(10)),
         }
 
+    @patch("app.database.engine.dispose")
+    def test_prefork_child_replaces_inherited_database_pool(self, mock_dispose):
+        """A child process must not reuse a DB connection opened by its parent."""
+        from app.celery_app import reset_database_pool_after_fork
+
+        reset_database_pool_after_fork()
+
+        mock_dispose.assert_called_once_with(close=False)
+
 
 @pytest.mark.unit
 class TestTaskFailureHandler:
