@@ -136,6 +136,32 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 ## Common Endpoints
 
+### Owner-controlled file privacy
+
+`FileRecord.is_private` is the canonical authorization flag. A private document
+is readable only by its owner unless the owner creates a new explicit share link.
+Changing the flag never changes the owner, tribe, pipeline, storage path, routing,
+or delivery history.
+
+Owners can create automatic rules based on filename patterns, OCR/content
+keywords, or extracted metadata. Preview is read-only. Retroactive apply changes
+only matching files' privacy flag, and an explicit manual owner choice always
+wins until the owner returns the file to automatic handling.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `PUT` | `/api/files/{file_id}/privacy` | Set a manual private/public owner override |
+| `DELETE` | `/api/files/{file_id}/privacy/override` | Return the file to automatic privacy rules |
+| `GET` | `/api/privacy-rules/` | List the current owner's rules |
+| `POST` | `/api/privacy-rules/` | Create an owner-scoped rule |
+| `PUT` | `/api/privacy-rules/{rule_id}` | Update an owner-scoped rule |
+| `DELETE` | `/api/privacy-rules/{rule_id}` | Delete an owner-scoped rule |
+| `POST` | `/api/privacy-rules/{rule_id}/preview` | Preview owner-file matches without mutation |
+| `POST` | `/api/privacy-rules/{rule_id}/apply` | Mark matching owner files private, skipping manual overrides |
+
+Privacy is committed before Meilisearch or Qdrant indexing. Derived index payloads
+are reconciled asynchronously, while the relational database remains authoritative.
+
 ### DearConcierge knowledge bridge
 
 The preproduction knowledge bridge provides one ingestion path and one
