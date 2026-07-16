@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.9 (2026-07-16)
+
+### Performance Improvements
+
+- Batch search reconciliation updates
+  ([`5f69f3c`](https://github.com/christianlouis/DocuElevate/commit/5f69f3c2b23c891989b841715d434bac4b1ad824))
+
+
 ## v0.184.8 (2026-07-16)
 
 ### Bug Fixes
