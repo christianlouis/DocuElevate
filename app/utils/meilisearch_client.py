@@ -212,7 +212,14 @@ def index_documents(documents: Sequence[tuple["FileRecord", str, dict]]) -> int:
         index = _get_or_create_index(client)
         payload = [_build_document(file_record, text, metadata) for file_record, text, metadata in documents]
         task = index.add_documents(payload)
-        client.wait_for_task(task.task_uid)
+        completed_task = client.wait_for_task(task.task_uid, timeout_in_ms=120_000)
+        if completed_task.status != "succeeded":
+            logger.warning(
+                "Meilisearch batch task %s finished with status=%s",
+                task.task_uid,
+                completed_task.status,
+            )
+            return 0
         logger.info(
             "Committed %s document(s) to Meilisearch (task_uid=%s)",
             len(payload),
