@@ -580,8 +580,9 @@ def backfill_missing_metadata(batch_size: int = _METADATA_BACKFILL_BATCH_SIZE) -
 _SEARCH_SYNC_BATCH_SIZE: int = 500
 #: Page size used while reading IDs already committed to Meilisearch.
 _SEARCH_ID_PAGE_SIZE: int = 1000
-#: Keep individual Meilisearch update payloads bounded because OCR text can be large.
-_SEARCH_INDEX_CHUNK_SIZE: int = 50
+#: Keep each update bounded to one reconciliation run; the character ceiling
+#: remains the primary guard for large OCR documents.
+_SEARCH_INDEX_CHUNK_SIZE: int = _SEARCH_SYNC_BATCH_SIZE
 #: Approximate character ceiling per update (well below Meilisearch's HTTP payload limit).
 _SEARCH_INDEX_CHUNK_CHAR_LIMIT: int = 5_000_000
 
