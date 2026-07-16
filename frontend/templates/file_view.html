@@ -320,13 +320,13 @@
           <span class="info-key">{{ _("file.owner_label") }}</span>
           <span class="info-val">{{ owner_display or _("file.owner_unowned") }}</span>
         </div>
+        {% endif %}
         <div class="info-row">
           <span class="info-key">Sichtbarkeit</span>
           <span class="info-val" id="privacy-state">
             {% if file.is_private %}<i class="fas fa-lock" aria-hidden="true"></i> Privat{% else %}<i class="fas fa-users" aria-hidden="true"></i> Im Tribe sichtbar{% endif %}
           </span>
         </div>
-        {% endif %}
       </div>
 
       <!-- Actions -->
@@ -357,7 +357,7 @@
             <i class="fas fa-share-alt" aria-hidden="true"></i> Share
           </a>
           {% endif %}
-          {% if multi_user_enabled and current_user_role == "owner" %}
+          {% if current_user_role == "owner" %}
           <button type="button" class="action-btn btn-secondary" id="privacy-toggle" onclick="setFilePrivacy({{ file.id }}, {{ 'false' if file.is_private else 'true' }})">
             <i class="fas fa-{{ 'users' if file.is_private else 'lock' }}" aria-hidden="true"></i>
             {{ 'Im Tribe sichtbar machen' if file.is_private else 'Als privat markieren' }}
