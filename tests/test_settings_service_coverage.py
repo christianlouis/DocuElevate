@@ -83,13 +83,12 @@ class TestSettingsServiceEncryption:
         # Test: Save a sensitive setting
         result = save_setting_to_db(db_session, "admin_password", "sensitive_password")
 
-        # Should succeed and store in plaintext with warning logged
-        assert result is True
+        # Sensitive values fail closed; plaintext storage is never acceptable.
+        assert result is False
         mock_encrypt.assert_not_called()
 
-        # Verify it was stored in plaintext
         stored = db_session.query(ApplicationSettings).filter_by(key="admin_password").first()
-        assert stored.value == "sensitive_password"
+        assert stored is None
 
     @patch("app.utils.encryption.encrypt_value")
     @patch("app.utils.encryption.is_encryption_available")

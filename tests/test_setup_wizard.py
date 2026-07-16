@@ -109,9 +109,11 @@ class TestIsSetupRequired:
         result = is_setup_required()
         assert isinstance(result, bool)
 
-    def test_setup_required_when_admin_password_is_none(self):
-        """Test that setup is required when admin_password is None (test environment default)."""
-        # In the test environment, admin_password defaults to None which is a placeholder value
+    @patch("app.utils.setup_wizard.settings")
+    def test_setup_required_when_admin_password_is_none(self, mock_settings):
+        """Test that setup is required when admin_password is None."""
+        mock_settings.session_secret = "a_very_long_real_session_secret_that_is_definitely_not_placeholder"
+        mock_settings.admin_password = None
         result = is_setup_required()
         assert result is True
 
@@ -149,15 +151,15 @@ class TestIsSetupRequired:
 
     @patch("app.utils.setup_wizard.settings")
     def test_handles_exception_gracefully(self, mock_settings):
-        """Test that exceptions are handled gracefully and return False (fail open)."""
+        """An unreadable security state keeps the installation in setup."""
 
         def raise_error():
             raise RuntimeError("boom")
 
         type(mock_settings).session_secret = property(lambda s: raise_error())
-        # This should not raise - it returns False on error (fail open)
+        # This should not raise and must fail closed.
         result = is_setup_required()
-        assert result is False
+        assert result is True
 
 
 @pytest.mark.unit

@@ -1,6 +1,7 @@
 name: docuelevate
 
 x-docuelevate-service: &docuelevate-service
+  image: ${DOCUELEVATE_IMAGE:-docuelevate:local}
   build:
     context: .
     dockerfile: Dockerfile
@@ -25,10 +26,10 @@ x-docuelevate-service: &docuelevate-service
     MULTI_USER_ENABLED: "true"
     ALLOW_LOCAL_SIGNUP: "true"
     UNOWNED_DOCS_VISIBLE_TO_ALL: "false"
-    EXTERNAL_HOSTNAME: localhost:8000
-    PUBLIC_BASE_URL: http://localhost:8000
+    EXTERNAL_HOSTNAME: localhost:${DOCUELEVATE_PORT:-8000}
+    PUBLIC_BASE_URL: http://localhost:${DOCUELEVATE_PORT:-8000}
   volumes:
-    - ${DOCUELEVATE_WORKDIR:-/var/docparse/workdir}:/workdir
+    - ${DOCUELEVATE_WORKDIR:-workdir-data}:/workdir
     - bootstrap-secrets:/run/docuelevate-bootstrap:ro
 
 services:
@@ -102,7 +103,7 @@ services:
     <<: *docuelevate-service
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
     ports:
-      - "8000:8000"
+      - "${DOCUELEVATE_PORT:-8000}:8000"
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -201,6 +202,7 @@ services:
 
 volumes:
   bootstrap-secrets:
+  workdir-data:
   postgres-data:
   meilisearch-data:
   qdrant-data:

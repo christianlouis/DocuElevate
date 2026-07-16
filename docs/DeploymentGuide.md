@@ -7,6 +7,7 @@ This guide covers all supported deployment methods for DocuElevate.
 - [Prerequisites](#prerequisites)
 - [Docker Compose Deployment](#docker-compose-deployment) *(recommended for single-server)*
 - [Kubernetes / Helm Deployment](#kubernetes--helm-deployment) *(recommended for production scale-out)*
+- [Terraform Deployment](#terraform-deployment) *(declarative Kubernetes deployment)*
 - [Production Considerations](#production-considerations)
 - [Scaling](#scaling)
 - [Backup Procedures](#backup-procedures)
@@ -56,9 +57,10 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
-For upgrade compatibility, documents continue to live under the host path
-`/var/docparse/workdir`. A new installation can choose another persistent host
-path without changing the Compose file:
+Fresh installations store documents in the private `workdir-data` Docker named
+volume. This avoids host-specific paths and makes a disposable Canary safe to
+create and remove. Existing operators who intentionally want a host directory
+can opt in without changing the Compose file:
 
 ```dotenv
 DOCUELEVATE_WORKDIR=/srv/docuelevate/workdir
@@ -67,6 +69,24 @@ DOCUELEVATE_WORKDIR=/srv/docuelevate/workdir
 The containers themselves keep `/workdir` as their working directory, so a
 legacy relative SQLite `DATABASE_URL` also continues to resolve against the
 persisted document path during an upgrade.
+
+Run a parallel disposable Canary on another local port without changing the
+Compose file or colliding with an existing DocuElevate installation:
+
+```bash
+COMPOSE_PROJECT_NAME=docuelevate-canary-preprod \
+DOCUELEVATE_PORT=8180 \
+docker-compose up -d --build
+```
+
+The browser journey is then available at `http://localhost:8180`, and generated
+callback/base URLs use the same port automatically. Remove the complete Canary,
+including its generated bootstrap secret and all named data volumes, with:
+
+```bash
+COMPOSE_PROJECT_NAME=docuelevate-canary-preprod \
+docker-compose down --volumes --remove-orphans
+```
 
 See the [Configuration Guide](ConfigurationGuide.md) for all optional settings.
 
@@ -98,6 +118,10 @@ wizard. Then create normal user accounts and follow the per-user onboarding
 journey. Multi-user isolation is enabled by default and unowned documents are
 not visible to ordinary users.
 
+For automated or AI-operated installations, use the versioned
+[Agentic setup](AgenticSetup.md) manifest. Its `plan` and `apply` commands use
+the same database validation and encryption contract as the browser journey.
+
 The API readiness endpoint is
 `http://localhost:8000/api/diagnostic/healthz/ready`; optional API documentation
 is available at `http://localhost:8000/docs` when enabled.
@@ -114,6 +138,8 @@ The Helm chart at `helm/docuelevate/` packages all components into a single, con
 - Persistent volumes for workdir and Meilisearch data
 - Alembic database migration Job (pre-install/upgrade hook)
 - TLS Ingress via any controller (nginx, Traefik, etc.)
+- An optional, idempotent agentic setup Job after migrations
+- Existing Kubernetes Secrets managed by 1Password / External Secrets
 
 ### Prerequisites
 
@@ -298,6 +324,16 @@ Internet
 ```
 
 ---
+
+## Terraform Deployment
+
+The reference Terraform configuration deploys this Helm chart and optionally
+applies the same versioned setup manifest used by an automation agent. It does
+not accept raw secrets: runtime and initial-setup credentials are referenced by
+existing Kubernetes Secret names so they do not enter Terraform state.
+
+See the [Terraform deployment guide](TerraformDeployment.md) and the runnable
+[`examples/terraform/kubernetes`](https://github.com/christianlouis/DocuElevate/tree/main/examples/terraform/kubernetes) module.
 
 ## Production Considerations
 

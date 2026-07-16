@@ -43,6 +43,15 @@ MANIFEST
 *.key
 *.p12
 *.pfx
+
+# Terraform working directories and local state (provider lock files are kept)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Helm dependencies are restored from Chart.lock
+helm/*/charts/*.tgz
 id_rsa*
 ssh_host_*
 

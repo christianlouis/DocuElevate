@@ -249,7 +249,7 @@ class TestUploadGoogleDrive:
             self._call(fp, {}, {})
 
     def test_oauth_upload_calls_drive_api(self, tmp_path):
-        """OAuth credentials (client_id + client_secret + refresh_token) trigger OAuth flow."""
+        """Operator app credentials plus a user's refresh token trigger OAuth."""
         fp = str(tmp_path / "doc.pdf")
         _write_file(fp)
 
@@ -268,20 +268,22 @@ class TestUploadGoogleDrive:
         mock_google_auth_transport.requests.Request = MagicMock()
         mock_media_upload = MagicMock()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "googleapiclient.discovery": MagicMock(build=mock_build),
-                "googleapiclient.http": MagicMock(MediaFileUpload=mock_media_upload),
-                "google.oauth2.credentials": mock_google_oauth2.credentials,
-                "google.auth.transport.requests": mock_google_auth_transport.requests,
-                "google.oauth2.service_account": MagicMock(),
-            },
+        modules = {
+            "googleapiclient.discovery": MagicMock(build=mock_build),
+            "googleapiclient.http": MagicMock(MediaFileUpload=mock_media_upload),
+            "google.oauth2.credentials": mock_google_oauth2.credentials,
+            "google.auth.transport.requests": mock_google_auth_transport.requests,
+            "google.oauth2.service_account": MagicMock(),
+        }
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.upload_to_user_integration.settings.google_drive_client_id", "cid"),
+            patch("app.tasks.upload_to_user_integration.settings.google_drive_client_secret", "csec"),
         ):
             result = self._call(
                 fp,
                 {"folder_id": "folder-xyz"},
-                {"client_id": "cid", "client_secret": "csec", "refresh_token": "rtoken"},
+                {"refresh_token": "rtoken"},
             )
 
         assert result["status"] == "Completed"

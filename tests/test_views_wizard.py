@@ -45,7 +45,7 @@ class TestWizardViews:
 
     def test_setup_wizard_skip(self, client):
         """Test skipping the setup wizard."""
-        response = client.get("/setup/skip", follow_redirects=False)
+        response = client.post("/setup/skip", follow_redirects=False)
         assert response.status_code in (200, 303)
 
     @patch("app.utils.settings_service.get_setting_from_db")
@@ -116,8 +116,9 @@ class TestWizardViewsPost:
         assert response.status_code == 303
         mock_save.assert_not_called()
 
+    @patch("app.views.wizard.get_missing_required_settings", return_value=[])
     @patch("app.views.wizard.save_setting_to_db")
-    def test_setup_wizard_save_last_step_redirects_home(self, mock_save, client):
+    def test_setup_wizard_save_last_step_records_completion(self, mock_save, _mock_missing, client):
         """Test that last step redirects to home."""
         mock_save.return_value = True
 
@@ -132,7 +133,8 @@ class TestWizardViewsPost:
         )
 
         assert response.status_code == 303
-        assert "/?setup=complete" in response.headers["location"]
+        assert response.headers["location"] == "/"
+        assert any(call.args[1] == "_setup_wizard_completed" for call in mock_save.call_args_list)
 
     @patch("app.views.wizard.save_setting_to_db")
     def test_setup_wizard_save_failed_setting(self, mock_save, client):
@@ -198,7 +200,7 @@ class TestWizardSkip:
         """Test successful skipping of setup wizard."""
         mock_save.return_value = True
 
-        response = client.get("/setup/skip", follow_redirects=False)
+        response = client.post("/setup/skip", follow_redirects=False)
 
         assert response.status_code == 303
         assert response.headers["location"] == "/"
@@ -212,7 +214,7 @@ class TestWizardSkip:
         """Test exception handling when skipping wizard."""
         mock_save.side_effect = Exception("Database error")
 
-        response = client.get("/setup/skip", follow_redirects=False)
+        response = client.post("/setup/skip", follow_redirects=False)
 
         # Should still redirect to home even on error
         assert response.status_code == 303
@@ -228,7 +230,7 @@ class TestWizardUndoSkip:
         """Test successful undo of wizard skip (covers lines 166-171)."""
         mock_delete.return_value = True
 
-        response = client.get("/setup/undo-skip", follow_redirects=False)
+        response = client.post("/setup/undo-skip", follow_redirects=False)
 
         assert response.status_code == 303
         assert "/setup?step=1" in response.headers["location"]
@@ -241,7 +243,56 @@ class TestWizardUndoSkip:
         """Test exception handling when undoing wizard skip (covers lines 172-174)."""
         mock_delete.side_effect = Exception("Database error")
 
-        response = client.get("/setup/undo-skip", follow_redirects=False)
+        response = client.post("/setup/undo-skip", follow_redirects=False)
 
         assert response.status_code == 303
         assert response.headers["location"] == "/settings"
+
+
+@pytest.mark.integration
+class TestWizardBootstrapBoundary:
+    """First-run setup is public once, then administrator-only."""
+
+    def test_real_first_run_session_can_continue_after_step_one(self, client):
+        with (
+            patch("app.views.wizard.app_settings.auth_enabled", True),
+            patch("app.views.wizard.is_setup_required", return_value=True),
+        ):
+            assert client.get("/setup?step=1", follow_redirects=False).status_code == 200
+            assert client.get("/setup?step=2", follow_redirects=False).status_code == 200
+
+    def test_non_bootstrap_visitor_cannot_jump_into_setup(self, client):
+        with patch("app.views.wizard.app_settings.auth_enabled", True):
+            response = client.get("/setup?step=2", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/login?next=/setup")
+
+    def test_completed_install_requires_admin_for_setup(self, client):
+        with (
+            patch("app.views.wizard.app_settings.auth_enabled", True),
+            patch("app.views.wizard.is_setup_required", return_value=False),
+        ):
+            response = client.get("/setup?step=1", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/login?next=/setup")
+
+    @patch("app.views.wizard.save_setting_to_db")
+    def test_unauthenticated_visitor_cannot_skip_setup(self, mock_save, client):
+        with patch("app.views.wizard.app_settings.auth_enabled", True):
+            response = client.post("/setup/skip", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/login?next=/setup/skip")
+        mock_save.assert_not_called()
+
+    def test_required_admin_password_cannot_be_skipped(self, client):
+        with (
+            patch("app.views.wizard.app_settings.admin_password", None),
+            patch("app.views.wizard.get_setting_from_db", return_value=None),
+        ):
+            response = client.post(
+                "/setup",
+                data={"step": "2", "admin_username": "admin", "admin_password": ""},
+                follow_redirects=False,
+            )
+        assert response.status_code == 303
+        assert response.headers["location"] == "/setup?step=2&error=required_missing"

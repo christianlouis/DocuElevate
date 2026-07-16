@@ -53,7 +53,13 @@ os.environ["AZURE_ENDPOINT"] = "https://test.cognitiveservices.azure.com/"
 os.environ["GOTENBERG_URL"] = "http://localhost:3000"
 os.environ["WORKDIR"] = "/tmp"
 os.environ["AUTH_ENABLED"] = "False"
+os.environ["ADMIN_PASSWORD"] = "test_admin_password_for_completed_setup"
 os.environ["SESSION_SECRET"] = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+os.environ["LOG_FORMAT"] = "text"
+
+# Keep pytest-created files inside WORKDIR on macOS, where the system TMPDIR
+# otherwise resolves to /private/var while /tmp resolves to /private/tmp.
+tempfile.tempdir = "/tmp"
 
 from app.database import Base  # noqa: E402
 from app.main import app as fastapi_app  # noqa: E402

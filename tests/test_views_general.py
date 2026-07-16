@@ -1,5 +1,7 @@
 """Tests for app/views/general.py module."""
 
+from unittest.mock import patch
+
 import pytest
 
 
@@ -116,7 +118,9 @@ class TestGeneralViews:
         # May be 200 or 404 depending on whether the file exists
         assert response.status_code in (200, 404)
 
-    def test_index_with_setup_complete(self, client):
-        """Test index page with setup=complete query param."""
+    @patch("app.utils.setup_wizard.is_setup_required", return_value=True)
+    def test_index_query_does_not_bypass_setup(self, _setup_required, client):
+        """Setup completion is server-owned, never accepted from the URL."""
         response = client.get("/?setup=complete", follow_redirects=False)
-        assert response.status_code == 200
+        assert response.status_code == 303
+        assert response.headers["location"] == "/setup?step=1"

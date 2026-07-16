@@ -53,7 +53,7 @@ spec:
             - configMapRef:
                 name: {{ include "docuelevate.fullname" . }}-config
             - secretRef:
-                name: {{ include "docuelevate.fullname" . }}-secret
+                name: {{ include "docuelevate.secretName" . }}
           {{- with .Values.api.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
