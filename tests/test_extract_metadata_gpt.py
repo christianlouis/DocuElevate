@@ -113,6 +113,25 @@ class TestExtractMetadataWithGpt:
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
     @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.settings")
+    def test_missing_ai_credentials_skip_metadata_and_continue_pipeline(
+        self, mock_settings, mock_get_provider, mock_log_progress, mock_embed_task
+    ):
+        """A keyless fresh install still embeds text and reaches finalization."""
+        mock_settings.ai_provider = "openai"
+        mock_settings.openai_api_key = None
+        extract_metadata_with_gpt.request.id = "test-task-id"
+
+        result = extract_metadata_with_gpt.__wrapped__("test.pdf", "Embedded document text", 123)
+
+        mock_get_provider.assert_not_called()
+        mock_embed_task.delay.assert_called_once_with("test.pdf", "Embedded document text", {}, 123)
+        assert result == {"s3_file": "test.pdf", "metadata": {}, "skipped": True}
+        assert any(call.args[2] == "skipped" for call in mock_log_progress.call_args_list)
+
+    @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
+    @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
+    @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
     def test_successful_metadata_extraction(self, mock_get_provider, mock_log_progress, mock_embed_task):
         """Test successful metadata extraction with valid AI provider response."""
         mock_provider = MagicMock()

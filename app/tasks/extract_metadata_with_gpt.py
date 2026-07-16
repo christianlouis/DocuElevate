@@ -19,6 +19,24 @@ from app.utils.filename_utils import VALID_FILENAME_RE
 logger = logging.getLogger(__name__)
 
 
+def _active_ai_provider_is_configured() -> bool:
+    """Return whether the selected AI provider has its required connection settings."""
+    provider = (settings.ai_provider or "openai").lower()
+    if provider in {"openai", "azure", "litellm"}:
+        return bool(settings.openai_api_key)
+    if provider == "anthropic":
+        return bool(settings.anthropic_api_key)
+    if provider == "gemini":
+        return bool(settings.gemini_api_key)
+    if provider == "ollama":
+        return bool(settings.ollama_base_url)
+    if provider == "openrouter":
+        return bool(settings.openrouter_api_key)
+    if provider == "portkey":
+        return bool(settings.portkey_api_key)
+    return False
+
+
 def _sample_text_for_metadata(text: str, model: str, max_tokens: int) -> tuple[str, int, int]:
     """Fit long documents into the metadata prompt while retaining coverage."""
     if not text:
@@ -109,6 +127,20 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
                 file_record = db.query(FileRecord).filter_by(local_filename=file_path).first()
                 if file_record:
                     file_id = file_record.id
+
+    if not _active_ai_provider_is_configured():
+        provider = (settings.ai_provider or "openai").lower()
+        message = f"AI provider '{provider}' is not configured; continuing without extracted metadata"
+        logger.info("[%s] %s", task_id, message)
+        log_task_progress(
+            task_id,
+            "extract_metadata_with_gpt",
+            "skipped",
+            message,
+            file_id=file_id,
+        )
+        embed_metadata_into_pdf.delay(filename, cleaned_text, {}, file_id)
+        return {"s3_file": os.path.basename(filename), "metadata": {}, "skipped": True}
 
     model = settings.ai_model or settings.openai_model
     metadata_text, original_tokens, sampled_tokens = _sample_text_for_metadata(
