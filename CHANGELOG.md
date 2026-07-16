@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.5 (2026-07-16)
+
+### Bug Fixes
+
+- **research**: Reject ungrounded results and retry DB
+  ([#1118](https://github.com/christianlouis/DocuElevate/pull/1118),
+  [`f9692b1`](https://github.com/christianlouis/DocuElevate/commit/f9692b1ac30d05ad3072fe3088e0b0b547abbd0b))
+
+
 ## v0.184.4 (2026-07-15)
 
 ### Bug Fixes
