@@ -438,6 +438,7 @@ def _search_lexical_scope(scope: list[int], lexical_queries: list[str]) -> tuple
                 file_ids=scope,
                 page=page,
                 per_page=_LEXICAL_RESULTS_PER_SCOPE,
+                matching_strategy="all",
             )
             page_scores = []
             for hit in result.get("results", []):

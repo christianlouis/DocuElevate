@@ -270,6 +270,7 @@ def search_documents(
     date_to: Optional[int] = None,
     sort_by: str = "relevance",
     sort_order: str = "desc",
+    matching_strategy: str | None = None,
     page: int = 1,
     per_page: int = 20,
 ) -> dict:
@@ -289,6 +290,9 @@ def search_documents(
         date_to: Optional upper bound Unix timestamp for created_at.
         sort_by: Relevance or a supported sortable document field.
         sort_order: Ascending or descending when ``sort_by`` is not relevance.
+        matching_strategy: Optional Meilisearch term-matching strategy. Use
+            ``"all"`` to require every query term, or ``"last"`` to retain
+            Meilisearch's fallback behavior.
         page: 1-based page number.
         per_page: Results per page (max 100).
 
@@ -359,6 +363,8 @@ def search_documents(
 
         if filters:
             search_params["filter"] = " AND ".join(filters)
+        if matching_strategy in {"all", "last"}:
+            search_params["matchingStrategy"] = matching_strategy
 
         sort_fields = {
             "created_at": "created_at_ts",
