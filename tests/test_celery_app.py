@@ -41,6 +41,9 @@ class TestCeleryAppConfig:
         assert celery.conf.task_routes is not None
         assert "app.tasks.*" in celery.conf.task_routes
         assert celery.conf.task_routes["app.tasks.*"]["queue"] == "document_processor"
+        assert celery.conf.task_routes[
+            "app.tasks.knowledge_research.run_knowledge_research"
+        ]["queue"] == "knowledge_research"
 
     def test_broker_connection_retry_on_startup(self):
         """Test that broker connection retry on startup is enabled."""

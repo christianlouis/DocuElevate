@@ -38,6 +38,9 @@ celery.conf.broker_transport_options = {
 # Set the default queue and routing so that tasks are enqueued on "document_processor"
 celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {
+    "app.tasks.knowledge_research.run_knowledge_research": {
+        "queue": "knowledge_research"
+    },
     "app.tasks.*": {"queue": "document_processor"},
 }
 
