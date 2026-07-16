@@ -163,6 +163,7 @@ def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Sessio
     accessible_rows = (
         apply_owner_filter(
             db.query(FileRecord.id, FileRecord.filehash, func.length(FileRecord.ocr_text)).filter(
+                FileRecord.is_duplicate.is_(False),
                 FileRecord.ocr_text.isnot(None),
                 func.length(func.trim(FileRecord.ocr_text)) > 0,
             ),
