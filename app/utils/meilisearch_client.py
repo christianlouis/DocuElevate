@@ -291,7 +291,8 @@ def search_documents(
         sort_by: Relevance or a supported sortable document field.
         sort_order: Ascending or descending when ``sort_by`` is not relevance.
         matching_strategy: Optional Meilisearch term-matching strategy. Use
-            ``"all"`` for precision-sensitive retrieval planning.
+            ``"all"`` to require every query term, or ``"last"`` to retain
+            Meilisearch's fallback behavior.
         page: 1-based page number.
         per_page: Results per page (max 100).
 

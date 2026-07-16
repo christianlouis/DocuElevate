@@ -270,6 +270,13 @@ class TestMeilisearchSearchDocuments:
         search_params = mock_index.search.call_args.args[1]
         assert search_params["matchingStrategy"] == "all"
 
+        mock_index.search.reset_mock()
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            search_documents("invoice")
+
+        default_search_params = mock_index.search.call_args.args[1]
+        assert "matchingStrategy" not in default_search_params
+
     def test_search_with_tags_filter(self):
         """search_documents passes tags filter to Meilisearch."""
         mock_client, mock_index = self._make_mock_client(hits=[], total=0)
