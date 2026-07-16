@@ -331,18 +331,16 @@ def _fallback_research_plan(query: str) -> dict[str, Any]:
     }
 
 
-def _entity_first_lexical_queries(
-    payload: dict[str, Any], lexical_queries: list[str]
-) -> list[str]:
+def _entity_first_lexical_queries(payload: dict[str, Any], lexical_queries: list[str]) -> list[str]:
     """Prefer exact named entities over planner-generated compound AND queries."""
     raw_entities = payload.get("hard_entities", [])
     if isinstance(raw_entities, str):
         raw_entities = [raw_entities]
-    entities = [
-        " ".join(value.split()).strip('"')[:120]
-        for value in raw_entities
-        if isinstance(value, str) and value.strip()
-    ] if isinstance(raw_entities, list) else []
+    entities = (
+        [" ".join(value.split()).strip('"')[:120] for value in raw_entities if isinstance(value, str) and value.strip()]
+        if isinstance(raw_entities, list)
+        else []
+    )
     for query in lexical_queries:
         entities.extend(re.findall(r'"([^"\r\n]{2,120})"', query))
 
@@ -553,9 +551,7 @@ def _subject_hint_from_history(history_json: str) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def _no_evidence_answer(
-    question: str, *, index_complete: bool, analysis_truncated: bool = False
-) -> str:
+def _no_evidence_answer(question: str, *, index_complete: bool, analysis_truncated: bool = False) -> str:
     """Return a localized fallback that accurately qualifies index coverage."""
     looks_german = bool(re.search(r"\b(wie|was|wann|wo|welche|mein|meine|über|belegbar)\b", question, re.IGNORECASE))
     if looks_german:
