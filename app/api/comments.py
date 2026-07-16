@@ -280,6 +280,13 @@ def create_comment(
                         )
                         .first()
                     )
+                    from app.utils.tribe_scope import ensure_personal_scope
+
+                    ensure_personal_scope(
+                        db,
+                        tenant_id=file_record.tenant_id,
+                        user_id=mentioned_user,
+                    )
                     if not existing_share:
                         auto_share = FileShare(
                             file_id=file_id,

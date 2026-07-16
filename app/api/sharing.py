@@ -152,6 +152,15 @@ def create_share(
         )
 
     try:
+        from app.utils.tribe_scope import ensure_personal_scope
+
+        # Keep a direct share file-specific: prove tenant membership through
+        # the recipient's personal Tribe without exposing this whole Tribe.
+        ensure_personal_scope(
+            db,
+            tenant_id=file_record.tenant_id,
+            user_id=shared_with_user_id,
+        )
         existing = (
             db.query(FileShare)
             .filter(FileShare.file_id == file_id, FileShare.shared_with_user_id == shared_with_user_id)

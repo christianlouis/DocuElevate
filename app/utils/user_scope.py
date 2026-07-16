@@ -132,7 +132,9 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     member_scopes = select(TribeMembership.tenant_id, TribeMembership.tribe_id).where(
         TribeMembership.user_id == owner_id
     )
+    member_tenants = select(TribeMembership.tenant_id).where(TribeMembership.user_id == owner_id)
     in_member_tribe = tuple_(FileRecord.tenant_id, FileRecord.tribe_id).in_(member_scopes)
+    in_member_tenant = FileRecord.tenant_id.in_(member_tenants)
 
     # The owner can read their document only inside a current membership; any
     # member of the same Tribe can read a non-private document.
@@ -146,7 +148,7 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
 
     conditions.append(
         and_(
-            in_member_tribe,
+            in_member_tenant,
             FileRecord.is_private.is_(False),
             FileRecord.id.in_(sa_select(FileShare.file_id).where(FileShare.shared_with_user_id == owner_id)),
         )
@@ -188,7 +190,18 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
     if user_id is None:
         return None
 
-    membership = (
+    tenant_membership = (
+        db.query(TribeMembership.id)
+        .filter(
+            TribeMembership.user_id == user_id,
+            TribeMembership.tenant_id == file_record.tenant_id,
+        )
+        .first()
+    )
+    if tenant_membership is None:
+        return None
+
+    tribe_membership = (
         db.query(TribeMembership.id)
         .filter(
             TribeMembership.user_id == user_id,
@@ -198,10 +211,7 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
         .first()
     )
 
-    if membership is None:
-        return None
-
-    if file_record.owner_id == user_id:
+    if tribe_membership is not None and file_record.owner_id == user_id:
         return "owner"
 
     # Privacy is an owner-only boundary and wins over named shares and
@@ -219,7 +229,7 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
         return share.role
 
     # Every non-private document is visible to authorised Tribe members.
-    if not file_record.is_private:
+    if tribe_membership is not None and not file_record.is_private:
         return FILE_SHARE_ROLE_VIEWER
 
     # Unclaimed document — limited access when setting allows it

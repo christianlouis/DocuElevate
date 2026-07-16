@@ -85,7 +85,8 @@ def upgrade() -> None:
     bind = op.get_bind()
     owners = [row[0] for row in bind.execute(sa.text("SELECT DISTINCT owner_id FROM files WHERE owner_id IS NOT NULL"))]
     profile_owners = [row[0] for row in bind.execute(sa.text("SELECT user_id FROM user_profiles"))]
-    for owner_id in sorted(set(owners + profile_owners)):
+    share_recipients = [row[0] for row in bind.execute(sa.text("SELECT DISTINCT shared_with_user_id FROM file_shares"))]
+    for owner_id in sorted(set(owners + profile_owners + share_recipients)):
         tribe_id = _personal_tribe_id(owner_id)
         bind.execute(
             sa.text("INSERT INTO tribes (id, tenant_id, name) VALUES (:id, :tenant, :name)"),

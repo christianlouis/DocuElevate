@@ -238,6 +238,20 @@ class QdrantVectorIndex:
             conditions.append(
                 {"must": [scope_filter, owner_condition]} if scope_filter is not None else owner_condition
             )
+            if scope_filter is not None and tribe_scopes:
+                # Points written before Tribe payloads existed remain usable
+                # for their owner during the rolling reindex. Requiring both
+                # fields to be absent prevents this compatibility path from
+                # weakening newly scoped points.
+                conditions.append(
+                    {
+                        "must": [
+                            {"is_null": {"key": "tenant_id"}},
+                            {"is_null": {"key": "tribe_id"}},
+                            owner_condition,
+                        ]
+                    }
+                )
         if scope_filter is not None:
             conditions.append(
                 {
@@ -255,7 +269,6 @@ class QdrantVectorIndex:
             conditions.append(
                 {
                     "must": [
-                        scope_filter,
                         shared_condition,
                         {"key": "is_private", "match": {"value": False}},
                     ]
@@ -263,6 +276,17 @@ class QdrantVectorIndex:
                 if scope_filter is not None
                 else shared_condition
             )
+            if scope_filter is not None and tribe_scopes:
+                conditions.append(
+                    {
+                        "must": [
+                            {"is_null": {"key": "tenant_id"}},
+                            {"is_null": {"key": "tribe_id"}},
+                            shared_condition,
+                            {"key": "is_private", "match": {"value": False}},
+                        ]
+                    }
+                )
         if include_unowned:
             unowned_conditions = [
                 cls._owner_condition(None),

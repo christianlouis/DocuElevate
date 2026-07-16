@@ -312,11 +312,16 @@ def _qdrant_authorization_scope(db: Session, request: Request) -> dict[str, Any]
         .order_by(TribeMembership.tenant_id.asc(), TribeMembership.tribe_id.asc())
         .all()
     ]
+    tenant_ids = sorted({tenant_id for tenant_id, _tribe_id in tribe_scopes})
     shared_document_ids = [
         row[0]
         for row in db.query(FileShare.file_id)
         .join(FileRecord, FileRecord.id == FileShare.file_id)
-        .filter(FileShare.shared_with_user_id == owner_id, FileRecord.is_private.is_(False))
+        .filter(
+            FileShare.shared_with_user_id == owner_id,
+            FileRecord.tenant_id.in_(tenant_ids),
+            FileRecord.is_private.is_(False),
+        )
         .order_by(FileShare.file_id.asc())
         .all()
     ]

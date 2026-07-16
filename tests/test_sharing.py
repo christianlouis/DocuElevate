@@ -10,7 +10,7 @@ from app.models import (
     TribeMembership,
     UserProfile,
 )
-from app.utils.tribe_scope import ensure_document_scope
+from app.utils.tribe_scope import ensure_document_scope, ensure_personal_scope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -110,6 +110,21 @@ class TestGetFileRole:
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
         db_session.add(share)
         db_session.commit()
+        assert get_file_role(f, "bob", db_session) == FILE_SHARE_ROLE_VIEWER
+
+    def test_file_share_does_not_require_or_grant_file_tribe_membership(self, db_session, monkeypatch):
+        from app.config import settings as real_settings
+        from app.utils.user_scope import get_file_role
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        f = _create_file(db_session, owner_id="alice")
+        _tenant_id, bob_tribe_id = ensure_personal_scope(db_session, "bob", f.tenant_id)
+        db_session.add(
+            FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
+        )
+        db_session.commit()
+
+        assert bob_tribe_id != f.tribe_id
         assert get_file_role(f, "bob", db_session) == FILE_SHARE_ROLE_VIEWER
 
     def test_shared_editor_returns_editor(self, db_session, monkeypatch):
@@ -323,6 +338,9 @@ class TestCreateShare:
         )
         assert resp.status_code == 201
         assert resp.json()["role"] == "editor"
+        carol_membership = db_session.query(TribeMembership).filter_by(user_id="carol").one()
+        assert carol_membership.tenant_id == f.tenant_id
+        assert carol_membership.tribe_id != f.tribe_id
 
     def test_non_owner_cannot_share(self, client, db_session, monkeypatch):
         import app.api.sharing as sharing_mod
@@ -634,6 +652,9 @@ class TestAutoShareOnMention:
         )
         assert share is not None
         assert share.role == FILE_SHARE_ROLE_VIEWER
+        bob_membership = db_session.query(TribeMembership).filter_by(user_id="bob").one()
+        assert bob_membership.tenant_id == f.tenant_id
+        assert bob_membership.tribe_id != f.tribe_id
 
     def test_mention_does_not_duplicate_share(self, client, db_session, monkeypatch):
         """Mentioning a user that already has a share does not create a duplicate."""

@@ -361,7 +361,7 @@ def test_qdrant_search_denies_all_when_user_has_no_tribe_membership():
             "query",
             limit=5,
             owner_id="alice@example.com",
-            shared_document_ids=[8],
+            shared_document_ids=[],
             include_unowned=True,
             tribe_scopes=[],
         )
@@ -370,6 +370,31 @@ def test_qdrant_search_denies_all_when_user_has_no_tribe_membership():
     conditions = request.call_args.args[2]["filter"]["should"]
     assert conditions[0] == {"must": [no_scope, {"key": "owner_id", "match": {"value": "alice@example.com"}}]}
     assert all(no_scope in condition["must"] for condition in conditions)
+
+
+def test_qdrant_search_keeps_legacy_owner_points_during_scope_transition():
+    from app.utils.vector_index import QdrantVectorIndex
+
+    response = SimpleNamespace(status_code=200, json=lambda: {"result": {"points": []}})
+    with (
+        patch("app.utils.vector_index.generate_embeddings", return_value=[[0.1, 0.2]]),
+        patch.object(QdrantVectorIndex, "_request", return_value=response) as request,
+    ):
+        QdrantVectorIndex().search(
+            "query",
+            limit=5,
+            owner_id="alice@example.com",
+            tribe_scopes=[("tenant-a", "tribe-a")],
+        )
+
+    conditions = request.call_args.args[2]["filter"]["should"]
+    assert {
+        "must": [
+            {"is_null": {"key": "tenant_id"}},
+            {"is_null": {"key": "tribe_id"}},
+            {"key": "owner_id", "match": {"value": "alice@example.com"}},
+        ]
+    } in conditions
 
 
 def test_qdrant_document_cleanup_is_owner_scoped():
@@ -477,8 +502,8 @@ def test_knowledge_search_passes_authorized_scope_to_qdrant(db_session):
         mime_type="application/pdf",
         ocr_text="denied evidence",
     )
-    _assign_personal_scope(db_session, "alice@example.com", own, shared)
-    _assign_personal_scope(db_session, "bob@example.com", denied)
+    _assign_personal_scope(db_session, "alice@example.com", own)
+    _assign_personal_scope(db_session, "bob@example.com", shared, denied)
     db_session.add_all([own, shared, denied])
     db_session.add(
         FileShare(

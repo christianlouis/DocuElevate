@@ -63,6 +63,21 @@ class TestOrderedTables:
         # custom_table is not in _TABLE_ORDER so comes after known tables
         assert "custom_table" in result
 
+    def test_tenant_parents_are_copied_before_files(self):
+        mock_inspector = MagicMock()
+        mock_inspector.get_table_names.return_value = [
+            "files",
+            "tribe_memberships",
+            "tribes",
+            "tenants",
+        ]
+
+        result = _ordered_tables(mock_inspector)
+
+        assert result.index("tenants") < result.index("tribes")
+        assert result.index("tribes") < result.index("tribe_memberships")
+        assert result.index("tribe_memberships") < result.index("files")
+
     def test_skips_alembic_version(self):
         """Test that alembic_version table is always skipped."""
         mock_inspector = MagicMock()

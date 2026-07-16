@@ -15,9 +15,35 @@ from app.models import (
 )
 
 
-def personal_tribe_id(owner_id: str) -> str:
+def personal_tribe_id(owner_id: str, tenant_id: str = DEFAULT_TENANT_ID) -> str:
     """Return a stable opaque ID without exposing the login in file payloads."""
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"docuelevate:tribe:{DEFAULT_TENANT_ID}:{owner_id}"))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"docuelevate:tribe:{tenant_id}:{owner_id}"))
+
+
+def ensure_personal_scope(
+    db: Session,
+    user_id: str,
+    tenant_id: str = DEFAULT_TENANT_ID,
+) -> tuple[str, str]:
+    """Ensure a user has a personal Tribe proving membership in one tenant."""
+    tenant = db.get(Tenant, tenant_id)
+    if tenant is None:
+        db.add(Tenant(id=tenant_id, name="Default tenant" if tenant_id == DEFAULT_TENANT_ID else tenant_id))
+        db.flush()
+
+    tribe_id = personal_tribe_id(user_id, tenant_id)
+    tribe = db.get(Tribe, tribe_id)
+    if tribe is None:
+        db.add(Tribe(id=tribe_id, tenant_id=tenant_id, name=f"Personal space for {user_id}"))
+        db.flush()
+    ensure_tribe_membership(
+        db,
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
+        user_id=user_id,
+        role="admin",
+    )
+    return tenant_id, tribe_id
 
 
 def ensure_document_scope(db: Session, owner_id: str | None) -> tuple[str, str]:
@@ -27,12 +53,11 @@ def ensure_document_scope(db: Session, owner_id: str | None) -> tuple[str, str]:
     later routing decision may move the document to an explicitly selected
     shared Tribe before indexing or delivery.
     """
-    tenant = db.get(Tenant, DEFAULT_TENANT_ID)
-    if tenant is None:
-        db.add(Tenant(id=DEFAULT_TENANT_ID, name="Default tenant"))
-        db.flush()
-
     if owner_id is None:
+        tenant = db.get(Tenant, DEFAULT_TENANT_ID)
+        if tenant is None:
+            db.add(Tenant(id=DEFAULT_TENANT_ID, name="Default tenant"))
+            db.flush()
         tribe_id = QUARANTINE_TRIBE_ID
         tribe = db.get(Tribe, tribe_id)
         if tribe is None:
@@ -40,24 +65,30 @@ def ensure_document_scope(db: Session, owner_id: str | None) -> tuple[str, str]:
             db.flush()
         return DEFAULT_TENANT_ID, tribe_id
 
-    tribe_id = personal_tribe_id(owner_id)
-    tribe = db.get(Tribe, tribe_id)
-    if tribe is None:
-        db.add(Tribe(id=tribe_id, tenant_id=DEFAULT_TENANT_ID, name=f"Personal space for {owner_id}"))
-        db.flush()
+    return ensure_personal_scope(db, owner_id)
+
+
+def ensure_tribe_membership(
+    db: Session,
+    *,
+    tenant_id: str,
+    tribe_id: str,
+    user_id: str,
+    role: str = "member",
+) -> TribeMembership:
+    """Return the user's membership, creating it when collaboration grants access."""
     membership = (
         db.query(TribeMembership)
-        .filter(TribeMembership.tribe_id == tribe_id, TribeMembership.user_id == owner_id)
+        .filter(TribeMembership.tribe_id == tribe_id, TribeMembership.user_id == user_id)
         .first()
     )
     if membership is None:
-        db.add(
-            TribeMembership(
-                tenant_id=DEFAULT_TENANT_ID,
-                tribe_id=tribe_id,
-                user_id=owner_id,
-                role="admin",
-            )
+        membership = TribeMembership(
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
+            user_id=user_id,
+            role=role,
         )
+        db.add(membership)
         db.flush()
-    return DEFAULT_TENANT_ID, tribe_id
+    return membership
