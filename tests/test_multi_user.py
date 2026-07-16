@@ -47,7 +47,7 @@ def mu_session(mu_engine):
     session.close()
 
 
-def _create_file_record(session, owner_id=None, filename="test.pdf"):
+def _create_file_record(session, owner_id=None, filename="test.pdf", is_private=False):
     """Helper to insert a minimal FileRecord."""
     rec = FileRecord(
         filehash="abc123",
@@ -57,6 +57,7 @@ def _create_file_record(session, owner_id=None, filename="test.pdf"):
         mime_type="application/pdf",
         is_duplicate=False,
         owner_id=owner_id,
+        is_private=is_private,
     )
     session.add(rec)
     session.commit()
@@ -89,6 +90,11 @@ class TestFileRecordOwnerField:
         """FileRecord created without owner_id should have None."""
         rec = _create_file_record(mu_session)
         assert rec.owner_id is None
+
+    @pytest.mark.unit
+    def test_private_defaults_to_false(self, mu_session):
+        rec = _create_file_record(mu_session)
+        assert rec.is_private is False
 
     @pytest.mark.unit
     def test_owner_id_stores_value(self, mu_session):
@@ -341,11 +347,12 @@ class TestApplyOwnerFilter:
 
     @pytest.mark.unit
     def test_admin_sees_all_when_enabled(self, mu_session):
-        """Admin users bypass the owner filter in multi-user mode."""
+        """Admins see non-private files but cannot override owner privacy."""
         from app.utils.user_scope import apply_owner_filter
 
         _create_file_record(mu_session, owner_id="alice")
         _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id="bob", filename="private.pdf", is_private=True)
         _create_file_record(mu_session, owner_id=None)
 
         request = _mock_request(user={"preferred_username": "admin", "is_admin": True})
@@ -355,6 +362,19 @@ class TestApplyOwnerFilter:
             filtered = apply_owner_filter(query, request)
 
         assert filtered.count() == 3
+
+    @pytest.mark.unit
+    def test_private_file_is_hidden_from_named_share(self, mu_session):
+        from app.models import FileShare
+        from app.utils.user_scope import apply_owner_filter
+
+        private_file = _create_file_record(mu_session, owner_id="alice", is_private=True)
+        mu_session.add(FileShare(file_id=private_file.id, owner_id="alice", shared_with_user_id="bob", role="viewer"))
+        mu_session.commit()
+
+        request = _mock_request(user={"preferred_username": "bob"})
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
+            assert apply_owner_filter(mu_session.query(FileRecord), request).all() == []
 
     @pytest.mark.unit
     def test_unauthenticated_sees_nothing_when_enabled(self, mu_session):

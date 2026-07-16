@@ -185,7 +185,11 @@ class QdrantVectorIndex:
 
         # Qdrant needs payload indexes to evaluate tenant and document filters
         # before vector ranking without scanning the whole shared collection.
-        for field_name, field_schema in (("owner_id", "keyword"), ("document_id", "integer")):
+        for field_name, field_schema in (
+            ("owner_id", "keyword"),
+            ("document_id", "integer"),
+            ("is_private", "bool"),
+        ):
             self._request(
                 "PUT",
                 f"/collections/{self.collection}/index?wait=true",
@@ -213,7 +217,14 @@ class QdrantVectorIndex:
         if shared_document_ids:
             conditions.append({"key": "document_id", "match": {"any": shared_document_ids}})
         if include_unowned:
-            conditions.append(cls._owner_condition(None))
+            conditions.append(
+                {
+                    "must": [
+                        cls._owner_condition(None),
+                        {"key": "is_private", "match": {"value": False}},
+                    ]
+                }
+            )
         return {"should": conditions} if conditions else None
 
     def index_document(self, file_record: Any) -> int:
@@ -263,6 +274,7 @@ class QdrantVectorIndex:
                     "payload": {
                         "document_id": file_record.id,
                         "owner_id": file_record.owner_id,
+                        "is_private": bool(getattr(file_record, "is_private", False)),
                         "file_hash": file_record.filehash,
                         "content_hash": digest,
                         "index_version": index_version,

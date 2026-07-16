@@ -202,7 +202,7 @@ def trigger_pipeline_from_webhook(
     file_record = db.query(FileRecord).filter(FileRecord.id == body.file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-    if not is_admin and file_record.owner_id is not None and file_record.owner_id != owner_id:
+    if file_record.owner_id != owner_id and (not is_admin or file_record.is_private):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()

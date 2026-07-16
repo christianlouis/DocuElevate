@@ -18,6 +18,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.models import FileRecord
+from app.utils.user_scope import apply_owner_filter
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,9 @@ def list_duplicate_groups(
     ```
     """
     # Find all hashes that have at least one duplicate record
-    dup_hashes_query = db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)).distinct()
+    dup_hashes_query = apply_owner_filter(
+        db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)), request
+    ).distinct()
     total_groups = dup_hashes_query.count()
 
     # Paginate hash groups
@@ -76,7 +79,10 @@ def list_duplicate_groups(
     if dup_hashes:
         # Fetch all matching files (both original and duplicates) in a single batch query
         all_records = (
-            db.query(FileRecord).filter(FileRecord.filehash.in_(dup_hashes)).order_by(FileRecord.id.asc()).all()
+            apply_owner_filter(db.query(FileRecord), request)
+            .filter(FileRecord.filehash.in_(dup_hashes))
+            .order_by(FileRecord.id.asc())
+            .all()
         )
 
         # Group records by hash
@@ -165,14 +171,15 @@ def get_file_duplicates(
     }
     ```
     """
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    accessible_query = apply_owner_filter(db.query(FileRecord), request)
+    file_record = accessible_query.filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     # --- Exact duplicates ---
     # Case 1: This file is the original — find all records that are duplicates of it
     exact_duplicates_of_this = (
-        db.query(FileRecord)
+        apply_owner_filter(db.query(FileRecord), request)
         .filter(FileRecord.filehash == file_record.filehash, FileRecord.id != file_id)
         .order_by(FileRecord.id.asc())
         .all()
@@ -182,7 +189,7 @@ def get_file_duplicates(
     is_self_duplicate = file_record.is_duplicate
     duplicate_of_original: FileRecord | None = None
     if is_self_duplicate and file_record.duplicate_of_id:
-        duplicate_of_original = db.query(FileRecord).filter(FileRecord.id == file_record.duplicate_of_id).first()
+        duplicate_of_original = accessible_query.filter(FileRecord.id == file_record.duplicate_of_id).first()
 
     exact_duplicate_dicts = [_file_record_to_dict(f) for f in exact_duplicates_of_this]
 
@@ -196,11 +203,13 @@ def get_file_duplicates(
         try:
             from app.utils.similarity import find_similar_documents
 
+            accessible_ids = [row[0] for row in apply_owner_filter(db.query(FileRecord.id), request).all()]
             near_duplicates = find_similar_documents(
                 db,
                 file_id,
                 limit=near_duplicate_limit,
                 threshold=effective_threshold,
+                accessible_file_ids=accessible_ids,
             )
         except Exception as e:
             logger.warning(f"Near-duplicate detection failed for file {file_id}: {e}")
