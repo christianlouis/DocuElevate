@@ -169,11 +169,10 @@ class TestGetMissingRequiredSettings:
         result = get_missing_required_settings()
         assert isinstance(result, list)
 
-    def test_includes_placeholder_settings(self):
-        """Test that settings with placeholder values are included."""
+    def test_excludes_optional_placeholder_settings(self):
+        """Optional settings are not reported missing even with placeholder values."""
         missing = get_missing_required_settings()
-        # In test environment, openai_api_key is "test-key" which is a placeholder
-        assert "openai_api_key" in missing
+        assert "openai_api_key" not in missing
 
     @patch("app.utils.setup_wizard.settings")
     def test_returns_empty_when_all_configured(self, mock_settings):
@@ -240,8 +239,8 @@ class TestGetMissingRequiredSettings:
         assert "session_secret" in missing
 
     @patch("app.utils.setup_wizard.settings")
-    def test_detects_placeholder_bracket_format_as_missing(self, mock_settings):
-        """Test that <KEY_NAME> formatted placeholders are detected as missing."""
+    def test_ignores_optional_bracket_placeholder(self, mock_settings):
+        """Optional settings remain optional even with bracket placeholders."""
         mock_settings.database_url = "sqlite:///./real.db"
         mock_settings.redis_url = "redis://localhost:6379/0"
         mock_settings.workdir = "/data/workdir"
@@ -253,11 +252,11 @@ class TestGetMissingRequiredSettings:
         mock_settings.openai_api_key = "<OPENAI_API_KEY>"
         mock_settings.openai_model = "gpt-4o-mini"
         missing = get_missing_required_settings()
-        assert "openai_api_key" in missing
+        assert "openai_api_key" not in missing
 
     @patch("app.utils.setup_wizard.settings")
-    def test_detects_test_key_placeholder_as_missing(self, mock_settings):
-        """Test that 'test-key' is detected as a missing placeholder."""
+    def test_ignores_optional_test_key_placeholder(self, mock_settings):
+        """Optional settings remain optional even with test placeholders."""
         mock_settings.database_url = "sqlite:///./real.db"
         mock_settings.redis_url = "redis://localhost:6379/0"
         mock_settings.workdir = "/data/workdir"
@@ -269,7 +268,7 @@ class TestGetMissingRequiredSettings:
         mock_settings.openai_api_key = "test-key"
         mock_settings.openai_model = "gpt-4o-mini"
         missing = get_missing_required_settings()
-        assert "openai_api_key" in missing
+        assert "openai_api_key" not in missing
 
 
 @pytest.mark.unit

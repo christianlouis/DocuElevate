@@ -173,6 +173,9 @@ def get_missing_required_settings() -> List[str]:
     missing = []
 
     for required_setting in get_required_settings():
+        if required_setting.get("required") is False:
+            continue
+
         key = required_setting["key"]
         value = getattr(settings, key, None)
 

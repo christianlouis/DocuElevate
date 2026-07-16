@@ -431,8 +431,12 @@ class LiteLLMProvider(AIProvider):
 def is_ai_provider_configured() -> bool:
     """Return whether the active AI provider has its required connection settings."""
     provider = (settings.ai_provider or "openai").lower()
-    if provider in {"openai", "azure", "litellm"}:
+    if provider in {"openai", "azure"}:
         return bool(settings.openai_api_key)
+    if provider == "litellm":
+        return bool(settings.openai_api_key) or bool(
+            settings.openai_base_url and settings.openai_base_url != "https://api.openai.com/v1"
+        )
     if provider == "anthropic":
         return bool(settings.anthropic_api_key)
     if provider == "gemini":

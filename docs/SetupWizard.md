@@ -67,7 +67,7 @@ Configure the AI provider used for metadata extraction and document understandin
 | Setting | Description | Notes |
 |---------|-------------|-------|
 | `AI_PROVIDER` | The AI backend to use. | Options: `openai`, `azure`, `anthropic`, `gemini`, `ollama`, `openrouter`, `portkey`, `litellm` |
-| `OPENAI_API_KEY` | API key for OpenAI, Azure OpenAI, or LiteLLM-compatible endpoints. | Not required when using Ollama. |
+| `OPENAI_API_KEY` | API key for OpenAI, Azure OpenAI, or LiteLLM-compatible endpoints. | Optional during setup. Required later only when the selected backend needs it; Ollama and an unauthenticated local LiteLLM endpoint do not. |
 | `OPENAI_MODEL` | Default model name (e.g. `gpt-4o-mini`, `claude-3-5-sonnet-20241022`, `llama3.2`). | Used when `AI_MODEL` is not explicitly set. |
 
 > DocuElevate can operate without an AI provider — metadata extraction tasks will be skipped.  You can always add AI credentials later through the [Settings page](SettingsManagement.md).
