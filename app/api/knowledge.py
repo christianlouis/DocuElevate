@@ -170,7 +170,8 @@ def _research_cache_is_complete(job: KnowledgeResearchJob) -> bool:
         result = json.loads(job.result_json or "{}")
     except (TypeError, json.JSONDecodeError):
         return False
-    return bool((result.get("coverage") or {}).get("index_complete"))
+    coverage = result.get("coverage") or {}
+    return bool(coverage.get("index_complete") and not coverage.get("truncated"))
 
 
 def _queue_research_job(request: Request, body: KnowledgeChatRequest, db: Session) -> JSONResponse:

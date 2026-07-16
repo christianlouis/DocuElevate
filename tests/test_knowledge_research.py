@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.api.knowledge import _research_job_payload
+from app.api.knowledge import _research_cache_is_complete, _research_job_payload
 from app.models import KnowledgeResearchJob
 from app.tasks.knowledge_research import (
     _bounded_synthesis_evidence,
@@ -237,6 +237,12 @@ def test_terminal_research_elapsed_time_does_not_keep_growing():
     )
 
     assert _research_job_payload(job)["elapsed_seconds"] == 42
+
+
+def test_truncated_research_result_is_not_reused_as_complete():
+    job = SimpleNamespace(result_json='{"coverage":{"index_complete":true,"truncated":true}}')
+
+    assert _research_cache_is_complete(job) is False
 
 
 def test_candidate_retrieval_splits_scopes_at_search_result_cap():

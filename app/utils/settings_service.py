@@ -8,6 +8,7 @@ This module provides functionality to:
 """
 
 import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -3905,6 +3906,8 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
     elif setting_type == "float":
         try:
             num = float(value)
+            if not math.isfinite(num):
+                return False, f"{key} must be a finite number"
             min_val = metadata.get("min")
             max_val = metadata.get("max")
             if min_val is not None and num < min_val:
@@ -3917,6 +3920,8 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
     elif setting_type == "slider":
         try:
             num = float(value)
+            if not math.isfinite(num):
+                return False, f"{key} must be a finite number"
             min_val = metadata.get("min")
             max_val = metadata.get("max")
             if min_val is not None and num < min_val:
