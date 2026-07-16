@@ -781,7 +781,10 @@ class TestComputeDocumentEmbeddingTask:
         from app.tasks.compute_embedding import compute_document_embedding
 
         # Patch SessionLocal to return our test session
-        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+        with (
+            patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local,
+            patch("app.tasks.compute_embedding._queue_vector_index") as mock_queue_vector_index,
+        ):
             mock_session_local.return_value.__enter__ = lambda self: db_session
             mock_session_local.return_value.__exit__ = lambda self, *args: None
 
@@ -789,6 +792,7 @@ class TestComputeDocumentEmbeddingTask:
 
         assert result["status"] == "success"
         assert "dimensions" in result["detail"]
+        mock_queue_vector_index.assert_called_once_with(file_record.id)
 
     @pytest.mark.unit
     def test_skips_missing_file(self, db_session):
@@ -841,7 +845,10 @@ class TestComputeDocumentEmbeddingTask:
 
         from app.tasks.compute_embedding import compute_document_embedding
 
-        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+        with (
+            patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local,
+            patch("app.tasks.compute_embedding._queue_vector_index") as mock_queue_vector_index,
+        ):
             mock_session_local.return_value.__enter__ = lambda self: db_session
             mock_session_local.return_value.__exit__ = lambda self, *args: None
 
@@ -849,6 +856,32 @@ class TestComputeDocumentEmbeddingTask:
 
         assert result["status"] == "skipped"
         assert "already cached" in result["detail"]
+        mock_queue_vector_index.assert_called_once_with(file_record.id)
+
+    @pytest.mark.unit
+    @patch("app.tasks.compute_embedding.is_ai_provider_configured", return_value=False)
+    def test_skips_when_ai_provider_is_unconfigured(self, _mock_configured, db_session):
+        """An optional AI setup must not mark otherwise processed files as failed."""
+        file_record = FileRecord(
+            filehash="task-unconfigured-ai",
+            local_filename="/tmp/task-unconfigured-ai.pdf",
+            file_size=100,
+            original_filename="task-unconfigured-ai.pdf",
+            ocr_text="Some document text",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+
+        from app.tasks.compute_embedding import compute_document_embedding
+
+        with patch("app.tasks.compute_embedding.SessionLocal") as mock_session_local:
+            mock_session_local.return_value.__enter__ = lambda self: db_session
+            mock_session_local.return_value.__exit__ = lambda self, *args: None
+
+            result = compute_document_embedding(file_record.id)
+
+        assert result["status"] == "skipped"
+        assert "not configured" in result["detail"]
 
 
 # ---------------------------------------------------------------------------

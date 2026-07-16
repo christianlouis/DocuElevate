@@ -113,9 +113,10 @@ class TestExtractMetadataWithGpt:
     @patch("app.tasks.extract_metadata_with_gpt.embed_metadata_into_pdf")
     @patch("app.tasks.extract_metadata_with_gpt.log_task_progress")
     @patch("app.tasks.extract_metadata_with_gpt.get_ai_provider")
+    @patch("app.tasks.extract_metadata_with_gpt.is_ai_provider_configured", return_value=False)
     @patch("app.tasks.extract_metadata_with_gpt.settings")
     def test_missing_ai_credentials_skip_metadata_and_continue_pipeline(
-        self, mock_settings, mock_get_provider, mock_log_progress, mock_embed_task
+        self, mock_settings, _mock_configured, mock_get_provider, mock_log_progress, mock_embed_task
     ):
         """A keyless fresh install still embeds text and reaches finalization."""
         mock_settings.ai_provider = "openai"

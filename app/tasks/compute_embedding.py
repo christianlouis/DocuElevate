@@ -14,6 +14,7 @@ from app.database import SessionLocal
 from app.models import FileRecord, IntegrationDirection, IntegrationType, UserIntegration
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
+from app.utils.ai_provider import is_ai_provider_configured
 from app.utils.step_manager import update_step_status
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,20 @@ def compute_document_embedding(self, file_id: int) -> dict:
             update_step_status(db, file_id, "compute_embedding", "skipped", completed_at=now)
             return {"status": "skipped", "detail": "No OCR text available"}
 
+        if not is_ai_provider_configured():
+            provider = (settings.ai_provider or "openai").lower()
+            message = f"AI provider '{provider}' is not configured; embedding skipped"
+            logger.info("[%s] %s for file %s", task_id, message, file_id)
+            log_task_progress(
+                task_id,
+                "compute_embedding",
+                "skipped",
+                message,
+                file_id=file_id,
+            )
+            update_step_status(db, file_id, "compute_embedding", "skipped", completed_at=now)
+            return {"status": "skipped", "detail": message}
+
         try:
             from app.utils.similarity import compute_and_store_embedding
 
@@ -178,6 +193,11 @@ def backfill_missing_embeddings(self) -> dict:
     batch_size = settings.embedding_backfill_batch_size
     task_id = self.request.id
     logger.info("[%s] Backfill: scanning for files missing embeddings (batch_size=%d)", task_id, batch_size)
+
+    if not is_ai_provider_configured():
+        provider = (settings.ai_provider or "openai").lower()
+        logger.info("[%s] Backfill skipped: AI provider '%s' is not configured", task_id, provider)
+        return {"queued": 0, "status": "skipped", "detail": "AI provider is not configured"}
 
     with SessionLocal() as db:
         candidates = (
