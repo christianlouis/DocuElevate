@@ -174,15 +174,47 @@ class QdrantVectorIndex:
                 {"vectors": {"size": dimensions, "distance": "Cosine"}},
                 expected=(200, 201),
             )
-            return
+        else:
+            config = response.json().get("result", {}).get("config", {}).get("params", {}).get("vectors", {})
+            current_size = config.get("size") if isinstance(config, dict) else None
+            if current_size is not None and int(current_size) != dimensions:
+                raise VectorIndexError(
+                    f"Collection {self.collection!r} uses {current_size} dimensions, but "
+                    f"{settings.embedding_model!r} returned {dimensions}"
+                )
 
-        config = response.json().get("result", {}).get("config", {}).get("params", {}).get("vectors", {})
-        current_size = config.get("size") if isinstance(config, dict) else None
-        if current_size is not None and int(current_size) != dimensions:
-            raise VectorIndexError(
-                f"Collection {self.collection!r} uses {current_size} dimensions, but "
-                f"{settings.embedding_model!r} returned {dimensions}"
+        # Qdrant needs payload indexes to evaluate tenant and document filters
+        # before vector ranking without scanning the whole shared collection.
+        for field_name, field_schema in (("owner_id", "keyword"), ("document_id", "integer")):
+            self._request(
+                "PUT",
+                f"/collections/{self.collection}/index?wait=true",
+                {"field_name": field_name, "field_schema": field_schema},
+                expected=(200, 201),
             )
+
+    @staticmethod
+    def _owner_condition(owner_id: str | None) -> dict[str, Any]:
+        if owner_id is None:
+            return {"is_null": {"key": "owner_id"}}
+        return {"key": "owner_id", "match": {"value": owner_id}}
+
+    @classmethod
+    def _authorization_filter(
+        cls,
+        *,
+        owner_id: str | None,
+        shared_document_ids: list[int] | None,
+        include_unowned: bool,
+    ) -> dict[str, Any] | None:
+        conditions: list[dict[str, Any]] = []
+        if owner_id is not None:
+            conditions.append(cls._owner_condition(owner_id))
+        if shared_document_ids:
+            conditions.append({"key": "document_id", "match": {"any": shared_document_ids}})
+        if include_unowned:
+            conditions.append(cls._owner_condition(None))
+        return {"should": conditions} if conditions else None
 
     def index_document(self, file_record: Any) -> int:
         """Replace all indexed chunks for one FileRecord and return their count."""
@@ -264,12 +296,33 @@ class QdrantVectorIndex:
             f"/collections/{self.collection}/points/delete?wait=true",
             {
                 "filter": {
-                    "must": [{"key": "document_id", "match": {"value": file_record.id}}],
+                    "must": [
+                        {"key": "document_id", "match": {"value": file_record.id}},
+                        self._owner_condition(file_record.owner_id),
+                    ],
                     "must_not": [{"key": "index_version", "match": {"value": index_version}}],
                 }
             },
         )
         return len(points)
+
+    def delete_documents(self, document_ids: list[int], *, owner_id: str | None) -> None:
+        """Delete derived chunks for owner-scoped documents."""
+        if not document_ids:
+            return
+        self._request(
+            "POST",
+            f"/collections/{self.collection}/points/delete?wait=true",
+            {
+                "filter": {
+                    "must": [
+                        {"key": "document_id", "match": {"any": document_ids}},
+                        self._owner_condition(owner_id),
+                    ]
+                }
+            },
+            expected=(200, 404),
+        )
 
     def search(
         self,
@@ -278,6 +331,9 @@ class QdrantVectorIndex:
         limit: int,
         score_threshold: float | None = None,
         document_ids: list[int] | None = None,
+        owner_id: str | None = None,
+        shared_document_ids: list[int] | None = None,
+        include_unowned: bool = False,
     ) -> list[dict[str, Any]]:
         vector = generate_embeddings([query])[0]
         body: dict[str, Any] = {
@@ -288,10 +344,22 @@ class QdrantVectorIndex:
         }
         if score_threshold is not None:
             body["score_threshold"] = score_threshold
+        authorization_filter = self._authorization_filter(
+            owner_id=owner_id,
+            shared_document_ids=shared_document_ids,
+            include_unowned=include_unowned,
+        )
         if document_ids is not None:
             if not document_ids:
                 return []
-            body["filter"] = {"must": [{"key": "document_id", "match": {"any": document_ids}}]}
+            document_filter = {"key": "document_id", "match": {"any": document_ids}}
+            body["filter"] = (
+                {"must": [document_filter, authorization_filter]}
+                if authorization_filter
+                else {"must": [document_filter]}
+            )
+        elif authorization_filter is not None:
+            body["filter"] = authorization_filter
 
         response = self._request(
             "POST",

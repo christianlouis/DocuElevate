@@ -42,6 +42,22 @@ router = APIRouter()
 DbSession = Annotated[Session, Depends(get_db)]
 
 
+def _delete_vector_chunks(file_records: list[FileRecord]) -> None:
+    """Remove derived Qdrant data with owner-scoped filters before DB deletion."""
+    if not settings.vector_index_enabled or not file_records:
+        return
+    from collections import defaultdict
+
+    from app.utils.vector_index import QdrantVectorIndex
+
+    documents_by_owner: dict[str | None, list[int]] = defaultdict(list)
+    for record in file_records:
+        documents_by_owner[record.owner_id].append(record.id)
+    index = QdrantVectorIndex()
+    for owner_id, document_ids in documents_by_owner.items():
+        index.delete_documents(document_ids, owner_id=owner_id)
+
+
 class BulkPipelineAssignment(BaseModel):
     """Request body for assigning selected files to a processing pipeline."""
 
@@ -483,6 +499,11 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
         # Log the deletion
         logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
 
+        # Derived vector chunks contain source text and must be removed before
+        # the authoritative record disappears. Owner scope is retained in the
+        # Qdrant delete filter as defense in depth.
+        _delete_vector_chunks([file_record])
+
         # Delete the record
         db.delete(file_record)
         db.commit()
@@ -553,6 +574,8 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
         # Log the deletion
         logger.info(f"Bulk deleting {deleted_count} file records: IDs={deleted_ids}")
+
+        _delete_vector_chunks(file_records)
 
         # Delete the selected records in one statement after access checks.
         query.delete(synchronize_session=False)

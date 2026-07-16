@@ -25,9 +25,12 @@ DearConcierge MCP adapter --------------------------> retrieval API
 ```
 
 The relational database and document work directory remain authoritative. Qdrant is
-a derived index that can be deleted and rebuilt. Search results are never trusted for
-authorization: document IDs returned by Qdrant are checked against the relational
-owner/share model before any text is returned.
+a derived index that can be deleted and rebuilt. Multi-user installations use one
+private collection with payload indexes for `owner_id` and `document_id`. Owner and
+explicit-share filters run before vector ranking; the document IDs returned by Qdrant
+are then checked against the relational owner/share model again before any text is
+returned. Owner-scoped cleanup removes derived chunks before a document record is
+deleted.
 
 Qdrant is configured as a normal `VECTOR_DATABASE` destination on the user's
 integration dashboard. The connection remains operator-managed, while destination
@@ -83,6 +86,8 @@ subsequent polls continue from Dropbox's change cursor.
 - Replacement is idempotent and retains the old index if embedding generation fails.
 - An explicit corpus backfill and a health endpoint exist.
 - Qdrant is private to the cluster and protected by its own API key.
+- In multi-user mode, pre-ranking owner/share filters isolate tenants in the shared
+  collection; ordinary status responses omit global corpus sizes.
 
 ### KB-5: Retrieval and MCP
 
