@@ -23,7 +23,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
-from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog
+from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog, SharedLink
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
@@ -71,6 +71,12 @@ class BulkTagRequest(BaseModel):
     file_ids: list[int] = Field(..., min_length=1)
     tags: list[str] = Field(..., min_length=1)
     mode: Literal["add", "replace"] = "add"
+
+
+class FilePrivacyRequest(BaseModel):
+    """Owner-controlled document privacy state."""
+
+    is_private: bool
 
 
 def _bulk_action_status(
@@ -362,6 +368,7 @@ def list_files_api(
                 "file_size": f.file_size,
                 "mime_type": f.mime_type,
                 "legal_hold": f.legal_hold,
+                "is_private": f.is_private,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
                 "processing_status": statuses.get(
                     f.id,
@@ -453,12 +460,51 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
             "file_size": file_record.file_size,
             "mime_type": file_record.mime_type,
             "legal_hold": file_record.legal_hold,
+            "is_private": file_record.is_private,
             "created_at": (file_record.created_at.isoformat() if file_record.created_at else None),
         },
         "processing_status": processing_status,
         "logs": log_list,
         "files_on_disk": files_on_disk,
     }
+
+
+@router.put("/files/{file_id}/privacy")
+@require_login
+def set_file_privacy(request: Request, file_id: int, body: FilePrivacyRequest, db: DbSession):
+    """Set the canonical privacy flag; only the document owner may do so."""
+    owner_id = get_current_owner_id(request)
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if file_record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if get_file_role(file_record, owner_id, db) != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the file owner can change privacy",
+        )
+
+    revoked_links = 0
+    if body.is_private and not file_record.is_private:
+        revoked_at = datetime.now(timezone.utc)
+        revoked_links = (
+            db.query(SharedLink)
+            .filter(SharedLink.file_id == file_id, SharedLink.is_active.is_(True))
+            .update(
+                {SharedLink.is_active: False, SharedLink.revoked_at: revoked_at},
+                synchronize_session="fetch",
+            )
+        )
+
+    file_record.is_private = body.is_private
+    db.commit()
+    db.refresh(file_record)
+    logger.info(
+        "File privacy changed: file_id=%s is_private=%s revoked_links=%s",
+        file_id,
+        body.is_private,
+        revoked_links,
+    )
+    return {"file_id": file_record.id, "is_private": file_record.is_private}
 
 
 @router.delete("/files/{file_id}")
@@ -1926,7 +1972,7 @@ def claim_file(request: Request, file_id: int, db: DbSession):
     if owner_id is None:
         raise HTTPException(status_code=401, detail="Authentication required to claim a document")
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
 
@@ -1963,7 +2009,7 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
     if owner_id is None:
         raise HTTPException(status_code=401, detail="Authentication required to claim documents")
 
-    file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+    file_records = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id.in_(file_ids)), request).all()
     if not file_records:
         raise HTTPException(status_code=404, detail="No files found with the provided IDs")
 
@@ -2018,14 +2064,14 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
         # Assign to specific files
         updated = (
             db.query(FileRecord)
-            .filter(FileRecord.id.in_(file_ids))
+            .filter(FileRecord.id.in_(file_ids), FileRecord.is_private.is_(False))
             .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
         )
     else:
         # Assign to all currently unowned documents
         updated = (
             db.query(FileRecord)
-            .filter(FileRecord.owner_id.is_(None))
+            .filter(FileRecord.owner_id.is_(None), FileRecord.is_private.is_(False))
             .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
         )
 
@@ -2082,7 +2128,7 @@ def assign_pipeline_to_file(
 
     is_admin_user = bool(user and user.get("is_admin"))
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 

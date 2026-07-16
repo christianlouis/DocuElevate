@@ -302,14 +302,20 @@ def _qdrant_authorization_scope(db: Session, request: Request) -> dict[str, Any]
         return {}
     user = get_current_user(request)
     if isinstance(user, dict) and user.get("is_admin"):
-        return {}
+        return {
+            "document_ids": [
+                row[0]
+                for row in apply_owner_filter(db.query(FileRecord.id), request).order_by(FileRecord.id.asc()).all()
+            ]
+        }
     owner_id = get_current_owner_id(request)
     if owner_id is None:
         return {"document_ids": []}
     shared_document_ids = [
         row[0]
         for row in db.query(FileShare.file_id)
-        .filter(FileShare.shared_with_user_id == owner_id)
+        .join(FileRecord, FileRecord.id == FileShare.file_id)
+        .filter(FileShare.shared_with_user_id == owner_id, FileRecord.is_private.is_(False))
         .order_by(FileShare.file_id.asc())
         .all()
     ]

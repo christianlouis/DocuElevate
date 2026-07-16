@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import FileRecord, SharedLink
-from app.utils.user_scope import apply_owner_filter, get_current_owner_id
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id, get_file_role
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +269,8 @@ async def create_shared_link(
     q = apply_owner_filter(q, request)
     file_record = q.first()
     if not file_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if get_file_role(file_record, owner_id, db) != "owner":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     token = _generate_token()

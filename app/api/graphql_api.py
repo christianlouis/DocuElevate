@@ -16,6 +16,7 @@ from typing import Annotated, Any
 
 import strawberry
 from fastapi import Depends, Request
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from strawberry.fastapi import GraphQLRouter
 
@@ -275,8 +276,10 @@ class Query:
             if not is_admin:
                 # Non-admins can only see their own documents
                 query = query.filter(FileRecord.owner_id == current_user_id)
-            elif owner_id:
-                query = query.filter(FileRecord.owner_id == owner_id)
+            else:
+                query = query.filter(or_(FileRecord.owner_id == current_user_id, FileRecord.is_private.is_(False)))
+                if owner_id:
+                    query = query.filter(FileRecord.owner_id == owner_id)
         elif owner_id:
             query = query.filter(FileRecord.owner_id == owner_id)
 
@@ -296,7 +299,7 @@ class Query:
         if settings.auth_enabled and user:
             is_admin = user.get("is_admin", False)
             current_user_id = _get_current_user_id(user)
-            if not is_admin and rec.owner_id != current_user_id:
+            if rec.owner_id != current_user_id and (not is_admin or rec.is_private):
                 return None
 
         return _document_from_record(rec)

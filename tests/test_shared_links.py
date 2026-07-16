@@ -46,7 +46,13 @@ def sl_session(sl_engine):
     session.close()
 
 
-def _make_file(session, owner_id: str = _OWNER, filename: str = "test.pdf") -> FileRecord:
+def _make_file(
+    session,
+    owner_id: str = _OWNER,
+    filename: str = "test.pdf",
+    *,
+    is_private: bool = False,
+) -> FileRecord:
     """Insert a minimal FileRecord and return it."""
     record = FileRecord(
         owner_id=owner_id,
@@ -55,6 +61,7 @@ def _make_file(session, owner_id: str = _OWNER, filename: str = "test.pdf") -> F
         local_filename="/tmp/test.pdf",
         file_size=1024,
         mime_type="application/pdf",
+        is_private=is_private,
     )
     session.add(record)
     session.commit()
@@ -116,6 +123,20 @@ class TestCreateSharedLink:
             assert data["is_active"] is True
             assert data["has_password"] is False
             assert data["expires_at"] is None
+        finally:
+            _cleanup(app)
+
+    @pytest.mark.unit
+    def test_owner_can_explicitly_create_link_after_file_is_private(self, sl_engine, sl_session):
+        """A new link on a private file is a separate explicit owner action."""
+        from app.main import app
+
+        file_record = _make_file(sl_session, is_private=True)
+        client = _make_client(sl_engine)
+        try:
+            resp = client.post("/api/shared-links/", json={"file_id": file_record.id})
+            assert resp.status_code == 201, resp.text
+            assert resp.json()["is_active"] is True
         finally:
             _cleanup(app)
 

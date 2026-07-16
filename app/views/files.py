@@ -20,6 +20,7 @@ from app.utils.pipeline_stages import (
     normalize_stage_name,
     stage_keys_for_pipeline_steps,
 )
+from app.utils.user_scope import apply_owner_filter
 from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
@@ -46,10 +47,9 @@ def _resolve_owner_context(request: Request, file_record, db: Session) -> dict:
     user_session = request.session.get("user")
     is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
 
-    if is_admin:
-        current_user_role: str | None = "owner"
-    else:
-        current_user_role = get_file_role(file_record, current_owner_id, db)
+    current_user_role = get_file_role(file_record, current_owner_id, db)
+    if is_admin and current_user_role is None and not file_record.is_private:
+        current_user_role = "admin"
 
     # Build a human-readable owner label
     if file_record.owner_id:
@@ -95,7 +95,7 @@ def files_page(
         from app.models import FileProcessingStep, FileRecord
 
         # Start with base query
-        query = db.query(FileRecord)
+        query = apply_owner_filter(db.query(FileRecord), request)
 
         # Apply search filter
         if search:
@@ -262,7 +262,7 @@ def file_summary_page(request: Request, file_id: int, db: Session = Depends(get_
 
         from app.models import FileRecord
 
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -346,7 +346,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
 
         from app.models import FileRecord
 
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -437,7 +437,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         from app.models import FileRecord, ProcessingLog
 
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -522,7 +522,7 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
 
         from app.models import FileRecord
 
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -956,7 +956,7 @@ def preview_original_file(request: Request, file_id: int, db: Session = Depends(
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -983,7 +983,7 @@ def preview_processed_file(request: Request, file_id: int, db: Session = Depends
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1010,7 +1010,7 @@ def get_original_text(request: Request, file_id: int, db: Session = Depends(get_
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1050,7 +1050,7 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1086,7 +1086,7 @@ def get_default_language_text(request: Request, file_id: int, db: Session = Depe
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1123,7 +1123,9 @@ def duplicates_page(
 
     try:
         # Find hashes that have at least one is_duplicate=True record
-        dup_hashes_query = db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)).distinct()
+        dup_hashes_query = apply_owner_filter(
+            db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)), request
+        ).distinct()
         total_groups = dup_hashes_query.count()
 
         offset = (page - 1) * per_page
@@ -1134,13 +1136,13 @@ def duplicates_page(
 
         for filehash in dup_hashes:
             original = (
-                db.query(FileRecord)
+                apply_owner_filter(db.query(FileRecord), request)
                 .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
                 .order_by(FileRecord.id.asc())
                 .first()
             )
             duplicates = (
-                db.query(FileRecord)
+                apply_owner_filter(db.query(FileRecord), request)
                 .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(True))
                 .order_by(FileRecord.id.asc())
                 .all()
@@ -1218,11 +1220,12 @@ def similarity_dashboard_page(
     from app.models import FileRecord
 
     try:
-        total_files = db.query(FileRecord).count()
-        files_with_embedding = (
-            db.query(FileRecord).filter(FileRecord.embedding.isnot(None), FileRecord.embedding != "").count()
-        )
-        files_with_ocr = db.query(FileRecord).filter(FileRecord.ocr_text.isnot(None), FileRecord.ocr_text != "").count()
+        accessible_files = apply_owner_filter(db.query(FileRecord), request)
+        total_files = accessible_files.count()
+        files_with_embedding = accessible_files.filter(
+            FileRecord.embedding.isnot(None), FileRecord.embedding != ""
+        ).count()
+        files_with_ocr = accessible_files.filter(FileRecord.ocr_text.isnot(None), FileRecord.ocr_text != "").count()
 
         return templates.TemplateResponse(
             "similarity_dashboard.html",

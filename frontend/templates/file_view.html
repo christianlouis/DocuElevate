@@ -321,6 +321,12 @@
           <span class="info-val">{{ owner_display or _("file.owner_unowned") }}</span>
         </div>
         {% endif %}
+        <div class="info-row">
+          <span class="info-key">Sichtbarkeit</span>
+          <span class="info-val" id="privacy-state">
+            {% if file.is_private %}<i class="fas fa-lock" aria-hidden="true"></i> Privat{% else %}<i class="fas fa-users" aria-hidden="true"></i> Im Tribe sichtbar{% endif %}
+          </span>
+        </div>
       </div>
 
       <!-- Actions -->
@@ -346,9 +352,17 @@
             <i class="fas fa-external-link-alt" aria-hidden="true"></i> Open original
           </a>
           {% endif %}
+          {% if current_user_role == "owner" %}
           <a href="/shared-links?file_id={{ file.id }}" class="action-btn btn-secondary">
             <i class="fas fa-share-alt" aria-hidden="true"></i> Share
           </a>
+          {% endif %}
+          {% if current_user_role == "owner" %}
+          <button type="button" class="action-btn btn-secondary" id="privacy-toggle" onclick="setFilePrivacy({{ file.id }}, {{ 'false' if file.is_private else 'true' }})">
+            <i class="fas fa-{{ 'users' if file.is_private else 'lock' }}" aria-hidden="true"></i>
+            {{ 'Im Tribe sichtbar machen' if file.is_private else 'Als privat markieren' }}
+          </button>
+          {% endif %}
           {% if multi_user_enabled and file.owner_id is none %}
           <button
             class="action-btn btn-primary"
@@ -943,6 +957,27 @@
   }
 
   // ── Initialise on load ──
+  function setFilePrivacy(fileId, isPrivate) {
+    var button = document.getElementById('privacy-toggle');
+    if (button) button.disabled = true;
+    var csrfToken = document.querySelector('meta[name="csrf-token"]');
+    var headers = {'Content-Type': 'application/json'};
+    if (csrfToken && csrfToken.content) headers['X-CSRF-Token'] = csrfToken.content;
+    fetch('/api/files/' + fileId + '/privacy', {
+      method: 'PUT',
+      headers: headers,
+      body: JSON.stringify({is_private: isPrivate})
+    }).then(function(response) {
+      if (!response.ok) return response.json().then(function(data) { throw new Error(data.detail || 'Privacy update failed'); });
+      return response.json();
+    }).then(function() {
+      window.location.reload();
+    }).catch(function(error) {
+      if (button) button.disabled = false;
+      window.alert(error.message);
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function() {
     {% if (processed_file_exists or original_file_exists) and file %}
       {% set pv = 'processed' if processed_file_exists else 'original' %}

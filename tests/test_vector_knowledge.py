@@ -226,6 +226,7 @@ def test_qdrant_collection_creation_and_dimension_guard():
             SimpleNamespace(status_code=201),
             SimpleNamespace(status_code=200),
             SimpleNamespace(status_code=200),
+            SimpleNamespace(status_code=200),
         ],
     ) as request:
         QdrantVectorIndex().ensure_collection(1536)
@@ -247,6 +248,12 @@ def test_qdrant_collection_creation_and_dimension_guard():
             "PUT",
             "/collections/docuelevate_documents/index?wait=true",
             {"field_name": "document_id", "field_schema": "integer"},
+            expected=(200, 201),
+        ),
+        call(
+            "PUT",
+            "/collections/docuelevate_documents/index?wait=true",
+            {"field_name": "is_private", "field_schema": "bool"},
             expected=(200, 201),
         ),
     ]
@@ -307,7 +314,12 @@ def test_qdrant_search_filters_owner_shares_and_unowned_before_ranking():
         "should": [
             {"key": "owner_id", "match": {"value": "alice@example.com"}},
             {"key": "document_id", "match": {"any": [8, 9]}},
-            {"is_null": {"key": "owner_id"}},
+            {
+                "must": [
+                    {"is_null": {"key": "owner_id"}},
+                    {"key": "is_private", "match": {"value": False}},
+                ]
+            },
         ]
     }
 

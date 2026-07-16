@@ -10,7 +10,7 @@ documents are visible to all users (single-user / shared mode).
 import logging
 
 from fastapi import Request
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Query, Session
 from sqlalchemy.sql import false
 
@@ -102,7 +102,8 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     When multi-user mode is enabled, only files whose ``owner_id``
     matches the authenticated user are returned, **plus** any files that
     have been explicitly shared with the user via ``FileShare``.  Admin
-    users bypass the filter and see all documents.
+    users may see non-private documents, but never another owner's private
+    documents.
 
     When ``unowned_docs_visible_to_all`` is ``True`` (default), documents
     with ``owner_id IS NULL`` (unclaimed) are also included for every
@@ -121,26 +122,33 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
         return query
 
     user = request.session.get("user")
-    if isinstance(user, dict) and user.get("is_admin"):
-        # Admins see all documents in multi-user mode
-        return query
-
     owner_id = get_current_owner_id(request)
     if owner_id is None:
         # No authenticated user — return empty result set
         return query.filter(false())
 
-    # Build filter: user's own documents + documents shared with them
+    # A private document is owner-only.  This condition intentionally also
+    # applies to administrators: an operational role must not silently
+    # override a user's privacy choice.
+    if isinstance(user, dict) and user.get("is_admin"):
+        return query.filter(or_(FileRecord.owner_id == owner_id, FileRecord.is_private.is_(False)))
+
+    # Build filter: user's own documents + non-private documents shared with them
     conditions = [FileRecord.owner_id == owner_id]
 
     # Include files explicitly shared with this user
     from sqlalchemy import select as sa_select
 
-    conditions.append(FileRecord.id.in_(sa_select(FileShare.file_id).where(FileShare.shared_with_user_id == owner_id)))
+    conditions.append(
+        and_(
+            FileRecord.is_private.is_(False),
+            FileRecord.id.in_(sa_select(FileShare.file_id).where(FileShare.shared_with_user_id == owner_id)),
+        )
+    )
 
     # Optionally include unclaimed (owner_id IS NULL) documents
     if settings.unowned_docs_visible_to_all:
-        conditions.append(FileRecord.owner_id.is_(None))
+        conditions.append(and_(FileRecord.is_private.is_(False), FileRecord.owner_id.is_(None)))
 
     return query.filter(or_(*conditions))
 
@@ -177,6 +185,11 @@ def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> 
     # Owner always has full access
     if file_record.owner_id == user_id:
         return "owner"
+
+    # Privacy is an owner-only boundary and wins over named shares and
+    # unclaimed-document discovery.
+    if file_record.is_private:
+        return None
 
     # Unclaimed document — limited access when setting allows it
     if file_record.owner_id is None and settings.unowned_docs_visible_to_all:

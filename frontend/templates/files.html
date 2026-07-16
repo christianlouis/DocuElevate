@@ -712,7 +712,12 @@
             <input type="checkbox" class="file-checkbox" value="{{ file.id }}" onchange="updateBulkActionsBar()">
           </td>
           <td>{{ file.id }}</td>
-          <td>{{ file.original_filename }}</td>
+          <td>
+            {{ file.original_filename }}
+            {% if file.is_private %}
+            <span title="Nur für den Dateiinhaber sichtbar" aria-label="Privates Dokument" style="margin-left:0.35rem;color:#7c3aed;"><i class="fas fa-lock" aria-hidden="true"></i></span>
+            {% endif %}
+          </td>
           <td>{{ (file.file_size / 1024) | round(2) }} KB</td>
           <td>{{ file.mime_type }}</td>
           <td>
@@ -757,7 +762,10 @@
     >
       <div class="flex items-start justify-between gap-2">
         <div class="flex-1 min-w-0">
-          <p class="font-semibold text-gray-800 truncate">{{ file.original_filename }}</p>
+          <p class="font-semibold text-gray-800 truncate">
+            {{ file.original_filename }}
+            {% if file.is_private %}<i class="fas fa-lock" aria-label="Privates Dokument" title="Nur für den Dateiinhaber sichtbar" style="color:#7c3aed;margin-left:0.25rem;"></i>{% endif %}
+          </p>
           <p class="text-xs text-gray-500 mt-1">ID: {{ file.id }} &middot; {{ (file.file_size / 1024) | round(2) }} KB</p>
           <p class="text-xs text-gray-500 mt-0.5">{{ file.mime_type }}</p>
           <p class="text-xs text-gray-400 mt-0.5">{{ file.created_at.strftime('%Y-%m-%d %H:%M') if file.created_at else _('common.not_available') }}</p>
