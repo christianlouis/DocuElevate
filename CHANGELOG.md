@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`8205a38`](https://github.com/christianlouis/DocuElevate/commit/8205a38d65f8b66b90c8ccedbdd0f1d614b53d8c))
+
+### Testing
+
+- Model quarantine membership for claim views
+  ([#1156](https://github.com/christianlouis/DocuElevate/pull/1156),
+  [`7683b52`](https://github.com/christianlouis/DocuElevate/commit/7683b525cbb2e73bc56455ad8c00a0ab1e114492))
+
+
+## Unreleased
+
 ### Testing
 
 - Model quarantine membership for claim views
