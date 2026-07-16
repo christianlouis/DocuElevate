@@ -1524,6 +1524,37 @@ class TestSyncSearchIndexAdditional:
         assert result["indexed"] == 2
         assert index_documents.call_count == 2
 
+    def test_commits_small_reconciliation_run_in_one_update(self, sj_engine):
+        """Small documents use one update instead of paying per-chunk task latency."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        for index in range(51):
+            _make_file_record(session, filehash=f"hash_bulk_{index}", ocr_text="searchable")
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.return_value = MagicMock(results=[])
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as index_documents,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=51)
+            real_session.close()
+
+        assert result["indexed"] == 51
+        index_documents.assert_called_once()
+
 
 @pytest.mark.unit
 class TestReprocessFailedDocumentsMissingFile:
