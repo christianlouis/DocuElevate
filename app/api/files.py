@@ -23,7 +23,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
-from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog
+from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog, SharedLink
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
@@ -483,10 +483,27 @@ def set_file_privacy(request: Request, file_id: int, body: FilePrivacyRequest, d
             detail="Only the file owner can change privacy",
         )
 
+    revoked_links = 0
+    if body.is_private and not file_record.is_private:
+        revoked_at = datetime.now(timezone.utc)
+        revoked_links = (
+            db.query(SharedLink)
+            .filter(SharedLink.file_id == file_id, SharedLink.is_active.is_(True))
+            .update(
+                {SharedLink.is_active: False, SharedLink.revoked_at: revoked_at},
+                synchronize_session="fetch",
+            )
+        )
+
     file_record.is_private = body.is_private
     db.commit()
     db.refresh(file_record)
-    logger.info("File privacy changed: file_id=%s is_private=%s", file_id, body.is_private)
+    logger.info(
+        "File privacy changed: file_id=%s is_private=%s revoked_links=%s",
+        file_id,
+        body.is_private,
+        revoked_links,
+    )
     return {"file_id": file_record.id, "is_private": file_record.is_private}
 
 
