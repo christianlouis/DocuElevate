@@ -2091,6 +2091,11 @@ class TestOwnerDisplayAndClaim:
     """Tests that owner info and claim button appear correctly on file views."""
 
     def _make_file(self, db_session, owner_id=None) -> FileRecord:
+        from app.utils.tribe_scope import ensure_document_scope, ensure_personal_scope
+
+        tenant_id, tribe_id = ensure_document_scope(db_session, owner_id)
+        if owner_id is None:
+            ensure_personal_scope(db_session, "viewer@example.com", tenant_id)
         file_rec = FileRecord(
             filehash=uuid.uuid4().hex,
             original_filename="doc.pdf",
@@ -2098,6 +2103,8 @@ class TestOwnerDisplayAndClaim:
             file_size=512,
             mime_type="application/pdf",
             owner_id=owner_id,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
         )
         db_session.add(file_rec)
         db_session.commit()

@@ -27,6 +27,9 @@ _SKIP_TABLES = {"alembic_version"}
 
 # Ordered list — parent tables first to respect foreign-key constraints.
 _TABLE_ORDER = [
+    "tenants",
+    "tribes",
+    "tribe_memberships",
     "documents",
     "files",
     "file_processing_steps",

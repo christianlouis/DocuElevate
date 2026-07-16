@@ -300,22 +300,28 @@ def _qdrant_authorization_scope(db: Session, request: Request) -> dict[str, Any]
     """Build a pre-ranking Qdrant scope matching relational access rules."""
     if not settings.multi_user_enabled:
         return {}
-    user = get_current_user(request)
-    if isinstance(user, dict) and user.get("is_admin"):
-        return {
-            "document_ids": [
-                row[0]
-                for row in apply_owner_filter(db.query(FileRecord.id), request).order_by(FileRecord.id.asc()).all()
-            ]
-        }
     owner_id = get_current_owner_id(request)
     if owner_id is None:
         return {"document_ids": []}
+    from app.models import TribeMembership
+
+    tribe_scopes = [
+        (row[0], row[1])
+        for row in db.query(TribeMembership.tenant_id, TribeMembership.tribe_id)
+        .filter(TribeMembership.user_id == owner_id)
+        .order_by(TribeMembership.tenant_id.asc(), TribeMembership.tribe_id.asc())
+        .all()
+    ]
+    tenant_ids = sorted({tenant_id for tenant_id, _tribe_id in tribe_scopes})
     shared_document_ids = [
         row[0]
         for row in db.query(FileShare.file_id)
         .join(FileRecord, FileRecord.id == FileShare.file_id)
-        .filter(FileShare.shared_with_user_id == owner_id, FileRecord.is_private.is_(False))
+        .filter(
+            FileShare.shared_with_user_id == owner_id,
+            FileRecord.tenant_id.in_(tenant_ids),
+            FileRecord.is_private.is_(False),
+        )
         .order_by(FileShare.file_id.asc())
         .all()
     ]
@@ -323,6 +329,7 @@ def _qdrant_authorization_scope(db: Session, request: Request) -> dict[str, Any]
         "owner_id": owner_id,
         "shared_document_ids": shared_document_ids,
         "include_unowned": settings.unowned_docs_visible_to_all,
+        "tribe_scopes": tribe_scopes,
     }
 
 

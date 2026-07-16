@@ -2029,7 +2029,12 @@ def claim_file(request: Request, file_id: int, db: DbSession):
             return {"status": "already_owned", "message": "You already own this document", "file_id": file_id}
         raise HTTPException(status_code=403, detail="This document is already owned by another user")
 
+    from app.utils.tribe_scope import ensure_personal_scope
+
+    tenant_id, tribe_id = ensure_personal_scope(db, owner_id, file_record.tenant_id)
     file_record.owner_id = owner_id
+    file_record.tenant_id = tenant_id
+    file_record.tribe_id = tribe_id
     try:
         db.commit()
     except Exception as e:
@@ -2063,9 +2068,14 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
 
     claimed = []
     skipped = []
+    from app.utils.tribe_scope import ensure_personal_scope
+
     for rec in file_records:
         if rec.owner_id is None:
+            tenant_id, tribe_id = ensure_personal_scope(db, owner_id, rec.tenant_id)
             rec.owner_id = owner_id
+            rec.tenant_id = tenant_id
+            rec.tribe_id = tribe_id
             claimed.append(rec.id)
         else:
             skipped.append({"file_id": rec.id, "reason": "already owned"})

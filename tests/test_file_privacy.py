@@ -5,9 +5,11 @@ from unittest.mock import patch
 import pytest
 
 from app.models import FileRecord, SharedLink
+from app.utils.tribe_scope import ensure_document_scope
 
 
 def _file(db_session, owner_id="alice") -> FileRecord:
+    tenant_id, tribe_id = ensure_document_scope(db_session, owner_id)
     record = FileRecord(
         owner_id=owner_id,
         filehash="privacy-hash",
@@ -15,6 +17,8 @@ def _file(db_session, owner_id="alice") -> FileRecord:
         local_filename="/tmp/privacy.pdf",
         file_size=123,
         mime_type="application/pdf",
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     db_session.add(record)
     db_session.commit()

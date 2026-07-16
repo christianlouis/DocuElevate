@@ -119,6 +119,8 @@ Conductor, and Signal are currently planning-track names because their former
 - Full-text search and document discovery
 - Multi-destination distribution (cloud providers, DMS, protocols, email)
 - Admin UI for configuration (database-backed settings, encryption, setup wizard)
+- [x] Tenant/Tribe document boundary foundation with canonical per-file `is_private` enforcement
+- [ ] Tribe membership, invitations, delegated routing administration, and explicit shared-intake UI (#1146)
 - Production hardening building blocks (CI/CD, security docs, deployment guides)
 
 ## Feature Landscape (Themes)
