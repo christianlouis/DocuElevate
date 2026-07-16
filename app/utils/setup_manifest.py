@@ -66,7 +66,7 @@ def _resolve_value(value: Any, *, path: str, environ: Mapping[str, str]) -> tupl
     if not isinstance(value, dict):
         return _scalar_string(value, path=path), None
     if set(value) != {"fromEnv"}:
-        raise SetupManifestError(f"{path} supports only {{\"fromEnv\": \"NAME\"}} references")
+        raise SetupManifestError(f'{path} supports only {{"fromEnv": "NAME"}} references')
     env_name = value["fromEnv"]
     if not isinstance(env_name, str) or not _ENV_NAME_RE.fullmatch(env_name):
         raise SetupManifestError(f"{path}.fromEnv must be a valid environment variable name")
@@ -314,7 +314,9 @@ def apply_setup_manifest(db: Session, resolved: dict[str, Any]) -> dict[str, Any
     restart_required: list[str] = []
 
     for setting in resolved["settings"]:
-        planned = next(change for change in plan["changes"] if change["resource"] == "setting" and change["key"] == setting["key"])
+        planned = next(
+            change for change in plan["changes"] if change["resource"] == "setting" and change["key"] == setting["key"]
+        )
         if planned["status"] == "unchanged":
             continue
         if not save_setting_to_db(db, setting["key"], setting["value"], changed_by="agentic_setup"):
@@ -334,7 +336,9 @@ def apply_setup_manifest(db: Session, resolved: dict[str, Any]) -> dict[str, Any
             existing = LocalUser(email=user["email"], username=user["username"])
             db.add(existing)
         elif existing.username != user["username"]:
-            duplicate = db.query(LocalUser).filter(LocalUser.username == user["username"], LocalUser.id != existing.id).first()
+            duplicate = (
+                db.query(LocalUser).filter(LocalUser.username == user["username"], LocalUser.id != existing.id).first()
+            )
             if duplicate:
                 raise SetupManifestError(f"Username already belongs to another user: {user['username']}")
         existing.username = user["username"]

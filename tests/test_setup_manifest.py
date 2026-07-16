@@ -71,9 +71,7 @@ _ENV = {
 def test_example_and_json_schema_use_the_runtime_api_version():
     root = Path(__file__).resolve().parents[1]
     example = json.loads((root / "examples" / "agentic-setup.preprod.json").read_text(encoding="utf-8"))
-    schema = json.loads(
-        (root / "schemas" / "docuelevate-setup-v1alpha1.schema.json").read_text(encoding="utf-8")
-    )
+    schema = json.loads((root / "schemas" / "docuelevate-setup-v1alpha1.schema.json").read_text(encoding="utf-8"))
     assert example["apiVersion"] == MANIFEST_API_VERSION
     assert example["kind"] == MANIFEST_KIND
     assert schema["properties"]["apiVersion"]["const"] == MANIFEST_API_VERSION
@@ -115,9 +113,12 @@ def test_manifest_reports_missing_secret_reference():
         (lambda manifest: manifest["spec"].update({"completeSetup": "false"}), "boolean"),
         (lambda manifest: manifest["spec"]["users"][1].update({"username": "christian"}), "username"),
         (lambda manifest: manifest["spec"]["users"][1].update({"isAdmin": "false"}), "boolean"),
-        (lambda manifest: manifest["spec"]["tribes"][0]["members"].append(
-            {"email": "julia@example.test", "role": "member"}
-        ), "Duplicate member"),
+        (
+            lambda manifest: manifest["spec"]["tribes"][0]["members"].append(
+                {"email": "julia@example.test", "role": "member"}
+            ),
+            "Duplicate member",
+        ),
     ],
 )
 def test_manifest_rejects_ambiguous_or_duplicate_desired_state(mutate, error):
