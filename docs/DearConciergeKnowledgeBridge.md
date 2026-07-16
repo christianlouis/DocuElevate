@@ -92,6 +92,8 @@ subsequent polls continue from Dropbox's change cursor.
 - Cross-document questions about counts, maxima, and trends combine semantic and
   full-text candidates. Limited retrieval is disclosed and must not be presented as a
   corpus-complete result.
+- The lexical index reconciler pages through the full Meilisearch corpus and commits
+  missing documents in resumable bulk updates on its own worker queue.
 - A cited document endpoint returns authoritative OCR text and metadata for follow-up.
 - OAuth-authenticated browser clients and Bearer-token clients use the same endpoints.
 - The MCP server is a stateless adapter exposing `search_documents` and `get_document`;
@@ -102,8 +104,9 @@ subsequent polls continue from Dropbox's change cursor.
 - Automated tests cover intake authentication, idempotency, path safety, size/type
   validation, outbound retries, Dropbox resume, chunk overlap, Qdrant replacement,
   authorization filtering, and source citations.
-- A preprod smoke test imports a representative Dropbox subset, rebuilds Qdrant from
-  scratch, and answers agreed DearConcierge questions with traceable source documents.
+- A preprod smoke test imports a representative Dropbox subset, rebuilds Qdrant and
+  Meilisearch from scratch, and answers agreed DearConcierge questions with traceable
+  source documents and explicit coverage.
 - Production deployment, Evergreen enablement, and credential changes require explicit
   approval after the evidence above is reviewed.
 

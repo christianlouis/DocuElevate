@@ -72,12 +72,17 @@ release. Delivery is split into independently reversible slices:
    - Keep the existing whole-document embedding for duplicate detection; vector export is
      optional and idempotent.
    - Provide explicit backfill and health/status operations for the existing corpus.
-5. **P0 — DearConcierge retrieval contract**
+5. **P0 — Complete lexical corpus index**
+   - Reconcile every processed, non-duplicate document into Meilisearch without a
+     fixed corpus-size ceiling.
+   - Use bounded, resumable bulk updates on a dedicated worker and expose the
+     remaining gap so exhaustive answers cannot silently claim incomplete coverage.
+6. **P0 — DearConcierge retrieval contract**
    - Expose authenticated semantic search and cited full-text retrieval with DocuElevate's
      existing owner/share checks applied to every result.
    - Support OAuth browser sessions and personal Bearer tokens first; add an MCP adapter as
      a thin client over the same API rather than duplicating authorization logic.
-6. **P0 — Preprod acceptance and promotion gate**
+7. **P0 — Preprod acceptance and promotion gate**
    - Prove retry/idempotency, owner isolation, Dropbox resume, vector backfill, citation
      retrieval, and end-to-end DearConcierge queries in preprod.
    - Do not change the production image or enable the Evergreen sender without a separate,

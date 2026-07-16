@@ -48,6 +48,7 @@ class TestCeleryWorkerConfig:
         mod = _reload_celery_worker()
         routes = mod.celery.conf.task_routes
         assert routes["app.tasks.knowledge_research.run_knowledge_research"]["queue"] == "knowledge_research"
+        assert routes["app.tasks.batch_tasks.sync_search_index"]["queue"] == "search_index"
         assert routes is not None
         assert "app.tasks.*" in routes
 

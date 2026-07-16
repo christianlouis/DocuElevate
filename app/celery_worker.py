@@ -76,6 +76,7 @@ register_settings_reload_signal()
 
 celery.conf.task_routes = {
     "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
+    "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     "app.tasks.*": {"queue": "default"},
 }
 

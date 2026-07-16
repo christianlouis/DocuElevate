@@ -70,6 +70,23 @@ services:
     volumes:
       - /var/docparse/workdir:/workdir
 
+  search-index-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    working_dir: /workdir
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "search_index"]
+    env_file:
+      - .env
+    environment:
+      - PYTHONPATH=/app
+    depends_on:
+      - redis
+      - meilisearch
+    volumes:
+      - /var/docparse/workdir:/workdir
+
   gotenberg:
     image: gotenberg/gotenberg:latest
     container_name: gotenberg

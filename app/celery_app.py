@@ -39,6 +39,7 @@ celery.conf.broker_transport_options = {
 celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {
     "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
+    "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     "app.tasks.*": {"queue": "document_processor"},
 }
 

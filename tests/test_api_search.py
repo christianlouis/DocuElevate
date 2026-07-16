@@ -121,6 +121,58 @@ class TestMeilisearchIndexDocument:
             result = index_document(_FakeRecord(), "some text", {})
             assert result is False
 
+    def test_index_documents_commits_one_bulk_update(self):
+        """Batch indexing waits until the Meilisearch update is committed."""
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_task = MagicMock(task_uid=42)
+        mock_client.get_index.return_value = mock_index
+        mock_index.add_documents.return_value = mock_task
+        mock_client.wait_for_task.return_value = MagicMock(status="succeeded")
+
+        class _FakeRecord:
+            original_filename = "invoice.pdf"
+            mime_type = "application/pdf"
+            file_size = 2048
+            created_at = None
+
+            def __init__(self, file_id):
+                self.id = file_id
+
+        documents = [
+            (_FakeRecord(1), "first", {"document_type": "Invoice"}),
+            (_FakeRecord(2), "second", {"document_type": "Invoice"}),
+        ]
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import index_documents
+
+            assert index_documents(documents) == 2
+
+        payload = mock_index.add_documents.call_args.args[0]
+        assert [document["file_id"] for document in payload] == [1, 2]
+        mock_client.wait_for_task.assert_called_once_with(42, timeout_in_ms=120_000)
+
+    def test_index_documents_rejects_failed_meilisearch_task(self):
+        """An accepted update is not counted when Meilisearch later rejects it."""
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_index.add_documents.return_value = MagicMock(task_uid=43)
+        mock_client.get_index.return_value = mock_index
+        mock_client.wait_for_task.return_value = MagicMock(status="failed")
+
+        class _FakeRecord:
+            id = 1
+            original_filename = "invoice.pdf"
+            mime_type = "application/pdf"
+            file_size = 2048
+            created_at = None
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import index_documents
+
+            assert index_documents([(_FakeRecord(), "text", {})]) == 0
+
 
 @pytest.mark.unit
 class TestMeilisearchSearchDocuments:

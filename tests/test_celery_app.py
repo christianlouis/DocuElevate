@@ -45,6 +45,7 @@ class TestCeleryAppConfig:
             celery.conf.task_routes["app.tasks.knowledge_research.run_knowledge_research"]["queue"]
             == "knowledge_research"
         )
+        assert celery.conf.task_routes["app.tasks.batch_tasks.sync_search_index"]["queue"] == "search_index"
 
     def test_broker_connection_retry_on_startup(self):
         """Test that broker connection retry on startup is enabled."""

@@ -117,11 +117,17 @@ This is particularly useful when:
 |---|---|
 | **Task** | `app.tasks.batch_tasks.sync_search_index` |
 | **Default schedule** | Hourly (cron `15 */1 * * *`) |
-| **Purpose** | Indexes documents in Meilisearch that have OCR text or AI metadata but are not yet present in the search index. Processes up to 100 documents per run. |
+| **Purpose** | Reconciles documents with OCR text or AI metadata into Meilisearch. It reads all existing IDs page by page and commits up to 500 missing documents per run in bounded bulk updates. |
 
 This is useful after:
 - Enabling Meilisearch for the first time on an existing installation.
 - Recovering from a Meilisearch index wipe or migration.
+
+The task is safe to rerun. Each bulk update is confirmed by Meilisearch before
+the run reports it as indexed. Large one-time reconciliations can call the task
+with `continue_until_complete=true`; the dedicated `search_index` worker then
+continues in bounded batches without blocking document processing or knowledge
+research.
 
 ---
 
