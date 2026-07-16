@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.185.0 (2026-07-16)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e4962f0`](https://github.com/christianlouis/DocuElevate/commit/e4962f02096d39a36f603f9ce0c5358eb83afb61))
+
+### Features
+
+- Document owner-controlled file privacy
+  ([#1153](https://github.com/christianlouis/DocuElevate/pull/1153),
+  [`4707fac`](https://github.com/christianlouis/DocuElevate/commit/4707fac204bca3c11144a8a2a60679a978927b7e))
+
+
 ## Unreleased
 
 
