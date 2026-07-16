@@ -20,6 +20,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
 
 - **changelog**: Update changelog [skip ci]
