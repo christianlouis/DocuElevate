@@ -11,6 +11,7 @@ from fastapi import Request
 from fastapi.responses import Response
 
 from app.config import settings
+from app.utils.config_validator.masking import mask_database_url
 from app.views.base import APIRouter, templates
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,6 @@ async def database_wizard(request: Request) -> Response:
         "db_wizard.html",
         {
             "request": request,
-            "current_database_url": settings.database_url,
+            "current_database_url": mask_database_url(settings.database_url),
         },
     )
