@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.8 (2026-07-16)
+
+### Bug Fixes
+
+- Recognize Meilisearch SDK documents
+  ([`cd40089`](https://github.com/christianlouis/DocuElevate/commit/cd40089030168541664e5b9aefd204441832fce8))
+
+
 ## v0.184.7 (2026-07-16)
 
 ### Bug Fixes
