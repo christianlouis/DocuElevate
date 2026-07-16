@@ -248,24 +248,6 @@
     }
     .knowledge-chat-form button { border: 0; background: #2563eb; color: #fff; }
     .knowledge-chat-form button:disabled { opacity: 0.55; cursor: wait; }
-    .knowledge-chat-progress {
-      display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.65rem 0.75rem;
-      align-items: center; margin-top: 0.75rem; padding: 0.8rem 0.9rem;
-      border: 1px solid #bfdbfe; border-radius: 0.625rem; background: #eff6ff; color: #1e3a8a;
-    }
-    .knowledge-chat-progress[hidden] { display: none; }
-    .knowledge-chat-progress-icon { color: #2563eb; }
-    .knowledge-chat-progress-copy { min-width: 0; }
-    .knowledge-chat-progress-phase { display: block; font-weight: 700; }
-    .knowledge-chat-progress-detail { display: block; margin-top: 0.15rem; color: #475569; font-size: 0.8rem; }
-    .knowledge-chat-progress-elapsed { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
-    .knowledge-chat-progress-bar {
-      grid-column: 2 / 4; width: 100%; height: 0.45rem; overflow: hidden;
-      border: 0; border-radius: 999px; background: #dbeafe; color: #2563eb;
-    }
-    .knowledge-chat-progress-bar::-webkit-progress-bar { background: #dbeafe; border-radius: 999px; }
-    .knowledge-chat-progress-bar::-webkit-progress-value { background: #2563eb; border-radius: 999px; }
-    .knowledge-chat-progress-bar::-moz-progress-bar { background: #2563eb; border-radius: 999px; }
     .knowledge-chat-clear { margin-top: 0.5rem; border: 1px solid #d1d5db; background: #fff; color: #4b5563; }
     @media (max-width: 900px) {
       .search-container.preview-active .search-workspace {
@@ -306,14 +288,14 @@
         <textarea id="knowledge-chat-input" maxlength="4000" placeholder="{{ _('search.chat_placeholder') }}" required></textarea>
         <button type="submit" id="knowledge-chat-send"><i class="fas fa-paper-plane" aria-hidden="true"></i> {{ _("search.chat_send") }}</button>
       </form>
-      <div id="knowledge-chat-progress" class="knowledge-chat-progress" role="status" aria-live="polite" hidden>
-        <i class="fas fa-circle-notch fa-spin knowledge-chat-progress-icon" aria-hidden="true"></i>
-        <div class="knowledge-chat-progress-copy">
-          <strong id="knowledge-chat-progress-phase" class="knowledge-chat-progress-phase">{{ _("search.chat_planning") }}</strong>
-          <span id="knowledge-chat-progress-detail" class="knowledge-chat-progress-detail">{{ _("search.chat_planning_detail") }}</span>
+      <div id="knowledge-chat-progress" class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 mt-3 p-3 border border-blue-200 rounded-lg bg-blue-50 text-blue-900 [&[hidden]]:hidden" role="status" aria-live="polite" hidden>
+        <i class="fas fa-circle-notch fa-spin text-blue-600" aria-hidden="true"></i>
+        <div class="min-w-0">
+          <strong id="knowledge-chat-progress-phase" class="block font-bold">{{ _("search.chat_planning") }}</strong>
+          <span id="knowledge-chat-progress-detail" class="block mt-0.5 text-sm text-slate-600">{{ _("search.chat_planning_detail") }}</span>
         </div>
-        <span id="knowledge-chat-progress-elapsed" class="knowledge-chat-progress-elapsed">0s</span>
-        <progress id="knowledge-chat-progress-bar" class="knowledge-chat-progress-bar" aria-label="{{ _('search.chat_progress_aria') }}"></progress>
+        <span id="knowledge-chat-progress-elapsed" class="font-bold tabular-nums whitespace-nowrap">0s</span>
+        <progress id="knowledge-chat-progress-bar" class="col-start-2 col-end-4 w-full h-2 overflow-hidden rounded-full bg-blue-100 accent-blue-600" aria-label="{{ _('search.chat_progress_aria') }}"></progress>
       </div>
       <button type="button" id="knowledge-chat-clear" class="knowledge-chat-clear"><i class="fas fa-trash-alt" aria-hidden="true"></i> {{ _("search.chat_clear") }}</button>
     </section>

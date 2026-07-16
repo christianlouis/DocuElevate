@@ -271,7 +271,14 @@ class QdrantVectorIndex:
         )
         return len(points)
 
-    def search(self, query: str, *, limit: int, score_threshold: float | None = None) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int,
+        score_threshold: float | None = None,
+        document_ids: list[int] | None = None,
+    ) -> list[dict[str, Any]]:
         vector = generate_embeddings([query])[0]
         body: dict[str, Any] = {
             "query": vector,
@@ -281,6 +288,10 @@ class QdrantVectorIndex:
         }
         if score_threshold is not None:
             body["score_threshold"] = score_threshold
+        if document_ids is not None:
+            if not document_ids:
+                return []
+            body["filter"] = {"must": [{"key": "document_id", "match": {"any": document_ids}}]}
 
         response = self._request(
             "POST",

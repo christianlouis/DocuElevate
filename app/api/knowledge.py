@@ -44,8 +44,6 @@ _RESEARCH_QUERY_STOPWORDS = {
     "a",
     "an",
     "auf",
-    "aufenthalt",
-    "aufenthalte",
     "basis",
     "belegbar",
     "biggest",
@@ -147,6 +145,11 @@ def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
     created_at = job.created_at
     if created_at is not None and created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
+    elapsed_until = datetime.now(timezone.utc)
+    if job.state in {"completed", "failed", "cancelled"} and job.updated_at is not None:
+        elapsed_until = job.updated_at
+        if elapsed_until.tzinfo is None:
+            elapsed_until = elapsed_until.replace(tzinfo=timezone.utc)
     payload: dict[str, Any] = {
         "job_id": job.id,
         "state": job.state,
@@ -154,9 +157,7 @@ def _research_job_payload(job: KnowledgeResearchJob) -> dict[str, Any]:
         "processed_documents": job.processed_documents,
         "cancel_requested": job.cancel_requested,
         "error": job.error,
-        "elapsed_seconds": max(0, int((datetime.now(timezone.utc) - created_at).total_seconds()))
-        if created_at is not None
-        else 0,
+        "elapsed_seconds": max(0, int((elapsed_until - created_at).total_seconds())) if created_at is not None else 0,
     }
     if job.result_json:
         payload["result"] = json.loads(job.result_json)

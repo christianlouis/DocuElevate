@@ -769,6 +769,8 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+        "min": 15,
+        "max": 300,
     },
     "rag_research_lexical_min_score": {
         "category": "AI Services",
@@ -777,6 +779,8 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+        "min": 0.0,
+        "max": 1.0,
     },
     "rag_research_semantic_min_score": {
         "category": "AI Services",
@@ -785,6 +789,8 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": False,
+        "min": 0.0,
+        "max": 1.0,
     },
     "knowledge_research_retention_days": {
         "category": "AI Services",
@@ -3886,9 +3892,27 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
 
     elif setting_type == "integer":
         try:
-            int(value)
+            num = int(value)
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
         except ValueError:
             return False, f"{key} must be an integer"
+
+    elif setting_type == "float":
+        try:
+            num = float(value)
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
+        except (TypeError, ValueError):
+            return False, f"{key} must be a number"
 
     elif setting_type == "slider":
         try:

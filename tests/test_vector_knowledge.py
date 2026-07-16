@@ -249,11 +249,17 @@ def test_qdrant_search_uses_legacy_fallback_and_normalizes_results():
         patch("app.utils.vector_index.generate_embeddings", return_value=[[0.1, 0.2]]),
         patch.object(QdrantVectorIndex, "_request", side_effect=[missing, legacy]) as request,
     ):
-        result = QdrantVectorIndex().search("query", limit=3, score_threshold=0.4)
+        result = QdrantVectorIndex().search(
+            "query",
+            limit=3,
+            score_threshold=0.4,
+            document_ids=[7, 8],
+        )
 
     assert result == [{"id": "point-1", "score": 0.9}]
     assert request.call_args_list[0].args[2]["query"] == [0.1, 0.2]
     assert request.call_args_list[0].args[2]["score_threshold"] == 0.4
+    assert request.call_args_list[0].args[2]["filter"] == {"must": [{"key": "document_id", "match": {"any": [7, 8]}}]}
     assert request.call_args_list[1].args[2]["vector"] == [0.1, 0.2]
     assert "query" not in request.call_args_list[1].args[2]
 
