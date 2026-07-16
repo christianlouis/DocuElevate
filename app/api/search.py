@@ -15,9 +15,12 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
+from app.config import settings
 from app.database import get_db
+from app.models import FileRecord
 from app.utils.hybrid_search import hybrid_rank, semantic_candidates
 from app.utils.meilisearch_client import search_documents
+from app.utils.user_scope import apply_owner_filter
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +107,20 @@ def search_api(
     """
     logger.info(f"Search request: q={q!r}, mime_type={mime_type}, page={page}, per_page={per_page}")
 
+    # Meilisearch is a shared external index.  Never rely on the database
+    # checks performed by the file-detail endpoint to protect search results:
+    # constrain the search itself to the IDs this principal may access.
+    # Keeping this as an ID allowlist also includes explicitly shared files and
+    # follows the same unowned-document policy as the rest of the application.
+    accessible_file_ids: list[int] | None = None
+    if settings.multi_user_enabled:
+        accessible_file_ids = [
+            row[0] for row in apply_owner_filter(db.query(FileRecord.id), request).order_by(FileRecord.id.asc()).all()
+        ]
+
     result = search_documents(
         q,
+        file_ids=accessible_file_ids,
         mime_type=mime_type,
         document_type=document_type,
         language=language,

@@ -78,6 +78,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         ghostscript \
         poppler-utils \
+        postgresql-client \
         unpaper \
         wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -88,6 +89,7 @@ COPY ./frontend /app/frontend
 COPY ./migrations /app/migrations
 COPY ./alembic.ini /app/alembic.ini
 COPY ./LICENSE /app/LICENSE
+COPY ./docker/compose-entrypoint.sh /usr/local/bin/docuelevate-compose-entrypoint
 
 # Copy build metadata files (generated at build time)
 COPY ./VERSION /app/VERSION
@@ -102,7 +104,8 @@ COPY --from=docs-builder /docs/docs_build /app/docs_build
 COPY --from=frontend-builder /frontend/static/styles.css /app/frontend/static/styles.css
 
 # Create necessary runtime directories in a single layer
-RUN mkdir -p /app/runtime_info /workdir
+RUN mkdir -p /app/runtime_info /workdir \
+    && chmod 0755 /usr/local/bin/docuelevate-compose-entrypoint
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \

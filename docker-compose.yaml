@@ -1,122 +1,196 @@
+name: docuelevate
+
+x-docuelevate-service: &docuelevate-service
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  working_dir: /workdir
+  entrypoint: ["/usr/local/bin/docuelevate-compose-entrypoint"]
+  env_file:
+    - path: .env
+      required: false
+  environment: &docuelevate-environment
+    PYTHONPATH: /app
+    WORKDIR: /workdir
+    REDIS_URL: redis://redis:6379/0
+    GOTENBERG_URL: http://gotenberg:3000
+    MEILISEARCH_URL: http://meilisearch:7700
+    MEILISEARCH_INDEX_NAME: documents
+    ENABLE_SEARCH: "true"
+    VECTOR_INDEX_ENABLED: "true"
+    VECTOR_INDEX_URL: http://qdrant:6333
+    VECTOR_INDEX_COLLECTION: docuelevate_documents
+    AUTH_ENABLED: "true"
+    MULTI_USER_ENABLED: "true"
+    ALLOW_LOCAL_SIGNUP: "true"
+    UNOWNED_DOCS_VISIBLE_TO_ALL: "false"
+    EXTERNAL_HOSTNAME: localhost:8000
+    PUBLIC_BASE_URL: http://localhost:8000
+  volumes:
+    - ${DOCUELEVATE_WORKDIR:-/var/docparse/workdir}:/workdir
+    - bootstrap-secrets:/run/docuelevate-bootstrap:ro
+
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: document_api
-    restart: always
-
-    # We'll keep the code in /app, but set working_dir to the shared data directory
-    working_dir: /workdir
-
-    # We'll run uvicorn from the container's /app code
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
-
-    # Environment variables
-    environment:
-      - PYTHONPATH=/app
-    env_file:
-      - .env
-
-    # Expose container's 8000 -> Host's 8000
-    ports:
-      - "8000:8000"
-
-    depends_on:
-      - redis
-      - worker
-
-    # Mount the shared working directory for data
+  bootstrap:
+    image: alpine:3.22
+    restart: "no"
+    network_mode: none
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        if [ ! -s /bootstrap/session_secret ]; then
+          head -c 48 /dev/urandom | base64 > /bootstrap/session_secret
+        fi
+        if [ ! -s /bootstrap/postgres_password ]; then
+          head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > /bootstrap/postgres_password
+        fi
     volumes:
-      - /var/docparse/workdir:/workdir
+      - bootstrap-secrets:/bootstrap
 
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: document_worker
-    restart: always
-
-    # same shared working directory
-    working_dir: /workdir
-
-    command: ["celery", "-A", "app.celery_worker", "worker", "-B", "--loglevel=info", "-Q", "document_processor,default,celery"]
-    env_file:
-      - .env
-    environment:
-      - PYTHONPATH=/app
-
-    depends_on:
-      - redis
-      - gotenberg
-
-    # Mount the shared directory
-    volumes:
-      - /var/docparse/workdir:/workdir
-
-  knowledge-research-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  postgres:
+    image: postgres:17
     restart: unless-stopped
-    working_dir: /workdir
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "knowledge_research"]
-    env_file:
-      - .env
-    environment:
-      - PYTHONPATH=/app
     depends_on:
-      - redis
-    volumes:
-      - /var/docparse/workdir:/workdir
-
-  search-index-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    working_dir: /workdir
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "search_index"]
-    env_file:
-      - .env
+      bootstrap:
+        condition: service_completed_successfully
     environment:
-      - PYTHONPATH=/app
-    depends_on:
-      - redis
-      - meilisearch
+      POSTGRES_DB: docuelevate
+      POSTGRES_USER: docuelevate
+      POSTGRES_PASSWORD_FILE: /run/docuelevate-bootstrap/postgres_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuelevate -d docuelevate"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes:
-      - /var/docparse/workdir:/workdir
-
-  gotenberg:
-    image: gotenberg/gotenberg:latest
-    container_name: gotenberg
-    restart: always
-
-  meilisearch:
-    image: getmeili/meilisearch:latest
-    container_name: document_meilisearch
-    restart: always
-    environment:
-      - MEILI_NO_ANALYTICS=true
-    volumes:
-      - /var/docparse/meilisearch:/meili_data
+      - postgres-data:/var/lib/postgresql/data
+      - bootstrap-secrets:/run/docuelevate-bootstrap:ro
 
   redis:
-    image: redis:alpine
-    container_name: document_redis
-    restart: always
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  # Optional: standalone docs server using MkDocs Material (live-reload during development).
-  # Start with: docker compose --profile docs up docs
-  # Access at: http://localhost:8001
-  # Note: The /help route in the main app serves pre-built docs from the Docker image.
-  # This service is for content authors who want live preview while editing documentation.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.36.0
+    restart: unless-stopped
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meilisearch-data:/meili_data
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.2
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  api:
+    <<: *docuelevate-service
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+      meilisearch:
+        condition: service_started
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/api/diagnostic/healthz/ready', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  worker:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "-Q", "document_processor,default,celery"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+      api:
+        condition: service_healthy
+
+  beat:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  knowledge-research-worker:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "knowledge_research"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      api:
+        condition: service_healthy
+
+  search-index-worker:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "search_index"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+      api:
+        condition: service_healthy
+
   docs:
     image: squidfunk/mkdocs-material:latest
-    container_name: docuelevate_docs
     restart: "no"
-    profiles:
-      - docs
+    profiles: [docs]
     volumes:
       - ./docs:/docs/docs
       - ./mkdocs.yml:/docs/mkdocs.yml
@@ -124,3 +198,9 @@ services:
     command: ["serve", "--dev-addr=0.0.0.0:8000", "--config-file=/docs/mkdocs.yml"]
     ports:
       - "8001:8000"
+
+volumes:
+  bootstrap-secrets:
+  postgres-data:
+  meilisearch-data:
+  qdrant-data:

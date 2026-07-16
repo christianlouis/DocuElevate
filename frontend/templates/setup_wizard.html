@@ -78,6 +78,7 @@
 
       <!-- Card Body -->
       <form method="post" action="/setup" class="px-6 py-8">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
         <input type="hidden" name="step" value="{{ current_step }}">
 
         {% if request.query_params.get('error') == 'save_failed' %}

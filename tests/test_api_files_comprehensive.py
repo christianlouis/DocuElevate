@@ -2272,6 +2272,37 @@ class TestCheckForExactDuplicate:
             assert result["duplicate_type"] == "exact"
             assert result["original_file_id"] == existing.id
 
+    def test_check_duplicate_does_not_cross_tenant_boundary(self, db_session, tmp_path):
+        """A matching hash owned by another user must not be disclosed or reused."""
+        from app.api.files import _check_for_exact_duplicate
+        from app.utils.file_operations import hash_file
+
+        test_file = tmp_path / "private.pdf"
+        test_file.write_bytes(b"%PDF-1.4 same bytes, different tenant")
+        existing = FileRecord(
+            filehash=hash_file(str(test_file)),
+            original_filename="julia-private.pdf",
+            local_filename=str(test_file),
+            file_size=test_file.stat().st_size,
+            mime_type="application/pdf",
+            is_duplicate=False,
+            owner_id="julia@example.test",
+        )
+        db_session.add(existing)
+        db_session.commit()
+
+        with patch("app.api.files.settings") as mock_settings:
+            mock_settings.enable_deduplication = True
+            mock_settings.multi_user_enabled = True
+            result = _check_for_exact_duplicate(
+                db_session,
+                str(test_file),
+                "christian-private.pdf",
+                "christian@example.test",
+            )
+
+        assert result is None
+
     def test_check_duplicate_hash_error_returns_none(self, db_session, tmp_path):
         """Test that hash errors return None (graceful fallback)."""
         from app.api.files import _check_for_exact_duplicate

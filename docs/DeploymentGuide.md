@@ -36,13 +36,39 @@ git clone https://github.com/christianlouis/DocuElevate.git
 cd DocuElevate
 ```
 
-### Step 2: Configure Environment Variables
+### Step 2: Optionally provide operator-owned app credentials
 
-```bash
-cp .env.demo .env
+The included Compose stack does **not** require a `.env` file. On first start it
+creates a stable session secret and PostgreSQL password in a private Docker
+volume. PostgreSQL, Redis, Gotenberg, Meilisearch and Qdrant are wired
+automatically. The browser setup journey stores user choices and encrypted user
+credentials in PostgreSQL, so workers pick up changes without editing every
+container environment or restarting the stack.
+
+Create `.env` only for credentials owned by the deployment operator, such as an
+OAuth application client ID/secret or an AI-provider key that should be shared
+by this installation:
+
+```dotenv
+# Optional examples — do not copy end-user OAuth tokens here.
+OPENAI_API_KEY=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
 ```
 
-Edit `.env` with your settings. See the [Configuration Guide](ConfigurationGuide.md) for all options.
+For upgrade compatibility, documents continue to live under the host path
+`/var/docparse/workdir`. A new installation can choose another persistent host
+path without changing the Compose file:
+
+```dotenv
+DOCUELEVATE_WORKDIR=/srv/docuelevate/workdir
+```
+
+The containers themselves keep `/workdir` as their working directory, so a
+legacy relative SQLite `DATABASE_URL` also continues to resolve against the
+persisted document path during an upgrade.
+
+See the [Configuration Guide](ConfigurationGuide.md) for all optional settings.
 
 ### Step 3: Run with Docker Compose
 
@@ -56,13 +82,25 @@ This starts:
 |---------|---------|
 | `api` | FastAPI web server (port 8000) |
 | `worker` | Celery background task worker |
-| `redis` | Message broker for Celery |
+| `beat` | Single Celery scheduler instance |
+| `knowledge-research-worker` | Document research and RAG jobs |
+| `search-index-worker` | Search reconciliation jobs |
+| `postgres` | Persistent application and user configuration database |
+| `redis` | Ephemeral task broker for Celery |
 | `gotenberg` | PDF conversion (LibreOffice headless) |
-| `meilisearch` | Full-text search engine (port 7700) |
+| `meilisearch` | Persistent full-text search index |
+| `qdrant` | Persistent vector index for semantic retrieval |
 
 ### Step 4: Verify the Installation
 
-Access the web interface at `http://localhost:8000` and the API docs at `http://localhost:8000/docs`.
+Access the web interface at `http://localhost:8000` and complete the deployment
+wizard. Then create normal user accounts and follow the per-user onboarding
+journey. Multi-user isolation is enabled by default and unowned documents are
+not visible to ordinary users.
+
+The API readiness endpoint is
+`http://localhost:8000/api/diagnostic/healthz/ready`; optional API documentation
+is available at `http://localhost:8000/docs` when enabled.
 
 ---
 

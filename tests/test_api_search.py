@@ -409,12 +409,16 @@ class TestSearchAPIEndpoint:
     def test_search_endpoint_with_filters(self, client):
         """GET /api/search with optional filters passes them to search_documents."""
         mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "invoice"}
-        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+        with (
+            patch("app.api.search.settings.multi_user_enabled", False),
+            patch("app.api.search.search_documents", return_value=mock_result) as mock_search,
+        ):
             response = client.get("/api/search?q=invoice&mime_type=application/pdf&language=en&page=2&per_page=10")
 
         assert response.status_code == 200
         mock_search.assert_called_once_with(
             "invoice",
+            file_ids=None,
             mime_type="application/pdf",
             document_type=None,
             language="en",
@@ -437,12 +441,16 @@ class TestSearchAPIEndpoint:
     def test_search_endpoint_pagination_defaults(self, client):
         """GET /api/search uses default page=1 per_page=20."""
         mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "test"}
-        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+        with (
+            patch("app.api.search.settings.multi_user_enabled", False),
+            patch("app.api.search.search_documents", return_value=mock_result) as mock_search,
+        ):
             response = client.get("/api/search?q=test")
 
         assert response.status_code == 200
         mock_search.assert_called_once_with(
             "test",
+            file_ids=None,
             mime_type=None,
             document_type=None,
             language=None,
@@ -456,6 +464,22 @@ class TestSearchAPIEndpoint:
             page=1,
             per_page=20,
         )
+
+    def test_search_endpoint_scopes_shared_index_in_multi_user_mode(self, client):
+        """The external search index receives only IDs authorized by the DB scope."""
+        mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "private"}
+        scoped_query = MagicMock()
+        scoped_query.order_by.return_value.all.return_value = [(11,), (42,)]
+
+        with (
+            patch("app.api.search.settings.multi_user_enabled", True),
+            patch("app.api.search.apply_owner_filter", return_value=scoped_query),
+            patch("app.api.search.search_documents", return_value=mock_result) as mock_search,
+        ):
+            response = client.get("/api/search?q=private")
+
+        assert response.status_code == 200
+        assert mock_search.call_args.kwargs["file_ids"] == [11, 42]
 
     def test_search_endpoint_date_filters(self, client):
         """GET /api/search with date_from and date_to passes them as int."""

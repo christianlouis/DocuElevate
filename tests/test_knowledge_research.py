@@ -1,6 +1,7 @@
 """Deterministic controls for exhaustive corpus research."""
 
 from datetime import datetime, timedelta, timezone
+from threading import Barrier
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -163,6 +164,84 @@ def test_candidate_retrieval_uses_adaptive_relevance_threshold():
     assert retrieval_truncated is False
 
 
+def test_candidate_retrieval_prioritizes_documents_matching_qualified_queries():
+    def search(query, *, file_ids, page, per_page):
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        if query == '"Motel One"':
+            return {
+                "results": [
+                    {"file_id": 1, "ranking_score": 0.99},  # broad mention only
+                    {"file_id": 2, "ranking_score": 0.80},
+                ],
+                "total": 2,
+                "pages": 1,
+            }
+        return {
+            "results": [{"file_id": 2, "ranking_score": 0.75}],
+            "total": 1,
+            "pages": 1,
+        }
+
+    with (
+        patch("app.tasks.knowledge_research.settings.vector_index_enabled", False),
+        patch("app.tasks.knowledge_research.settings.rag_research_lexical_min_score", 0.65),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+    ):
+        candidates, _indexed, _truncated = _candidate_ids(
+            [1, 2],
+            "Motel One",
+            plan={
+                "lexical_queries": ['"Motel One"', '"Motel One" Buchung Aufenthalt'],
+                "semantic_query": "Motel One stay",
+            },
+        )
+
+    assert candidates == [2, 1]
+
+
+def test_candidate_retrieval_runs_qualified_query_after_broad_query_saturates():
+    queries = []
+
+    def search(query, *, file_ids, page, per_page):
+        queries.append((query, page))
+        if query == "":
+            return {"results": [], "total": len(file_ids), "pages": 1}
+        if query == '"Motel One"':
+            return {
+                "results": [
+                    {"file_id": 1, "ranking_score": 0.99},
+                    {"file_id": 2, "ranking_score": 0.98},
+                ],
+                "total": 20,
+                "pages": 10,
+            }
+        return {
+            "results": [{"file_id": 2, "ranking_score": 0.99}],
+            "total": 1,
+            "pages": 1,
+        }
+
+    with (
+        patch("app.tasks.knowledge_research._RETRIEVAL_SAFETY_LIMIT", 2),
+        patch("app.tasks.knowledge_research.settings.vector_index_enabled", False),
+        patch("app.tasks.knowledge_research.settings.rag_research_lexical_min_score", 0.65),
+        patch("app.utils.meilisearch_client.search_documents", side_effect=search),
+    ):
+        candidates, _indexed, truncated = _candidate_ids(
+            [1, 2],
+            "Motel One",
+            plan={
+                "lexical_queries": ['"Motel One"', '"Motel One" Buchung Aufenthalt'],
+                "semantic_query": "Motel One stay",
+            },
+        )
+
+    assert ('"Motel One" Buchung Aufenthalt', 1) in queries
+    assert candidates == [2, 1]
+    assert truncated is True
+
+
 def test_candidate_retrieval_uses_relative_semantic_threshold():
     vector_hits = [
         {"score": 0.90, "payload": {"document_id": 1}},
@@ -277,11 +356,37 @@ def test_candidate_retrieval_splits_scopes_at_search_result_cap():
     assert candidates == [1, 2, 3, 4, 5]
     assert indexed == 5
     assert retrieval_truncated is False
-    assert [file_ids for query, file_ids, _page, _per_page in scopes if query == ""] == [
+    assert sorted(
+        [file_ids for query, file_ids, _page, _per_page in scopes if query == ""], key=lambda ids: ids[0]
+    ) == [
         [1, 2],
         [3, 4],
         [5],
     ]
+
+
+def test_candidate_retrieval_searches_authorized_scopes_concurrently():
+    """Large tenant scopes must not add one full search round-trip each."""
+    barrier = Barrier(2)
+
+    def search_scope(scope, _queries):
+        barrier.wait(timeout=1)
+        return len(scope), {scope[0]: 0.9}, False
+
+    with (
+        patch("app.tasks.knowledge_research._SCOPE_BATCH", 2),
+        patch("app.tasks.knowledge_research._search_lexical_scope", side_effect=search_scope),
+        patch("app.tasks.knowledge_research.settings.vector_index_enabled", False),
+    ):
+        candidates, indexed, retrieval_truncated = _candidate_ids(
+            [1, 2, 3, 4],
+            "Motel One",
+            plan={"lexical_queries": ['"Motel One"'], "semantic_query": "Motel One stay"},
+        )
+
+    assert candidates == [1, 3]
+    assert indexed == 4
+    assert retrieval_truncated is False
 
 
 def test_deduplication_merges_transport_legs_and_duplicate_documents():

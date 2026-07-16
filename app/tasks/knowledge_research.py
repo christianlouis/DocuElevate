@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 
@@ -30,6 +31,7 @@ _SYNTHESIS_RESERVE_SECONDS = 12
 _RETRIEVAL_SAFETY_LIMIT = 1_000
 _RESEARCH_SAFETY_SECONDS = 5 * 60
 _SEMANTIC_RELATIVE_SCORE = 0.85
+_SCOPE_SEARCH_WORKERS = 6
 
 _NON_EVENT_EVIDENCE_TERMS = {
     "advertisement",
@@ -420,6 +422,48 @@ def _plan_research(query: str, model: str) -> dict[str, Any]:
         return fallback
 
 
+def _search_lexical_scope(scope: list[int], lexical_queries: list[str]) -> tuple[int, dict[int, float], bool]:
+    """Search one authorization scope without sharing mutable state."""
+    from app.utils.meilisearch_client import search_documents
+
+    scope_status = search_documents("", file_ids=scope, page=1, per_page=1)
+    indexed_scope = int(scope_status.get("total") or 0)
+    scores: dict[int, float] = {}
+    retrieval_truncated = False
+    for query_number, lexical_query in enumerate(lexical_queries):
+        page = 1
+        while True:
+            result = search_documents(
+                lexical_query,
+                file_ids=scope,
+                page=page,
+                per_page=_LEXICAL_RESULTS_PER_SCOPE,
+            )
+            page_scores = []
+            for hit in result.get("results", []):
+                ranking_score = float(hit.get("ranking_score") or 0.0)
+                page_scores.append(ranking_score)
+                file_id = hit.get("file_id")
+                if isinstance(file_id, int) and ranking_score >= settings.rag_research_lexical_min_score:
+                    query_weight = 1.0 - (query_number * 0.1)
+                    # Exact entity probes intentionally have broad recall. A
+                    # document that also matches the planner's qualified
+                    # booking/invoice/evidence queries is much more useful than
+                    # a high-scoring marketing mention, so accumulate evidence
+                    # across distinct queries instead of retaining only the
+                    # strongest single score.
+                    scores[file_id] = scores.get(file_id, 0.0) + (query_weight * ranking_score)
+            pages = max(1, int(result.get("pages") or 1))
+            more_lexical_results = page < pages or query_number + 1 < len(lexical_queries)
+            if len(scores) >= _RETRIEVAL_SAFETY_LIMIT and more_lexical_results:
+                retrieval_truncated = True
+                break
+            if page >= pages or (page_scores and max(page_scores) < settings.rag_research_lexical_min_score):
+                break
+            page += 1
+    return indexed_scope, scores, retrieval_truncated
+
+
 def _candidate_ids(
     accessible_ids: list[int],
     query: str,
@@ -427,53 +471,27 @@ def _candidate_ids(
     plan: dict[str, Any] | None = None,
 ) -> tuple[list[int], int, bool]:
     """Rank adaptively qualified candidates inside the authorized scope."""
-    from app.utils.meilisearch_client import search_documents
-
     plan = plan or _fallback_research_plan(query)
     lexical_queries = [value for value in plan.get("lexical_queries", []) if isinstance(value, str) and value.strip()]
     candidate_scores: dict[int, float] = {}
     indexed_scope = 0
     retrieval_truncated = False
-    lexical_saturated = False
-    for offset in range(0, len(accessible_ids), _SCOPE_BATCH):
-        scope = accessible_ids[offset : offset + _SCOPE_BATCH]
-        scope_status = search_documents("", file_ids=scope, page=1, per_page=1)
-        indexed_scope += int(scope_status.get("total") or 0)
-        if lexical_saturated:
-            continue
-        for query_number, lexical_query in enumerate(lexical_queries):
-            page = 1
-            while True:
-                result = search_documents(
-                    lexical_query,
-                    file_ids=scope,
-                    page=page,
-                    per_page=_LEXICAL_RESULTS_PER_SCOPE,
-                )
-                page_scores = []
-                for hit in result.get("results", []):
-                    ranking_score = float(hit.get("ranking_score") or 0.0)
-                    page_scores.append(ranking_score)
-                    file_id = hit.get("file_id")
-                    if isinstance(file_id, int) and ranking_score >= settings.rag_research_lexical_min_score:
-                        query_weight = 1.0 - (query_number * 0.1)
-                        candidate_scores[file_id] = max(
-                            candidate_scores.get(file_id, 0.0),
-                            query_weight + ranking_score,
-                        )
-                pages = max(1, int(result.get("pages") or 1))
-                more_lexical_results = (
-                    page < pages or query_number + 1 < len(lexical_queries) or offset + len(scope) < len(accessible_ids)
-                )
-                if len(candidate_scores) >= _RETRIEVAL_SAFETY_LIMIT and more_lexical_results:
-                    retrieval_truncated = True
-                    lexical_saturated = True
-                    break
-                if page >= pages or (page_scores and max(page_scores) < settings.rag_research_lexical_min_score):
-                    break
-                page += 1
-            if lexical_saturated:
-                break
+
+    # Each scope is independently authorization-filtered. Searching scopes in
+    # parallel removes corpus-size latency without ever issuing an unscoped
+    # query against the shared Meilisearch index.
+    scopes = [accessible_ids[offset : offset + _SCOPE_BATCH] for offset in range(0, len(accessible_ids), _SCOPE_BATCH)]
+    workers = min(_SCOPE_SEARCH_WORKERS, len(scopes))
+    if workers:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="knowledge-search") as executor:
+            for scope_indexed, scope_scores, scope_truncated in executor.map(
+                lambda scope: _search_lexical_scope(scope, lexical_queries),
+                scopes,
+            ):
+                indexed_scope += scope_indexed
+                retrieval_truncated = retrieval_truncated or scope_truncated
+                for file_id, score in scope_scores.items():
+                    candidate_scores[file_id] = max(candidate_scores.get(file_id, 0.0), score)
 
     # Semantic retrieval helps bridge user vocabulary to indexed document
     # vocabulary; authorization remains the immutable ID snapshot.
