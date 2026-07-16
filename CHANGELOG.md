@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.184.10 (2026-07-16)
+
+### Bug Fixes
+
+- Align research scope with indexed corpus
+  ([`f102e7c`](https://github.com/christianlouis/DocuElevate/commit/f102e7c8f0c29564769f6d2a32e6d788d0d72290))
+
+
 ## v0.184.9 (2026-07-16)
 
 ### Performance Improvements
