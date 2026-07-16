@@ -2175,6 +2175,16 @@ class TestOwnerDisplayAndClaim:
         assert response.status_code == 200
         assert b"Claim Ownership" in response.content
 
+    def test_detail_shows_privacy_control_in_single_user_mode(self, client, db_session):
+        """The canonical privacy flag remains editable before multi-user activation."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b'id="privacy-state"' in response.content
+        assert b'id="privacy-toggle"' in response.content
+        assert b"Als privat markieren" in response.content
+
     # ── /files/{id}/annotations (file_annotations.html) ──────────────────
 
     def test_annotations_shows_owner_info(self, client, db_session):
