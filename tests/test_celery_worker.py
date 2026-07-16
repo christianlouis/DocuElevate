@@ -47,10 +47,7 @@ class TestCeleryWorkerConfig:
         """Test that task routes are set."""
         mod = _reload_celery_worker()
         routes = mod.celery.conf.task_routes
-        assert (
-            routes["app.tasks.knowledge_research.run_knowledge_research"]["queue"]
-            == "knowledge_research"
-        )
+        assert routes["app.tasks.knowledge_research.run_knowledge_research"]["queue"] == "knowledge_research"
         assert routes is not None
         assert "app.tasks.*" in routes
 
