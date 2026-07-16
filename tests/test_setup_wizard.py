@@ -82,6 +82,12 @@ class TestGetRequiredSettings:
         assert len(ai_provider["options"]) > 0
         assert "openai" in ai_provider["options"]
 
+    def test_ai_api_key_is_optional_during_bootstrap(self):
+        """A fresh installation can finish before an AI key is available."""
+        settings_map = {s["key"]: s for s in get_required_settings()}
+        assert settings_map["openai_api_key"]["required"] is False
+        assert settings_map["admin_password"]["required"] is True
+
     def test_settings_have_string_type(self):
         """Test that all settings have the 'string' type."""
         for setting in get_required_settings():

@@ -30,6 +30,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "wizard_step": 1,
             "wizard_category": "Core Infrastructure",
             "bootstrap": True,
+            "required": True,
             "bootstrap_reason": "Required before DocuElevate can open the settings database; configure DATABASE_URL in the deployment secret.",
         },
         {
@@ -72,6 +73,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "wizard_step": 2,
             "wizard_category": "Security",
             "bootstrap": True,
+            "required": True,
             "bootstrap_reason": "Must remain stable across restarts to decrypt database-stored credentials; configure SESSION_SECRET in the deployment secret.",
         },
         {
@@ -91,6 +93,7 @@ def get_required_settings() -> List[Dict[str, Any]]:
             "type": "string",
             "sensitive": True,
             "default": None,  # Must be set
+            "required": True,
             "wizard_step": 2,
             "wizard_category": "Security",
         },
@@ -108,10 +111,11 @@ def get_required_settings() -> List[Dict[str, Any]]:
         {
             "key": "openai_api_key",
             "label": "API Key (OpenAI / Azure / LiteLLM)",
-            "description": "API key for OpenAI, Azure OpenAI, or LiteLLM (not required for Ollama)",
+            "description": "Optional API key for OpenAI, Azure OpenAI, or LiteLLM; leave blank to configure AI later",
             "type": "string",
             "sensitive": True,
             "default": None,
+            "required": False,
             "wizard_step": 3,
             "wizard_category": "AI Services",
         },
