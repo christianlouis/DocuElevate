@@ -680,9 +680,18 @@ def process_document(
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id
 
+    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
+
     # 2. Check for embedded text (outside the DB session to avoid long open transactions)
     # Skip local text extraction if force_cloud_ocr is True
     if force_cloud_ocr:
+        if is_pdf:
+            try:
+                with open(new_local_path, "rb") as file:
+                    open_pdf_reader(file)
+            except (EncryptedPdfPasswordRequiredError, FileNotDecryptedError):
+                logger.info("[%s] Stopped forced OCR for a password-protected PDF", task_id)
+                return _mark_encrypted_pdf_password_required(task_id, file_id)
         if index_only:
             return _mark_index_first_pending(
                 task_id,
@@ -718,7 +727,6 @@ def process_document(
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
 
     # If the file is not a PDF, skip embedded text check and convert to PDF first
-    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
     if not is_pdf:
         if index_only:
             return _mark_index_first_pending(

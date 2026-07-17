@@ -49,7 +49,8 @@ def test_owner_password_only_pdf_remains_processable(tmp_path):
 
 
 @pytest.mark.requires_db
-def test_process_document_stops_cleanly_for_password_protected_pdf(db_session, tmp_path):
+@pytest.mark.parametrize("force_cloud_ocr", [False, True])
+def test_process_document_stops_cleanly_for_password_protected_pdf(db_session, tmp_path, force_cloud_ocr):
     protected_pdf = tmp_path / "protected.pdf"
     _write_encrypted_pdf(protected_pdf, user_password="required-password")
 
@@ -60,7 +61,7 @@ def test_process_document_stops_cleanly_for_password_protected_pdf(db_session, t
         patch("app.tasks.process_document.process_with_ocr.delay") as queue_ocr,
         patch("app.tasks.process_document.extract_metadata_with_gpt.delay") as queue_metadata,
     ):
-        result = process_document.run(str(protected_pdf))
+        result = process_document.run(str(protected_pdf), force_cloud_ocr=force_cloud_ocr)
 
     assert result["status"] == "Password required"
     assert result["error_code"] == ENCRYPTED_PDF_ERROR_CODE
