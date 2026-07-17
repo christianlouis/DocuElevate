@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.utils.config_validator.settings_display import dump_all_settings, get_settings_for_display
 from app.utils.config_validator.masking import is_sensitive_setting
+from app.utils.config_validator.settings_display import dump_all_settings, get_settings_for_display
 
 
 @pytest.mark.unit
