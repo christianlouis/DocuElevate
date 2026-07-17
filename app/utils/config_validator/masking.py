@@ -43,6 +43,16 @@ _OPERATIONAL_TOKEN_FRAGMENTS = (
     "token_reservation",
     "token_threshold",
 )
+_NON_SECRET_SETTING_NAMES = {
+    "cors_allow_credentials",
+    "dropbox_allow_global_credentials_for_integrations",
+    "notify_on_credential_failure",
+    "sftp_disable_host_key_verification",
+    "social_auth_dropbox_use_global_credentials",
+    "social_auth_generic_oauth2_token_url",
+    "social_auth_google_use_global_credentials",
+    "social_auth_microsoft_use_global_credentials",
+}
 
 
 def is_sensitive_setting(name: str) -> bool:
@@ -53,6 +63,8 @@ def is_sensitive_setting(name: str) -> bool:
     visible.
     """
     normalized = name.lower()
+    if normalized in _NON_SECRET_SETTING_NAMES:
+        return False
     if normalized in _SENSITIVE_URL_SETTINGS:
         return True
     if any(fragment in normalized for fragment in _SENSITIVE_NAME_FRAGMENTS):

@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from app.utils.config_validator.settings_display import dump_all_settings, get_settings_for_display
+from app.utils.config_validator.masking import is_sensitive_setting
 
 
 @pytest.mark.unit
@@ -79,6 +80,20 @@ class TestDumpAllSettings:
 
         assert future_secret not in caplog.text
         assert "future_provider_config: <configured>" in caplog.text
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "cors_allow_credentials",
+            "dropbox_allow_global_credentials_for_integrations",
+            "notify_on_credential_failure",
+            "sftp_disable_host_key_verification",
+            "social_auth_google_use_global_credentials",
+            "social_auth_generic_oauth2_token_url",
+        ],
+    )
+    def test_non_secret_policy_settings_are_not_misclassified(self, name):
+        assert not is_sensitive_setting(name)
 
 
 @pytest.mark.unit
