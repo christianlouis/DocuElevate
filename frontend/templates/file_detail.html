@@ -1477,6 +1477,21 @@
     </div>
   </div>
 
+  {% if encrypted_pdf_password_required %}
+  <div class="detail-card" role="alert" style="border-left: 5px solid #d97706; background: #fffbeb;">
+    <div style="display: flex; gap: 0.85rem; align-items: flex-start;">
+      <i class="fas fa-lock" aria-hidden="true" style="color: #b45309; font-size: 1.4rem; margin-top: 0.15rem;"></i>
+      <div>
+        <h3 style="margin: 0 0 0.35rem; color: #92400e;">Password-protected PDF</h3>
+        <p style="margin: 0; color: #78350f;">
+          DocuElevate kept the original file and did not send it to OCR or AI services.
+          Upload an unprotected copy of the PDF and start processing that copy instead.
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Step Summary Card -->
   {% if step_summary %}
   <div class="detail-card">

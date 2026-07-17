@@ -815,7 +815,7 @@ startxref
         patch("app.tasks.process_document.SessionLocal") as mock_session_local,
         patch("app.tasks.process_document.settings") as mock_settings,
         patch("app.tasks.process_document.log_task_progress"),
-        patch("app.tasks.process_document.pypdf.PdfReader") as mock_pdf_reader,
+        patch("app.tasks.process_document.open_pdf_reader") as mock_pdf_reader,
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)

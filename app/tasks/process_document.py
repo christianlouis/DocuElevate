@@ -10,8 +10,7 @@ import shutil
 import uuid
 from typing import TYPE_CHECKING
 
-import pypdf
-from pypdf.errors import PdfReadError
+from pypdf.errors import FileNotDecryptedError, PdfReadError
 
 from app.celery_app import celery
 from app.config import settings
@@ -21,6 +20,12 @@ from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
+from app.utils.pdf_security import (
+    ENCRYPTED_PDF_ERROR_CODE,
+    ENCRYPTED_PDF_MESSAGE,
+    EncryptedPdfPasswordRequiredError,
+    open_pdf_reader,
+)
 from app.utils.routing_engine import evaluate_pre_processing_routing_rules
 from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
@@ -30,6 +35,45 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+def _mark_encrypted_pdf_password_required(task_id: str, file_id: int) -> dict[str, object]:
+    """Stop processing safely and persist an actionable encrypted-PDF state."""
+    with SessionLocal() as db:
+        _set_index_first_source_state(db, task_id, "failed", ENCRYPTED_PDF_MESSAGE)
+        db.commit()
+
+    log_task_progress(
+        task_id,
+        "check_text",
+        "failure",
+        ENCRYPTED_PDF_MESSAGE,
+        file_id=file_id,
+        detail=ENCRYPTED_PDF_ERROR_CODE,
+    )
+    for step_name in ("extract_text", "process_with_ocr"):
+        log_task_progress(
+            task_id,
+            step_name,
+            "skipped",
+            "Skipped because the PDF requires a password",
+            file_id=file_id,
+            detail=ENCRYPTED_PDF_ERROR_CODE,
+        )
+    log_task_progress(
+        task_id,
+        "process_document",
+        "failure",
+        ENCRYPTED_PDF_MESSAGE,
+        file_id=file_id,
+        detail=ENCRYPTED_PDF_ERROR_CODE,
+    )
+    return {
+        "status": "Password required",
+        "error": ENCRYPTED_PDF_MESSAGE,
+        "error_code": ENCRYPTED_PDF_ERROR_CODE,
+        "file_id": file_id,
+    }
 
 
 def _set_index_first_source_state(db: "Session", task_id: str, state: str, error: str | None = None) -> None:
@@ -636,9 +680,18 @@ def process_document(
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id
 
+    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
+
     # 2. Check for embedded text (outside the DB session to avoid long open transactions)
     # Skip local text extraction if force_cloud_ocr is True
     if force_cloud_ocr:
+        if is_pdf:
+            try:
+                with open(new_local_path, "rb") as file:
+                    open_pdf_reader(file)
+            except (EncryptedPdfPasswordRequiredError, FileNotDecryptedError):
+                logger.info("[%s] Stopped forced OCR for a password-protected PDF", task_id)
+                return _mark_encrypted_pdf_password_required(task_id, file_id)
         if index_only:
             return _mark_index_first_pending(
                 task_id,
@@ -674,7 +727,6 @@ def process_document(
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
 
     # If the file is not a PDF, skip embedded text check and convert to PDF first
-    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
     if not is_pdf:
         if index_only:
             return _mark_index_first_pending(
@@ -723,12 +775,15 @@ def process_document(
     )
     try:
         with open(new_local_path, "rb") as file:
-            pdf_reader = pypdf.PdfReader(file)
+            pdf_reader = open_pdf_reader(file)
             has_text = False
             for page in pdf_reader.pages:
                 if page.extract_text().strip():
                     has_text = True
                     break
+    except (EncryptedPdfPasswordRequiredError, FileNotDecryptedError):
+        logger.info("[%s] Stopped processing a password-protected PDF", task_id)
+        return _mark_encrypted_pdf_password_required(task_id, file_id)
     except PdfReadError as exc:
         logger.warning(f"[{task_id}] PDF read error during embedded text check: {exc}")
         log_task_progress(
@@ -772,7 +827,7 @@ def process_document(
         )
         extracted_text = ""
         with open(new_local_path, "rb") as file:
-            pdf_reader = pypdf.PdfReader(file)
+            pdf_reader = open_pdf_reader(file)
             for page in pdf_reader.pages:
                 extracted_text += page.extract_text() + "\n"
 
