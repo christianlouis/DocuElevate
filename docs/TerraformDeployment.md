@@ -85,6 +85,9 @@ An AI may report the installation ready only after all of these checks pass:
 - the deployed image tag and environment names match the intended target.
 
 The current `v1alpha1` manifest reconciles settings, local users and Tribes.
+It can seed the same isolated personal and optional shared Family/Team spaces
+that users otherwise create in the onboarding journey; later onboarding is
+idempotent and reuses those memberships rather than creating duplicates.
 Pipelines, integration instances, routing rules and user-consent OAuth grants
 are not silently approximated. Until those resource types are added to the
 schema, configure them through their supported product journeys and keep them
