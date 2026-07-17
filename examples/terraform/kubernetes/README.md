@@ -47,7 +47,8 @@ post-install action.
 9. Log in as every seeded user and prove document and Tribe isolation before
    treating the Canary as accepted.
 
-The module refuses a release or namespace name that omits `environment`, an
+The module refuses a release or namespace name that omits `environment` as a
+complete hyphen-delimited token (so `prod` never matches `preprod`), an
 `image_tag` of `latest`, or agentic setup without a dedicated setup Secret.
 These are plan-time safety failures, not conventions an operator must remember.
 The `readiness_url` and `deployed_image` outputs expose the two most important

@@ -1,6 +1,7 @@
 locals {
-  agentic_setup_enabled = var.agentic_setup_manifest_path != null
-  agentic_manifest      = local.agentic_setup_enabled ? file(var.agentic_setup_manifest_path) : ""
+  agentic_setup_enabled    = var.agentic_setup_manifest_path != null
+  agentic_manifest         = local.agentic_setup_enabled ? file(var.agentic_setup_manifest_path) : ""
+  environment_name_pattern = "(^|-)${lower(var.environment)}(-|$)"
 
   docuelevate_values = {
     image = {
@@ -65,12 +66,12 @@ resource "helm_release" "docuelevate" {
 
   lifecycle {
     precondition {
-      condition     = strcontains(lower(var.release_name), lower(var.environment))
+      condition     = can(regex(local.environment_name_pattern, lower(var.release_name)))
       error_message = "release_name must include the environment name (for example docuelevate-preprod-canary)."
     }
 
     precondition {
-      condition     = strcontains(lower(var.namespace), lower(var.environment))
+      condition     = can(regex(local.environment_name_pattern, lower(var.namespace)))
       error_message = "namespace must include the environment name so Canary, Preprod and production cannot be confused."
     }
 

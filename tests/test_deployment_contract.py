@@ -99,8 +99,9 @@ def test_terraform_guards_environment_identity_and_agentic_secret_boundary():
     main = (TERRAFORM / "main.tf").read_text(encoding="utf-8")
     outputs = (TERRAFORM / "outputs.tf").read_text(encoding="utf-8")
 
-    assert "strcontains(lower(var.release_name), lower(var.environment))" in main
-    assert "strcontains(lower(var.namespace), lower(var.environment))" in main
+    assert 'environment_name_pattern = "(^|-)${lower(var.environment)}(-|$)"' in main
+    assert "can(regex(local.environment_name_pattern, lower(var.release_name)))" in main
+    assert "can(regex(local.environment_name_pattern, lower(var.namespace)))" in main
     assert 'lower(var.image_tag) != "latest"' in main
     assert '!local.agentic_setup_enabled || trimspace(var.setup_secret_name) != ""' in main
     assert 'output "readiness_url"' in outputs
@@ -115,4 +116,6 @@ def test_ci_runs_real_terraform_validation_before_building_images():
     assert "terraform fmt -check -recursive examples/terraform" in run_commands
     assert "terraform -chdir=examples/terraform/kubernetes init -backend=false -input=false" in run_commands
     assert "terraform -chdir=examples/terraform/kubernetes validate" in run_commands
+    checkout = terraform_job["steps"][0]
+    assert checkout["with"]["persist-credentials"] is False
     assert "terraform-validate" in workflow["jobs"]["build"]["needs"]
