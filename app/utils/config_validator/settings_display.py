@@ -5,7 +5,7 @@ Module for displaying and organizing settings information
 import logging
 
 from app.config import settings
-from app.utils.config_validator.masking import mask_sensitive_value
+from app.utils.config_validator.masking import mask_database_url, mask_sensitive_value
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,9 @@ def dump_all_settings() -> None:
         if not key.startswith("_") and key not in _PYDANTIC_INTERNALS and not callable(getattr(settings, key)):
             value = getattr(settings, key)
             # Mask sensitive values in logs
-            if (
+            if key == "database_url":
+                value = mask_database_url(str(value)) if value else value
+            elif (
                 key.lower().find("password") >= 0
                 or key.lower().find("secret") >= 0
                 or key.lower().find("token") >= 0
@@ -255,6 +257,9 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
         for key in setting_keys:
             if hasattr(settings, key):
                 value = getattr(settings, key)
+                is_database_url = key == "database_url"
+                if is_database_url and value:
+                    value = mask_database_url(str(value))
 
                 # List of patterns that indicate sensitive values
                 sensitive_patterns = [
@@ -269,7 +274,7 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
                 ]
 
                 # Check if this is a sensitive value that should be masked
-                is_sensitive = any(pattern in key.lower() for pattern in sensitive_patterns)
+                is_sensitive = is_database_url or any(pattern in key.lower() for pattern in sensitive_patterns)
 
                 # Special handling for "auth" to avoid matching prefixes like "authentik"
                 if not is_sensitive and "auth" in key.lower():
@@ -281,7 +286,7 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
                 # Mask sensitive values regardless of debug mode
                 # Other values are only hidden if debug mode is off AND show_values is False
                 if (is_sensitive or not show_values) and value:
-                    if is_sensitive:
+                    if is_sensitive and not is_database_url:
                         value = mask_sensitive_value(value)
 
                 # Check if the setting is configured (has a non-None value)

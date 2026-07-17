@@ -55,8 +55,10 @@ Settings are organized into logical categories for easy navigation:
 ### Sensitive Data
 
 Settings marked as sensitive (passwords, API keys, tokens) are:
-- Masked in the UI by default (show ****key)
-- Can be revealed temporarily using the eye icon
+- Masked in the UI and every settings API response
+- Never recoverable through the eye icon; it only reveals a newly entered replacement while editing
+- Masked in configuration exports; exported placeholders must be replaced through the normal secret flow
+- Database URLs retain their driver, username, host, port, and database for diagnostics while hiding the password
 - Encrypted in session storage
 - Never logged in plain text
 
