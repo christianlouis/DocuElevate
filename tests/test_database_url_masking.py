@@ -234,7 +234,7 @@ def test_diagnostic_settings_dump_never_logs_database_password(caplog):
 
     rendered_logs = caplog.text
     assert "top-secret" not in rendered_logs
-    assert "postgresql://docuelevate:***@database.internal:5432/docuelevate" in rendered_logs
+    assert "database_url: <configured>" in rendered_logs
 
 
 @pytest.mark.unit
@@ -246,5 +246,5 @@ def test_settings_diagnostic_display_masks_database_password_even_when_values_re
         result = settings_display.get_settings_for_display(show_values=True)
 
     database_entry = next(item for item in result["Core"] if item["name"] == "database_url")
-    assert database_entry["value"] == "postgresql://docuelevate:***@database.internal:5432/docuelevate"
+    assert database_entry["value"] == "<configured>"
     assert "top-secret" not in str(result)

@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.utils.config_validator.masking import configured_state, is_sensitive_setting
 from app.utils.config_validator.settings_display import dump_all_settings, get_settings_for_display
 
 
@@ -22,6 +23,80 @@ class TestDumpAllSettings:
         dump_all_settings()
         # Should have logged start and end markers
         assert mock_logger.info.call_count > 2  # At least start, some settings, and end
+
+    def test_structured_credentials_are_reduced_to_configuration_state(self, caplog):
+        private_material = "PRIVATE-MATERIAL-MUST-NEVER-APPEAR"
+        credentials = f'{{"private_key":"{private_material}","client_email":"svc@example.test"}}'
+
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["google_drive_credentials_json"]),
+        ):
+            patched_settings.google_drive_credentials_json = credentials
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert private_material not in caplog.text
+        assert "svc@example.test" not in caplog.text
+        assert "google_drive_credentials_json: <configured>" in caplog.text
+
+    def test_secret_prefixes_and_suffixes_are_never_logged(self, caplog):
+        secret = "prefix-super-secret-suffix"
+
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["openai_api_key"]),
+        ):
+            patched_settings.openai_api_key = secret
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert secret not in caplog.text
+        assert "prefix" not in caplog.text
+        assert "suffix" not in caplog.text
+        assert "openai_api_key: <configured>" in caplog.text
+
+    def test_numeric_token_budget_remains_diagnostic(self, caplog):
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["corpus_backfill_daily_llm_token_budget"]),
+        ):
+            patched_settings.corpus_backfill_daily_llm_token_budget = 12345
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert "corpus_backfill_daily_llm_token_budget: 12345" in caplog.text
+
+    def test_unknown_string_setting_defaults_to_presence_only(self, caplog):
+        future_secret = "future-provider-value-must-not-appear"
+
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["future_provider_config"]),
+        ):
+            patched_settings.future_provider_config = future_secret
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert future_secret not in caplog.text
+        assert "future_provider_config: <configured>" in caplog.text
+
+    def test_empty_bytes_are_not_configured(self):
+        assert configured_state(b"") == "<not configured>"
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "cors_allow_credentials",
+            "dropbox_allow_global_credentials_for_integrations",
+            "notify_on_credential_failure",
+            "sftp_disable_host_key_verification",
+            "social_auth_google_use_global_credentials",
+            "social_auth_generic_oauth2_token_url",
+        ],
+    )
+    def test_non_secret_policy_settings_are_not_misclassified(self, name):
+        assert not is_sensitive_setting(name)
 
 
 @pytest.mark.unit
@@ -80,6 +155,39 @@ class TestGetSettingsForDisplay:
                 assert "name" in item
                 assert "value" in item
                 assert "is_configured" in item
+
+    def test_show_values_cannot_reveal_structured_credentials(self):
+        credentials = '{"private_key":"never-render-this","client_email":"svc@example.test"}'
+        with patch(
+            "app.utils.config_validator.settings_display.settings.google_drive_credentials_json",
+            credentials,
+        ):
+            result = get_settings_for_display(show_values=True)
+
+        entry = next(item for item in result["Google Drive"] if item["name"] == "google_drive_credentials_json")
+        assert entry["value"] == "<configured>"
+        assert "never-render-this" not in str(result)
+        assert "svc@example.test" not in str(result)
+
+    def test_saml_certificate_is_never_returned(self):
+        certificate = "-----BEGIN CERTIFICATE-----sensitive-material-----END CERTIFICATE-----"
+        with patch(
+            "app.utils.config_validator.settings_display.settings.social_auth_saml2_certificate",
+            certificate,
+        ):
+            result = get_settings_for_display(show_values=True)
+
+        entry = next(item for item in result["Other"] if item["name"] == "social_auth_saml2_certificate")
+        assert entry["value"] == "<configured>"
+        assert certificate not in str(result)
+
+    def test_empty_sensitive_collection_is_consistently_unconfigured(self):
+        with patch("app.utils.config_validator.settings_display.settings.notification_urls", []):
+            result = get_settings_for_display(show_values=True)
+
+        entry = next(item for item in result["Notifications"] if item["name"] == "notification_urls")
+        assert entry["value"] == "<not configured>"
+        assert entry["is_configured"] is False
 
 
 @pytest.mark.unit
