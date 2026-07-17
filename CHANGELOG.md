@@ -10,6 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.187.0 (2026-07-17)
+
+### Bug Fixes
+
+- Enforce exact Terraform environment names
+  ([#1166](https://github.com/christianlouis/DocuElevate/pull/1166),
+  [`d1bf8b1`](https://github.com/christianlouis/DocuElevate/commit/d1bf8b11450734182e39d4ed5080190ee6d7ad9a))
+
+### Features
+
+- Harden Terraform deployment contract
+  ([#1166](https://github.com/christianlouis/DocuElevate/pull/1166),
+  [`d1bf8b1`](https://github.com/christianlouis/DocuElevate/commit/d1bf8b11450734182e39d4ed5080190ee6d7ad9a))
+
+
 ## v0.186.5 (2026-07-17)
 
 ### Bug Fixes
