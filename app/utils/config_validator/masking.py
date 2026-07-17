@@ -15,6 +15,19 @@ def mask_sensitive_value(value: str | None) -> str | None:
     return value
 
 
+def redact_sensitive_value(value: str | None) -> str | None:
+    """Mask a configured secret without ever returning it verbatim.
+
+    ``mask_sensitive_value`` predates API/export redaction and intentionally
+    leaves short display values alone. Public response surfaces need the
+    stronger invariant implemented here.
+    """
+    if not value:
+        return value
+    masked = mask_sensitive_value(value)
+    return "********" if masked == value else masked
+
+
 def mask_database_url(value: str | None) -> str | None:
     """Preserve useful database location details while hiding credentials."""
     if not value or not isinstance(value, str):
