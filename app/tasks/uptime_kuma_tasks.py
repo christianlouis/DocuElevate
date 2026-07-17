@@ -22,11 +22,13 @@ def ping_uptime_kuma():
         return
 
     try:
-        logger.info(f"Pinging Uptime Kuma at {settings.uptime_kuma_url}")
+        logger.info("Pinging configured Uptime Kuma endpoint")
         response = requests.get(settings.uptime_kuma_url, timeout=10)
         response.raise_for_status()
         logger.info(f"Successfully pinged Uptime Kuma: {response.status_code}")
         return True
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to ping Uptime Kuma: {e}")
+    except requests.exceptions.RequestException as exc:
+        # Requests may include the full push URL (including its secret token)
+        # in exception messages. Log only the failure class.
+        logger.error("Failed to ping Uptime Kuma (%s)", type(exc).__name__)
         return False
