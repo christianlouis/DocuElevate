@@ -14,6 +14,15 @@ def test_helm_app_version_matches_product_version():
     assert str(chart["appVersion"]) == (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 
 
+def test_release_automation_keeps_helm_app_version_in_sync():
+    metadata_script = (ROOT / "scripts" / "generate_build_metadata.sh").read_text(encoding="utf-8")
+    release_workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert 'HELM_CHART="helm/docuelevate/Chart.yaml"' in metadata_script
+    assert 'appVersion: "{os.environ["VERSION"]}"' in metadata_script
+    assert "helm/docuelevate/Chart.yaml" in release_workflow
+
+
 def test_helm_processes_use_the_configurable_runtime_secret():
     templates = [
         "api-deployment.yaml",

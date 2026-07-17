@@ -96,7 +96,7 @@ jobs:
 
       - name: Update build metadata files if changed
         run: |
-          for f in VERSION BUILD_DATE GIT_SHA RUNTIME_INFO; do
+          for f in VERSION BUILD_DATE GIT_SHA RUNTIME_INFO helm/docuelevate/Chart.yaml; do
             if [ -f "$f" ]; then
               git add -f "$f"
             fi
