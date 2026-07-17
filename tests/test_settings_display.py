@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.utils.config_validator.masking import is_sensitive_setting
+from app.utils.config_validator.masking import configured_state, is_sensitive_setting
 from app.utils.config_validator.settings_display import dump_all_settings, get_settings_for_display
 
 
@@ -80,6 +80,9 @@ class TestDumpAllSettings:
 
         assert future_secret not in caplog.text
         assert "future_provider_config: <configured>" in caplog.text
+
+    def test_empty_bytes_are_not_configured(self):
+        assert configured_state(b"") == "<not configured>"
 
     @pytest.mark.parametrize(
         "name",
@@ -165,6 +168,28 @@ class TestGetSettingsForDisplay:
         assert entry["value"] == "<configured>"
         assert "never-render-this" not in str(result)
         assert "svc@example.test" not in str(result)
+
+    def test_saml_certificate_is_never_returned(self):
+        certificate = "-----BEGIN CERTIFICATE-----sensitive-material-----END CERTIFICATE-----"
+        with patch(
+            "app.utils.config_validator.settings_display.settings.social_auth_saml2_certificate",
+            certificate,
+        ):
+            result = get_settings_for_display(show_values=True)
+
+        entry = next(
+            item for item in result["Other"] if item["name"] == "social_auth_saml2_certificate"
+        )
+        assert entry["value"] == "<configured>"
+        assert certificate not in str(result)
+
+    def test_empty_sensitive_collection_is_consistently_unconfigured(self):
+        with patch("app.utils.config_validator.settings_display.settings.notification_urls", []):
+            result = get_settings_for_display(show_values=True)
+
+        entry = next(item for item in result["Notifications"] if item["name"] == "notification_urls")
+        assert entry["value"] == "<not configured>"
+        assert entry["is_configured"] is False
 
 
 @pytest.mark.unit

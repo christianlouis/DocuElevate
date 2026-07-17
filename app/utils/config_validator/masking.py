@@ -10,6 +10,7 @@ NOT_CONFIGURED_VALUE = "<not configured>"
 _SENSITIVE_NAME_PARTS = {
     "credential",
     "credentials",
+    "certificate",
     "cookie",
     "dsn",
     "key",
@@ -78,7 +79,7 @@ def configured_state(value: object) -> str:
     """Describe only whether a secret exists, never any part of its value."""
     if value is None:
         return NOT_CONFIGURED_VALUE
-    if isinstance(value, (str, list, dict, set, tuple)) and not value:
+    if isinstance(value, (str, bytes, list, dict, set, tuple)) and not value:
         return NOT_CONFIGURED_VALUE
     return CONFIGURED_VALUE
 

@@ -35,7 +35,8 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
     Returns a dictionary with categories as keys and lists of setting items as values.
     Each setting item is a dict with name, value, and is_configured.
 
-    If show_values is False, sensitive values are masked.
+    ``show_values`` is retained for API compatibility. Sensitive values are
+    always reduced to configuration state regardless of this flag.
     """
     # First include system info with version in result
     result = {
@@ -227,7 +228,7 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
                 # Check if the setting is configured (has a non-None value)
                 # For boolean settings, consider them configured even if False
                 is_configured = value is not None
-                if is_configured and isinstance(value, str):
+                if is_configured and isinstance(value, (str, bytes, list, tuple, set, dict)):
                     is_configured = len(value) > 0
 
                 # ``show_values`` never overrides secret redaction. This also
