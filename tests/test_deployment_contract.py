@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
+import pytest
 import yaml
+
+pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "helm" / "docuelevate"
@@ -21,6 +24,37 @@ def test_release_automation_keeps_helm_app_version_in_sync():
     assert 'HELM_CHART="helm/docuelevate/Chart.yaml"' in metadata_script
     assert 'appVersion: "{os.environ["VERSION"]}"' in metadata_script
     assert "helm/docuelevate/Chart.yaml" in release_workflow
+
+
+def test_release_automation_builds_the_finalized_release_commit():
+    ci_workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    release_workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))
+
+    # PyYAML 1.1 parses the unquoted GitHub Actions key `on` as boolean True.
+    ci_triggers = ci_workflow.get("on", ci_workflow.get(True, {}))
+    assert "workflow_dispatch" in ci_triggers
+    assert ci_workflow["jobs"]["build"]["if"] == (
+        "github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    )
+    assert ci_workflow["jobs"]["update-k8s-manifest"]["if"] == (
+        "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')"
+    )
+
+    assert release_workflow["permissions"]["actions"] == "write"
+    release_steps = release_workflow["jobs"]["release"]["steps"]
+    metadata_index = next(
+        index
+        for index, step in enumerate(release_steps)
+        if step.get("name") == "Update build metadata files if changed"
+    )
+    dispatch_index, dispatch_step = next(
+        (index, step)
+        for index, step in enumerate(release_steps)
+        if step.get("name") == "Build and deploy the finalized release commit"
+    )
+    assert metadata_index < dispatch_index
+    assert dispatch_step["env"]["GH_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}"
+    assert dispatch_step["run"] == "gh workflow run ci.yml --ref main"
 
 
 def test_helm_processes_use_the_configurable_runtime_secret():
