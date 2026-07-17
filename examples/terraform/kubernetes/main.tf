@@ -1,6 +1,7 @@
 locals {
-  agentic_setup_enabled = var.agentic_setup_manifest_path != null
-  agentic_manifest      = local.agentic_setup_enabled ? file(var.agentic_setup_manifest_path) : ""
+  agentic_setup_enabled    = var.agentic_setup_manifest_path != null
+  agentic_manifest         = local.agentic_setup_enabled ? file(var.agentic_setup_manifest_path) : ""
+  environment_name_pattern = "(^|-)${lower(var.environment)}(-|$)"
 
   docuelevate_values = {
     image = {
@@ -62,6 +63,28 @@ resource "helm_release" "docuelevate" {
     [yamlencode(local.docuelevate_values)],
     var.additional_helm_values,
   )
+
+  lifecycle {
+    precondition {
+      condition     = can(regex(local.environment_name_pattern, lower(var.release_name)))
+      error_message = "release_name must include the environment name (for example docuelevate-preprod-canary)."
+    }
+
+    precondition {
+      condition     = can(regex(local.environment_name_pattern, lower(var.namespace)))
+      error_message = "namespace must include the environment name so Canary, Preprod and production cannot be confused."
+    }
+
+    precondition {
+      condition     = lower(var.image_tag) != "latest"
+      error_message = "image_tag must be an immutable release or commit tag; latest is not allowed."
+    }
+
+    precondition {
+      condition     = !local.agentic_setup_enabled || trimspace(var.setup_secret_name) != ""
+      error_message = "setup_secret_name is required when agentic_setup_manifest_path is set."
+    }
+  }
 
   depends_on = [kubernetes_namespace_v1.docuelevate]
 }

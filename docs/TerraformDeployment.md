@@ -61,6 +61,13 @@ The Helm release is atomic. A migration failure, invalid setup manifest, failed
 setup plan or failed setup apply causes the release to fail instead of leaving
 Terraform reporting a healthy deployment.
 
+Terraform also rejects ambiguous environment naming with exact hyphen-delimited
+environment tokens, a floating `latest` image,
+and an agentic manifest without its short-lived setup Secret. CI runs real
+`terraform init` and `terraform validate` checks for the reference module on
+every pull request. After apply, use the non-sensitive `readiness_url` and
+`deployed_image` outputs as the start of the acceptance check.
+
 ## Acceptance contract for an AI operator
 
 An AI may report the installation ready only after all of these checks pass:

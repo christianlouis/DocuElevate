@@ -20,6 +20,11 @@ variable "environment" {
   description = "Environment label applied when this module creates the namespace."
   type        = string
   default     = "preprod"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]*$", var.environment))
+    error_message = "environment must be a lowercase Kubernetes-safe name such as preprod or canary."
+  }
 }
 
 variable "chart_path" {
@@ -37,11 +42,21 @@ variable "image_repository" {
 variable "image_tag" {
   description = "Immutable image tag to deploy. Never use latest."
   type        = string
+
+  validation {
+    condition     = trimspace(var.image_tag) != ""
+    error_message = "image_tag must not be empty."
+  }
 }
 
 variable "external_hostname" {
   description = "Public hostname used by DocuElevate and OAuth callbacks."
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$", var.external_hostname))
+    error_message = "external_hostname must be a hostname without a URL scheme or path."
+  }
 }
 
 variable "bootstrap_secret_name" {
