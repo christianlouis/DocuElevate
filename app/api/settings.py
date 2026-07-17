@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.utils.config_validator.masking import mask_database_url, mask_sensitive_value
+from app.utils.config_validator.masking import mask_database_url, redact_sensitive_value
 from app.utils.input_validation import validate_setting_key, validate_setting_key_format
 from app.utils.settings_service import (
     SETTING_METADATA,
@@ -45,7 +45,7 @@ def _safe_setting_value(key: str, value: Any, metadata: Dict[str, Any] | None = 
         return mask_database_url(str(value))
     metadata = metadata if metadata is not None else get_setting_metadata(key.lower())
     if metadata.get("sensitive", False):
-        return mask_sensitive_value(str(value))
+        return redact_sensitive_value(str(value))
     return value
 
 

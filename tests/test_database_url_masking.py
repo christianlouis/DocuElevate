@@ -108,6 +108,7 @@ def test_settings_api_safe_value_masks_database_and_other_sensitive_values():
         "postgresql://docuelevate:***@database.internal:5432/docuelevate"
     )
     assert _safe_setting_value("openai_api_key", "sk-secret-value", {"sensitive": True}) != "sk-secret-value"
+    assert _safe_setting_value("smtp_password", "short", {"sensitive": True}) == "********"
     assert _safe_setting_value("workdir", "/workdir", {"sensitive": False}) == "/workdir"
 
 
@@ -167,6 +168,33 @@ async def test_settings_update_response_and_export_never_return_database_passwor
     assert update["value"] == "postgresql://docuelevate:***@database.internal:5432/docuelevate"
     assert b"top-secret" not in exported.body
     assert b"DATABASE_URL=postgresql://docuelevate:***@database.internal:5432/docuelevate" in exported.body
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_settings_put_response_never_returns_database_password():
+    from app.api import settings as settings_api
+
+    raw_url = "postgresql://docuelevate:top-secret@database.internal:5432/docuelevate"
+    metadata = {"type": "str", "sensitive": True, "restart_required": True}
+    request = Mock()
+    request.session = {"user": {"username": "admin"}}
+    with (
+        patch.object(settings_api, "get_setting_metadata", return_value=metadata),
+        patch.object(settings_api, "validate_setting_value", return_value=(True, None)),
+        patch.object(settings_api, "save_setting_to_db", return_value=True),
+        patch.object(settings_api, "notify_settings_updated"),
+    ):
+        result = await settings_api.put_setting(
+            "database_url",
+            settings_api.SettingValueUpdate(value=raw_url),
+            request,
+            Mock(),
+            {"is_admin": True},
+        )
+
+    assert "top-secret" not in str(result)
+    assert result["value"] == "postgresql://docuelevate:***@database.internal:5432/docuelevate"
 
 
 @pytest.mark.unit

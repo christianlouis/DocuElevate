@@ -5,7 +5,7 @@ Module for displaying and organizing settings information
 import logging
 
 from app.config import settings
-from app.utils.config_validator.masking import mask_database_url, mask_sensitive_value
+from app.utils.config_validator.masking import mask_database_url, redact_sensitive_value
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +287,7 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
                 # Other values are only hidden if debug mode is off AND show_values is False
                 if (is_sensitive or not show_values) and value:
                     if is_sensitive and not is_database_url:
-                        value = mask_sensitive_value(value)
+                        value = redact_sensitive_value(value)
 
                 # Check if the setting is configured (has a non-None value)
                 # For boolean settings, consider them configured even if False
