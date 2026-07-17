@@ -603,6 +603,11 @@ DocuElevate uses Python's standard `logging` module. Two environment variables c
 
 1. If `LOG_LEVEL` is explicitly set, it always wins — regardless of `DEBUG`.
 2. If only `DEBUG=true` is set (no `LOG_LEVEL`), the effective level becomes `DEBUG`.
+
+Provider libraries that may log document content or credential-bearing request
+payloads remain pinned to `WARNING` even when application logging is set to
+`DEBUG`. This currently includes the OpenAI SDK and Apprise notification
+providers.
 3. If neither is set, the default level is `INFO`.
 
 ```bash

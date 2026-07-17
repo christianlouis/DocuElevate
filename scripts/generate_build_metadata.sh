@@ -68,6 +68,30 @@ else
     VERSION="unknown"
 fi
 
+# Keep the Helm application version aligned with the product version. The
+# chart package version remains independent, but appVersion must describe the
+# image/application release represented by VERSION.
+HELM_CHART="helm/docuelevate/Chart.yaml"
+if [ -f "${HELM_CHART}" ] && [ "${VERSION}" != "unknown" ]; then
+    VERSION="${VERSION}" python3 - <<'PY'
+import os
+import re
+from pathlib import Path
+
+chart = Path("helm/docuelevate/Chart.yaml")
+content = chart.read_text(encoding="utf-8")
+updated, count = re.subn(
+    r'(?m)^appVersion:\s*["\x27]?[^"\x27\n]+["\x27]?\s*$',
+    f'appVersion: "{os.environ["VERSION"]}"',
+    content,
+)
+if count != 1:
+    raise SystemExit(f"Expected exactly one appVersion in {chart}, found {count}")
+chart.write_text(updated, encoding="utf-8")
+PY
+    echo "✓ Helm appVersion: ${VERSION}"
+fi
+
 # Look up release codename from release_names.json
 RELEASE_NAME=""
 if [ -f "release_names.json" ] && command -v python3 > /dev/null 2>&1; then

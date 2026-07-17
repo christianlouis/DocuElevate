@@ -11,6 +11,14 @@ logger = logging.getLogger(__name__)
 _apprise = None
 
 
+def _notification_service_name(server: object) -> str:
+    """Return a credential-free provider label for log messages."""
+    class_name = type(server).__name__
+    if class_name.startswith("Notify") and len(class_name) > len("Notify"):
+        return class_name[len("Notify") :]
+    return class_name or "notification provider"
+
+
 def init_apprise() -> apprise.Apprise:
     """Initialize the Apprise instance with configured notification services"""
     global _apprise
@@ -24,8 +32,11 @@ def init_apprise() -> apprise.Apprise:
                 try:
                     _apprise.add(url)
                     logger.info(f"Added notification service: {_mask_sensitive_url(url)}")
-                except Exception as e:
-                    logger.error(f"Failed to add notification service: {str(e)}")
+                except Exception as exc:
+                    logger.error(
+                        "Failed to add a configured notification service (%s)",
+                        type(exc).__name__,
+                    )
         else:
             logger.warning("No notification services configured")
 
@@ -92,8 +103,8 @@ def send_notification(
         successful_services = 0
 
         for server in apprise_obj.servers:  # Iterate through the list directly
+            service_name = _notification_service_name(server)
             try:
-                service_name = str(server).split("://")[0] if "://" in str(server) else str(server)
                 service_result = server.notify(title=title, body=message, notify_type=notify_type, attach=attachments)
 
                 if service_result:
@@ -101,8 +112,12 @@ def send_notification(
                     logger.debug(f"Notification sent via {service_name}")
                 else:
                     logger.warning(f"Failed to send notification via {service_name}")
-            except Exception as e:
-                logger.error(f"Error sending notification via {str(server)}: {str(e)}")
+            except Exception as exc:
+                logger.error(
+                    "Error sending notification via %s (%s)",
+                    service_name,
+                    type(exc).__name__,
+                )
 
         overall_result = successful_services > 0
 
@@ -113,8 +128,8 @@ def send_notification(
 
         return overall_result
 
-    except Exception as e:
-        logger.exception(f"Error sending notification: {e}")
+    except Exception as exc:
+        logger.error("Error sending notification (%s)", type(exc).__name__)
         return False
 
 
