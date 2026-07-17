@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.0 (2026-07-17)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`b4572fd`](https://github.com/christianlouis/DocuElevate/commit/b4572fd8d4b4fae30b83f10dd989da9099edf652))
+
+### Features
+
+- Release onboarding document spaces
+  ([#1169](https://github.com/christianlouis/DocuElevate/pull/1169),
+  [`3e34082`](https://github.com/christianlouis/DocuElevate/commit/3e34082bc0841ae0ea223cbfaf764201baf8990f))
+
+
 ## Unreleased
 
 
