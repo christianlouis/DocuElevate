@@ -10,6 +10,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.186.5 (2026-07-17)
+
+### Bug Fixes
+
+- Cover redaction review edge cases
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Keep Uptime Kuma tokens out of logs
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Preserve non-secret policy diagnostics
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Redact configuration diagnostics fail closed
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+### Continuous Integration
+
+- Validate reviewed redaction fix ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Validate strict config redaction
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+
 ## v0.186.4 (2026-07-17)
 
 ### Bug Fixes
