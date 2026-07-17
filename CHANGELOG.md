@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.186.4 (2026-07-17)
+
+### Bug Fixes
+
+- Guard encrypted PDFs before forced OCR
+  ([#1165](https://github.com/christianlouis/DocuElevate/pull/1165),
+  [`d9af6eb`](https://github.com/christianlouis/DocuElevate/commit/d9af6eba46d7bb0af814660def69808bb26b9462))
+
+- Handle encrypted PDFs without worker retries
+  ([#1165](https://github.com/christianlouis/DocuElevate/pull/1165),
+  [`d9af6eb`](https://github.com/christianlouis/DocuElevate/commit/d9af6eba46d7bb0af814660def69808bb26b9462))
+
+
 ## v0.186.3 (2026-07-17)
 
 ### Bug Fixes
