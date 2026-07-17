@@ -481,6 +481,10 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         # Compute processing flow for visualization — filter to pipeline steps when available
         flow_data = _compute_processing_flow(logs, pipeline_steps=pipeline_info["steps"] if pipeline_info else None)
 
+        from app.utils.pdf_security import ENCRYPTED_PDF_ERROR_CODE
+
+        encrypted_pdf_password_required = any(log.detail == ENCRYPTED_PDF_ERROR_CODE for log in logs)
+
         # Compute step-aligned summary from status table (preferred) or fallback to logs
         try:
             from app.utils.step_manager import get_step_summary as get_step_summary_from_table
@@ -504,6 +508,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
                 "flow_data": flow_data,
                 "step_summary": step_summary,
                 "pipeline_info": pipeline_info,
+                "encrypted_pdf_password_required": encrypted_pdf_password_required,
             },
         )
     except Exception as e:
@@ -707,6 +712,8 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             correspond to the pipeline's enabled steps (plus bookkeeping stages like
             ``create_file_record`` and any stage that actually ran in the logs).
     """
+    from app.utils.pdf_security import ENCRYPTED_PDF_ERROR_CODE
+
     # Define the full catalogue of main processing stages
     stages = {
         "convert_to_pdf": {"label": "Convert to PDF", "next": ["check_for_duplicates", "create_file_record"]},
@@ -801,7 +808,13 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             if step_name not in step_map:
                 step_map[step_name] = []
             step_map[step_name].append(
-                {"status": log.status, "message": log.message, "timestamp": log.timestamp, "task_id": log.task_id}
+                {
+                    "status": log.status,
+                    "message": log.message,
+                    "timestamp": log.timestamp,
+                    "task_id": log.task_id,
+                    "detail": getattr(log, "detail", None),
+                }
             )
 
     # Build the flow structure
@@ -816,11 +829,15 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             message = latest_log["message"]
             timestamp = latest_log["timestamp"]
             task_id = latest_log["task_id"]
+            detail = latest_log["detail"]
         else:
             status = "not_run"
             message = None
             timestamp = None
             task_id = None
+            detail = None
+
+        requires_source_replacement = detail == ENCRYPTED_PDF_ERROR_CODE
 
         stage_data = {
             "key": stage_key,
@@ -829,7 +846,8 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             "message": message,
             "timestamp": timestamp,
             "task_id": task_id,
-            "can_retry": status == "failure",
+            "can_retry": status == "failure" and not requires_source_replacement,
+            "requires_source_replacement": requires_source_replacement,
             "is_branch_parent": stage_info.get("has_branches", False),
         }
 
