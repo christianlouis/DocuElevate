@@ -177,9 +177,7 @@ class TestGetSettingsForDisplay:
         ):
             result = get_settings_for_display(show_values=True)
 
-        entry = next(
-            item for item in result["Other"] if item["name"] == "social_auth_saml2_certificate"
-        )
+        entry = next(item for item in result["Other"] if item["name"] == "social_auth_saml2_certificate")
         assert entry["value"] == "<configured>"
         assert certificate not in str(result)
 
