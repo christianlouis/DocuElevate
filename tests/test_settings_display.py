@@ -23,6 +23,63 @@ class TestDumpAllSettings:
         # Should have logged start and end markers
         assert mock_logger.info.call_count > 2  # At least start, some settings, and end
 
+    def test_structured_credentials_are_reduced_to_configuration_state(self, caplog):
+        private_material = "PRIVATE-MATERIAL-MUST-NEVER-APPEAR"
+        credentials = f'{{"private_key":"{private_material}","client_email":"svc@example.test"}}'
+
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["google_drive_credentials_json"]),
+        ):
+            patched_settings.google_drive_credentials_json = credentials
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert private_material not in caplog.text
+        assert "svc@example.test" not in caplog.text
+        assert "google_drive_credentials_json: <configured>" in caplog.text
+
+    def test_secret_prefixes_and_suffixes_are_never_logged(self, caplog):
+        secret = "prefix-super-secret-suffix"
+
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["openai_api_key"]),
+        ):
+            patched_settings.openai_api_key = secret
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert secret not in caplog.text
+        assert "prefix" not in caplog.text
+        assert "suffix" not in caplog.text
+        assert "openai_api_key: <configured>" in caplog.text
+
+    def test_numeric_token_budget_remains_diagnostic(self, caplog):
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["corpus_backfill_daily_llm_token_budget"]),
+        ):
+            patched_settings.corpus_backfill_daily_llm_token_budget = 12345
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert "corpus_backfill_daily_llm_token_budget: 12345" in caplog.text
+
+    def test_unknown_string_setting_defaults_to_presence_only(self, caplog):
+        future_secret = "future-provider-value-must-not-appear"
+
+        with (
+            patch("app.utils.config_validator.settings_display.settings") as patched_settings,
+            patch("builtins.dir", return_value=["future_provider_config"]),
+        ):
+            patched_settings.future_provider_config = future_secret
+            with caplog.at_level("INFO", logger="app.utils.config_validator.settings_display"):
+                dump_all_settings()
+
+        assert future_secret not in caplog.text
+        assert "future_provider_config: <configured>" in caplog.text
+
 
 @pytest.mark.unit
 class TestGetSettingsForDisplay:
@@ -80,6 +137,19 @@ class TestGetSettingsForDisplay:
                 assert "name" in item
                 assert "value" in item
                 assert "is_configured" in item
+
+    def test_show_values_cannot_reveal_structured_credentials(self):
+        credentials = '{"private_key":"never-render-this","client_email":"svc@example.test"}'
+        with patch(
+            "app.utils.config_validator.settings_display.settings.google_drive_credentials_json",
+            credentials,
+        ):
+            result = get_settings_for_display(show_values=True)
+
+        entry = next(item for item in result["Google Drive"] if item["name"] == "google_drive_credentials_json")
+        assert entry["value"] == "<configured>"
+        assert "never-render-this" not in str(result)
+        assert "svc@example.test" not in str(result)
 
 
 @pytest.mark.unit

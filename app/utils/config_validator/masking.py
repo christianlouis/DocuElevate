@@ -4,6 +4,72 @@ Module for masking sensitive information in configuration values
 
 from sqlalchemy.engine import make_url
 
+CONFIGURED_VALUE = "<configured>"
+NOT_CONFIGURED_VALUE = "<not configured>"
+
+_SENSITIVE_NAME_PARTS = {
+    "credential",
+    "credentials",
+    "cookie",
+    "dsn",
+    "key",
+    "password",
+    "passphrase",
+    "secret",
+    "token",
+}
+_SENSITIVE_NAME_FRAGMENTS = (
+    "access_key",
+    "api_key",
+    "auth_token",
+    "client_secret",
+    "credentials_json",
+    "private_key",
+    "refresh_token",
+    "session_secret",
+    "virtual_key",
+)
+_SENSITIVE_URL_SETTINGS = {
+    "audit_siem_http_custom_headers",
+    "database_url",
+    "notification_urls",
+    "redis_url",
+    "uptime_kuma_url",
+}
+_OPERATIONAL_TOKEN_FRAGMENTS = (
+    "token_budget",
+    "token_count",
+    "token_limit",
+    "token_reservation",
+    "token_threshold",
+)
+
+
+def is_sensitive_setting(name: str) -> bool:
+    """Return whether a setting may contain authentication material.
+
+    Singular ``token`` parts are secret-bearing, while operational settings
+    such as ``max_completion_tokens`` and token budgets intentionally remain
+    visible.
+    """
+    normalized = name.lower()
+    if normalized in _SENSITIVE_URL_SETTINGS:
+        return True
+    if any(fragment in normalized for fragment in _SENSITIVE_NAME_FRAGMENTS):
+        return True
+    if any(fragment in normalized for fragment in _OPERATIONAL_TOKEN_FRAGMENTS):
+        return False
+    return any(part in _SENSITIVE_NAME_PARTS for part in normalized.split("_"))
+
+
+def configured_state(value: object) -> str:
+    """Describe only whether a secret exists, never any part of its value."""
+    if value is None:
+        return NOT_CONFIGURED_VALUE
+    if isinstance(value, (str, list, dict, set, tuple)) and not value:
+        return NOT_CONFIGURED_VALUE
+    return CONFIGURED_VALUE
+
 
 def mask_sensitive_value(value: str | None) -> str | None:
     """

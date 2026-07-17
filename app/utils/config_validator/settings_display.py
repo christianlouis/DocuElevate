@@ -5,7 +5,7 @@ Module for displaying and organizing settings information
 import logging
 
 from app.config import settings
-from app.utils.config_validator.masking import mask_database_url, redact_sensitive_value
+from app.utils.config_validator.masking import configured_state, is_sensitive_setting
 
 logger = logging.getLogger(__name__)
 
@@ -14,49 +14,16 @@ _PYDANTIC_INTERNALS = {"model_computed_fields", "model_config", "model_extra", "
 
 
 def dump_all_settings() -> None:
-    """Log all settings values for diagnostic purposes"""
+    """Log settings without ever rendering authentication material."""
     logger.info("--- DUMPING ALL SETTINGS FOR DIAGNOSTIC PURPOSES ---")
     for key in dir(settings):
         if not key.startswith("_") and key not in _PYDANTIC_INTERNALS and not callable(getattr(settings, key)):
             value = getattr(settings, key)
-            # Mask sensitive values in logs
-            if key == "database_url":
-                value = mask_database_url(str(value)) if value else value
-            elif (
-                key.lower().find("password") >= 0
-                or key.lower().find("secret") >= 0
-                or key.lower().find("token") >= 0
-                or key.lower().find("key") >= 0
-            ):
-                if value:
-                    if isinstance(value, str) and len(value) > 10:
-                        visible_start = max(1, len(value) // 3)
-                        visible_end = max(1, len(value) // 4)
-                        value = (
-                            f"{value[:visible_start]}"
-                            f"{'*' * (len(value) - visible_start - visible_end)}"
-                            f"{value[-visible_end:]}"
-                        )
-                    else:
-                        value = (
-                            f"{value[:2]}{'*' * (len(value) - 4)}{value[-2:]}"
-                            if isinstance(value, str) and len(value) > 4
-                            else "****"
-                        )
-
-            # Special handling for notification URLs
-            if key == "notification_urls" and value:
-                try:
-                    from app.utils.notification import _mask_sensitive_url
-
-                    if isinstance(value, list):
-                        masked_urls = [_mask_sensitive_url(url) for url in value]
-                        logger.info(f"{key}: {masked_urls}")
-                    else:
-                        logger.info(f"{key}: {_mask_sensitive_url(value)}")
-                    continue  # Skip the default logging
-                except (ImportError, AttributeError):
-                    pass  # Fall back to default logging if _mask_sensitive_url is not available
+            # String and structured settings default to presence-only. This
+            # prevents a newly added credential from leaking merely because
+            # its name does not yet match the sensitive-name classifier.
+            if is_sensitive_setting(key) or isinstance(value, (str, bytes, list, tuple, set, dict)):
+                value = configured_state(value)
 
             logger.info(f"{key}: {value}")
     logger.info("--- END OF SETTINGS DUMP ---")
@@ -257,43 +224,16 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
         for key in setting_keys:
             if hasattr(settings, key):
                 value = getattr(settings, key)
-                is_database_url = key == "database_url"
-                if is_database_url and value:
-                    value = mask_database_url(str(value))
-
-                # List of patterns that indicate sensitive values
-                sensitive_patterns = [
-                    "password",
-                    "secret",
-                    "token",
-                    "api_key",
-                    "private_key",
-                    "credentials",
-                    "access_key",
-                    "ai_key",
-                ]
-
-                # Check if this is a sensitive value that should be masked
-                is_sensitive = is_database_url or any(pattern in key.lower() for pattern in sensitive_patterns)
-
-                # Special handling for "auth" to avoid matching prefixes like "authentik"
-                if not is_sensitive and "auth" in key.lower():
-                    # Only mark as sensitive if "auth" is a standalone word or at the end
-                    # This avoids matching "authentik" as sensitive
-                    parts = key.lower().split("_")
-                    is_sensitive = any(part == "auth" for part in parts) or key.lower().endswith("auth")
-
-                # Mask sensitive values regardless of debug mode
-                # Other values are only hidden if debug mode is off AND show_values is False
-                if (is_sensitive or not show_values) and value:
-                    if is_sensitive and not is_database_url:
-                        value = redact_sensitive_value(value)
-
                 # Check if the setting is configured (has a non-None value)
                 # For boolean settings, consider them configured even if False
                 is_configured = value is not None
                 if is_configured and isinstance(value, str):
                     is_configured = len(value) > 0
+
+                # ``show_values`` never overrides secret redaction. This also
+                # handles structured credentials as one opaque value.
+                if is_sensitive_setting(key):
+                    value = configured_state(value)
 
                 items.append({"name": key, "value": value, "is_configured": is_configured})
 
