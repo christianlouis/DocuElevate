@@ -47,6 +47,12 @@ post-install action.
 9. Log in as every seeded user and prove document and Tribe isolation before
    treating the Canary as accepted.
 
+The module refuses a release or namespace name that omits `environment`, an
+`image_tag` of `latest`, or agentic setup without a dedicated setup Secret.
+These are plan-time safety failures, not conventions an operator must remember.
+The `readiness_url` and `deployed_image` outputs expose the two most important
+acceptance facts without reading credentials or Terraform state internals.
+
 Provider authentication is intentionally not defined here. Supply Kubernetes
 and Helm provider credentials through your normal CI or workstation identity;
 do not commit a kubeconfig or cluster token.

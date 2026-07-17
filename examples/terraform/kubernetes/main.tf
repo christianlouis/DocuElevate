@@ -63,5 +63,27 @@ resource "helm_release" "docuelevate" {
     var.additional_helm_values,
   )
 
+  lifecycle {
+    precondition {
+      condition     = strcontains(lower(var.release_name), lower(var.environment))
+      error_message = "release_name must include the environment name (for example docuelevate-preprod-canary)."
+    }
+
+    precondition {
+      condition     = strcontains(lower(var.namespace), lower(var.environment))
+      error_message = "namespace must include the environment name so Canary, Preprod and production cannot be confused."
+    }
+
+    precondition {
+      condition     = lower(var.image_tag) != "latest"
+      error_message = "image_tag must be an immutable release or commit tag; latest is not allowed."
+    }
+
+    precondition {
+      condition     = !local.agentic_setup_enabled || trimspace(var.setup_secret_name) != ""
+      error_message = "setup_secret_name is required when agentic_setup_manifest_path is set."
+    }
+  }
+
   depends_on = [kubernetes_namespace_v1.docuelevate]
 }

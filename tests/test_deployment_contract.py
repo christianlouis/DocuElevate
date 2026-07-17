@@ -93,3 +93,26 @@ def test_terraform_accepts_secret_names_but_not_secret_values():
     assert 'variable "session_secret"' not in variables.lower()
     assert "existingSecret = var.bootstrap_secret_name" in main
     assert "existingSecret = var.setup_secret_name" in main
+
+
+def test_terraform_guards_environment_identity_and_agentic_secret_boundary():
+    main = (TERRAFORM / "main.tf").read_text(encoding="utf-8")
+    outputs = (TERRAFORM / "outputs.tf").read_text(encoding="utf-8")
+
+    assert "strcontains(lower(var.release_name), lower(var.environment))" in main
+    assert "strcontains(lower(var.namespace), lower(var.environment))" in main
+    assert 'lower(var.image_tag) != "latest"' in main
+    assert '!local.agentic_setup_enabled || trimspace(var.setup_secret_name) != ""' in main
+    assert 'output "readiness_url"' in outputs
+    assert 'output "deployed_image"' in outputs
+
+
+def test_ci_runs_real_terraform_validation_before_building_images():
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    terraform_job = workflow["jobs"]["terraform-validate"]
+
+    run_commands = [step.get("run", "") for step in terraform_job["steps"]]
+    assert "terraform fmt -check -recursive examples/terraform" in run_commands
+    assert "terraform -chdir=examples/terraform/kubernetes init -backend=false -input=false" in run_commands
+    assert "terraform -chdir=examples/terraform/kubernetes validate" in run_commands
+    assert "terraform-validate" in workflow["jobs"]["build"]["needs"]
