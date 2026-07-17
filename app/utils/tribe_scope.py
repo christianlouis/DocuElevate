@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,18 @@ from app.models import (
 def personal_tribe_id(owner_id: str, tenant_id: str = DEFAULT_TENANT_ID) -> str:
     """Return a stable opaque ID without exposing the login in file payloads."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"docuelevate:tribe:{tenant_id}:{owner_id}"))
+
+
+def canonical_tribe_name(name: str) -> str:
+    """Return the canonical comparison form for a user-supplied Tribe name."""
+    normalized_name = unicodedata.normalize("NFKC", name)
+    return " ".join(normalized_name.split()).casefold()
+
+
+def shared_tribe_id(name: str, tenant_id: str = DEFAULT_TENANT_ID) -> str:
+    """Return a stable ID for a named shared Tribe inside one tenant."""
+    normalized_name = canonical_tribe_name(name)
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"docuelevate:shared-tribe:{tenant_id}:{normalized_name}"))
 
 
 def ensure_personal_scope(

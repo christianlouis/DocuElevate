@@ -15,7 +15,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
-from app.models import UserProfile
+from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserProfile
+from app.utils.tribe_scope import personal_tribe_id
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -192,6 +193,110 @@ class TestOnboardingAPI:
         assert profile.display_name == "Jane Doe"
         assert profile.contact_email == "jane@example.com"
 
+        personal = ob_session.get(Tribe, personal_tribe_id(_TEST_USER["sub"]))
+        assert personal is not None
+        membership = ob_session.query(TribeMembership).filter_by(tribe_id=personal.id, user_id=_TEST_USER["sub"]).one()
+        assert membership.role == "admin"
+        assert data["spaces"] == [
+            {
+                "tenant_id": DEFAULT_TENANT_ID,
+                "tribe_id": personal.id,
+                "name": f"Personal space for {_TEST_USER['sub']}",
+                "role": "admin",
+                "is_personal": True,
+            }
+        ]
+        assert data["onboarding_journey"]["space_mode"] == "personal"
+        assert data["onboarding_journey"]["selected_tribe_id"] == personal.id
+
+    def test_save_profile_can_create_shared_tribe_idempotently(self, ob_client_authed, ob_session):
+        payload = {
+            "display_name": "Jane Doe",
+            "space_mode": "shared",
+            "tribe_name": "  Family   Example  ",
+        }
+        first = ob_client_authed.post("/api/onboarding/profile", json=payload)
+        second = ob_client_authed.post("/api/onboarding/profile", json=payload)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        shared = ob_session.query(Tribe).filter(Tribe.name == "Family Example").one()
+        assert ob_session.query(Tribe).filter(Tribe.name == "Family Example").count() == 1
+        membership = ob_session.query(TribeMembership).filter_by(tribe_id=shared.id, user_id=_TEST_USER["sub"]).one()
+        assert membership.role == "admin"
+        assert sum(not space["is_personal"] for space in second.json()["spaces"]) == 1
+        assert second.json()["onboarding_journey"]["space_mode"] == "shared"
+        assert second.json()["onboarding_journey"]["selected_tribe_id"] == shared.id
+
+    def test_save_profile_reuses_unicode_equivalent_shared_name(self, ob_client_authed, ob_session):
+        first = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "Familie Straße"},
+        )
+        second = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "Familie STRASSE"},
+        )
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert ob_session.query(Tribe).filter(Tribe.name.like("Familie%")).count() == 1
+        assert (
+            second.json()["onboarding_journey"]["selected_tribe_id"]
+            == first.json()["onboarding_journey"]["selected_tribe_id"]
+        )
+
+    def test_save_profile_rejects_joining_existing_tribe_by_name(self, ob_client_authed, ob_session):
+        from app.models import Tenant
+
+        ob_session.add(Tenant(id=DEFAULT_TENANT_ID, name="Default tenant"))
+        ob_session.flush()
+        ob_session.add(Tribe(id="existing-shared", tenant_id=DEFAULT_TENANT_ID, name="Family Example"))
+        ob_session.commit()
+
+        response = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "family example"},
+        )
+
+        assert response.status_code == 409
+        assert "invitation" in response.json()["detail"]
+        assert (
+            ob_session.query(TribeMembership).filter_by(tribe_id="existing-shared", user_id=_TEST_USER["sub"]).count()
+            == 0
+        )
+
+    def test_save_profile_requires_shared_tribe_name(self, ob_client_authed):
+        response = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "   "},
+        )
+        assert response.status_code == 422
+
+    def test_save_profile_reserves_generated_personal_space_names(self, ob_client_authed):
+        response = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "Personal space for future-user"},
+        )
+        assert response.status_code == 422
+
+    def test_progress_preserves_explicit_space_selection(self, ob_client_authed):
+        profile_response = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "Family Example"},
+        )
+        selected_tribe_id = profile_response.json()["onboarding_journey"]["selected_tribe_id"]
+
+        progress_response = ob_client_authed.post(
+            "/api/onboarding/progress",
+            json={"current_step": 3, "completed_topic": "profile"},
+        )
+
+        assert progress_response.status_code == 200
+        journey = progress_response.json()["journey"]
+        assert journey["space_mode"] == "shared"
+        assert journey["selected_tribe_id"] == selected_tribe_id
+
     def test_save_profile_requires_auth(self, ob_engine):
         """POST /profile without auth should return 401."""
         from app.main import app
@@ -342,6 +447,7 @@ class TestOnboardingAPI:
         profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
         assert profile is not None
         assert profile.onboarding_completed is True
+        assert ob_session.get(Tribe, personal_tribe_id(_TEST_USER["sub"])) is not None
 
     def test_complete_requires_auth(self, ob_engine):
         """POST /complete without auth should return 401."""

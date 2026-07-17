@@ -96,8 +96,8 @@
            x-transition:enter-end="opacity-100 translate-x-0">
         <div class="bg-gradient-to-r from-blue-500 to-indigo-600 px-8 py-6 text-white">
           <i class="fas fa-user-circle text-4xl mb-2" aria-hidden="true"></i>
-          <h2 class="text-2xl font-bold">Your Profile</h2>
-          <p class="text-blue-100 text-sm">Tell us a little about yourself</p>
+          <h2 class="text-2xl font-bold">{{ _("onboarding.space_heading") }}</h2>
+          <p class="text-blue-100 text-sm">{{ _("onboarding.space_subheading") }}</p>
         </div>
         <div class="p-8">
           <div class="mb-5">
@@ -123,6 +123,38 @@
                    class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
                    aria-describedby="contactEmailHint" />
             <p id="contactEmailHint" class="text-gray-400 text-xs mt-1">Used for notifications. Can be different from your login email.</p>
+          </div>
+          <fieldset class="mb-6">
+            <legend class="block text-sm font-medium text-gray-700 mb-2">{{ _("onboarding.space_mode_legend") }}</legend>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <label class="border-2 rounded-xl p-4 cursor-pointer transition focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
+                     :class="spaceMode === 'personal' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'">
+                <input type="radio" class="sr-only" x-model="spaceMode" value="personal" />
+                <span class="font-semibold text-gray-800 block">{{ _("onboarding.personal_space_title") }}</span>
+                <span class="text-xs text-gray-500">{{ _("onboarding.personal_space_description") }}</span>
+              </label>
+              <label class="border-2 rounded-xl p-4 cursor-pointer transition focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2"
+                     :class="spaceMode === 'shared' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'">
+                <input type="radio" class="sr-only" x-model="spaceMode" value="shared" />
+                <span class="font-semibold text-gray-800 block">{{ _("onboarding.shared_space_title") }}</span>
+                <span class="text-xs text-gray-500">{{ _("onboarding.shared_space_description") }}</span>
+              </label>
+            </div>
+          </fieldset>
+          <div class="mb-6" x-show="spaceMode === 'shared'" x-cloak>
+            <label for="tribeName" class="block text-sm font-medium text-gray-700 mb-1">{{ _("onboarding.shared_space_name") }}</label>
+            <input id="tribeName"
+                   type="text"
+                   x-model="tribeName"
+                   maxlength="255"
+                   placeholder="{{ _("onboarding.shared_space_placeholder") }}"
+                   class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition" />
+            <p class="text-gray-500 text-xs mt-1">
+              {{ _("onboarding.shared_space_hint") }}
+            </p>
+          </div>
+          <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-6 text-xs text-indigo-800">
+            {{ _("onboarding.space_privacy_hint") }}
           </div>
           <div class="flex gap-3">
             <button @click="goBack()"
@@ -392,6 +424,13 @@
             </li>
             <li class="flex items-center gap-3 text-gray-700">
               <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
+                <i class="fas fa-users text-green-600 text-sm" aria-hidden="true"></i>
+              </div>
+              <span x-show="spaceMode === 'personal'">{{ _("onboarding.personal_space_ready") }}</span>
+              <span x-show="spaceMode === 'shared'">{{ _("onboarding.shared_space_summary") }} <strong x-text="tribeName"></strong></span>
+            </li>
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
                 <i class="fas fa-check text-green-600 text-sm" aria-hidden="true"></i>
               </div>
               <span>Plan selected: <strong x-text="selectedTier"></strong></span>
@@ -432,6 +471,10 @@
 </div><!-- /min-h-screen -->
 
 <script>
+const onboardingI18n = {
+  sharedNameRequired: {{ _("onboarding.shared_name_required") | tojson }}
+};
+
 function onboardingWizard() {
   return {
     step: 1,
@@ -442,6 +485,10 @@ function onboardingWizard() {
     // Form data – pre-populated from Jinja2 context
     displayName: '{{ user.name | default("") | e }}',
     contactEmail: '{{ user.email | default("") | e }}',
+    spaceMode: 'personal',
+    tribeName: '',
+    spaces: [],
+    selectedTribeId: '',
     selectedTier: 'free',
     billingCycle: 'monthly',
     annual: false,
@@ -469,6 +516,18 @@ function onboardingWizard() {
             if (data.profile.subscription_tier) this.selectedTier = data.profile.subscription_tier;
             if (data.profile.subscription_billing_cycle) this.billingCycle = data.profile.subscription_billing_cycle;
             if (data.profile.preferred_destination) this.selectedDestination = data.profile.preferred_destination;
+            const journey = data.profile.onboarding_journey || {};
+            if (journey.space_mode === 'personal' || journey.space_mode === 'shared') {
+              this.spaceMode = journey.space_mode;
+              this.selectedTribeId = journey.selected_tribe_id || '';
+            }
+          }
+          if (data.spaces) {
+            this.spaces = data.spaces;
+            if (this.spaceMode === 'shared' && this.selectedTribeId) {
+              const selectedSpace = data.spaces.find(space => space.tribe_id === this.selectedTribeId);
+              if (selectedSpace && !selectedSpace.is_personal) this.tribeName = selectedSpace.name;
+            }
           }
           if (data.integrations) this.integrationCounts = data.integrations;
           if (data.step) this.step = Math.max(1, Math.min(this.totalSteps, data.step));
@@ -514,13 +573,29 @@ function onboardingWizard() {
 
     async saveProfile() {
       this.loading = true; this.error = '';
+      if (this.spaceMode === 'shared' && !this.tribeName.trim()) {
+        this.error = onboardingI18n.sharedNameRequired;
+        this.loading = false;
+        return;
+      }
       try {
         const r = await fetch('/api/onboarding/profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ display_name: this.displayName, contact_email: this.contactEmail })
+          body: JSON.stringify({
+            display_name: this.displayName,
+            contact_email: this.contactEmail,
+            space_mode: this.spaceMode,
+            tribe_name: this.spaceMode === 'shared' ? this.tribeName.trim() : null
+          })
         });
         if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save profile'; }
+        else {
+          const data = await r.json();
+          if (data.spaces) this.spaces = data.spaces;
+          const journey = data.onboarding_journey || {};
+          this.selectedTribeId = journey.selected_tribe_id || '';
+        }
       } catch (_) { this.error = 'Network error. Please try again.'; }
       finally { this.loading = false; }
     },

@@ -119,7 +119,7 @@ bypass an incomplete installation.
 
 ### The per-user onboarding journey
 
-After the operator bootstrap, each user gets a separate, resumable eight-step journey at `/onboarding`: profile, plan, processing, document sources, destinations, automation/notifications, and review. Optional integration steps can be skipped and resumed later. Progress belongs to the user profile in the database, so two users can be at different steps and no API or worker restart is required.
+After the operator bootstrap, each user gets a separate, resumable eight-step journey at `/onboarding`: identity and document space, plan, processing, document sources, destinations, automation/notifications, and review. The first step always creates an isolated personal Tribe. A user may also create a new shared Family/Team Tribe and becomes its administrator; an existing Tribe cannot be joined by entering or guessing its name and requires a later invitation flow. Optional integration steps can be skipped and resumed later. Progress and memberships belong to the database, so two users can be at different steps and no API or worker restart is required.
 
 The journey links to the personal Integrations dashboard. OAuth refresh tokens and other user credentials are encrypted in `user_integrations`; they are never written to environment variables or browser storage. On a preprod hostname, names and suggested folders created by the journey use the `DocuElevate Preprod` / `/DocuElevate Preprod` label to prevent accidental overlap with production resources.
 

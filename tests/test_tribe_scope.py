@@ -4,7 +4,7 @@ import pytest
 
 from app.config import settings
 from app.models import FileRecord, TribeMembership
-from app.utils.tribe_scope import ensure_document_scope
+from app.utils.tribe_scope import canonical_tribe_name, ensure_document_scope, shared_tribe_id
 from app.utils.user_scope import apply_owner_filter
 
 
@@ -15,6 +15,12 @@ def test_personal_scope_is_stable_and_creates_membership(db_session):
 
     assert first == second
     assert db_session.query(TribeMembership).filter_by(user_id="alice", tribe_id=first[1]).count() == 1
+
+
+@pytest.mark.unit
+def test_shared_tribe_identity_uses_unicode_canonicalization():
+    assert canonical_tribe_name("  Familie  Straße ") == canonical_tribe_name("Familie STRASSE")
+    assert shared_tribe_id("Familie Straße") == shared_tribe_id("Familie STRASSE")
 
 
 @pytest.mark.unit

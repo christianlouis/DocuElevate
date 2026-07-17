@@ -120,6 +120,7 @@ Conductor, and Signal are currently planning-track names because their former
 - Multi-destination distribution (cloud providers, DMS, protocols, email)
 - Admin UI for configuration (database-backed settings, encryption, setup wizard)
 - [x] Tenant/Tribe document boundary foundation with canonical per-file `is_private` enforcement
+- [x] Per-user onboarding creates an isolated personal Tribe and can create an initial shared Family/Team Tribe
 - [ ] Tribe membership, invitations, delegated routing administration, and explicit shared-intake UI (#1146)
 - Production hardening building blocks (CI/CD, security docs, deployment guides)
 
