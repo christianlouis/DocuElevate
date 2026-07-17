@@ -10,7 +10,7 @@ type: application
 version: 0.2.0
 
 # Application version — kept in sync with the VERSION file.
-appVersion: "0.187.0"
+appVersion: "0.188.0"
 keywords:
   - document-management
   - ocr
