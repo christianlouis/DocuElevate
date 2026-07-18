@@ -837,6 +837,10 @@ class TestAlembicUpgrade:
         # Verify alembic_version table exists and has a revision
         inspector = inspect(engine)
         assert "alembic_version" in inspector.get_table_names()
+        version_column = next(
+            column for column in inspector.get_columns("alembic_version") if column["name"] == "version_num"
+        )
+        assert version_column["type"].length == 255
 
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))

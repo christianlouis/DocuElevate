@@ -649,7 +649,7 @@ class TestEnsureUserProfileAdmin:
         assert profile is not None
         assert profile.subscription_tier == TIER_ORDER[-1]
         assert profile.is_complimentary is True
-        assert profile.onboarding_completed is True
+        assert profile.onboarding_completed is False
 
     @pytest.mark.unit
     def test_regular_user_login_creates_free_profile(self, au_session):

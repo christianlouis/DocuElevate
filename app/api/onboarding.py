@@ -394,7 +394,10 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
 
     The redirect URL is read from ``request.session["post_onboarding_redirect"]`` (stored by
     ``oauth_callback`` when it reroutes a first-time user to the wizard) and defaults to
-    ``/upload`` when the session key is absent.
+    ``/upload?onboarding=first-document`` when the session key is absent. A
+    plain ``/upload`` saved by the authentication flow is normalized to the
+    same first-document destination, while explicit custom redirects are
+    preserved.
     """
     user_id = _get_current_user_id(request)
     profile = _get_or_create_profile(db, user_id)
@@ -409,6 +412,8 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
         db.rollback()
         raise
 
-    redirect_url = request.session.pop("post_onboarding_redirect", "/upload")
+    redirect_url = request.session.pop("post_onboarding_redirect", "/upload?onboarding=first-document")
+    if redirect_url == "/upload":
+        redirect_url = "/upload?onboarding=first-document"
     logger.info("Onboarding: completed for user %s, redirecting to %s", user_id, redirect_url)
     return {"success": True, "redirect_url": redirect_url}
