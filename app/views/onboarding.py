@@ -9,7 +9,7 @@ from app.config import Settings
 from app.config import settings as _settings
 from app.models import UserIntegration, UserProfile
 from app.utils.config_validator.providers import get_provider_status
-from app.utils.subscription import get_all_tiers
+from app.utils.subscription import TIER_DEFAULTS, get_all_tiers
 from app.views.base import APIRouter, get_db, require_login, templates
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,32 @@ _DESTINATION_META: list[dict] = [
     {"id": "ftp", "name": "FTP", "icon": "fas fa-server"},
     {"id": "icloud", "name": "iCloud Drive", "icon": "fab fa-apple"},
 ]
+
+
+def _prepare_onboarding_tiers(tiers: list[dict]) -> list[dict]:
+    """Add optional translation keys without replacing configured plan copy.
+
+    Built-in plans are localised while their name or tagline still matches the
+    shipped default. Once an administrator changes either field, onboarding
+    displays that database-backed value verbatim instead of stale stock copy.
+    """
+    prepared: list[dict] = []
+    for tier in tiers:
+        item = dict(tier)
+        tier_id = str(item.get("id", ""))
+        default = TIER_DEFAULTS.get(tier_id)
+        item["name_translation_key"] = (
+            f"onboarding.tier_{tier_id}_name"
+            if default is not None and item.get("name") == default.get("name")
+            else None
+        )
+        item["tagline_translation_key"] = (
+            f"onboarding.tier_{tier_id}_tagline"
+            if default is not None and item.get("tagline") == default.get("tagline")
+            else None
+        )
+        prepared.append(item)
+    return prepared
 
 
 def _get_configured_destinations(cfg: Settings) -> list[dict]:
@@ -101,7 +127,7 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
         if integration.direction == "DESTINATION"
     ]
     legacy_destinations = _get_configured_destinations(_settings)
-    tiers = get_all_tiers(db)
+    tiers = _prepare_onboarding_tiers(get_all_tiers(db))
     ai_configured = bool(get_provider_status()["AI Provider"]["configured"])
     is_preprod = "preprod" in request.url.hostname.lower() if request.url.hostname else False
 

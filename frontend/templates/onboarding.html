@@ -221,7 +221,7 @@
                     :class="selectedTier === '{{ tier.id }}' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white'"
                     :aria-pressed="(selectedTier === '{{ tier.id }}').toString()">
               <div class="flex items-center justify-between mb-1">
-                <span class="font-bold text-gray-800">{{ _("onboarding.tier_" ~ tier.id ~ "_name") }}</span>
+                <span class="font-bold text-gray-800">{{ _(tier.name_translation_key) if tier.name_translation_key else tier.name }}</span>
                 <span class="text-lg font-extrabold text-indigo-600">
                   {% if tier.price_monthly == 0 %}
                     {{ _("onboarding.free") }}
@@ -235,7 +235,7 @@
                   {% endif %}
                 </span>
               </div>
-              <p class="text-gray-500 text-xs">{{ _("onboarding.tier_" ~ tier.id ~ "_tagline") }}</p>
+              <p class="text-gray-500 text-xs">{{ _(tier.tagline_translation_key) if tier.tagline_translation_key else tier.tagline }}</p>
               {% if tier.id != "free" and tier.get("trial_days") %}
               <span class="inline-block mt-1.5 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
                 {{ tier.trial_days }} {{ _("onboarding.day_trial") }}
@@ -504,10 +504,9 @@ const onboardingI18n = {
   completionFailed: {{ _("onboarding.error_completion") | tojson }},
   networkError: {{ _("onboarding.error_network") | tojson }},
   tierLabels: {
-    free: {{ _("onboarding.tier_free_name") | tojson }},
-    starter: {{ _("onboarding.tier_starter_name") | tojson }},
-    professional: {{ _("onboarding.tier_professional_name") | tojson }},
-    business: {{ _("onboarding.tier_business_name") | tojson }}
+    {% for tier in tiers %}
+    {{ tier.id | tojson }}: {{ (_(tier.name_translation_key) if tier.name_translation_key else tier.name) | tojson }}{% if not loop.last %},{% endif %}
+    {% endfor %}
   },
   stepLabels: [
     {{ _("onboarding.step_welcome") | tojson }},

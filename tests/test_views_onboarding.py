@@ -57,6 +57,84 @@ def _make_mock_request(session_user: dict | None = None) -> MagicMock:
     return mock_req
 
 
+@pytest.mark.unit
+class TestPrepareOnboardingTiers:
+    """Plan copy remains localised until an administrator customises it."""
+
+    def test_stock_plan_copy_uses_translation_keys_without_mutating_input(self):
+        from app.utils.subscription import TIER_DEFAULTS
+        from app.views.onboarding import _prepare_onboarding_tiers
+
+        tier = dict(TIER_DEFAULTS["free"])
+
+        result = _prepare_onboarding_tiers([tier])
+
+        assert result[0]["name_translation_key"] == "onboarding.tier_free_name"
+        assert result[0]["tagline_translation_key"] == "onboarding.tier_free_tagline"
+        assert "name_translation_key" not in tier
+
+    def test_renamed_builtin_plan_preserves_database_name_and_tagline(self):
+        from app.utils.subscription import TIER_DEFAULTS
+        from app.views.onboarding import _prepare_onboarding_tiers
+
+        tier = {
+            **TIER_DEFAULTS["business"],
+            "name": "Family Archive",
+            "tagline": "Shared document care for the whole tribe",
+        }
+
+        [result] = _prepare_onboarding_tiers([tier])
+
+        assert result["name"] == "Family Archive"
+        assert result["tagline"] == "Shared document care for the whole tribe"
+        assert result["name_translation_key"] is None
+        assert result["tagline_translation_key"] is None
+
+    def test_template_localises_stock_copy_but_renders_custom_copy_verbatim(self):
+        from app.utils.subscription import TIER_DEFAULTS
+        from app.views.base import templates
+        from app.views.onboarding import _prepare_onboarding_tiers
+
+        tiers = _prepare_onboarding_tiers(
+            [
+                dict(TIER_DEFAULTS["free"]),
+                {
+                    **TIER_DEFAULTS["business"],
+                    "name": "Family Archive",
+                    "tagline": "Shared document care for the whole tribe",
+                },
+            ]
+        )
+        translations = {
+            "onboarding.tier_free_name": "Kostenlos",
+            "onboarding.tier_free_tagline": "Ohne Kreditkarte ausprobieren",
+        }
+        request = MagicMock()
+        request.url.path = "/onboarding"
+
+        rendered = templates.env.get_template("onboarding.html").render(
+            request=request,
+            _=lambda key, **_kwargs: translations.get(key, key),
+            user={},
+            tiers=tiers,
+            is_complimentary=False,
+            instance_label="DocuElevate",
+            suggested_storage_path="/DocuElevate",
+            configured_destinations=[],
+            legacy_destinations=[],
+            integration_sources=[],
+            integration_destinations=[],
+            ai_configured=False,
+            suggested_languages=[],
+            supported_languages={},
+        )
+
+        assert "Kostenlos" in rendered
+        assert "Ohne Kreditkarte ausprobieren" in rendered
+        assert "Family Archive" in rendered
+        assert "Shared document care for the whole tribe" in rendered
+
+
 # ---------------------------------------------------------------------------
 # Tests for _get_configured_destinations
 # ---------------------------------------------------------------------------
@@ -623,7 +701,10 @@ class TestOnboardingPage:
         try:
             with (
                 patch("app.views.onboarding.templates") as mock_templates,
-                patch("app.views.onboarding.get_all_tiers", return_value=["free"]),
+                patch(
+                    "app.views.onboarding.get_all_tiers",
+                    return_value=[{"id": "free", "name": "Free", "tagline": "Try DocuElevate free — no credit card needed"}],
+                ),
                 patch("app.views.onboarding._get_configured_destinations", return_value=[{"id": "s3"}]),
             ):
                 mock_templates.TemplateResponse.return_value = mock_template_response
@@ -636,7 +717,8 @@ class TestOnboardingPage:
             assert context["configured_destinations"] == []
             assert context["legacy_destinations"] == [{"id": "s3"}]
             assert context["instance_label"] == "DocuElevate"
-            assert context["tiers"] == ["free"]
+            assert context["tiers"][0]["id"] == "free"
+            assert context["tiers"][0]["name_translation_key"] == "onboarding.tier_free_name"
             assert context["is_complimentary"] is False
             assert isinstance(context["ai_configured"], bool)
         finally:
