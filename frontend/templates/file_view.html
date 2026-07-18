@@ -322,10 +322,10 @@
         </div>
         {% endif %}
         <div class="info-row">
-          <span class="info-key">Sichtbarkeit</span>
+          <span class="info-key">{{ _("file.visibility_label") }}</span>
           <span class="info-val" id="privacy-state">
-            {% if file.is_private %}<i class="fas fa-lock" aria-hidden="true"></i> Privat{% else %}<i class="fas fa-users" aria-hidden="true"></i> Im Tribe sichtbar{% endif %}
-            {% if file.privacy_manual_override is not none %}<small style="color:#92400e;">(manuell)</small>{% endif %}
+            {% if file.is_private %}<i class="fas fa-lock" aria-hidden="true"></i> {{ _("file.visibility_private") }}{% else %}<i class="fas fa-users" aria-hidden="true"></i> {{ _("file.visibility_tribe") }}{% endif %}
+            {% if file.privacy_manual_override is not none %}<small style="color:#92400e;">({{ _("file.privacy_manual") }})</small>{% endif %}
           </span>
         </div>
       </div>
@@ -353,21 +353,25 @@
             <i class="fas fa-external-link-alt" aria-hidden="true"></i> Open original
           </a>
           {% endif %}
-          {% if current_user_role == "owner" %}
+          {% if multi_user_enabled and current_user_role == "owner" %}
           <a href="/shared-links?file_id={{ file.id }}" class="action-btn btn-secondary">
             <i class="fas fa-share-alt" aria-hidden="true"></i> Share
           </a>
           {% endif %}
-          {% if current_user_role == "owner" %}
+          {% if current_user_role == "owner" and (file.owner_id is not none or file.is_private) %}
           <button type="button" class="action-btn btn-secondary" id="privacy-toggle" onclick="setFilePrivacy({{ file.id }}, {{ 'false' if file.is_private else 'true' }})">
             <i class="fas fa-{{ 'users' if file.is_private else 'lock' }}" aria-hidden="true"></i>
-            {{ 'Im Tribe sichtbar machen' if file.is_private else 'Als privat markieren' }}
+            {{ _("file.privacy_make_tribe_visible") if file.is_private else _("file.privacy_make_private") }}
           </button>
           {% if file.privacy_manual_override is not none %}
           <button type="button" class="action-btn btn-secondary" id="privacy-automatic" onclick="clearFilePrivacyOverride({{ file.id }})">
-            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Automatik verwenden
+            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> {{ _("file.privacy_use_automatic") }}
           </button>
           {% endif %}
+          {% elif current_user_role == "owner" and not multi_user_enabled %}
+          <span class="action-btn btn-secondary" id="privacy-owner-required" aria-disabled="true" title="{{ _("file.privacy_owner_required_hint") }}">
+            <i class="fas fa-user-lock" aria-hidden="true"></i> {{ _("file.privacy_owner_required") }}
+          </span>
           {% endif %}
           {% if multi_user_enabled and file.owner_id is none %}
           <button

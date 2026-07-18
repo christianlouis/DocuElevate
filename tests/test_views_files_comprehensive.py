@@ -2190,15 +2190,49 @@ class TestOwnerDisplayAndClaim:
         assert response.status_code == 200
         assert b"Claim Ownership" in response.content
 
-    def test_detail_shows_privacy_control_in_single_user_mode(self, client, db_session):
-        """The canonical privacy flag remains editable before multi-user activation."""
-        file_rec = self._make_file(db_session, owner_id=None)
+    @pytest.mark.parametrize(
+        ("is_private", "expected_state", "next_privacy_value"),
+        [
+            (False, b"Visible to the Tribe", "true"),
+            (True, b"Private", "false"),
+        ],
+    )
+    def test_detail_shows_privacy_control_in_single_user_mode(
+        self, client, db_session, is_private, expected_state, next_privacy_value
+    ):
+        """Owned single-user documents render the state and inverse privacy action."""
+        file_rec = self._make_file(db_session, owner_id="owner@example.com")
+        file_rec.is_private = is_private
+        db_session.commit()
         with patch("app.config.settings.multi_user_enabled", False):
             response = client.get(f"/files/{file_rec.id}/detail")
         assert response.status_code == 200
         assert b'id="privacy-state"' in response.content
         assert b'id="privacy-toggle"' in response.content
-        assert b"Als privat markieren" in response.content
+        assert expected_state in response.content
+        assert f"setFilePrivacy({file_rec.id}, {next_privacy_value})".encode() in response.content
+        assert b"/shared-links?file_id=" not in response.content
+
+    def test_detail_does_not_allow_private_override_for_unowned_single_user_file(self, client, db_session):
+        """An ownerless document cannot be made private and orphaned on activation."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b'id="privacy-toggle"' not in response.content
+        assert b'id="privacy-owner-required"' in response.content
+        assert b"/shared-links?file_id=" not in response.content
+
+    def test_detail_allows_ownerless_private_legacy_file_to_be_made_visible(self, client, db_session):
+        """A previously private legacy document retains a recovery action."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        file_rec.is_private = True
+        db_session.commit()
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b'id="privacy-toggle"' in response.content
+        assert f"setFilePrivacy({file_rec.id}, false)".encode() in response.content
 
     # ── /files/{id}/annotations (file_annotations.html) ──────────────────
 
