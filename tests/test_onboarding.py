@@ -11,7 +11,8 @@ Covers:
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
@@ -279,6 +280,39 @@ class TestOnboardingAPI:
             json={"space_mode": "shared", "tribe_name": "Personal space for future-user"},
         )
         assert response.status_code == 422
+
+    def test_save_profile_maps_concurrent_shared_insert_conflict_to_invitation(
+        self,
+        ob_client_authed,
+        ob_session,
+        monkeypatch,
+    ):
+        """A unique conflict after lookup stays a safe 409 instead of becoming a 500."""
+        original_flush = Session.flush
+        collision_seen = False
+
+        def flush_with_shared_collision(self, objects=None):
+            nonlocal collision_seen
+            if not collision_seen and any(isinstance(obj, Tribe) and obj.name == "Family Race" for obj in self.new):
+                collision_seen = True
+                raise IntegrityError(
+                    "INSERT INTO tribes",
+                    {},
+                    RuntimeError("simulated concurrent unique conflict"),
+                )
+            return original_flush(self, objects)
+
+        monkeypatch.setattr(Session, "flush", flush_with_shared_collision)
+
+        response = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": "Family Race"},
+        )
+
+        assert collision_seen is True
+        assert response.status_code == 409
+        assert "invitation" in response.json()["detail"]
+        assert ob_session.query(Tribe).filter(Tribe.name == "Family Race").count() == 0
 
     def test_progress_preserves_explicit_space_selection(self, ob_client_authed):
         profile_response = ob_client_authed.post(

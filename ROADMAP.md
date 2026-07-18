@@ -1,7 +1,7 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-07-14
-**Version:** 2.1
+**Last Updated:** 2026-07-18
+**Version:** 2.2
 
 ## Vision
 
@@ -19,29 +19,36 @@ For the detailed milestone breakdown and target dates, see [MILESTONES.md](MILES
 
 ## Current Focus and Delivery Order
 
-The automated release number (`0.176.x` at the time of this review) is independent
+The automated release number (`0.188.0` at the time of this review) is independent
 from the named planning anchors below. The team should execute work in dependency
 order, not in numeric-anchor order:
 
-1. **Stabilize the processing foundation** — close post-merge correctness work
-   (#1007), make workflow state/retries/status match execution (#388), and finish
+1. **Close the active security and privacy gaps** — rotate the affected Preprod
+   credentials (#1162), harden single-user privacy controls (#1170), and keep
+   secret values out of GitOps, diagnostics, and browser responses.
+2. **Make a clean installation genuinely useful** — finish the disposable
+   fresh-install journey (#1134, #1151), including integrations, a first processed
+   document, a second isolated user, recovery paths, and browser E2E evidence.
+3. **Complete Family/Tribe document separation** — deliver recipient profiles,
+   explainable classification, per-user routing, review, invitations, delegated
+   administration, and owner-controlled privacy (#1142–#1147).
+4. **Finish retrieval quality rather than widening brute-force context** — tune
+   hybrid ranking (#871), add an evaluation harness (#880), and only then close
+   Chat with Library (#478) against cited-answer quality and latency targets.
+5. **Remove operational single points of failure** — restore executable database
+   backups (#1062, #1102), harden maintenance monitors (#1103, #1121), and finish
    the single-host-loss resilience plan (#902).
-2. **Complete the existing search experience** — saved searches (#870),
-   preview-first results (#872), and safe bulk actions (#873).
-3. **Add retrieval foundations** — choose one vector-store architecture (#477),
-   implement semantic retrieval (#480), then hybrid ranking and evaluation (#871).
-4. **Make orchestration configurable** — only after #388, build the workflow
-   editor (#875), scheduling (#876), and reusable templates (#877).
-5. **Make AI quality measurable before expanding AI UX** — build the extraction
-   evaluation harness (#880) before confidence scoring (#878), review queues
-   (#879), or Chat with Library (#478).
-6. **Build enterprise and ecosystem layers on stable contracts** — RBAC,
-   multi-tenancy, audit, plugins, governance, MCP, and agent actions remain later
-   tracks and must not displace the foundation work above.
+6. **Build later enterprise and ecosystem layers on proven contracts** — workflow
+   editing, RBAC, full organization management, audit, plugins, governance, MCP,
+   and agent actions remain sequenced behind the user-facing foundations above.
 
 GitHub issues and milestones are the source of truth for executable scope. This
 document explains sequencing and product intent; it should not duplicate a sprint
 backlog.
+
+The current issue inventory also contains post-merge follow-ups. Before starting
+one, verify it against `main` and existing regression tests; close already-delivered
+findings with evidence instead of carrying stale work forward.
 
 ## Preprod Pilot: DearConcierge Knowledge Bridge
 
