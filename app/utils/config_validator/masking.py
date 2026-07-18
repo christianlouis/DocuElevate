@@ -32,6 +32,8 @@ _SENSITIVE_NAME_FRAGMENTS = (
 )
 _SENSITIVE_URL_SETTINGS = {
     "audit_siem_http_custom_headers",
+    "celery_broker_url",
+    "celery_result_backend",
     "database_url",
     "notification_urls",
     "redis_url",

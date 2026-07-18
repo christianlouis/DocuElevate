@@ -174,6 +174,21 @@ RATE_LIMITING_ENABLED=true   # default — ensure not overridden to false
 REDIS_URL=redis://redis:6379/0
 ```
 
+For high-availability Redis deployments, route both Celery endpoints through
+a primary-aware service or load balancer. DocuElevate verifies the result
+backend's Redis role and an ephemeral write before a worker consumes tasks.
+It also reconnects and retries result writes when an established connection
+receives `ReadOnlyError` after primary demotion:
+
+```env
+CELERY_BROKER_URL=redis://redis-primary-router:6379/0
+CELERY_RESULT_BACKEND=redis://redis-primary-router:6379/0
+```
+
+Never point `CELERY_RESULT_BACKEND` at a generic service that can select a
+replica. A worker deliberately refuses to start when only a read-only route is
+available.
+
 See the [Configuration Guide — Rate Limiting](ConfigurationGuide.md#rate-limiting) for per-endpoint tuning.
 
 ### Secrets Management

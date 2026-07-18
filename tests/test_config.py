@@ -99,9 +99,24 @@ class TestConfigurationValidation:
         )
 
         assert config.redis_url == "redis://redis:6379/0"
+        assert config.effective_celery_broker_url == "redis://redis:6379/0"
+        assert config.effective_celery_result_backend == "redis://redis:6379/0"
         assert config.workdir == "/workdir"
         assert config.gotenberg_url == "http://gotenberg:3000"
         assert config.openai_api_key == ""
+
+    def test_celery_urls_can_be_overridden_independently(self):
+        """Broker and result traffic can use separate primary-aware routes."""
+        config = Settings(
+            database_url="sqlite:///test.db",
+            redis_url="redis://cache:6379/0",
+            celery_broker_url="redis://broker:6379/0",
+            celery_result_backend="redis://results-primary:6379/0",
+            auth_enabled=False,
+        )
+
+        assert config.effective_celery_broker_url == "redis://broker:6379/0"
+        assert config.effective_celery_result_backend == "redis://results-primary:6379/0"
 
 
 @pytest.mark.unit

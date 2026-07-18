@@ -98,6 +98,10 @@ class TestDumpAllSettings:
     def test_non_secret_policy_settings_are_not_misclassified(self, name):
         assert not is_sensitive_setting(name)
 
+    @pytest.mark.parametrize("name", ["celery_broker_url", "celery_result_backend"])
+    def test_celery_connection_urls_are_sensitive(self, name):
+        assert is_sensitive_setting(name)
+
 
 @pytest.mark.unit
 class TestGetSettingsForDisplay:

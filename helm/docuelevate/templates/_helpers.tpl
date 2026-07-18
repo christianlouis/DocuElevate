@@ -92,6 +92,24 @@ then fall back to the bundled Redis service URL.
 {{- end }}
 {{- end }}
 
+{{/* Resolve an optional dedicated Celery broker URL. */}}
+{{- define "docuelevate.celeryBrokerUrl" -}}
+{{- if .Values.secrets.CELERY_BROKER_URL }}
+{{- .Values.secrets.CELERY_BROKER_URL }}
+{{- else }}
+{{- include "docuelevate.redisUrl" . }}
+{{- end }}
+{{- end }}
+
+{{/* Resolve an optional dedicated Celery result-backend URL. */}}
+{{- define "docuelevate.celeryResultBackend" -}}
+{{- if .Values.secrets.CELERY_RESULT_BACKEND }}
+{{- .Values.secrets.CELERY_RESULT_BACKEND }}
+{{- else }}
+{{- include "docuelevate.redisUrl" . }}
+{{- end }}
+{{- end }}
+
 {{/*
 Resolve GOTENBERG_URL — use env override if set, otherwise build from service name.
 */}}

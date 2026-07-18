@@ -15,7 +15,9 @@ Configuration is primarily done through environment variables specified in a `.e
 | `DB_MAX_OVERFLOW`      | Additional connections beyond `DB_POOL_SIZE` under burst load (PostgreSQL/MySQL only). | `20` |
 | `DB_POOL_TIMEOUT`      | Seconds to wait for a pool connection before raising `TimeoutError` (PostgreSQL/MySQL only). | `30` |
 | `DB_POOL_RECYCLE`      | Recycle connections after this many seconds to avoid stale connections (PostgreSQL/MySQL only). | `1800` |
-| `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
+| `REDIS_URL`            | Shared Redis URL for caching and as the default Celery route. | `redis://redis:6379/0`         |
+| `CELERY_BROKER_URL`    | Optional dedicated Celery broker URL; falls back to `REDIS_URL`. | unset |
+| `CELERY_RESULT_BACKEND` | Optional dedicated Celery result-backend URL; must resolve to a writable primary and falls back to `REDIS_URL`. | unset |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |

@@ -57,3 +57,11 @@ def test_default_worker_concurrency_fits_small_fresh_install_hosts():
     command = _compose()["services"]["worker"]["command"]
 
     assert "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}" in command
+
+
+def test_all_celery_redis_routes_are_explicit_and_writable_by_default():
+    environment = _compose()["x-docuelevate-service"]["environment"]
+
+    assert environment["REDIS_URL"] == "redis://redis:6379/0"
+    assert environment["CELERY_BROKER_URL"] == "redis://redis:6379/0"
+    assert environment["CELERY_RESULT_BACKEND"] == "redis://redis:6379/0"
