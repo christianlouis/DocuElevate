@@ -1,5 +1,8 @@
 """Tests for app/views/onboarding.py covering _get_configured_destinations() and onboarding_page() route."""
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,6 +12,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 from app.models import UserProfile
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -632,6 +637,49 @@ class TestOnboardingPage:
             assert context["legacy_destinations"] == [{"id": "s3"}]
             assert context["instance_label"] == "DocuElevate"
             assert context["tiers"] == ["free"]
+            assert context["is_complimentary"] is False
+            assert isinstance(context["ai_configured"], bool)
         finally:
             db.close()
             Base.metadata.drop_all(bind=engine)
+
+    @pytest.mark.asyncio
+    async def test_complimentary_admin_context_keeps_included_access(self):
+        """A self-hosted admin sees included access instead of a paid plan chooser."""
+        from app.views.onboarding import onboarding_page
+
+        engine = _make_engine()
+        db = _make_session(engine)
+        _make_profile(db, "admin-user", onboarding_completed=False, is_complimentary=True)
+        mock_req = _make_mock_request(session_user={"sub": "admin-user"})
+
+        try:
+            with (
+                patch("app.views.onboarding.templates") as mock_templates,
+                patch("app.views.onboarding.get_all_tiers", return_value=[]),
+                patch("app.views.onboarding._get_configured_destinations", return_value=[]),
+            ):
+                await onboarding_page(mock_req, db)
+
+            context = mock_templates.TemplateResponse.call_args[0][1]
+            assert context["is_complimentary"] is True
+        finally:
+            db.close()
+            Base.metadata.drop_all(bind=engine)
+
+
+@pytest.mark.unit
+def test_onboarding_copy_is_complete_in_english_and_german():
+    """Every onboarding translation used by the journey has en/de copy."""
+    template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
+    keys = set(re.findall(r'["\'](onboarding\.[a-z0-9_]+)["\']', template))
+    keys.discard("onboarding.tier_")  # Dynamic prefix used with the finite tier IDs below.
+    for tier_id in ("free", "starter", "professional", "business"):
+        keys.add(f"onboarding.tier_{tier_id}_name")
+        keys.add(f"onboarding.tier_{tier_id}_tagline")
+
+    assert keys, "Expected onboarding translation keys in the template"
+    for locale in ("en", "de"):
+        translations = json.loads((_REPO_ROOT / f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
+        missing = sorted(keys - translations.keys())
+        assert not missing, f"Missing {locale} onboarding translations: {missing}"

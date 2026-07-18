@@ -909,8 +909,8 @@ def _compute_step_summary(logs, pipeline_steps=None):
 
     upload_prefixes = ["upload_to_", "queue_"]
 
-    main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
-    upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
+    main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0, "skipped": 0}
+    upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0, "skipped": 0}
 
     # Track latest status for each step by comparing timestamps (order-independent)
     main_steps_seen = {}  # {step_name: (timestamp, status)}

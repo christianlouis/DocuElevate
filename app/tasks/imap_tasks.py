@@ -161,27 +161,34 @@ def pull_all_inboxes():
     try:
         logger.info("Starting pull_all_inboxes")
 
-        # Mailbox #1 (non-Gmail)
-        check_and_pull_mailbox(
-            mailbox_key="imap1",
-            host=settings.imap1_host,
-            port=settings.imap1_port,
-            username=settings.imap1_username,
-            password=settings.imap1_password,
-            use_ssl=settings.imap1_ssl,
-            delete_after_process=settings.imap1_delete_after_process,
-        )
-
-        # Mailbox #2 (Gmail)
-        check_and_pull_mailbox(
-            mailbox_key="imap2",
-            host=settings.imap2_host,
-            port=settings.imap2_port,
-            username=settings.imap2_username,
-            password=settings.imap2_password,
-            use_ssl=settings.imap2_ssl,
-            delete_after_process=settings.imap2_delete_after_process,
-        )
+        # Legacy instance-level mailboxes are optional. A completely empty
+        # slot is the normal fresh-install state and must not emit a warning on
+        # every beat interval. Partially configured slots still flow through
+        # validation so operators get an actionable warning.
+        for mailbox in (
+            {
+                "mailbox_key": "imap1",
+                "host": settings.imap1_host,
+                "port": settings.imap1_port,
+                "username": settings.imap1_username,
+                "password": settings.imap1_password,
+                "use_ssl": settings.imap1_ssl,
+                "delete_after_process": settings.imap1_delete_after_process,
+            },
+            {
+                "mailbox_key": "imap2",
+                "host": settings.imap2_host,
+                "port": settings.imap2_port,
+                "username": settings.imap2_username,
+                "password": settings.imap2_password,
+                "use_ssl": settings.imap2_ssl,
+                "delete_after_process": settings.imap2_delete_after_process,
+            },
+        ):
+            if any(mailbox[field] for field in ("host", "username", "password")):
+                check_and_pull_mailbox(**mailbox)
+            else:
+                logger.debug("Mailbox %s is not configured; skipping silently.", mailbox["mailbox_key"])
 
         # Per-user IMAP accounts from the database
         _pull_user_imap_accounts()

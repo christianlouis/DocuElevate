@@ -70,6 +70,11 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
 
     # Get step category (all settings in a step should have same category)
     step_category = current_settings[0].get("wizard_category", "Configuration") if current_settings else "Configuration"
+    step_category_key = (
+        current_settings[0].get("wizard_category_key", "setup.category_configuration")
+        if current_settings
+        else "setup.category_configuration"
+    )
 
     # Enrich settings with current live values
     from app.config import settings as app_settings
@@ -107,6 +112,7 @@ async def setup_wizard(request: Request, step: int = 1, db: Session = Depends(ge
             "max_step": max_step,
             "settings": current_settings,
             "step_category": step_category,
+            "step_category_key": step_category_key,
             "progress_percent": int((step / max_step) * 100),
             "setup_skipped": bool(get_setting_from_db(db, "_setup_wizard_skipped")),
         },

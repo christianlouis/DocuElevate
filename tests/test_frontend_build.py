@@ -15,6 +15,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 DOCKERFILE_PATH = PROJECT_ROOT / "Dockerfile"
+SETTINGS_TEMPLATE_PATH = FRONTEND_DIR / "templates" / "settings.html"
 
 
 @pytest.mark.unit
@@ -83,6 +84,17 @@ class TestFrontendBuildAssets:
         lock_path = FRONTEND_DIR / "package-lock.json"
         assert lock_path.exists(), "frontend/package-lock.json not found"
 
+    def test_settings_keyboard_handlers_avoid_duplicate_prevent_attributes(self) -> None:
+        """Alpine keyboard handlers must remain valid for the HTML accessibility linter."""
+        content = SETTINGS_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+        assert "@keydown.arrow-down.prevent=" not in content
+        assert "@keydown.arrow-up.prevent=" not in content
+        assert "@keydown.enter.prevent=" not in content
+        assert content.count('@keydown.arrow-down="$event.preventDefault(); highlightNext()"') == 2
+        assert content.count('@keydown.arrow-up="$event.preventDefault(); highlightPrev()"') == 2
+        assert content.count('@keydown.enter="$event.preventDefault(); selectHighlighted()"') == 2
+
 
 @pytest.mark.unit
 class TestDockerfileFrontendBuilder:
@@ -122,6 +134,24 @@ class TestDockerfileFrontendBuilder:
             "Use 'npm ci' instead to install all dependencies."
         )
 
+    def test_dockerfile_npm_install_is_resilient(self) -> None:
+        """Fresh Docker builds must tolerate transient npm registry failures."""
+        content = DOCKERFILE_PATH.read_text(encoding="utf-8")
+
+        stage_pattern = re.compile(
+            r"FROM\s+\S+\s+AS\s+frontend-builder\b(.*?)(?=FROM\s|\Z)",
+            re.DOTALL,
+        )
+        match = stage_pattern.search(content)
+        assert match is not None, "Could not find frontend-builder stage in Dockerfile"
+
+        stage_content = match.group(1)
+        assert "NPM_CONFIG_FETCH_RETRIES=" in stage_content
+        assert "NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=" in stage_content
+        assert "NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=" in stage_content
+        assert "NPM_CONFIG_MAXSOCKETS=" in stage_content
+        assert "npm ci --no-audit --no-fund" in stage_content
+
     def test_dockerfile_runs_npm_build(self) -> None:
         """Dockerfile frontend-builder stage must run npm run build."""
         content = DOCKERFILE_PATH.read_text(encoding="utf-8")
@@ -143,3 +173,18 @@ class TestDockerfileFrontendBuilder:
             "Dockerfile does not copy assets from the frontend-builder stage"
         )
         assert "styles.css" in content, "Dockerfile does not reference the compiled styles.css"
+
+
+@pytest.mark.unit
+class TestDockerfileSystemPackages:
+    """Validate that clean builds tolerate transient package mirror failures."""
+
+    def test_apt_indexes_are_retried_and_fail_loudly(self) -> None:
+        """Every apt index refresh must retry and reject partial index failures."""
+        content = DOCKERFILE_PATH.read_text(encoding="utf-8")
+        updates = re.findall(r"apt-get[^\n]*update[^\n]*", content)
+
+        assert len(updates) == 2, "Expected builder and runtime apt index refreshes"
+        for command in updates:
+            assert "Acquire::Retries=5" in command
+            assert "--error-on=any" in command

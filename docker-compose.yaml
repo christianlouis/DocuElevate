@@ -2,9 +2,6 @@ name: docuelevate
 
 x-docuelevate-service: &docuelevate-service
   image: ${DOCUELEVATE_IMAGE:-docuelevate:local}
-  build:
-    context: .
-    dockerfile: Dockerfile
   restart: unless-stopped
   working_dir: /workdir
   entrypoint: ["/usr/local/bin/docuelevate-compose-entrypoint"]
@@ -101,6 +98,9 @@ services:
 
   api:
     <<: *docuelevate-service
+    build:
+      context: .
+      dockerfile: Dockerfile
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
     ports:
       - "${DOCUELEVATE_PORT:-8000}:8000"
@@ -130,7 +130,7 @@ services:
 
   worker:
     <<: *docuelevate-service
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "-Q", "document_processor,default,celery"]
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}", "-Q", "document_processor,default,celery"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully

@@ -150,6 +150,10 @@
       background-color: #f56565;
       color: white;
     }
+    .count-badge.skipped {
+      background-color: #d97706;
+      color: white;
+    }
     .count-badge.in-progress {
       background-color: #4299e1;
       color: white;
@@ -1119,46 +1123,50 @@
   <div style="margin-bottom: 1.5rem; padding: 1.5rem; background-color: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 0.5rem;">
     <div style="display: flex; align-items: center; justify-content: space-between;">
       <div>
-        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">Status</div>
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">{{ _("file_processing.status") }}</div>
         <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
           {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
           {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
+          {% set any_skipped = step_summary.main.skipped > 0 or step_summary.uploads.skipped > 0 %}
           {% if file.is_duplicate %}
-            <i class="fas fa-copy" aria-hidden="true" style="color: #6b7280; margin-right: 0.5rem;"></i>Duplicate
+            <i class="fas fa-copy" aria-hidden="true" style="color: #6b7280; margin-right: 0.5rem;"></i>{{ _("file_processing.duplicate") }}
           {% elif step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
-            <i class="fas fa-times-circle" aria-hidden="true" style="color: #dc2626; margin-right: 0.5rem;"></i>Failed
+            <i class="fas fa-times-circle" aria-hidden="true" style="color: #dc2626; margin-right: 0.5rem;"></i>{{ _("file_processing.failed") }}
           {% elif step_summary.main["in_progress"] > 0 or step_summary.uploads["in_progress"] > 0 %}
-            <i class="fas fa-circle-notch" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>Processing
+            <i class="fas fa-circle-notch" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>{{ _("file_processing.processing") }}
+          {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 and any_skipped %}
+            <i class="fas fa-circle-exclamation" aria-hidden="true" style="color: #d97706; margin-right: 0.5rem;"></i>{{ _("file_processing.completed_with_limitations") }}
           {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
-            <i class="fas fa-check-circle" aria-hidden="true" style="color: #059669; margin-right: 0.5rem;"></i>Completed
+            <i class="fas fa-check-circle" aria-hidden="true" style="color: #059669; margin-right: 0.5rem;"></i>{{ _("file_processing.completed") }}
           {% else %}
-            <i class="fas fa-pause-circle" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem;"></i>Pending
+            <i class="fas fa-pause-circle" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem;"></i>{{ _("file_processing.pending") }}
           {% endif %}
         </div>
       </div>
       <div style="text-align: right;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
           <div>
-            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">Main Steps</div>
+            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">{{ _("file_processing.main_steps") }}</div>
             <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
-              {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
-              {% if main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
-                <span style="color: #059669;">✓</span> {{ main_completed }}/{{ step_summary.total_main_steps }}
+              {% if step_summary.main.success == step_summary.total_main_steps and step_summary.main.failure == 0 %}
+                <span style="color: #059669;">✓</span> {{ step_summary.main.success }}/{{ step_summary.total_main_steps }}
               {% else %}
-                {{ main_completed }}/{{ step_summary.total_main_steps }}
+                {{ step_summary.main.success }}/{{ step_summary.total_main_steps }}
               {% endif %}
             </div>
+            {% if step_summary.main.skipped > 0 %}<div style="font-size:0.75rem;color:#b45309;">{{ step_summary.main.skipped }} {{ _("file_processing.skipped") }}</div>{% endif %}
           </div>
           <div>
-            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">Uploads</div>
+            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">{{ _("file_processing.uploads") }}</div>
             <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
               {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
-              {% if uploads_completed == step_summary.total_upload_tasks and step_summary.uploads.failure == 0 and step_summary.total_upload_tasks > 0 %}
-                <span style="color: #059669;">✓</span> {{ uploads_completed }}/{{ step_summary.total_upload_tasks }}
+              {% if step_summary.uploads.success == step_summary.total_upload_tasks and step_summary.uploads.failure == 0 and step_summary.total_upload_tasks > 0 %}
+                <span style="color: #059669;">✓</span> {{ step_summary.uploads.success }}/{{ step_summary.total_upload_tasks }}
               {% else %}
-                {{ uploads_completed }}/{{ step_summary.total_upload_tasks }}
+                {{ step_summary.uploads.success }}/{{ step_summary.total_upload_tasks }}
               {% endif %}
             </div>
+            {% if step_summary.uploads.skipped > 0 %}<div style="font-size:0.75rem;color:#b45309;">{{ step_summary.uploads.skipped }} {{ _("file_processing.skipped") }}</div>{% endif %}
           </div>
         </div>
       </div>
@@ -1495,34 +1503,39 @@
   <!-- Step Summary Card -->
   {% if step_summary %}
   <div class="detail-card">
-    <h3>Processing Status Summary</h3>
+    <h3>{{ _("file_processing.status_summary") }}</h3>
     <div class="step-summary">
       <div class="summary-card main-steps">
-        <div class="summary-title">Main Processing Steps</div>
+        <div class="summary-title">{{ _("file_processing.main_processing_steps") }}</div>
         <div class="summary-counts">
-          {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
-          {% if main_completed > 0 %}
+          {% if step_summary.main.success > 0 %}
           <div class="summary-count">
-            <span class="count-badge success">{{ main_completed }}</span>
-            <span>Success</span>
+            <span class="count-badge success">{{ step_summary.main.success }}</span>
+            <span>{{ _("file_processing.success") }}</span>
+          </div>
+          {% endif %}
+          {% if step_summary.main.skipped > 0 %}
+          <div class="summary-count">
+            <span class="count-badge skipped">{{ step_summary.main.skipped }}</span>
+            <span>{{ _("file_processing.skipped") }}</span>
           </div>
           {% endif %}
           {% if step_summary.main.failure > 0 %}
           <div class="summary-count">
             <span class="count-badge failure">{{ step_summary.main.failure }}</span>
-            <span>Failed</span>
+            <span>{{ _("file_processing.failed") }}</span>
           </div>
           {% endif %}
           {% if step_summary.main.in_progress > 0 %}
           <div class="summary-count">
             <span class="count-badge in-progress">{{ step_summary.main.in_progress }}</span>
-            <span>In Progress</span>
+            <span>{{ _("file_processing.in_progress") }}</span>
           </div>
           {% endif %}
           {% if step_summary.main.queued > 0 %}
           <div class="summary-count">
             <span class="count-badge queued">{{ step_summary.main.queued }}</span>
-            <span>Queued</span>
+            <span>{{ _("file_processing.queued") }}</span>
           </div>
           {% endif %}
         </div>
@@ -1530,31 +1543,36 @@
 
       {% if step_summary.total_upload_tasks > 0 %}
       <div class="summary-card upload-steps">
-        <div class="summary-title">Upload Destinations</div>
+        <div class="summary-title">{{ _("file_processing.upload_destinations") }}</div>
         <div class="summary-counts">
-          {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
-          {% if uploads_completed > 0 %}
+          {% if step_summary.uploads.success > 0 %}
           <div class="summary-count">
-            <span class="count-badge success">{{ uploads_completed }}</span>
-            <span>Success</span>
+            <span class="count-badge success">{{ step_summary.uploads.success }}</span>
+            <span>{{ _("file_processing.success") }}</span>
+          </div>
+          {% endif %}
+          {% if step_summary.uploads.skipped > 0 %}
+          <div class="summary-count">
+            <span class="count-badge skipped">{{ step_summary.uploads.skipped }}</span>
+            <span>{{ _("file_processing.skipped") }}</span>
           </div>
           {% endif %}
           {% if step_summary.uploads.failure > 0 %}
           <div class="summary-count">
             <span class="count-badge failure">{{ step_summary.uploads.failure }}</span>
-            <span>Failed</span>
+            <span>{{ _("file_processing.failed") }}</span>
           </div>
           {% endif %}
           {% if step_summary.uploads.in_progress > 0 %}
           <div class="summary-count">
             <span class="count-badge in-progress">{{ step_summary.uploads.in_progress }}</span>
-            <span>In Progress</span>
+            <span>{{ _("file_processing.in_progress") }}</span>
           </div>
           {% endif %}
           {% if step_summary.uploads.queued > 0 %}
           <div class="summary-count">
             <span class="count-badge queued">{{ step_summary.uploads.queued }}</span>
-            <span>Queued</span>
+            <span>{{ _("file_processing.queued") }}</span>
           </div>
           {% endif %}
         </div>
