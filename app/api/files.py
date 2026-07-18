@@ -534,6 +534,11 @@ def set_file_privacy(request: Request, file_id: int, body: FilePrivacyRequest, d
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the file owner can change privacy",
         )
+    if not settings.multi_user_enabled and file_record.owner_id is None and body.is_private:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assign an owner before marking this document private",
+        )
 
     revoked_links = apply_privacy_decision(
         db,

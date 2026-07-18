@@ -168,7 +168,7 @@ def test_manual_owner_choice_wins_until_returned_to_automatic(client, db_session
 
 
 @pytest.mark.unit
-def test_ownerless_legacy_file_uses_single_user_privacy_scope(client, db_session):
+def test_ownerless_legacy_file_cannot_receive_manual_private_override(client, db_session):
     record = _file(db_session, owner="legacy", name="legacy.pdf")
     record.owner_id = None
     db_session.commit()
@@ -180,11 +180,29 @@ def test_ownerless_legacy_file_uses_single_user_privacy_scope(client, db_session
     ):
         response = client.put(f"/api/files/{record.id}/privacy", json={"is_private": True})
 
+    assert response.status_code == 409
+    db_session.refresh(record)
+    assert record.is_private is False
+    assert db_session.query(PrivacyDecisionAudit).filter_by(file_id=record.id).count() == 0
+
+
+@pytest.mark.unit
+def test_ownerless_private_legacy_file_can_be_made_public(client, db_session):
+    record = _file(db_session, owner="legacy", name="legacy-private.pdf")
+    record.owner_id = None
+    record.is_private = True
+    db_session.commit()
+
+    with (
+        patch("app.api.files.get_current_owner_id", return_value=None),
+        patch("app.utils.user_scope.settings.multi_user_enabled", False),
+        patch("app.api.files.queue_privacy_reconciliation"),
+    ):
+        response = client.put(f"/api/files/{record.id}/privacy", json={"is_private": False})
+
     assert response.status_code == 200
     db_session.refresh(record)
-    assert record.is_private is True
-    audit = db_session.query(PrivacyDecisionAudit).filter_by(file_id=record.id).one()
-    assert audit.owner_id == "__single_user__"
+    assert record.is_private is False
 
 
 @pytest.mark.unit
