@@ -128,6 +128,22 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "deployment_label": {
+        "category": "Core",
+        "description": "Optional deployment suffix shown during onboarding, such as Preprod or Canary",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "default_storage_path": {
+        "category": "Core",
+        "description": "Default folder suggested for new source and destination integrations",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "debug": {
         "category": "Core",
         "description": "Enable debug mode for verbose logging",

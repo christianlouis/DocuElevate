@@ -525,3 +525,90 @@ class TestFileStatusMissingCoverage:
 
         # Terminal step succeeded → file should be completed despite pending dedup step
         assert result[file_record.id]["status"] == "completed"
+
+    def test_user_destination_terminal_marks_file_completed(self, db_session):
+        """A successful personal destination is a real terminal distribution step."""
+        from datetime import datetime
+
+        from app.models import FileProcessingStep
+        from app.utils.file_status import get_files_processing_status
+
+        file_record = FileRecord(
+            filehash="user-destination-success",
+            original_filename="owned.pdf",
+            local_filename="/tmp/owned.pdf",
+            file_size=100,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        now = datetime.now()
+        db_session.add_all(
+            [
+                FileProcessingStep(
+                    file_id=file_record.id,
+                    step_name="send_to_all_destinations",
+                    status="pending",
+                    created_at=now,
+                    updated_at=now,
+                ),
+                FileProcessingStep(
+                    file_id=file_record.id,
+                    step_name="send_to_user_destinations",
+                    status="success",
+                    created_at=now,
+                    updated_at=now,
+                ),
+                FileProcessingStep(
+                    file_id=file_record.id,
+                    step_name="upload_to_user_integration_3",
+                    status="success",
+                    created_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        result = get_files_processing_status(db_session, [file_record.id])
+
+        assert result[file_record.id]["status"] == "completed"
+
+    def test_user_destination_failure_marks_file_failed(self, db_session):
+        """A failed personal destination must not leave the file looking pending."""
+        from datetime import datetime
+
+        from app.models import FileProcessingStep
+        from app.utils.file_status import get_files_processing_status
+
+        file_record = FileRecord(
+            filehash="user-destination-failure",
+            original_filename="owned-failed.pdf",
+            local_filename="/tmp/owned-failed.pdf",
+            file_size=100,
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        now = datetime.now()
+        db_session.add_all(
+            [
+                FileProcessingStep(
+                    file_id=file_record.id,
+                    step_name="send_to_user_destinations",
+                    status="success",
+                    created_at=now,
+                    updated_at=now,
+                ),
+                FileProcessingStep(
+                    file_id=file_record.id,
+                    step_name="upload_to_user_integration_3",
+                    status="failure",
+                    created_at=now,
+                    updated_at=now,
+                ),
+            ]
+        )
+        db_session.commit()
+
+        result = get_files_processing_status(db_session, [file_record.id])
+
+        assert result[file_record.id]["status"] == "failed"

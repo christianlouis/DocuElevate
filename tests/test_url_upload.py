@@ -2,10 +2,28 @@
 Tests for URL-based file upload functionality
 """
 
+import socket
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def resolve_example_com_without_external_dns(monkeypatch):
+    """Keep URL-upload tests deterministic without weakening SSRF checks."""
+    real_getaddrinfo = socket.getaddrinfo
+
+    def deterministic_getaddrinfo(host, port, *args, **kwargs):
+        public_test_ips = {
+            "example.com": "93.184.216.34",
+            "google.com": "142.250.74.14",
+        }
+        if host in public_test_ips:
+            return [(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (public_test_ips[host], port or 0))]
+        return real_getaddrinfo(host, port, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", deterministic_getaddrinfo)
 
 
 @pytest.mark.unit
@@ -232,6 +250,56 @@ class TestURLUploadEndpoint:
         assert data["status"] == "queued"
         assert "filename" in data
         assert "size" in data
+
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_forwards_authenticated_owner_in_multi_user_mode(
+        self, mock_process_document, mock_stream, client
+    ):
+        """A browser URL upload must remain owned throughout the worker hand-off."""
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/pdf", "Content-Length": "11"}
+
+        async def mock_aiter_bytes(chunk_size=None):
+            yield b"PDF content"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
+        mock_response.raise_for_status = Mock()
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = mock_response
+        mock_stream.return_value = mock_context
+
+        mock_task = Mock()
+        mock_task.id = "owned-task"
+        mock_process_document.delay.return_value = mock_task
+
+        with (
+            patch("app.utils.user_scope.settings.multi_user_enabled", True),
+            patch("app.utils.user_scope.get_current_owner_id", return_value="julia@example.invalid"),
+            patch("app.api.url_upload.validate_url_safety"),
+        ):
+            response = client.post("/api/process-url", json={"url": "https://example.com/julia.pdf"})
+
+        assert response.status_code == 200
+        mock_process_document.delay.assert_called_once()
+        assert mock_process_document.delay.call_args.kwargs["owner_id"] == "julia@example.invalid"
+
+    @patch("app.api.url_upload.httpx.AsyncClient.stream")
+    @patch("app.api.url_upload.process_document")
+    def test_process_url_fails_closed_without_owner_in_multi_user_mode(
+        self, mock_process_document, mock_stream, client
+    ):
+        """Never download or queue a document that cannot be assigned to its user."""
+        with (
+            patch("app.utils.user_scope.settings.multi_user_enabled", True),
+            patch("app.utils.user_scope.get_current_owner_id", return_value=None),
+        ):
+            response = client.post("/api/process-url", json={"url": "https://example.com/unowned.pdf"})
+
+        assert response.status_code == 401
+        mock_stream.assert_not_called()
+        mock_process_document.delay.assert_not_called()
 
     @patch("app.api.url_upload.httpx.AsyncClient.stream")
     def test_process_url_blocks_private_ip(self, mock_stream, client):

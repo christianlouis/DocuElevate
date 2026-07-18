@@ -22,10 +22,18 @@ Configuration is primarily done through environment variables specified in a `.e
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
+| `DEPLOYMENT_LABEL`     | Optional label shown during onboarding so users can distinguish installations. | *(empty)* |
+| `DEFAULT_STORAGE_PATH` | Default folder suggested for newly configured sources and destinations. Give non-production deployments a clearly separated path. | `/DocuElevate` |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 | `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
 | `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
 | `ENABLE_FACTORY_RESET` | Show the System Reset page in the admin UI.         | `false` |
+
+For example, a disposable preproduction Canary should use
+`DEPLOYMENT_LABEL="Preprod Canary"` and
+`DEFAULT_STORAGE_PATH="/DocuElevate Preprod Canary"`. These are deployment
+settings, not image build parameters, so the same image can be promoted safely
+without inheriting another environment's folders.
 
 ### DearConcierge knowledge bridge (preproduction pilot)
 

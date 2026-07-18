@@ -531,6 +531,9 @@ async def login(request: Request):
     current_locale = detect_language(request)
     error = request.query_params.get("error")
     message = request.query_params.get("message")
+    message_key = request.query_params.get("message_key")
+    if message_key in {"auth.account_created_success"}:
+        message = _translate(message_key, current_locale)
     if message == "You have been logged out successfully":
         message = _translate("auth.logout_success", current_locale)
     show_oauth = OAUTH_CONFIGURED

@@ -9,7 +9,7 @@ documents are visible to all users (single-user / shared mode).
 
 import logging
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Query, Session
 from sqlalchemy.sql import false
@@ -94,6 +94,26 @@ def get_current_owner_id(request: Request) -> str | None:
             logger.debug("Bearer token resolution failed in get_current_owner_id", exc_info=True)
 
     return None
+
+
+def get_document_upload_owner_id(request: Request) -> str | None:
+    """Return the owner that must be attached to a user-initiated upload.
+
+    Single-user installations intentionally keep the historic ``NULL`` owner.
+    In multi-user mode an upload without a stable authenticated owner would
+    create an inaccessible, cross-tenant quarantine record.  Reject that state
+    before any bytes are written or background work is queued.
+    """
+    if not settings.multi_user_enabled:
+        return None
+
+    owner_id = get_current_owner_id(request)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A stable authenticated user is required to upload documents",
+        )
+    return owner_id
 
 
 def apply_owner_filter(query: Query, request: Request) -> Query:

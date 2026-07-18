@@ -27,6 +27,8 @@ x-docuelevate-service: &docuelevate-service
     UNOWNED_DOCS_VISIBLE_TO_ALL: "false"
     EXTERNAL_HOSTNAME: localhost:${DOCUELEVATE_PORT:-8000}
     PUBLIC_BASE_URL: http://localhost:${DOCUELEVATE_PORT:-8000}
+    DEPLOYMENT_LABEL: ${DOCUELEVATE_DEPLOYMENT_LABEL:-}
+    DEFAULT_STORAGE_PATH: ${DOCUELEVATE_DEFAULT_STORAGE_PATH:-/DocuElevate}
   volumes:
     - ${DOCUELEVATE_WORKDIR:-workdir-data}:/workdir
     - bootstrap-secrets:/run/docuelevate-bootstrap:ro

@@ -19,16 +19,25 @@
         {{ _("integrations.subtitle") }}
       </p>
     </div>
-    <button
-      type="button"
-      @click="openCreateModal()"
-      :disabled="!canAddAny"
-      class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-      style="min-height:44px;"
-      :aria-disabled="!canAddAny"
-    >
-      <i class="fas fa-plus mr-2" aria-hidden="true"></i> {{ _("integrations.add_button") }}
-    </button>
+    <div class="flex flex-wrap gap-2">
+      {% if onboarding_mode %}
+      <a href="/onboarding"
+         class="inline-flex items-center px-4 py-2 border border-indigo-300 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+         style="min-height:44px;">
+        <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("integrations.back_to_onboarding") }}
+      </a>
+      {% endif %}
+      <button
+        type="button"
+        @click="openCreateModal()"
+        :disabled="!canAddAny"
+        class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        style="min-height:44px;"
+        :aria-disabled="!canAddAny"
+      >
+        <i class="fas fa-plus mr-2" aria-hidden="true"></i> {{ _("integrations.add_button") }}
+      </button>
+    </div>
   </div>
 
   <!-- ── Quota indicators ─────────────────────────────────────────────────── -->
@@ -203,7 +212,7 @@
                     ></span>
                   </p>
                   <template x-if="intg.last_error">
-                    <p class="mt-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-words" x-text="intg.last_error"></p>
+                    <p class="mt-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-words" x-text="displayIntegrationError(intg)"></p>
                   </template>
                   <template x-if="sourceDeletionEnabled(intg)">
                     <div class="mt-2 flex items-center gap-2 rounded-md border-2 border-red-700 bg-red-100 px-3 py-2 text-sm font-extrabold uppercase tracking-wide text-red-900" role="alert">
@@ -228,7 +237,7 @@
                       ? 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
                       : 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500'"
                     style="min-height:36px;"
-                    :aria-label="`${intg.has_credentials ? 'Re-authorize' : 'Authorize'} ${intg.name}`"
+                    :aria-label="`${intg.has_credentials ? integrationI18n.reauthorize : integrationI18n.authorize} ${intg.name}`"
                   >
                     <i class="fas fa-key mr-1" aria-hidden="true"></i>
                     <span x-text="intg.has_credentials ? '{{ _('integrations.authorize_reauth') }}' : '{{ _('integrations.authorize_btn') }}'"></span>
@@ -240,7 +249,7 @@
                   :disabled="testingId === intg.id"
                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   style="min-height:36px;"
-                  :aria-label="`Test connection for ${intg.name}`"
+                  :aria-label="`${integrationI18n.testConnection} ${intg.name}`"
                 >
                   <template x-if="testingId === intg.id">
                     <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
@@ -255,7 +264,7 @@
                   @click="openEditModal(intg)"
                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   style="min-height:36px;"
-                  :aria-label="`Edit ${intg.name}`"
+                  :aria-label="`${integrationI18n.edit} ${intg.name}`"
                 >
                   <i class="fas fa-edit mr-1" aria-hidden="true"></i>{{ _("common.edit") }}
                 </button>
@@ -264,7 +273,7 @@
                   @click="confirmDelete(intg)"
                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                   style="min-height:36px;"
-                  :aria-label="`Delete ${intg.name}`"
+                  :aria-label="`${integrationI18n.delete} ${intg.name}`"
                 >
                   <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>{{ _("common.delete") }}
                 </button>
@@ -301,7 +310,7 @@
                     ></span>
                   </p>
                   <template x-if="intg.last_error">
-                    <p class="mt-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-words" x-text="intg.last_error"></p>
+                    <p class="mt-1.5 text-xs text-red-600 bg-red-50 rounded px-2 py-1 break-words" x-text="displayIntegrationError(intg)"></p>
                   </template>
                 </div>
               </div>
@@ -314,7 +323,7 @@
                       ? 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
                       : 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-yellow-400 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500'"
                     style="min-height:36px;"
-                    :aria-label="`${intg.has_credentials ? 'Re-authorize' : 'Authorize'} ${intg.name}`"
+                    :aria-label="`${intg.has_credentials ? integrationI18n.reauthorize : integrationI18n.authorize} ${intg.name}`"
                   >
                     <i class="fas fa-key mr-1" aria-hidden="true"></i>
                     <span x-text="intg.has_credentials ? '{{ _('integrations.authorize_reauth') }}' : '{{ _('integrations.authorize_btn') }}'"></span>
@@ -326,7 +335,7 @@
                   :disabled="testingId === intg.id"
                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                   style="min-height:36px;"
-                  :aria-label="`Test connection for ${intg.name}`"
+                  :aria-label="`${integrationI18n.testConnection} ${intg.name}`"
                 >
                   <template x-if="testingId === intg.id">
                     <i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i>
@@ -341,7 +350,7 @@
                   @click="openEditModal(intg)"
                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   style="min-height:36px;"
-                  :aria-label="`Edit ${intg.name}`"
+                  :aria-label="`${integrationI18n.edit} ${intg.name}`"
                 >
                   <i class="fas fa-edit mr-1" aria-hidden="true"></i>{{ _("common.edit") }}
                 </button>
@@ -350,7 +359,7 @@
                   @click="confirmDelete(intg)"
                   class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500"
                   style="min-height:36px;"
-                  :aria-label="`Delete ${intg.name}`"
+                  :aria-label="`${integrationI18n.delete} ${intg.name}`"
                 >
                   <i class="fas fa-trash-alt mr-1" aria-hidden="true"></i>{{ _("common.delete") }}
                 </button>
@@ -622,10 +631,10 @@
         <!-- Vector database (operator-managed Qdrant) -->
         <template x-if="form.integration_type === 'VECTOR_DATABASE'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
-            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Vector Database</p>
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.vector_database_settings") }}</p>
             <div class="bg-blue-50 dark:bg-blue-900/30 rounded-md p-3 text-sm text-blue-700 dark:text-blue-300">
               <i class="fas fa-database mr-1" aria-hidden="true"></i>
-              Documents are chunked and indexed in the operator-managed Qdrant collection. No user credentials are required.
+              {{ _("integrations.vector_database_hint") }}
             </div>
           </div>
         </template>
@@ -1024,7 +1033,7 @@ print(response.json())</code></pre>
             </button>
             <button
               type="submit"
-              :disabled="saving || !form.direction || !form.integration_type || !form.name"
+              :disabled="saving || !form.direction || !form.integration_type || !form.name || (form.integration_type === 'VECTOR_DATABASE' && (!testResult || !testResult.success))"
               class="inline-flex items-center px-4 py-2 text-sm font-medium rounded bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
               style="min-height:40px;"
             >
@@ -1087,8 +1096,28 @@ print(response.json())</code></pre>
 </div>
 
 <script>
+const integrationI18n = {
+  authorize: {{ _("integrations.authorize_btn") | tojson }},
+  reauthorize: {{ _("integrations.authorize_reauth") | tojson }},
+  testConnection: {{ _("integrations.test_connection_aria") | tojson }},
+  edit: {{ _("common.edit") | tojson }},
+  delete: {{ _("common.delete") | tojson }},
+  saved: {{ _("integrations.saved_title") | tojson }},
+  added: {{ _("integrations.added_success") | tojson }},
+  updated: {{ _("integrations.updated_success") | tojson }},
+  vectorReady: {{ _("integrations.vector_database_ready") | tojson }},
+  vectorEmbeddingMissing: {{ _("integrations.vector_embedding_not_configured") | tojson }},
+  vectorEmbeddingFailed: {{ _("integrations.vector_embedding_check_failed") | tojson }},
+  vectorIndexingFailed: {{ _("integrations.vector_indexing_failed") | tojson }},
+  connectionOk: {{ _("integrations.connection_ok") | tojson }},
+  connectionFailed: {{ _("integrations.connection_failed") | tojson }},
+  testFailed: {{ _("integrations.test_failed") | tojson }},
+  networkError: {{ _("integrations.network_error") | tojson }}
+};
+
 function integrationsDashboard() {
-  const PREPROD_PATH = {{ ('/DocuElevate Preprod' if is_preprod else '/DocuElevate') | tojson }};
+  const DEFAULT_STORAGE_PATH = {{ default_storage_path | tojson }};
+  const ONBOARDING_MODE = {{ onboarding_mode | tojson }};
   const DEFAULT_BACKFILL_TOKEN_BUDGET = {{ default_backfill_token_budget | tojson }};
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
   const DEST_TYPES = ['VECTOR_DATABASE', 'S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
@@ -1270,6 +1299,13 @@ function integrationsDashboard() {
       catch (e) { return iso; }
     },
 
+    displayIntegrationError(intg) {
+      if (intg.integration_type === 'VECTOR_DATABASE') {
+        return integrationI18n.vectorIndexingFailed;
+      }
+      return intg.last_error;
+    },
+
     onDirectionChange() {
       this.form.integration_type = '';
       this.form.config = {};
@@ -1286,22 +1322,22 @@ function integrationsDashboard() {
         this.form.config = { host: '', port: 993, username: '', use_ssl: true, delete_after_process: false, gmail_apply_labels: true };
         this.form.credentials = { password: '' };
       } else if (this.form.integration_type === 'S3') {
-        this.form.config = { bucket: '', region: 'us-east-1', folder_prefix: PREPROD_PATH.replace(/^\//, '') + '/', endpoint_url: '' };
+        this.form.config = { bucket: '', region: 'us-east-1', folder_prefix: DEFAULT_STORAGE_PATH.replace(/^\//, '') + '/', endpoint_url: '' };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
       } else if (this.form.integration_type === 'WEBDAV' || this.form.integration_type === 'NEXTCLOUD') {
-        this.form.config = { url: '', folder: PREPROD_PATH };
+        this.form.config = { url: '', folder: DEFAULT_STORAGE_PATH };
         this.form.credentials = { username: '', password: '' };
       } else if (this.form.integration_type === 'FTP' || this.form.integration_type === 'SFTP') {
-        this.form.config = { host: '', port: this.form.integration_type === 'SFTP' ? 22 : 21, folder: PREPROD_PATH };
+        this.form.config = { host: '', port: this.form.integration_type === 'SFTP' ? 22 : 21, folder: DEFAULT_STORAGE_PATH };
         this.form.credentials = { username: '', password: '' };
       } else if (this.form.integration_type === 'DROPBOX' || this.form.integration_type === 'GOOGLE_DRIVE' || this.form.integration_type === 'ONEDRIVE') {
-        this.form.config = { folder: PREPROD_PATH };
+        this.form.config = { folder: DEFAULT_STORAGE_PATH };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'EMAIL') {
         this.form.config = { recipient: '' };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'WATCH_FOLDER') {
-        this.form.config = { source_type: 'local', folder_path: PREPROD_PATH, preserve_source_files: true, delete_after_process: false };
+        this.form.config = { source_type: 'local', folder_path: DEFAULT_STORAGE_PATH, preserve_source_files: true, delete_after_process: false };
         this.form.credentials = {};
       } else if (this.form.integration_type === 'PAPERLESS') {
         this.form.config = { url: '' };
@@ -1318,7 +1354,7 @@ function integrationsDashboard() {
       const preserve = this.form.config.preserve_source_files !== false;
       this.form.credentials = {};
       if (st === 'local') {
-        this.form.config = { source_type: st, folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: DEFAULT_STORAGE_PATH, preserve_source_files: preserve, delete_after_process: dap };
       } else if (st === 's3') {
         this.form.config = { source_type: st, bucket: '', region: 'us-east-1', prefix: '', endpoint_url: '', preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { access_key_id: '', secret_access_key: '' };
@@ -1339,13 +1375,13 @@ function integrationsDashboard() {
         this.form.config = { source_type: st, folder_id: '', preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { credentials_json: '' };
       } else if (st === 'onedrive') {
-        this.form.config = { source_type: st, folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
+        this.form.config = { source_type: st, folder_path: DEFAULT_STORAGE_PATH, preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { refresh_token: '', client_id: '', client_secret: '' };
       } else if (st === 'nextcloud') {
-        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
+        this.form.config = { source_type: st, url: '', folder_path: DEFAULT_STORAGE_PATH, preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
       } else if (st === 'webdav') {
-        this.form.config = { source_type: st, url: '', folder_path: PREPROD_PATH, preserve_source_files: preserve, delete_after_process: dap };
+        this.form.config = { source_type: st, url: '', folder_path: DEFAULT_STORAGE_PATH, preserve_source_files: preserve, delete_after_process: dap };
         this.form.credentials = { username: '', password: '' };
       }
     },
@@ -1462,7 +1498,11 @@ function integrationsDashboard() {
         }
         const wasEditing = Boolean(this.editingIntegration);
         this.closeModal();
-        this.showAlert('success', 'Saved', wasEditing ? 'Integration updated.' : 'Integration added successfully.');
+        if (ONBOARDING_MODE && !wasEditing) {
+          window.location.href = '/onboarding';
+          return;
+        }
+        this.showAlert('success', integrationI18n.saved, wasEditing ? integrationI18n.updated : integrationI18n.added);
       } catch (err) {
         this.formError = `Network error: ${err.message || 'Unknown error'}. Please try again.`;
       } finally {
@@ -1485,6 +1525,13 @@ function integrationsDashboard() {
           body: JSON.stringify(payload),
         });
         this.testResult = await resp.json();
+        if (this.form.integration_type === 'VECTOR_DATABASE' && this.testResult.success) {
+          this.testResult.message = integrationI18n.vectorReady;
+        } else if (this.testResult.code === 'embedding_provider_not_configured') {
+          this.testResult.message = integrationI18n.vectorEmbeddingMissing;
+        } else if (this.testResult.code === 'embedding_provider_check_failed') {
+          this.testResult.message = integrationI18n.vectorEmbeddingFailed;
+        }
       } catch (err) {
         this.testResult = { success: false, message: `Network error: ${err.message || 'Unknown error'}` };
       } finally {
@@ -1502,12 +1549,16 @@ function integrationsDashboard() {
         });
         const data = await resp.json();
         if (data.success) {
-          this.showAlert('success', `${intg.name}: Connection OK`, data.message);
+          const message = intg.integration_type === 'VECTOR_DATABASE' ? integrationI18n.vectorReady : data.message;
+          this.showAlert('success', `${intg.name}: ${integrationI18n.connectionOk}`, message);
         } else {
-          this.showAlert('error', `${intg.name}: Connection Failed`, data.message);
+          const message = data.code === 'embedding_provider_not_configured'
+            ? integrationI18n.vectorEmbeddingMissing
+            : (data.code === 'embedding_provider_check_failed' ? integrationI18n.vectorEmbeddingFailed : data.message);
+          this.showAlert('error', `${intg.name}: ${integrationI18n.connectionFailed}`, message);
         }
       } catch (err) {
-        this.showAlert('error', 'Test Failed', `Network error: ${err.message || 'Unknown error'}`);
+        this.showAlert('error', integrationI18n.testFailed, `${integrationI18n.networkError}: ${err.message || 'Unknown error'}`);
       } finally {
         this.testingId = null;
       }

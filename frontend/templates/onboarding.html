@@ -162,7 +162,7 @@
               <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
             <button @click="goNext()"
-                    :disabled="loading"
+                    :disabled="loading{% if configured_destinations %} || !selectedDestination{% endif %}"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
               <span x-show="!loading">{{ _("onboarding.continue") }} <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
               <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("onboarding.saving") }}</span>
@@ -221,7 +221,11 @@
                     :class="selectedTier === '{{ tier.id }}' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white'"
                     :aria-pressed="(selectedTier === '{{ tier.id }}').toString()">
               <div class="flex items-center justify-between mb-1">
-                <span class="font-bold text-gray-800">{{ _("onboarding.tier_" ~ tier.id ~ "_name") }}</span>
+                <span class="font-bold text-gray-800">
+                  {% if tier.localize_name %}{{ _("onboarding.tier_" ~ tier.id ~ "_name") }}
+                  {% else %}{{ tier.name }}
+                  {% endif %}
+                </span>
                 <span class="text-lg font-extrabold text-indigo-600">
                   {% if tier.price_monthly == 0 %}
                     {{ _("onboarding.free") }}
@@ -235,7 +239,11 @@
                   {% endif %}
                 </span>
               </div>
-              <p class="text-gray-500 text-xs">{{ _("onboarding.tier_" ~ tier.id ~ "_tagline") }}</p>
+              <p class="text-gray-500 text-xs">
+                {% if tier.localize_tagline %}{{ _("onboarding.tier_" ~ tier.id ~ "_tagline") }}
+                {% else %}{{ tier.tagline }}
+                {% endif %}
+              </p>
               {% if tier.id != "free" and tier.get("trial_days") %}
               <span class="inline-block mt-1.5 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
                 {{ tier.trial_days }} {{ _("onboarding.day_trial") }}
@@ -349,11 +357,7 @@
           </div>
           <p class="text-gray-400 text-xs mb-4">
             {{ _("onboarding.storage_provider_missing") }}
-            {% if user.is_admin %}
             <a href="/integrations?onboarding=destination" class="text-indigo-500 hover:underline">{{ _("onboarding.add_integration") }}</a> {{ _("onboarding.add_integration_suffix") }}
-            {% else %}
-            {{ _("onboarding.ask_admin_storage") }}
-            {% endif %}
           </p>
           {% else %}
           <div class="text-center py-8">
@@ -364,14 +368,10 @@
             <p class="text-gray-500 text-sm mb-4">
               {{ _("onboarding.no_storage_description") }}
             </p>
-            {% if user.is_admin %}
             <a href="/integrations?onboarding=destination"
                class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-semibold min-h-[44px]">
               <i class="fas fa-cog" aria-hidden="true"></i> {{ _("onboarding.configure_storage") }}
             </a>
-            {% else %}
-            <p class="text-gray-400 text-xs">{{ _("onboarding.contact_admin_storage") }}</p>
-            {% endif %}
           </div>
           {% endif %}
 
@@ -466,7 +466,7 @@
                    :class="selectedDestination ? 'fa-check text-green-600' : 'fa-minus text-gray-400'"
                    aria-hidden="true"></i>
               </div>
-              <span x-show="selectedDestination">{{ _("onboarding.storage_selected") }} <strong x-text="selectedDestination"></strong></span>
+              <span x-show="selectedDestination">{{ _("onboarding.storage_selected") }} <strong x-text="selectedDestinationLabel"></strong></span>
               <span x-show="!selectedDestination" class="text-gray-400">{{ _("onboarding.storage_not_selected") }}</span>
             </li>
           </ul>
@@ -504,10 +504,9 @@ const onboardingI18n = {
   completionFailed: {{ _("onboarding.error_completion") | tojson }},
   networkError: {{ _("onboarding.error_network") | tojson }},
   tierLabels: {
-    free: {{ _("onboarding.tier_free_name") | tojson }},
-    starter: {{ _("onboarding.tier_starter_name") | tojson }},
-    professional: {{ _("onboarding.tier_professional_name") | tojson }},
-    business: {{ _("onboarding.tier_business_name") | tojson }}
+    {% for tier in tiers %}
+    {{ tier.id | tojson }}: {% if tier.localize_name %}{{ _("onboarding.tier_" ~ tier.id ~ "_name") | tojson }}{% else %}{{ tier.name | tojson }}{% endif %}{% if not loop.last %},{% endif %}
+    {% endfor %}
   },
   stepLabels: [
     {{ _("onboarding.step_welcome") | tojson }},
@@ -538,12 +537,18 @@ function onboardingWizard() {
     selectedTier: 'free',
     billingCycle: 'monthly',
     annual: false,
-    selectedDestination: '',
+    configuredDestinationIds: {{ configured_destination_ids | tojson }},
+    configuredDestinationLabels: {{ configured_destination_labels | tojson }},
+    selectedDestination: {{ (configured_destination_ids[0] if configured_destination_ids | length == 1 else '') | tojson }},
     integrationCounts: { sources: 0, destinations: 0 },
     complimentary: {{ is_complimentary | tojson }},
 
     get progressPercent() {
       return ((this.step - 1) / (this.totalSteps - 1)) * 100;
+    },
+
+    get selectedDestinationLabel() {
+      return this.configuredDestinationLabels[this.selectedDestination] || this.selectedDestination;
     },
 
     stepLabels: onboardingI18n.stepLabels,
@@ -581,6 +586,9 @@ function onboardingWizard() {
             }
           }
           if (data.integrations) this.integrationCounts = data.integrations;
+          if (!this.selectedDestination && this.configuredDestinationIds.length === 1) {
+            this.selectedDestination = this.configuredDestinationIds[0];
+          }
           if (data.step) this.step = Math.max(1, Math.min(this.totalSteps, data.step));
         }
       } catch (_) {

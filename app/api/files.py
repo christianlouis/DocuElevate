@@ -34,7 +34,12 @@ from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
 from app.utils.privacy_rules import SINGLE_USER_PRIVACY_OWNER, match_rule_to_file
-from app.utils.user_scope import apply_owner_filter, get_current_owner_id, get_file_role
+from app.utils.user_scope import (
+    apply_owner_filter,
+    get_current_owner_id,
+    get_document_upload_owner_id,
+    get_file_role,
+)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -1850,7 +1855,7 @@ async def ui_upload(
     target_path = os.path.join(workdir, target_filename)
 
     # Determine the owner_id for multi-user document isolation
-    upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
+    upload_owner_id = get_document_upload_owner_id(request)
 
     # Enforce subscription tier upload quotas (multi-user mode only) BEFORE writing the file
     # so that users who have exceeded their quota do not waste bandwidth or disk I/O.

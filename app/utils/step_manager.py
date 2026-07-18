@@ -249,7 +249,9 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     steps = [
         s
         for s in all_steps
-        if s.step_name in REAL_MAIN_STEPS or s.step_name.startswith("queue_") or s.step_name.startswith("upload_to_")
+        if normalize_stage_name(s.step_name) in REAL_MAIN_STEPS
+        or s.step_name.startswith("queue_")
+        or s.step_name.startswith("upload_to_")
     ]
 
     if not steps:
@@ -279,7 +281,11 @@ def get_file_overall_status(db: Session, file_id: int) -> Dict:
     # this, we use the terminal step as the authoritative signal that the
     # pipeline finished successfully, rather than requiring every single
     # intermediate step to be explicitly marked as success/skipped.
-    terminal_step_obj = next((s for s in steps if s.step_name == TERMINAL_STEP), None)
+    terminal_steps = [s for s in steps if normalize_stage_name(s.step_name) == TERMINAL_STEP]
+    terminal_step_obj = next(
+        (s for s in terminal_steps if s.status == "success"),
+        terminal_steps[0] if terminal_steps else None,
+    )
 
     if has_errors:
         status = "failed"

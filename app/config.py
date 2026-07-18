@@ -264,6 +264,20 @@ class Settings(BaseSettings):
             "not forward X-Forwarded-Proto headers correctly."
         ),
     )
+    deployment_label: str = Field(
+        default="",
+        description=(
+            "Optional human-readable deployment suffix, for example 'Preprod' or 'Canary'. "
+            "It is displayed during onboarding so users can distinguish installations."
+        ),
+    )
+    default_storage_path: str = Field(
+        default="/DocuElevate",
+        description=(
+            "Default folder suggested for newly configured source and destination integrations. "
+            "Set this per deployment, for example to '/DocuElevate Preprod'."
+        ),
+    )
 
     # ---------------------------------------------------------------------------
     # Document Translation Settings

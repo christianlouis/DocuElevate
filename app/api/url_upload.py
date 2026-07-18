@@ -21,6 +21,7 @@ from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_MIME_TYPES
 from app.utils.filename_utils import sanitize_filename
 from app.utils.network import is_private_ip
+from app.utils.user_scope import get_document_upload_owner_id
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -156,6 +157,7 @@ async def process_url(
     Raises:
         HTTPException: If URL is invalid, unsafe, or file cannot be processed
     """
+    upload_owner_id = get_document_upload_owner_id(request)
     url = str(url_request.url)
 
     # Validate URL safety (SSRF protection)
@@ -254,7 +256,11 @@ async def process_url(
         logger.info(f"Downloaded file from URL '{url}' as '{target_filename}' ({downloaded_size} bytes)")
 
         # Enqueue for processing
-        task = process_document.delay(target_path, original_filename=safe_filename)
+        task = process_document.delay(
+            target_path,
+            original_filename=safe_filename,
+            owner_id=upload_owner_id,
+        )
 
         return {
             "task_id": task.id,
