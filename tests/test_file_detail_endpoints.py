@@ -512,7 +512,9 @@ class TestFileDetailView:
         # Should have upload branches
         assert b"Dropbox" in response.content or b"dropbox" in response.content
 
-    def test_file_detail_distinguishes_skipped_steps_from_success(self, client: TestClient, db_session, sample_pdf_path):
+    def test_file_detail_distinguishes_skipped_steps_from_success(
+        self, client: TestClient, db_session, sample_pdf_path
+    ):
         """A keyless install reports limitations instead of claiming every step succeeded."""
         file_record = FileRecord(
             filehash="skipped-summary",
