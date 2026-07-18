@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.1 (2026-07-18)
+
+### Bug Fixes
+
+- Make Celery Redis result storage failover-safe
+  ([#1182](https://github.com/christianlouis/DocuElevate/pull/1182),
+  [`5ccf858`](https://github.com/christianlouis/DocuElevate/commit/5ccf8586402be555a393ab3c6aed80f9281e1227))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`86a312b`](https://github.com/christianlouis/DocuElevate/commit/86a312bb47e1b638a030e8ffa59a042c841059e7))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`49f892d`](https://github.com/christianlouis/DocuElevate/commit/49f892d2866b46c7e8579fcd4fbe0423f864680c))
+
+- **changelog**: Update changelog [skip ci]
+  ([`69bb41e`](https://github.com/christianlouis/DocuElevate/commit/69bb41e09b00b26fbd578925c416368d8f05573f))
+
+
 ## Unreleased
 
 ### Code Style
