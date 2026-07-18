@@ -703,7 +703,9 @@ class TestOnboardingPage:
                 patch("app.views.onboarding.templates") as mock_templates,
                 patch(
                     "app.views.onboarding.get_all_tiers",
-                    return_value=[{"id": "free", "name": "Free", "tagline": "Try DocuElevate free — no credit card needed"}],
+                    return_value=[
+                        {"id": "free", "name": "Free", "tagline": "Try DocuElevate free — no credit card needed"}
+                    ],
                 ),
                 patch("app.views.onboarding._get_configured_destinations", return_value=[{"id": "s3"}]),
             ):
