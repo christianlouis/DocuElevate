@@ -1,5 +1,8 @@
 """Tests for app/utils/setup_wizard.py module."""
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +13,8 @@ from app.utils.setup_wizard import (
     get_wizard_steps,
     is_setup_required,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.unit
@@ -24,7 +29,18 @@ class TestGetRequiredSettings:
 
     def test_each_setting_has_required_keys(self):
         """Test that each setting has the expected keys."""
-        required_keys = {"key", "label", "description", "type", "sensitive", "wizard_step", "wizard_category"}
+        required_keys = {
+            "key",
+            "label",
+            "label_key",
+            "description",
+            "description_key",
+            "type",
+            "sensitive",
+            "wizard_step",
+            "wizard_category",
+            "wizard_category_key",
+        }
         for setting in get_required_settings():
             assert required_keys.issubset(set(setting.keys())), f"Missing keys in {setting.get('key', 'unknown')}"
 
@@ -343,3 +359,22 @@ class TestGetWizardSteps:
         for settings_list in steps.values():
             all_keys.extend([s["key"] for s in settings_list])
         assert len(all_keys) == len(set(all_keys)), "Some settings appear in multiple steps"
+
+
+@pytest.mark.unit
+def test_setup_copy_is_complete_in_english_and_german():
+    """The instance setup must not fall back to raw keys or mixed-language copy."""
+    template = (_REPO_ROOT / "frontend/templates/setup_wizard.html").read_text(encoding="utf-8")
+    template_keys = set(re.findall(r'["\'](setup\.[a-z0-9_]+)["\']', template))
+    metadata_keys = {
+        str(setting[key])
+        for setting in get_required_settings()
+        for key in ("label_key", "description_key", "wizard_category_key", "bootstrap_reason_key")
+        if setting.get(key)
+    }
+    keys = template_keys | metadata_keys
+
+    for locale in ("en", "de"):
+        translations = json.loads((_REPO_ROOT / f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
+        missing = sorted(keys - translations.keys())
+        assert not missing, f"Missing {locale} setup translations: {missing}"

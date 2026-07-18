@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Welcome to DocuElevate{% endblock %}
+{% block title %}{{ _("onboarding.page_title") }}{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4"
@@ -12,11 +12,11 @@
         <i class="fas fa-file-alt" aria-hidden="true"></i>
         {{ instance_label }}
       </div>
-      <p class="text-gray-500 text-sm">Let's get you set up</p>
+      <p class="text-gray-500 text-sm">{{ _("onboarding.setup_tagline") }}</p>
     </div>
 
     <!-- Progress indicator -->
-    <div class="flex items-center justify-between mb-8 relative" role="list" aria-label="Onboarding steps">
+    <div class="flex items-center justify-between mb-8 relative" role="list" aria-label="{{ _('onboarding.steps_aria') }}">
       <!-- Background track -->
       <div class="absolute left-0 right-0 top-4 h-0.5 bg-gray-200" aria-hidden="true"></div>
       <!-- Progress fill -->
@@ -28,7 +28,7 @@
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all duration-300 bg-white"
                :class="i + 1 < step ? 'bg-indigo-600 border-indigo-600 text-white' : i + 1 === step ? 'border-indigo-600 text-indigo-600' : 'border-gray-300 text-gray-400'"
                :aria-current="i + 1 === step ? 'step' : undefined">
-            <span x-show="i + 1 < step" aria-label="Completed">
+            <span x-show="i + 1 < step" aria-label="{{ _('onboarding.completed_aria') }}">
               <i class="fas fa-check text-xs" aria-hidden="true"></i>
             </span>
             <span x-show="i + 1 >= step" x-text="i + 1" aria-hidden="true"></span>
@@ -55,34 +55,34 @@
             <i class="fas fa-hand-wave text-3xl" aria-hidden="true"></i>
           </div>
           <h1 class="text-3xl font-extrabold mb-2">
-            Welcome, {{ user.given_name | default(user.name) | default("there") }}! 👋
+            {{ _("onboarding.welcome") }}, {{ user.given_name | default(user.name) | default(_("onboarding.friend")) }}! 👋
           </h1>
-          <p class="text-indigo-100 text-lg">You're just a few steps away from transforming how you handle documents.</p>
+          <p class="text-indigo-100 text-lg">{{ _("onboarding.welcome_description") }}</p>
         </div>
         <div class="p-8">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div class="text-center p-4 rounded-xl bg-blue-50">
               <i class="fas fa-magic text-blue-500 text-2xl mb-2" aria-hidden="true"></i>
-              <h3 class="font-semibold text-gray-800 text-sm">Smart OCR</h3>
-              <p class="text-gray-500 text-xs mt-1">AI extracts text from any document</p>
+              <h3 class="font-semibold text-gray-800 text-sm">{{ _("onboarding.smart_ocr") }}</h3>
+              <p class="text-gray-500 text-xs mt-1">{{ _("onboarding.smart_ocr_description") }}</p>
             </div>
             <div class="text-center p-4 rounded-xl bg-indigo-50">
               <i class="fas fa-tags text-indigo-500 text-2xl mb-2" aria-hidden="true"></i>
-              <h3 class="font-semibold text-gray-800 text-sm">Auto-tagging</h3>
-              <p class="text-gray-500 text-xs mt-1">Documents organised automatically</p>
+              <h3 class="font-semibold text-gray-800 text-sm">{{ _("onboarding.auto_tagging") }}</h3>
+              <p class="text-gray-500 text-xs mt-1">{{ _("onboarding.auto_tagging_description") }}</p>
             </div>
             <div class="text-center p-4 rounded-xl bg-purple-50">
               <i class="fas fa-cloud-upload-alt text-purple-500 text-2xl mb-2" aria-hidden="true"></i>
-              <h3 class="font-semibold text-gray-800 text-sm">Cloud Sync</h3>
-              <p class="text-gray-500 text-xs mt-1">Instantly backed up to your storage</p>
+              <h3 class="font-semibold text-gray-800 text-sm">{{ _("onboarding.cloud_sync") }}</h3>
+              <p class="text-gray-500 text-xs mt-1">{{ _("onboarding.cloud_sync_description") }}</p>
             </div>
           </div>
           <p class="text-gray-500 text-sm text-center mb-6">
-            This quick setup takes about 2 minutes. You can change everything later in your settings.
+            {{ _("onboarding.duration_hint") }}
           </p>
           <button @click="advance('welcome')"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition min-h-[44px]">
-            Let's get started <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
+            {{ _("onboarding.get_started") }} <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
           </button>
         </div>
       </div>
@@ -102,27 +102,27 @@
         <div class="p-8">
           <div class="mb-5">
             <label for="displayName" class="block text-sm font-medium text-gray-700 mb-1">
-              Display Name
+              {{ _("onboarding.display_name") }}
             </label>
             <input id="displayName"
                    type="text"
                    x-model="displayName"
-                   placeholder="Your name"
+                   placeholder="{{ _('onboarding.display_name_placeholder') }}"
                    class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
                    aria-describedby="displayNameHint" />
-            <p id="displayNameHint" class="text-gray-400 text-xs mt-1">This is how you'll appear in DocuElevate.</p>
+            <p id="displayNameHint" class="text-gray-400 text-xs mt-1">{{ _("onboarding.display_name_hint") }}</p>
           </div>
           <div class="mb-6">
             <label for="contactEmail" class="block text-sm font-medium text-gray-700 mb-1">
-              Contact Email
+              {{ _("onboarding.contact_email") }}
             </label>
             <input id="contactEmail"
                    type="email"
                    x-model="contactEmail"
-                   placeholder="you@example.com"
+                   placeholder="{{ _('onboarding.contact_email_placeholder') }}"
                    class="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
                    aria-describedby="contactEmailHint" />
-            <p id="contactEmailHint" class="text-gray-400 text-xs mt-1">Used for notifications. Can be different from your login email.</p>
+            <p id="contactEmailHint" class="text-gray-400 text-xs mt-1">{{ _("onboarding.contact_email_hint") }}</p>
           </div>
           <fieldset class="mb-6">
             <legend class="block text-sm font-medium text-gray-700 mb-2">{{ _("onboarding.space_mode_legend") }}</legend>
@@ -159,13 +159,13 @@
           <div class="flex gap-3">
             <button @click="goBack()"
                     class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
-              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
             <button @click="goNext()"
                     :disabled="loading"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
-              <span x-show="!loading">Continue <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
-              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+              <span x-show="!loading">{{ _("onboarding.continue") }} <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
+              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("onboarding.saving") }}</span>
             </button>
           </div>
         </div>
@@ -180,25 +180,35 @@
            x-transition:enter-end="opacity-100 translate-x-0">
         <div class="bg-gradient-to-r from-purple-500 to-pink-600 px-8 py-6 text-white">
           <i class="fas fa-layer-group text-4xl mb-2" aria-hidden="true"></i>
-          <h2 class="text-2xl font-bold">Choose Your Plan</h2>
-          <p class="text-purple-100 text-sm">Start free, upgrade when you're ready</p>
+          <h2 class="text-2xl font-bold">{{ _("onboarding.plan_heading") }}</h2>
+          <p class="text-purple-100 text-sm">{{ _("onboarding.plan_subheading") }}</p>
         </div>
         <div class="p-6">
 
+          {% if is_complimentary %}
+          <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-5 flex gap-3 text-indigo-900">
+            <i class="fas fa-gift text-indigo-600 mt-0.5" aria-hidden="true"></i>
+            <div>
+              <h3 class="font-bold">{{ _("onboarding.complimentary_heading") }}</h3>
+              <p class="text-sm mt-1">{{ _("onboarding.complimentary_description") }}</p>
+            </div>
+          </div>
+          {% else %}
+
           <!-- Monthly / Annual toggle -->
           <div class="flex items-center justify-center gap-3 mb-6" x-effect="billingCycle = annual ? 'yearly' : 'monthly'">
-            <span class="text-sm font-medium" :class="!annual ? 'text-indigo-600' : 'text-gray-500'">Monthly</span>
+            <span class="text-sm font-medium" :class="!annual ? 'text-indigo-600' : 'text-gray-500'">{{ _("onboarding.monthly") }}</span>
             <button @click="annual = !annual"
                     class="relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     :class="annual ? 'bg-indigo-600' : 'bg-gray-300'"
                     role="switch"
                     :aria-checked="annual.toString()"
-                    aria-label="Toggle billing cycle">
+                    aria-label="{{ _('onboarding.billing_cycle_aria') }}">
               <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300"
                     :class="annual ? 'translate-x-6' : 'translate-x-0'"></span>
             </button>
             <span class="text-sm font-medium" :class="annual ? 'text-indigo-600' : 'text-gray-500'">
-            Annual <span class="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full ml-1">2 months free</span>
+            {{ _("onboarding.annual") }} <span class="bg-green-100 text-green-700 text-xs px-1.5 py-0.5 rounded-full ml-1">{{ _("onboarding.two_months_free") }}</span>
             </span>
           </div>
 
@@ -211,24 +221,24 @@
                     :class="selectedTier === '{{ tier.id }}' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300 bg-white'"
                     :aria-pressed="(selectedTier === '{{ tier.id }}').toString()">
               <div class="flex items-center justify-between mb-1">
-                <span class="font-bold text-gray-800">{{ tier.name }}</span>
+                <span class="font-bold text-gray-800">{{ _("onboarding.tier_" ~ tier.id ~ "_name") }}</span>
                 <span class="text-lg font-extrabold text-indigo-600">
                   {% if tier.price_monthly == 0 %}
-                    Free
+                    {{ _("onboarding.free") }}
                   {% else %}
-                    <span x-show="!annual">${{ tier.price_monthly }}<span class="text-xs font-normal text-gray-500">/mo</span></span>
+                    <span x-show="!annual">${{ tier.price_monthly }}<span class="text-xs font-normal text-gray-500">{{ _("onboarding.per_month") }}</span></span>
                     <span x-show="annual">
-                      {% if tier.price_yearly == 0 %}Free
-                      {% else %}${{ "%.2f"|format(tier.price_yearly) }}<span class="text-xs font-normal text-gray-500">/yr</span>
+                      {% if tier.price_yearly == 0 %}{{ _("onboarding.free") }}
+                      {% else %}${{ "%.2f"|format(tier.price_yearly) }}<span class="text-xs font-normal text-gray-500">{{ _("onboarding.per_year") }}</span>
                       {% endif %}
                     </span>
                   {% endif %}
                 </span>
               </div>
-              <p class="text-gray-500 text-xs">{{ tier.tagline }}</p>
+              <p class="text-gray-500 text-xs">{{ _("onboarding.tier_" ~ tier.id ~ "_tagline") }}</p>
               {% if tier.id != "free" and tier.get("trial_days") %}
               <span class="inline-block mt-1.5 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                {{ tier.trial_days }}-day free trial
+                {{ tier.trial_days }} {{ _("onboarding.day_trial") }}
               </span>
               {% endif %}
             </button>
@@ -238,19 +248,20 @@
           <!-- Beta notice -->
           <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5 flex gap-2 text-sm text-amber-700">
             <i class="fas fa-info-circle mt-0.5 shrink-0" aria-hidden="true"></i>
-            <span>Payment processing is coming soon. You can select a plan now and billing will activate at launch.</span>
+            <span>{{ _("onboarding.billing_notice") }}</span>
           </div>
+          {% endif %}
 
           <div class="flex gap-3">
             <button @click="goBack()"
                     class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
-              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
             <button @click="goNext()"
                     :disabled="loading"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
-              <span x-show="!loading">Continue <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
-              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+              <span x-show="!loading">{{ _("onboarding.continue") }} <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
+              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("onboarding.saving") }}</span>
             </button>
           </div>
         </div>
@@ -260,18 +271,22 @@
       <div x-show="step === 4" x-transition>
         <div class="bg-gradient-to-r from-cyan-500 to-blue-600 px-8 py-6 text-white">
           <i class="fas fa-wand-magic-sparkles text-4xl mb-2" aria-hidden="true"></i>
-          <h2 class="text-2xl font-bold">Document processing</h2>
-          <p class="text-cyan-100 text-sm">Understand what happens after intake</p>
+          <h2 class="text-2xl font-bold">{{ _("onboarding.processing_heading") }}</h2>
+          <p class="text-cyan-100 text-sm">{{ _("onboarding.processing_subheading") }}</p>
         </div>
         <div class="p-8">
           <div class="space-y-3 mb-6 text-sm text-gray-700">
-            <p><i class="fas fa-check text-green-600 mr-2"></i>OCR makes scans searchable.</p>
-            <p><i class="fas fa-check text-green-600 mr-2"></i>AI can classify, tag and rename documents.</p>
-            <p><i class="fas fa-shield-alt text-indigo-600 mr-2"></i>Provider credentials are encrypted in the database; user tokens never belong in environment variables.</p>
+            <p><i class="fas fa-check text-green-600 mr-2"></i>{{ _("onboarding.processing_ocr") }}</p>
+            {% if ai_configured %}
+            <p><i class="fas fa-check text-green-600 mr-2" aria-hidden="true"></i>{{ _("onboarding.processing_ai") }}</p>
+            {% else %}
+            <p class="text-amber-700"><i class="fas fa-circle-exclamation mr-2" aria-hidden="true"></i>{{ _("onboarding.processing_ai_unconfigured") }}</p>
+            {% endif %}
+            <p><i class="fas fa-shield-alt text-indigo-600 mr-2"></i>{{ _("onboarding.processing_credentials") }}</p>
           </div>
           <div class="flex gap-3">
-            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">Back</button>
-            <button @click="advance('processing')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">Continue</button>
+            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
+            <button @click="advance('processing')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
           </div>
         </div>
       </div>
@@ -280,22 +295,22 @@
       <div x-show="step === 5" x-transition>
         <div class="bg-gradient-to-r from-orange-500 to-amber-600 px-8 py-6 text-white">
           <i class="fas fa-inbox text-4xl mb-2" aria-hidden="true"></i>
-          <h2 class="text-2xl font-bold">Bring documents in</h2>
-          <p class="text-orange-100 text-sm">Add sources one by one, now or later</p>
+          <h2 class="text-2xl font-bold">{{ _("onboarding.sources_heading") }}</h2>
+          <p class="text-orange-100 text-sm">{{ _("onboarding.sources_subheading") }}</p>
         </div>
         <div class="p-8">
           <div class="grid sm:grid-cols-2 gap-3 mb-5">
-            <div class="border rounded-xl p-4"><strong>Upload</strong><p class="text-xs text-gray-500 mt-1">Ready without another integration.</p></div>
-            <div class="border rounded-xl p-4"><strong>Email / IMAP</strong><p class="text-xs text-gray-500 mt-1">Import mailbox attachments.</p></div>
-            <div class="border rounded-xl p-4"><strong>Cloud watch folder</strong><p class="text-xs text-gray-500 mt-1">Google Drive, Dropbox, OneDrive or S3.</p></div>
-            <div class="border rounded-xl p-4"><strong>Webhook / API</strong><p class="text-xs text-gray-500 mt-1">Automated document intake.</p></div>
+            <div class="border rounded-xl p-4"><strong>{{ _("onboarding.source_upload") }}</strong><p class="text-xs text-gray-500 mt-1">{{ _("onboarding.source_upload_description") }}</p></div>
+            <div class="border rounded-xl p-4"><strong>{{ _("onboarding.source_email") }}</strong><p class="text-xs text-gray-500 mt-1">{{ _("onboarding.source_email_description") }}</p></div>
+            <div class="border rounded-xl p-4"><strong>{{ _("onboarding.source_watch_folder") }}</strong><p class="text-xs text-gray-500 mt-1">{{ _("onboarding.source_watch_folder_description") }}</p></div>
+            <div class="border rounded-xl p-4"><strong>{{ _("onboarding.source_webhook") }}</strong><p class="text-xs text-gray-500 mt-1">{{ _("onboarding.source_webhook_description") }}</p></div>
           </div>
-          <p class="text-sm text-gray-600 mb-4"><strong x-text="integrationCounts.sources"></strong> source integration(s) configured.</p>
-          <a href="/integrations?onboarding=source" class="block text-center mb-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl">Configure a source</a>
+          <p class="text-sm text-gray-600 mb-4"><strong x-text="integrationCounts.sources"></strong> {{ _("onboarding.sources_configured") }}</p>
+          <a href="/integrations?onboarding=source" class="block text-center mb-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl">{{ _("onboarding.configure_source") }}</a>
           <div class="flex gap-3">
-            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">Back</button>
-            <button @click="skip('sources')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">Skip for now</button>
-            <button @click="advance('sources')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">Continue</button>
+            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
+            <button @click="skip('sources')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">{{ _("onboarding.skip_for_now") }}</button>
+            <button @click="advance('sources')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
           </div>
         </div>
       </div>
@@ -309,14 +324,14 @@
            x-transition:enter-end="opacity-100 translate-x-0">
         <div class="bg-gradient-to-r from-green-500 to-teal-600 px-8 py-6 text-white">
           <i class="fas fa-hdd text-4xl mb-2" aria-hidden="true"></i>
-          <h2 class="text-2xl font-bold">Storage Destination</h2>
-          <p class="text-green-100 text-sm">Where should your processed documents go?</p>
+          <h2 class="text-2xl font-bold">{{ _("onboarding.storage_heading") }}</h2>
+          <p class="text-green-100 text-sm">{{ _("onboarding.storage_subheading") }}</p>
         </div>
         <div class="p-8">
           {% if configured_destinations %}
-          <p class="text-gray-600 text-sm mb-2">Select where you'd like your documents stored. User integrations become active immediately.</p>
-          <p class="text-gray-500 text-xs mb-4">Suggested preprod folder: <code>{{ suggested_storage_path }}</code></p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" role="listbox" aria-label="Storage destinations">
+          <p class="text-gray-600 text-sm mb-2">{{ _("onboarding.storage_select") }}</p>
+          <p class="text-gray-500 text-xs mb-4">{{ _("onboarding.storage_suggested_folder") }} <code>{{ suggested_storage_path }}</code></p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" role="listbox" aria-label="{{ _('onboarding.storage_destinations_aria') }}">
             {% for dest in configured_destinations %}
             <button type="button"
                     @click="selectedDestination = '{{ dest.id }}'"
@@ -333,11 +348,11 @@
             {% endfor %}
           </div>
           <p class="text-gray-400 text-xs mb-4">
-            Not seeing your provider?
+            {{ _("onboarding.storage_provider_missing") }}
             {% if user.is_admin %}
-            <a href="/integrations?onboarding=destination" class="text-indigo-500 hover:underline">Add an integration</a> to configure more destinations.
+            <a href="/integrations?onboarding=destination" class="text-indigo-500 hover:underline">{{ _("onboarding.add_integration") }}</a> {{ _("onboarding.add_integration_suffix") }}
             {% else %}
-            Ask your administrator to configure additional storage providers.
+            {{ _("onboarding.ask_admin_storage") }}
             {% endif %}
           </p>
           {% else %}
@@ -345,18 +360,17 @@
             <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <i class="fas fa-hdd text-2xl text-gray-400" aria-hidden="true"></i>
             </div>
-            <h3 class="font-semibold text-gray-700 mb-2">No Storage Configured Yet</h3>
+            <h3 class="font-semibold text-gray-700 mb-2">{{ _("onboarding.no_storage_heading") }}</h3>
             <p class="text-gray-500 text-sm mb-4">
-              No storage destinations have been configured for this instance yet.
-              You can skip this step and set one up later.
+              {{ _("onboarding.no_storage_description") }}
             </p>
             {% if user.is_admin %}
             <a href="/integrations?onboarding=destination"
                class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition text-sm font-semibold min-h-[44px]">
-              <i class="fas fa-cog" aria-hidden="true"></i> Configure personal storage
+              <i class="fas fa-cog" aria-hidden="true"></i> {{ _("onboarding.configure_storage") }}
             </a>
             {% else %}
-            <p class="text-gray-400 text-xs">Contact your administrator to set up a storage destination.</p>
+            <p class="text-gray-400 text-xs">{{ _("onboarding.contact_admin_storage") }}</p>
             {% endif %}
           </div>
           {% endif %}
@@ -364,16 +378,16 @@
           <div class="flex gap-3">
             <button @click="goBack()"
                     class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
-              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
+              <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
             <button @click="goNext()"
                     :disabled="loading"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
               <span x-show="!loading">
-                {% if configured_destinations %}Continue{% else %}Skip{% endif %}
+                {% if configured_destinations %}{{ _("onboarding.continue") }}{% else %}{{ _("onboarding.skip") }}{% endif %}
                 <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i>
               </span>
-              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Saving…</span>
+              <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("onboarding.saving") }}</span>
             </button>
           </div>
         </div>
@@ -383,19 +397,19 @@
       <div x-show="step === 7" x-transition>
         <div class="bg-gradient-to-r from-slate-600 to-indigo-700 px-8 py-6 text-white">
           <i class="fas fa-bolt text-4xl mb-2" aria-hidden="true"></i>
-          <h2 class="text-2xl font-bold">Automation & notifications</h2>
-          <p class="text-slate-100 text-sm">Connect DocuElevate to your workflows</p>
+          <h2 class="text-2xl font-bold">{{ _("onboarding.automation_heading") }}</h2>
+          <p class="text-slate-100 text-sm">{{ _("onboarding.automation_subheading") }}</p>
         </div>
         <div class="p-8">
           <div class="space-y-3 mb-5 text-sm">
-            <a href="/api-tokens" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>API tokens</strong><br><span class="text-gray-500">Create revocable credentials for clients and MCP tools.</span></a>
-            <a href="/settings#webhooks" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>Webhooks</strong><br><span class="text-gray-500">Receive intake events and send processed-document events.</span></a>
-            <a href="/notifications" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>Notifications</strong><br><span class="text-gray-500">Choose how processing results reach you.</span></a>
+            <a href="/api-tokens" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>{{ _("onboarding.api_tokens") }}</strong><br><span class="text-gray-500">{{ _("onboarding.api_tokens_description") }}</span></a>
+            <a href="/settings#webhooks" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>{{ _("onboarding.webhooks") }}</strong><br><span class="text-gray-500">{{ _("onboarding.webhooks_description") }}</span></a>
+            <a href="/notifications" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>{{ _("onboarding.notifications") }}</strong><br><span class="text-gray-500">{{ _("onboarding.notifications_description") }}</span></a>
           </div>
           <div class="flex gap-3">
-            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">Back</button>
-            <button @click="skip('automation')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">Skip for now</button>
-            <button @click="advance('automation')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">Continue</button>
+            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
+            <button @click="skip('automation')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">{{ _("onboarding.skip_for_now") }}</button>
+            <button @click="advance('automation')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
           </div>
         </div>
       </div>
@@ -411,16 +425,16 @@
           <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <i class="fas fa-check-circle text-4xl" aria-hidden="true"></i>
           </div>
-          <h2 class="text-3xl font-extrabold mb-2">You're all set! 🎉</h2>
-          <p class="text-indigo-100">Your account is configured and ready to go.</p>
+          <h2 class="text-3xl font-extrabold mb-2">{{ _("onboarding.ready_heading") }} 🎉</h2>
+          <p class="text-indigo-100">{{ _("onboarding.ready_description") }}</p>
         </div>
         <div class="p-8">
-          <ul class="space-y-3 mb-8" aria-label="Setup summary">
+          <ul class="space-y-3 mb-8" aria-label="{{ _('onboarding.summary_aria') }}">
             <li class="flex items-center gap-3 text-gray-700">
               <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
                 <i class="fas fa-check text-green-600 text-sm" aria-hidden="true"></i>
               </div>
-              <span>Profile saved</span>
+              <span>{{ _("onboarding.profile_saved") }}</span>
             </li>
             <li class="flex items-center gap-3 text-gray-700">
               <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
@@ -433,7 +447,17 @@
               <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center shrink-0">
                 <i class="fas fa-check text-green-600 text-sm" aria-hidden="true"></i>
               </div>
-              <span>Plan selected: <strong x-text="selectedTier"></strong></span>
+              {% if is_complimentary %}
+              <span>{{ _("onboarding.complimentary_summary") }}</span>
+              {% else %}
+              <span>{{ _("onboarding.plan_selected") }} <strong x-text="tierLabel(selectedTier)"></strong></span>
+              {% endif %}
+            </li>
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 {{ 'bg-green-100' if ai_configured else 'bg-amber-100' }}">
+                <i class="fas {{ 'fa-check text-green-600' if ai_configured else 'fa-minus text-amber-700' }} text-sm" aria-hidden="true"></i>
+              </div>
+              <span>{{ _("onboarding.ai_ready") if ai_configured else _("onboarding.ai_optional_later") }}</span>
             </li>
             <li class="flex items-center gap-3 text-gray-700">
               <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
@@ -442,17 +466,17 @@
                    :class="selectedDestination ? 'fa-check text-green-600' : 'fa-minus text-gray-400'"
                    aria-hidden="true"></i>
               </div>
-              <span x-show="selectedDestination">Storage: <strong x-text="selectedDestination"></strong></span>
-              <span x-show="!selectedDestination" class="text-gray-400">No storage destination selected (can be set later)</span>
+              <span x-show="selectedDestination">{{ _("onboarding.storage_selected") }} <strong x-text="selectedDestination"></strong></span>
+              <span x-show="!selectedDestination" class="text-gray-400">{{ _("onboarding.storage_not_selected") }}</span>
             </li>
           </ul>
           <button @click="goNext()"
                   :disabled="loading"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
             <span x-show="!loading">
-              <i class="fas fa-rocket mr-2" aria-hidden="true"></i> Start uploading documents
+              <i class="fas fa-rocket mr-2" aria-hidden="true"></i> {{ _("onboarding.start_uploading") }}
             </span>
-            <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Setting up…</span>
+            <span x-show="loading"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("onboarding.setting_up") }}</span>
           </button>
         </div>
       </div>
@@ -472,7 +496,29 @@
 
 <script>
 const onboardingI18n = {
-  sharedNameRequired: {{ _("onboarding.shared_name_required") | tojson }}
+  sharedNameRequired: {{ _("onboarding.shared_name_required") | tojson }},
+  progressSaveFailed: {{ _("onboarding.error_progress_save") | tojson }},
+  profileSaveFailed: {{ _("onboarding.error_profile_save") | tojson }},
+  planSaveFailed: {{ _("onboarding.error_plan_save") | tojson }},
+  storageSaveFailed: {{ _("onboarding.error_storage_save") | tojson }},
+  completionFailed: {{ _("onboarding.error_completion") | tojson }},
+  networkError: {{ _("onboarding.error_network") | tojson }},
+  tierLabels: {
+    free: {{ _("onboarding.tier_free_name") | tojson }},
+    starter: {{ _("onboarding.tier_starter_name") | tojson }},
+    professional: {{ _("onboarding.tier_professional_name") | tojson }},
+    business: {{ _("onboarding.tier_business_name") | tojson }}
+  },
+  stepLabels: [
+    {{ _("onboarding.step_welcome") | tojson }},
+    {{ _("onboarding.step_profile") | tojson }},
+    {{ _("onboarding.step_plan") | tojson }},
+    {{ _("onboarding.step_processing") | tojson }},
+    {{ _("onboarding.step_sources") | tojson }},
+    {{ _("onboarding.step_storage") | tojson }},
+    {{ _("onboarding.step_automation") | tojson }},
+    {{ _("onboarding.step_review") | tojson }}
+  ]
 };
 
 function onboardingWizard() {
@@ -494,12 +540,17 @@ function onboardingWizard() {
     annual: false,
     selectedDestination: '',
     integrationCounts: { sources: 0, destinations: 0 },
+    complimentary: {{ is_complimentary | tojson }},
 
     get progressPercent() {
       return ((this.step - 1) / (this.totalSteps - 1)) * 100;
     },
 
-    stepLabels: ['Welcome', 'Profile', 'Plan', 'Processing', 'Sources', 'Storage', 'Automation', 'Review'],
+    stepLabels: onboardingI18n.stepLabels,
+
+    tierLabel(tierId) {
+      return onboardingI18n.tierLabels[tierId] || tierId;
+    },
 
     async init() {
       try {
@@ -554,21 +605,21 @@ function onboardingWizard() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ current_step: nextStep, completed_topic: completedTopic, skipped_topic: skippedTopic })
       });
-      if (!r.ok) throw new Error('Failed to save onboarding progress');
+      if (!r.ok) throw new Error(onboardingI18n.progressSaveFailed);
     },
 
     async advance(topic = null) {
       this.error = '';
       const nextStep = Math.min(this.totalSteps, this.step + 1);
       try { await this.persistProgress(nextStep, topic, null); this.step = nextStep; }
-      catch (_) { this.error = 'Could not save your progress. Please try again.'; }
+      catch (_) { this.error = onboardingI18n.progressSaveFailed; }
     },
 
     async skip(topic) {
       this.error = '';
       const nextStep = Math.min(this.totalSteps, this.step + 1);
       try { await this.persistProgress(nextStep, null, topic); this.step = nextStep; }
-      catch (_) { this.error = 'Could not save your progress. Please try again.'; }
+      catch (_) { this.error = onboardingI18n.progressSaveFailed; }
     },
 
     async saveProfile() {
@@ -589,18 +640,19 @@ function onboardingWizard() {
             tribe_name: this.spaceMode === 'shared' ? this.tribeName.trim() : null
           })
         });
-        if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save profile'; }
+        if (!r.ok) { const d = await r.json(); this.error = d.detail || onboardingI18n.profileSaveFailed; }
         else {
           const data = await r.json();
           if (data.spaces) this.spaces = data.spaces;
           const journey = data.onboarding_journey || {};
           this.selectedTribeId = journey.selected_tribe_id || '';
         }
-      } catch (_) { this.error = 'Network error. Please try again.'; }
+      } catch (_) { this.error = onboardingI18n.networkError; }
       finally { this.loading = false; }
     },
 
     async savePlan() {
+      if (this.complimentary) return;
       this.loading = true; this.error = '';
       try {
         const r = await fetch('/api/onboarding/plan', {
@@ -608,8 +660,8 @@ function onboardingWizard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subscription_tier: this.selectedTier, billing_cycle: this.billingCycle })
         });
-        if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save plan'; }
-      } catch (_) { this.error = 'Network error. Please try again.'; }
+        if (!r.ok) { const d = await r.json(); this.error = d.detail || onboardingI18n.planSaveFailed; }
+      } catch (_) { this.error = onboardingI18n.networkError; }
       finally { this.loading = false; }
     },
 
@@ -621,8 +673,8 @@ function onboardingWizard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ preferred_destination: this.selectedDestination || null })
         });
-        if (!r.ok) { const d = await r.json(); this.error = d.detail || 'Failed to save storage preference'; }
-      } catch (_) { this.error = 'Network error. Please try again.'; }
+        if (!r.ok) { const d = await r.json(); this.error = d.detail || onboardingI18n.storageSaveFailed; }
+      } catch (_) { this.error = onboardingI18n.networkError; }
       finally { this.loading = false; }
     },
 
@@ -633,8 +685,8 @@ function onboardingWizard() {
         if (r.ok) {
           const data = await r.json();
           window.location.href = data.redirect_url || '/upload';
-        } else { const d = await r.json(); this.error = d.detail || 'Failed to complete onboarding'; }
-      } catch (_) { this.error = 'Network error. Please try again.'; }
+        } else { const d = await r.json(); this.error = d.detail || onboardingI18n.completionFailed; }
+      } catch (_) { this.error = onboardingI18n.networkError; }
       finally { this.loading = false; }
     }
   };

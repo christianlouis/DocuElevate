@@ -135,7 +135,9 @@ def _run_alembic_upgrade(engine: Any) -> None:
         if "alembic_version" not in table_names:
             # Fresh database or one that predates Alembic tracking.
             # Base.metadata.create_all() already created everything, so
-            # stamp the current version to head (no migrations need to run).
+            # create revision storage that can hold DocuElevate's descriptive
+            # revision IDs, then stamp the current version to head.
+            _create_alembic_version_table(connection)
             logger.info("No Alembic version table found — stamping database to latest revision.")
             command.stamp(alembic_cfg, "head")
         else:
@@ -144,6 +146,18 @@ def _run_alembic_upgrade(engine: Any) -> None:
             logger.info("Running pending Alembic migrations…")
             command.upgrade(alembic_cfg, "head")
             logger.info("Alembic migration check complete.")
+
+
+def _create_alembic_version_table(connection: Any) -> None:
+    """Create Alembic revision storage with room for descriptive revision IDs."""
+    from sqlalchemy import Column, MetaData, String, Table
+
+    metadata = MetaData()
+    Table(
+        "alembic_version",
+        metadata,
+        Column("version_num", String(255), nullable=False, primary_key=True),
+    ).create(connection, checkfirst=True)
 
 
 def _ensure_alembic_version_capacity(connection: Any) -> None:

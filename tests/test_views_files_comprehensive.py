@@ -439,6 +439,26 @@ class TestComputeStepSummary:
         assert summary["uploads"]["success"] >= 1
         assert summary["uploads"]["failure"] >= 1
 
+    def test_compute_step_summary_keeps_skipped_separate_from_success(self):
+        """Optional unavailable steps must not inflate the successful-step count."""
+        from datetime import datetime
+
+        from app.views.files import _compute_step_summary
+
+        now = datetime.now()
+        logs = [
+            Mock(step_name="create_file_record", status="success", timestamp=now),
+            Mock(step_name="extract_metadata_with_gpt", status="skipped", timestamp=now),
+            Mock(step_name="upload_to_dropbox", status="skipped", timestamp=now),
+        ]
+
+        summary = _compute_step_summary(logs)
+
+        assert summary["main"]["success"] == 1
+        assert summary["main"]["skipped"] == 1
+        assert summary["uploads"]["success"] == 0
+        assert summary["uploads"]["skipped"] == 1
+
     def test_compute_step_summary_uses_profile_steps_for_expected_rows(self):
         """Profile-aware fallback summary counts expected unstarted steps as queued."""
         from app.views.files import _compute_step_summary
@@ -1355,8 +1375,8 @@ class TestComputeStepSummaryAdditional:
         assert summary["main"]["success"] == 1
         assert summary["total_main_steps"] == 1
 
-    def test_compute_step_summary_unknown_status_not_counted(self):
-        """Test that unknown statuses are not counted in main_counts (lines 577->576)."""
+    def test_compute_step_summary_counts_skipped_status(self):
+        """Skipped work is a first-class outcome and remains separate from success."""
         from app.views.files import _compute_step_summary
 
         now = datetime.now()
@@ -1365,9 +1385,8 @@ class TestComputeStepSummaryAdditional:
         ]
 
         summary = _compute_step_summary(logs)
-        # "skipped" is not in main_counts, so total counts should stay 0
-        total = sum(summary["main"].values())
-        assert total == 0
+        assert summary["main"]["skipped"] == 1
+        assert summary["main"]["success"] == 0
 
     def test_compute_step_summary_unknown_upload_status_not_counted(self):
         """Test that unknown statuses in upload counts are not counted (lines 582->581)."""
