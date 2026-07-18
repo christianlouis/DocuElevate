@@ -69,6 +69,8 @@ secrets:
   existingSecret: ""
   DATABASE_URL: ""         # e.g. postgresql://user:pass@postgres:5432/docuelevate
   REDIS_URL: ""            # leave blank to use bundled Redis
+  CELERY_BROKER_URL: ""    # optional; falls back to REDIS_URL
+  CELERY_RESULT_BACKEND: "" # optional; must resolve to a writable primary
   SESSION_SECRET: ""       # min 32-char random string — generate with: openssl rand -hex 32
   OPENAI_API_KEY: ""
   AZURE_AI_KEY: ""

@@ -28,6 +28,18 @@ class TestCeleryAppConfig:
         assert celery.conf.broker_url is not None
         assert celery.conf.result_backend is not None
 
+    def test_celery_uses_failover_aware_redis_backend(self):
+        """Redis task results must reconnect after primary demotion."""
+        from app.celery_app import celery
+        from app.config import settings
+        from app.utils.celery_redis_backend import FailoverAwareRedisBackend
+
+        assert celery.backend_cls == "app.utils.celery_redis_backend:FailoverAwareRedisBackend"
+        assert isinstance(celery.backend, FailoverAwareRedisBackend)
+        assert celery.backend.url == settings.effective_celery_result_backend
+        assert celery.conf.result_backend_always_retry is True
+        assert celery.conf.result_backend_max_retries == 20
+
     def test_celery_default_queue(self):
         """Test that default queue is set to document_processor."""
         from app.celery_app import celery
@@ -61,6 +73,39 @@ class TestCeleryAppConfig:
             "queue_order_strategy": "priority",
             "priority_steps": list(range(10)),
         }
+
+    @patch("app.celery_app.assert_redis_backend_writable")
+    def test_worker_preflight_checks_result_backend_before_start(self, mock_check):
+        """A worker must verify writeability before it starts consuming tasks."""
+        from app.celery_app import ResultBackendWriteabilityCheck, settings
+
+        ResultBackendWriteabilityCheck(MagicMock()).start(MagicMock())
+
+        mock_check.assert_called_once_with(settings.effective_celery_result_backend)
+
+    @patch("app.celery_app.assert_redis_backend_writable", side_effect=RuntimeError("read-only"))
+    def test_worker_preflight_aborts_on_read_only_backend(self, mock_check):
+        """A replica-only result route must fail worker startup clearly."""
+        from app.celery_app import ResultBackendWriteabilityCheck
+
+        with pytest.raises(RuntimeError, match="read-only"):
+            ResultBackendWriteabilityCheck(MagicMock()).start(MagicMock())
+
+        mock_check.assert_called_once()
+
+    @patch("app.celery_app.assert_redis_backend_writable")
+    @patch("app.celery_app.is_redis_backend", return_value=False)
+    @patch("app.celery_app.settings")
+    def test_worker_preflight_skips_non_redis_result_backend(self, mock_settings, mock_is_redis, mock_check):
+        """Database-backed result storage must not receive Redis commands."""
+        from app.celery_app import ResultBackendWriteabilityCheck
+
+        mock_settings.effective_celery_result_backend = "db+postgresql://database/results"
+
+        ResultBackendWriteabilityCheck(MagicMock()).start(MagicMock())
+
+        mock_is_redis.assert_called_once_with("db+postgresql://database/results")
+        mock_check.assert_not_called()
 
     @patch("app.database.engine.dispose")
     def test_prefork_child_replaces_inherited_database_pool(self, mock_dispose):

@@ -54,6 +54,8 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
             "workdir",
             "database_url",
             "redis_url",
+            "celery_broker_url",
+            "celery_result_backend",
             "gotenberg_url",
             "allow_file_delete",  # Added allow_file_delete to Core settings
         ],

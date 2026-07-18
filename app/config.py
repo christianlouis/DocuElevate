@@ -13,6 +13,24 @@ class Settings(BaseSettings):
 
     database_url: str
     redis_url: str = "redis://redis:6379/0"
+    celery_broker_url: Optional[str] = Field(
+        default=None,
+        description="Optional Celery broker URL; falls back to REDIS_URL.",
+    )
+    celery_result_backend: Optional[str] = Field(
+        default=None,
+        description="Optional Celery result-backend URL; falls back to REDIS_URL.",
+    )
+
+    @property
+    def effective_celery_broker_url(self) -> str:
+        """Resolve the broker independently while preserving REDIS_URL compatibility."""
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def effective_celery_result_backend(self) -> str:
+        """Resolve the result backend independently from the broker."""
+        return self.celery_result_backend or self.redis_url
 
     # Database connection-pool tuning (ignored for SQLite, which uses NullPool).
     db_pool_size: int = Field(

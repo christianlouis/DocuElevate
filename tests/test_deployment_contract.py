@@ -71,6 +71,17 @@ def test_helm_processes_use_the_configurable_runtime_secret():
         assert 'include "docuelevate.fullname" . }}-secret' not in content
 
 
+def test_helm_resolves_broker_and_result_backend_to_a_primary_route():
+    helpers = (CHART / "templates" / "_helpers.tpl").read_text(encoding="utf-8")
+    runtime_secret = (CHART / "templates" / "runtime-config.yaml").read_text(encoding="utf-8")
+
+    assert 'define "docuelevate.celeryBrokerUrl"' in helpers
+    assert 'define "docuelevate.celeryResultBackend"' in helpers
+    assert 'include "docuelevate.redisUrl" .' in helpers
+    assert 'CELERY_BROKER_URL: {{ include "docuelevate.celeryBrokerUrl" . | quote }}' in runtime_secret
+    assert 'CELERY_RESULT_BACKEND: {{ include "docuelevate.celeryResultBackend" . | quote }}' in runtime_secret
+
+
 def test_agentic_helm_hook_plans_before_apply_and_scopes_setup_credentials():
     template = (CHART / "templates" / "agentic-setup.yaml").read_text(encoding="utf-8")
     plan = "python -m app.agentic_setup plan /config/setup.json"

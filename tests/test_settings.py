@@ -166,6 +166,13 @@ class TestSettingsService:
             f"and will not appear on the settings page: {sorted(missing)}"
         )
 
+    def test_redis_connection_urls_are_sensitive_restart_settings(self):
+        """Redis URLs can contain credentials and only apply after process restart."""
+        for setting in ("redis_url", "celery_broker_url", "celery_result_backend"):
+            metadata = SETTING_METADATA[setting]
+            assert metadata["sensitive"] is True
+            assert metadata["restart_required"] is True
+
     def test_setting_metadata_has_required_fields(self):
         """Test that every SETTING_METADATA entry has the required keys."""
         required_keys = {"category", "description", "type", "sensitive", "required", "restart_required"}

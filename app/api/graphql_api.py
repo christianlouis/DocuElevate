@@ -184,6 +184,8 @@ _SENSITIVE_SETTING_KEYS: frozenset[str] = frozenset(
         "session_secret",
         "database_url",
         "redis_url",
+        "celery_broker_url",
+        "celery_result_backend",
         "dropbox_app_secret",
         "dropbox_refresh_token",
         "google_drive_credentials_json",

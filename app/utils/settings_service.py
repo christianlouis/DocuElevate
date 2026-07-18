@@ -34,10 +34,26 @@ SETTING_METADATA = {
     },
     "redis_url": {
         "category": "Core",
-        "description": "Redis connection URL for Celery task queue",
+        "description": "Default Redis connection URL for Celery broker and result storage",
         "type": "string",
-        "sensitive": False,
+        "sensitive": True,
         "required": True,
+        "restart_required": True,
+    },
+    "celery_broker_url": {
+        "category": "Core",
+        "description": "Optional dedicated Redis URL for the Celery task broker; defaults to Redis URL",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "celery_result_backend": {
+        "category": "Core",
+        "description": "Optional dedicated Redis URL for Celery task results; defaults to Redis URL",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
         "restart_required": True,
     },
     "db_pool_size": {

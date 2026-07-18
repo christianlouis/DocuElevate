@@ -8,8 +8,11 @@ metadata:
     {{- include "docuelevate.labels" . | nindent 4 }}
 type: Opaque
 stringData:
+  REDIS_URL: {{ include "docuelevate.redisUrl" . | quote }}
+  CELERY_BROKER_URL: {{ include "docuelevate.celeryBrokerUrl" . | quote }}
+  CELERY_RESULT_BACKEND: {{ include "docuelevate.celeryResultBackend" . | quote }}
   {{- range $key, $value := .Values.secrets }}
-  {{- if ne $key "existingSecret" }}
+  {{- if and (ne $key "existingSecret") (ne $key "REDIS_URL") (ne $key "CELERY_BROKER_URL") (ne $key "CELERY_RESULT_BACKEND") }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
   {{- end }}
