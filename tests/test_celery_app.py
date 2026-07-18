@@ -93,6 +93,20 @@ class TestCeleryAppConfig:
 
         mock_check.assert_called_once()
 
+    @patch("app.celery_app.assert_redis_backend_writable")
+    @patch("app.celery_app.is_redis_backend", return_value=False)
+    @patch("app.celery_app.settings")
+    def test_worker_preflight_skips_non_redis_result_backend(self, mock_settings, mock_is_redis, mock_check):
+        """Database-backed result storage must not receive Redis commands."""
+        from app.celery_app import ResultBackendWriteabilityCheck
+
+        mock_settings.effective_celery_result_backend = "db+postgresql://database/results"
+
+        ResultBackendWriteabilityCheck(MagicMock()).start(MagicMock())
+
+        mock_is_redis.assert_called_once_with("db+postgresql://database/results")
+        mock_check.assert_not_called()
+
     @patch("app.database.engine.dispose")
     def test_prefork_child_replaces_inherited_database_pool(self, mock_dispose):
         """A child process must not reuse a DB connection opened by its parent."""

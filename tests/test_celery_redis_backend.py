@@ -20,6 +20,8 @@ class TestRedisWriteabilityProbe:
         assert is_redis_backend("redis://redis:6379/0")
         assert is_redis_backend("rediss://redis.example/0")
         assert is_redis_backend("unix:///run/redis.sock")
+        assert is_redis_backend("REDIS://redis:6379/0")
+        assert not is_redis_backend(None)
         assert not is_redis_backend("db+postgresql://database/results")
 
     @patch("app.utils.celery_redis_backend.redis.Redis.from_url")
@@ -55,6 +57,30 @@ class TestRedisWriteabilityProbe:
 
         assert "secret" not in str(exc_info.value)
 
+    @patch("app.utils.celery_redis_backend.redis.Redis.from_url")
+    def test_rejected_write_probe_fails_and_disconnects(self, mock_from_url):
+        client = mock_from_url.return_value
+        client.role.return_value = ["master", 0, []]
+        client.set.return_value = False
+
+        with pytest.raises(RuntimeError, match="rejected the worker write probe"):
+            assert_redis_backend_writable("redis://primary:6379/0")
+
+        client.delete.assert_not_called()
+        client.connection_pool.disconnect.assert_called_once()
+
+    @patch("app.utils.celery_redis_backend.redis.Redis.from_url")
+    def test_cleanup_failure_is_logged_without_failing_preflight(self, mock_from_url, caplog):
+        client = mock_from_url.return_value
+        client.role.return_value = [b"master", 0, []]
+        client.set.return_value = True
+        client.delete.side_effect = ConnectionError("cleanup failed")
+
+        assert_redis_backend_writable("redis://primary:6379/0")
+
+        assert "Could not remove Redis worker preflight key" in caplog.text
+        client.connection_pool.disconnect.assert_called_once()
+
 
 @pytest.mark.unit
 class TestFailoverAwareBackend:
@@ -67,6 +93,15 @@ class TestFailoverAwareBackend:
         backend = self._backend_without_init()
 
         assert backend.exception_safe_to_retry(ReadOnlyError("READONLY")) is True
+
+    @patch.object(RedisBackend, "exception_safe_to_retry", return_value=True)
+    def test_non_read_only_retry_classification_delegates_to_celery(self, mock_super):
+        backend = self._backend_without_init()
+        error = ConnectionError("disconnected")
+
+        assert backend.exception_safe_to_retry(error) is True
+
+        mock_super.assert_called_once_with(error)
 
     def test_store_result_reconnects_and_retries_after_demotion(self):
         app = Celery("redis-failover-test")
@@ -95,4 +130,15 @@ class TestFailoverAwareBackend:
         backend.on_backend_retryable_error(error)
 
         backend.client.connection_pool.disconnect.assert_called_once()
+        mock_super.assert_called_once_with(error)
+
+    @patch.object(RedisBackend, "on_backend_retryable_error")
+    def test_pool_reset_failure_still_delegates_retry_to_celery(self, mock_super, caplog):
+        backend = self._backend_without_init()
+        backend.client.connection_pool.disconnect.side_effect = ConnectionError("already closed")
+        error = ConnectionError("disconnected")
+
+        backend.on_backend_retryable_error(error)
+
+        assert "Could not reset the Redis result-backend connection pool" in caplog.text
         mock_super.assert_called_once_with(error)
