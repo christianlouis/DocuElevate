@@ -5,6 +5,18 @@
 <div class="flex flex-col items-center justify-center p-4 sm:p-8">
   <h1 class="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8">{{ _("upload.page_title") }}</h1>
 
+  {% if request.query_params.get("onboarding") == "first-document" %}
+  <div class="w-full max-w-2xl mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5" role="status">
+    <div class="flex gap-3">
+      <i class="fas fa-file-circle-plus text-blue-600 mt-1" aria-hidden="true"></i>
+      <div>
+        <h2 class="font-bold text-blue-900">{{ _("upload.first_document_heading") }}</h2>
+        <p class="text-sm text-blue-800 mt-1">{{ _("upload.first_document_description") }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- File Upload Section -->
   <div class="w-full max-w-2xl mb-6 sm:mb-8">
     <h2 class="text-xl font-semibold mb-4">{{ _("upload.section_device") }}</h2>
@@ -131,6 +143,25 @@
     concurrency: {{ upload_concurrency }},
     queueDelayMs: {{ upload_queue_delay_ms }}
   };
+  window.uploadI18n = {
+    queuedBatch: {{ _("upload.queue_queued") | tojson }},
+    allComplete: {{ _("upload.queue_complete") | tojson }},
+    uploadingBatch: {{ _("upload.queue_uploading") | tojson }},
+    statusQueued: {{ _("upload.status_queued") | tojson }},
+    unsupportedType: {{ _("upload.error_unsupported_type") | tojson }},
+    tooLarge: {{ _("upload.error_too_large") | tojson }},
+    retryExhausted: {{ _("upload.error_retry_exhausted") | tojson }},
+    uploading: {{ _("upload.uploading") | tojson }},
+    uploadingPercent: {{ _("upload.uploading_percent") | tojson }},
+    duplicate: {{ _("upload.duplicate") | tojson }},
+    successTask: {{ _("upload.success_task") | tojson }},
+    retryRateLimit: {{ _("upload.retry_rate_limit") | tojson }},
+    errorHttp: {{ _("upload.error_http") | tojson }},
+    errorNetwork: {{ _("upload.error_network") | tojson }},
+    urlSuccess: {{ _("upload.url_success") | tojson }},
+    urlError: {{ _("upload.url_error") | tojson }},
+    urlNetworkError: {{ _("upload.url_network_error") | tojson }}
+  };
 </script>
 <script src="/static/js/upload.js"></script>
 <script>
@@ -207,7 +238,7 @@
     const filename = urlFilename.value.trim();
 
     if (!url) {
-      showUrlStatus("Please enter a URL", "error");
+      showUrlStatus({{ _("upload.error_url_required") | tojson }}, "error");
       return;
     }
 
@@ -215,16 +246,16 @@
     try {
       new URL(url);
     } catch (error) {
-      showUrlStatus("Invalid URL format", "error");
+      showUrlStatus({{ _("upload.error_invalid_url") | tojson }}, "error");
       return;
     }
 
     // Show loading state
-    showUrlStatus("Downloading file from URL...", "info");
+    showUrlStatus({{ _("upload.downloading") | tojson }}, "info");
 
     const submitButton = urlUploadForm.querySelector('button[type="submit"]');
     const originalButtonText = submitButton.textContent;
-    submitButton.textContent = "Processing...";
+    submitButton.textContent = {{ _("upload.button_processing") | tojson }};
     submitButton.disabled = true;
 
     try {
@@ -245,7 +276,7 @@
 
       if (response.ok) {
         showUrlStatus(
-          `Success! File "${data.filename}" (${formatBytes(data.size)}) downloaded and queued for processing.`,
+          uploadMessage('urlSuccess', { filename: data.filename, size: formatBytes(data.size) }),
           "success"
         );
         // Clear form
@@ -257,10 +288,10 @@
           window.location.href = "/files";
         }, 2000);
       } else {
-        showUrlStatus(`Error: ${data.detail || "Failed to process URL"}`, "error");
+        showUrlStatus(uploadMessage('urlError', { detail: data.detail || {{ _("upload.error_url_processing") | tojson }} }), "error");
       }
     } catch (error) {
-      showUrlStatus(`Network error: ${error.message}`, "error");
+      showUrlStatus(uploadMessage('urlNetworkError', { detail: error.message }), "error");
     } finally {
       submitButton.textContent = originalButtonText;
       submitButton.disabled = false;

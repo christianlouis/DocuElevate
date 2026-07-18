@@ -44,7 +44,16 @@ def test_fresh_install_uses_named_workdir_volume_by_default():
     assert "${DOCUELEVATE_WORKDIR:-workdir-data}:/workdir" in compose["x-docuelevate-service"]["volumes"]
 
 
-def test_all_application_processes_share_one_build_image():
-    service_defaults = _compose()["x-docuelevate-service"]
+def test_all_application_processes_share_one_image_built_once():
+    compose = _compose()
+    service_defaults = compose["x-docuelevate-service"]
 
     assert service_defaults["image"] == "${DOCUELEVATE_IMAGE:-docuelevate:local}"
+    assert "build" not in service_defaults
+    assert compose["services"]["api"]["build"] == {"context": ".", "dockerfile": "Dockerfile"}
+
+
+def test_default_worker_concurrency_fits_small_fresh_install_hosts():
+    command = _compose()["services"]["worker"]["command"]
+
+    assert "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}" in command

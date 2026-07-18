@@ -439,7 +439,7 @@ class TestOnboardingAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["redirect_url"] == "/upload"
+        assert data["redirect_url"] == "/upload?onboarding=first-document"
 
         # Re-query to see persisted value
         ob_session.expire_all()
@@ -520,6 +520,17 @@ class TestOnboardingAPI:
         assert resp.json()["redirect_url"] == "/dashboard"
         # Verify it was popped
         assert "post_onboarding_redirect" not in mock_session
+
+    def test_complete_normalizes_plain_upload_redirect(self, ob_client_authed, ob_session):
+        """The auth flow's plain upload target should retain first-document guidance."""
+        from unittest.mock import patch
+
+        with patch("app.api.onboarding.Request.session", new_callable=dict) as mock_session:
+            mock_session.update({"post_onboarding_redirect": "/upload"})
+            response = ob_client_authed.post("/api/onboarding/complete")
+
+        assert response.status_code == 200
+        assert response.json()["redirect_url"] == "/upload?onboarding=first-document"
 
     def test_complete_exception_rollback(self, ob_client_authed, ob_session):
         """POST /complete should rollback and re-raise if commit fails."""

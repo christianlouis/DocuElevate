@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.config import settings as _settings
 from app.models import UserIntegration, UserProfile
+from app.utils.config_validator.providers import get_provider_status
 from app.utils.subscription import get_all_tiers
 from app.views.base import APIRouter, get_db, require_login, templates
 
@@ -71,6 +72,7 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
     """
     user = request.session.get("user") or {}
     user_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    profile = None
 
     if user_id:
         profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
@@ -100,6 +102,7 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
     ]
     legacy_destinations = _get_configured_destinations(_settings)
     tiers = get_all_tiers(db)
+    ai_configured = bool(get_provider_status()["AI Provider"]["configured"])
     is_preprod = "preprod" in request.url.hostname.lower() if request.url.hostname else False
 
     return templates.TemplateResponse(
@@ -114,5 +117,7 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
             "instance_label": "DocuElevate Preprod" if is_preprod else "DocuElevate",
             "suggested_storage_path": "/DocuElevate Preprod" if is_preprod else "/DocuElevate",
             "tiers": tiers,
+            "is_complimentary": bool(profile and profile.is_complimentary),
+            "ai_configured": ai_configured,
         },
     )

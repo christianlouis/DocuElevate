@@ -121,6 +121,19 @@ bypass an incomplete installation.
 
 After the operator bootstrap, each user gets a separate, resumable eight-step journey at `/onboarding`: identity and document space, plan, processing, document sources, destinations, automation/notifications, and review. The first step always creates an isolated personal Tribe. A user may also create a new shared Family/Team Tribe and becomes its administrator; an existing Tribe cannot be joined by entering or guessing its name and requires a later invitation flow. Optional integration steps can be skipped and resumed later. Progress and memberships belong to the database, so two users can be at different steps and no API or worker restart is required.
 
+Self-hosted administrator accounts receive complimentary full access. Their
+journey states that explicitly instead of presenting paid plan choices. The
+processing step also distinguishes the core path from optional AI: uploads,
+embedded-text extraction and OCR remain available without an AI credential;
+metadata extraction and embeddings are shown as not configured rather than as
+successful work.
+
+Completion sends the user to `/upload?onboarding=first-document`, where a
+first-document callout explains that AI metadata and external destinations are
+optional. The processing detail page reports successful and skipped steps
+separately, so a keyless fresh install can be accepted without disguising
+skipped AI work as success.
+
 The journey links to the personal Integrations dashboard. OAuth refresh tokens and other user credentials are encrypted in `user_integrations`; they are never written to environment variables or browser storage. On a preprod hostname, names and suggested folders created by the journey use the `DocuElevate Preprod` / `/DocuElevate Preprod` label to prevent accidental overlap with production resources.
 
 ---
