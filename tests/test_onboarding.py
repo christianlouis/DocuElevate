@@ -167,7 +167,11 @@ class TestOnboardingAPI:
         assert status_response.json()["profile"]["onboarding_journey"]["skipped"] == ["sources"]
 
     def test_status_normalizes_empty_journey_lists(self, ob_client_authed, ob_session):
-        _make_profile(ob_session, _TEST_USER["sub"], onboarding_journey_state="{}")
+        _make_profile(
+            ob_session,
+            _TEST_USER["sub"],
+            onboarding_journey_state='{"completed":null,"skipped":null}',
+        )
 
         data = ob_client_authed.get("/api/onboarding/status").json()
 

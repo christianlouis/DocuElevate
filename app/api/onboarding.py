@@ -127,8 +127,8 @@ def _journey_state(profile: UserProfile) -> dict[str, Any]:
     # Keep the response shape stable for a brand-new profile and older rows.
     # The UI can then render an honest review without guessing whether a
     # missing list means "not visited" or "nothing skipped".
-    journey["completed"] = sorted(topic for topic in set(journey.get("completed", [])) if topic in _JOURNEY_TOPICS)
-    journey["skipped"] = sorted(topic for topic in set(journey.get("skipped", [])) if topic in _JOURNEY_TOPICS)
+    journey["completed"] = sorted(topic for topic in set(journey.get("completed") or []) if topic in _JOURNEY_TOPICS)
+    journey["skipped"] = sorted(topic for topic in set(journey.get("skipped") or []) if topic in _JOURNEY_TOPICS)
     return journey
 
 

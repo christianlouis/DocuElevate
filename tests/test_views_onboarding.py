@@ -766,6 +766,7 @@ def test_storage_step_auto_selects_single_destination_but_keeps_external_copy_op
     assert "{% if user.is_admin %}" not in template
 
 
+@pytest.mark.unit
 def test_review_step_is_truthful_and_optional_steps_can_be_reopened():
     template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
     assert "onboarding.review_heading" in template
