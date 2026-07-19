@@ -21,6 +21,11 @@
            class="hidden mt-2 inline-flex min-h-[44px] items-center font-semibold text-blue-800 underline">
           <i class="fas fa-folder-open mr-2" aria-hidden="true"></i>{{ _("upload.first_document_open_files") }}
         </a>
+        <a id="firstDocumentRetryLink"
+           href="/upload?onboarding=first-document"
+           class="hidden mt-2 inline-flex min-h-[44px] items-center font-semibold text-red-800 underline">
+          <i class="fas fa-rotate-right mr-2" aria-hidden="true"></i>{{ _("upload.first_document_retry") }}
+        </a>
       </div>
     </div>
   </div>
@@ -172,7 +177,8 @@
     urlNetworkError: {{ _("upload.url_network_error") | tojson }},
     firstDocumentQueued: {{ _("upload.first_document_queued") | tojson }},
     firstDocumentOpening: {{ _("upload.first_document_opening") | tojson }},
-    firstDocumentDelayed: {{ _("upload.first_document_delayed") | tojson }}
+    firstDocumentDelayed: {{ _("upload.first_document_delayed") | tojson }},
+    firstDocumentFailed: {{ _("upload.first_document_failed") | tojson }}
   };
 </script>
 <script src="/static/js/upload.js"></script>
@@ -186,6 +192,7 @@
   const firstDocumentTrackerText = document.getElementById("firstDocumentTrackerText");
   const firstDocumentElapsed = document.getElementById("firstDocumentElapsed");
   const firstDocumentDelayedLink = document.getElementById("firstDocumentDelayedLink");
+  const firstDocumentRetryLink = document.getElementById("firstDocumentRetryLink");
   let followingFirstDocument = false;
   let firstDocumentTimer = null;
 
@@ -215,7 +222,7 @@
     }, 1000);
   }
 
-  async function followFirstDocument({ taskId = null, duplicateFileId = null }) {
+  async function followFirstDocument({ operationId = null, taskId = null, duplicateFileId = null }) {
     if (!firstDocumentMode || followingFirstDocument) {
       return false;
     }
@@ -233,14 +240,27 @@
 
     for (let attempt = 0; attempt < 80; attempt += 1) {
       try {
-        const response = await fetch(`/api/logs/task/${encodeURIComponent(taskId)}`);
+        const statusUrl = operationId
+          ? `/api/bulk-operations/${encodeURIComponent(operationId)}`
+          : `/api/logs/task/${encodeURIComponent(taskId)}`;
+        const response = await fetch(statusUrl);
         if (response.ok) {
           const payload = await response.json();
-          const logWithFile = payload.logs.find((entry) => entry.file_id !== null);
-          if (logWithFile) {
+          const fileId = operationId
+            ? payload.file_ids?.[0]
+            : payload.logs.find((entry) => entry.file_id !== null)?.file_id;
+          if (fileId) {
             updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
-            window.location.href = `/files/${encodeURIComponent(logWithFile.file_id)}/process?onboarding=first-document`;
+            window.location.href = `/files/${encodeURIComponent(fileId)}/process?onboarding=first-document`;
             return true;
+          }
+          if (operationId && payload.state === "completed" && payload.failed_items > 0) {
+            if (firstDocumentTimer !== null) {
+              window.clearInterval(firstDocumentTimer);
+            }
+            updateFirstDocumentTracker(uploadMessage("firstDocumentFailed"), startedAt);
+            firstDocumentRetryLink?.classList.remove("hidden");
+            return false;
           }
         } else if (response.status !== 404) {
           throw new Error(`HTTP ${response.status}`);

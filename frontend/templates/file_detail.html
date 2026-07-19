@@ -1125,7 +1125,9 @@
        successfully processed document into a failed onboarding experience. #}
     {% set onboarding_failed = step_summary.main.failure > 0 %}
     {% set onboarding_finished = step_summary.total_main_steps > 0 and onboarding_main_completed == step_summary.total_main_steps and not onboarding_failed %}
-    <section style="margin-bottom:1.5rem;padding:1.25rem;border-radius:0.75rem;border:1px solid {{ '#fecaca' if onboarding_failed else ('#bbf7d0' if onboarding_finished else '#bfdbfe') }};background:{{ '#fef2f2' if onboarding_failed else ('#f0fdf4' if onboarding_finished else '#eff6ff') }};"
+    <section id="first-document-status"
+             data-onboarding-state="{{ 'failed' if onboarding_failed else ('finished' if onboarding_finished else 'processing') }}"
+             style="margin-bottom:1.5rem;padding:1.25rem;border-radius:0.75rem;border:1px solid {{ '#fecaca' if onboarding_failed else ('#bbf7d0' if onboarding_finished else '#bfdbfe') }};background:{{ '#fef2f2' if onboarding_failed else ('#f0fdf4' if onboarding_finished else '#eff6ff') }};"
              role="status"
              aria-live="polite"
              aria-labelledby="first-document-status-heading">
@@ -1183,19 +1185,48 @@
           startedAt = Date.now();
           window.sessionStorage.setItem(storageKey, String(startedAt));
         }
-        const elapsed = document.getElementById("first-document-processing-elapsed");
         const renderElapsed = () => {
+          const elapsed = document.getElementById("first-document-processing-elapsed");
+          if (!elapsed) return;
           const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
           const minutes = Math.floor(seconds / 60);
           elapsed.textContent = ` · ${minutes}:${String(seconds % 60).padStart(2, "0")}`;
         };
         renderElapsed();
-        window.setInterval(renderElapsed, 1000);
-        window.setTimeout(() => {
-          if (Date.now() - startedAt < 300000) {
-            window.location.reload();
+        const elapsedTimer = window.setInterval(renderElapsed, 1000);
+        const pollStatus = async () => {
+          if (Date.now() - startedAt >= 300000) {
+            window.clearInterval(elapsedTimer);
+            return;
           }
-        }, 3000);
+          try {
+            const response = await fetch(window.location.href, {
+              headers: {"Accept": "text/html", "X-DocuElevate-Partial": "first-document-status"},
+              cache: "no-store"
+            });
+            if (response.ok) {
+              const page = new DOMParser().parseFromString(await response.text(), "text/html");
+              const nextStatus = page.getElementById("first-document-status");
+              const currentStatus = document.getElementById("first-document-status");
+              if (nextStatus && currentStatus) {
+                currentStatus.replaceWith(nextStatus);
+                const nextHistory = page.getElementById("processing-history");
+                const currentHistory = document.getElementById("processing-history");
+                if (nextHistory && currentHistory) currentHistory.replaceWith(nextHistory);
+                if (nextStatus.dataset.onboardingState !== "processing") {
+                  window.sessionStorage.removeItem(storageKey);
+                  window.clearInterval(elapsedTimer);
+                  return;
+                }
+              }
+            }
+          } catch (error) {
+            // A transient API interruption must not strand onboarding. The
+            // next poll retries while the visible elapsed timer keeps running.
+          }
+          window.setTimeout(pollStatus, 3000);
+        };
+        window.setTimeout(pollStatus, 3000);
         {% endif %}
       })();
     </script>

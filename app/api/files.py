@@ -145,6 +145,25 @@ def _serialize_bulk_operation(operation: BulkOperation) -> dict:
     }
 
 
+def _record_upload_operation(db: Session, request: Request, task_ids: list[str]) -> str | None:
+    """Persist owner-scoped upload tracking without making upload success depend on it."""
+    try:
+        operation = _record_bulk_operation(
+            db,
+            request,
+            "upload",
+            len(task_ids),
+            state="queued",
+            task_ids=task_ids,
+        )
+        db.commit()
+        return operation.id
+    except Exception:
+        db.rollback()
+        logger.exception("Could not persist upload progress operation")
+        return None
+
+
 @router.delete("/files/{file_id}/privacy/override")
 @require_login
 def clear_file_privacy_override(request: Request, file_id: int, db: DbSession):
@@ -204,7 +223,12 @@ def get_bulk_operation(request: Request, operation_id: str, db: DbSession):
     owner_id = get_current_owner_id(request)
     user = request.session.get("user")
     is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-    if not is_admin and operation.owner_id != owner_id:
+    # Upload progress may include a failure that happened before a FileRecord
+    # existed.  It therefore remains strictly bound to the uploading owner;
+    # platform-admin status is not a cross-tenant bypass.
+    if operation.action == "upload" and operation.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Bulk operation not found")
+    if operation.action != "upload" and not is_admin and operation.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="Bulk operation not found")
 
     task_ids = json.loads(operation.task_ids or "[]")
@@ -214,14 +238,38 @@ def get_bulk_operation(request: Request, operation_id: str, db: DbSession):
         results = [celery.AsyncResult(task_id) for task_id in task_ids]
         recorded_result = json.loads(operation.result or "{}")
         enqueue_failures = len(recorded_result.get("errors", []))
-        operation.completed_items = sum(result.successful() for result in results)
-        operation.failed_items = enqueue_failures + sum(result.failed() for result in results)
+        successful_results = sum(result.successful() for result in results)
+        failed_results = sum(result.failed() for result in results)
+        if operation.action == "upload":
+            # Conversion failures intentionally return None after logging a
+            # user-safe error, so Celery calls them successful unless we treat
+            # a terminal None result as a failed intake.
+            failed_results += sum(result.successful() and result.result is None for result in results)
+            successful_results -= sum(result.successful() and result.result is None for result in results)
+        operation.completed_items = successful_results
+        operation.failed_items = enqueue_failures + failed_results
         ready_items = sum(result.ready() for result in results)
         operation.state = "completed" if ready_items == len(results) else "running"
         db.commit()
         db.refresh(operation)
 
-    return _serialize_bulk_operation(operation)
+    payload = _serialize_bulk_operation(operation)
+    if operation.action == "upload":
+        task_ids = json.loads(operation.task_ids or "[]")
+        accessible_ids = apply_owner_filter(db.query(FileRecord.id), request).subquery()
+        payload["file_ids"] = [
+            row[0]
+            for row in (
+                db.query(ProcessingLog.file_id)
+                .filter(
+                    ProcessingLog.task_id.in_(task_ids),
+                    ProcessingLog.file_id.in_(db.query(accessible_ids.c.id)),
+                )
+                .distinct()
+                .all()
+            )
+        ]
+    return payload
 
 
 def _normalize_tags(tags: list[str]) -> list[str]:
@@ -1649,8 +1697,9 @@ def get_file_preview(
         return FileResponse(
             path=file_path,
             media_type=safe_preview_media_type(declared_media_type, file_path),
+            filename=file_record.original_filename,
+            content_disposition_type="inline",
             headers={
-                "Content-Disposition": f'inline; filename="{file_record.original_filename}"',
                 "X-Content-Type-Options": "nosniff",
             },
         )
@@ -1733,8 +1782,9 @@ def download_file(
         # Return the file with attachment disposition to trigger download
         return FileResponse(
             path=file_path,
-            media_type=file_record.mime_type or "application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{file_record.original_filename}"'},
+            media_type="application/pdf" if version == "processed" else (file_record.mime_type or "application/pdf"),
+            filename=file_record.original_filename,
+            content_disposition_type="attachment",
         )
 
     except HTTPException:
@@ -1963,9 +2013,11 @@ async def ui_upload(
 
             # Remove the original file after successful splitting
             os.remove(target_path)
+            operation_id = _record_upload_operation(db, request, task_ids)
 
             return {
                 "task_ids": task_ids,
+                "operation_id": operation_id,
                 "status": "queued",
                 "original_filename": safe_filename,
                 "stored_filename": target_filename,
@@ -2007,8 +2059,10 @@ async def ui_upload(
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
 
+    operation_id = _record_upload_operation(db, request, [task.id])
     return {
         "task_id": task.id,
+        "operation_id": operation_id,
         "status": "queued",
         "original_filename": safe_filename,
         "stored_filename": target_filename,

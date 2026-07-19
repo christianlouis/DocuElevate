@@ -26,17 +26,16 @@ def test_drop_zone_supports_keyboard_activation():
 
 
 @pytest.mark.unit
-def test_upload_journey_copy_is_localized_in_english_and_german():
-    """First-upload guidance and asynchronous status text use the normal locale."""
+def test_upload_journey_copy_has_english_source_translations():
+    """New UI copy is sourced from English for the translation automation."""
     template = Path("frontend/templates/upload.html").read_text(encoding="utf-8")
     keys = set(re.findall(r'["\'](upload\.[a-z0-9_]+)["\']', template))
 
     assert "upload.first_document_heading" in keys
     assert "window.uploadI18n" in template
-    for locale in ("en", "de"):
-        translations = json.loads(Path(f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
-        missing = sorted(keys - translations.keys())
-        assert not missing, f"Missing {locale} upload translations: {missing}"
+    translations = json.loads(Path("frontend/translations/en.json").read_text(encoding="utf-8"))
+    missing = sorted(keys - translations.keys())
+    assert not missing, f"Missing English upload translations: {missing}"
 
 
 @pytest.mark.unit
@@ -56,6 +55,7 @@ def test_first_document_upload_follows_the_created_record_instead_of_losing_cont
     script = Path("frontend/static/js/upload.js").read_text(encoding="utf-8")
 
     assert 'get("onboarding") === "first-document"' in template
+    assert "/api/bulk-operations/${encodeURIComponent(operationId)}" in template
     assert "/api/logs/task/${encodeURIComponent(taskId)}" in template
     assert "/process?onboarding=first-document" in template
     assert "window.onDocuElevateUploadQueued = followFirstDocument" in template
@@ -63,6 +63,9 @@ def test_first_document_upload_follows_the_created_record_instead_of_losing_cont
     assert 'firstDocumentDelayedLink?.classList.remove("hidden")' in template
     assert script.count("window.onDocuElevateUploadQueued({") == 2
     assert "duplicateFileId: result.duplicate_of.original_file_id" in script
+    assert "operationId: result.operation_id" in script
+    assert "taskIds: result.task_ids" in script
+    assert 'payload.state === "completed" && payload.failed_items > 0' in template
 
 
 @pytest.mark.unit
@@ -74,14 +77,17 @@ def test_first_document_pipeline_has_live_elapsed_terminal_journey_copy():
     assert 'request.query_params.get("onboarding") == "first-document"' in template
     assert 'id="first-document-processing-elapsed"' in template
     assert "docuelevate.firstDocumentStartedAt" in template
-    assert "window.location.reload()" in template
+    onboarding_status = template[
+        template.index('id="first-document-status"') : template.index("<!-- Overall Processing Status Banner -->")
+    ]
+    assert "window.location.reload()" not in onboarding_status
+    assert 'page.getElementById("first-document-status")' in template
     assert 'id="processing-history"' in template
     assert "{% set onboarding_failed = step_summary.main.failure > 0 %}" in template
     assert "onboarding_failed = step_summary.main.failure > 0 or step_summary.uploads.failure" not in template
-    for locale in ("en", "de"):
-        translations = json.loads(Path(f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
-        missing = sorted(keys - translations.keys())
-        assert not missing, f"Missing {locale} first-document translations: {missing}"
+    translations = json.loads(Path("frontend/translations/en.json").read_text(encoding="utf-8"))
+    missing = sorted(keys - translations.keys())
+    assert not missing, f"Missing English first-document translations: {missing}"
 
 
 @pytest.mark.unit
