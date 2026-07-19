@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.models import ApplicationSettings, UserImapAccount, UserIntegration
+from app.models import ApplicationSettings, SettingsAuditLog, UserImapAccount, UserIntegration
 from app.utils.encryption import rotate_encrypted_value, value_uses_primary_key
 from app.utils.settings_service import get_setting_metadata
 
@@ -32,6 +32,14 @@ def _encrypted_columns(db: Session, *, lock_rows: bool) -> list[tuple[object, st
         metadata = get_setting_metadata(setting.key)
         if metadata.get("sensitive", False) and not metadata.get("environment_only", False):
             rows.append((setting, "value"))
+    for entry in _query_rows(db, SettingsAuditLog, lock_rows=lock_rows):
+        metadata = get_setting_metadata(entry.key)
+        if not metadata.get("sensitive", False) or metadata.get("environment_only", False):
+            continue
+        if entry.old_value is not None:
+            rows.append((entry, "old_value"))
+        if entry.new_value is not None:
+            rows.append((entry, "new_value"))
     rows.extend((row, "credentials") for row in _query_rows(db, UserIntegration, lock_rows=lock_rows))
     rows.extend((row, "password") for row in _query_rows(db, UserImapAccount, lock_rows=lock_rows))
     return rows
