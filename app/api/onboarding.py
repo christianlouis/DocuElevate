@@ -122,7 +122,14 @@ def _journey_state(profile: UserProfile) -> dict[str, Any]:
         journey = json.loads(profile.onboarding_journey_state or "{}")
     except (TypeError, json.JSONDecodeError):
         journey = {}
-    return journey if isinstance(journey, dict) else {}
+    if not isinstance(journey, dict):
+        journey = {}
+    # Keep the response shape stable for a brand-new profile and older rows.
+    # The UI can then render an honest review without guessing whether a
+    # missing list means "not visited" or "nothing skipped".
+    journey["completed"] = sorted(topic for topic in set(journey.get("completed", [])) if topic in _JOURNEY_TOPICS)
+    journey["skipped"] = sorted(topic for topic in set(journey.get("skipped", [])) if topic in _JOURNEY_TOPICS)
+    return journey
 
 
 def _get_or_create_profile(db: Session, user_id: str) -> UserProfile:
@@ -209,11 +216,19 @@ def save_progress(request: Request, body: ProgressBody, db: DbSession) -> dict[s
 
     completed = set(journey.get("completed", []))
     skipped = set(journey.get("skipped", []))
-    for topic, target in ((body.completed_topic, completed), (body.skipped_topic, skipped)):
-        if topic is not None:
-            if topic not in _JOURNEY_TOPICS:
-                raise HTTPException(status_code=422, detail="Unknown onboarding topic")
-            target.add(topic)
+    for topic in (body.completed_topic, body.skipped_topic):
+        if topic is not None and topic not in _JOURNEY_TOPICS:
+            raise HTTPException(status_code=422, detail="Unknown onboarding topic")
+
+    # A later choice supersedes an earlier one. Without this, returning to a
+    # skipped step and completing it leaves the journey in two contradictory
+    # states and the final review cannot be trusted.
+    if body.completed_topic is not None:
+        completed.add(body.completed_topic)
+        skipped.discard(body.completed_topic)
+    if body.skipped_topic is not None:
+        skipped.add(body.skipped_topic)
+        completed.discard(body.skipped_topic)
 
     profile.onboarding_current_step = body.current_step
     journey["completed"] = sorted(completed)

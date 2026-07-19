@@ -436,8 +436,8 @@
           <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <i class="fas fa-check-circle text-4xl" aria-hidden="true"></i>
           </div>
-          <h2 class="text-3xl font-extrabold mb-2">{{ _("onboarding.ready_heading") }} 🎉</h2>
-          <p class="text-indigo-100">{{ _("onboarding.ready_description") }}</p>
+          <h2 class="text-3xl font-extrabold mb-2">{{ _("onboarding.review_heading") }}</h2>
+          <p class="text-indigo-100">{{ _("onboarding.review_description") }}</p>
         </div>
         <div class="p-8">
           <ul class="space-y-3 mb-8" aria-label="{{ _('onboarding.summary_aria') }}">
@@ -486,7 +486,33 @@
               <span x-show="selectedDestination">{{ _("onboarding.external_copy_selected") }} <strong x-text="selectedDestinationLabel"></strong></span>
               <span x-show="!selectedDestination" class="text-gray-500">{{ _("onboarding.external_copy_not_selected") }}</span>
             </li>
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                   :class="integrationCounts.sources > 0 ? 'bg-green-100' : 'bg-amber-100'">
+                <i class="fas text-sm" :class="integrationCounts.sources > 0 ? 'fa-check text-green-600' : 'fa-clock text-amber-700'" aria-hidden="true"></i>
+              </div>
+              <div class="flex-1">
+                <span x-show="integrationCounts.sources > 0"><strong x-text="integrationCounts.sources"></strong> {{ _("onboarding.review_sources_ready") }}</span>
+                <span x-show="integrationCounts.sources === 0" class="text-amber-800">{{ _("onboarding.review_sources_later") }}</span>
+              </div>
+              <button type="button" @click="reopenStep(5)" class="text-sm text-indigo-700 hover:underline">{{ _("onboarding.review_change") }}</button>
+            </li>
+            <li class="flex items-center gap-3 text-gray-700">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                   :class="isTopicCompleted('automation') ? 'bg-green-100' : 'bg-amber-100'">
+                <i class="fas text-sm" :class="isTopicCompleted('automation') ? 'fa-check text-green-600' : 'fa-clock text-amber-700'" aria-hidden="true"></i>
+              </div>
+              <div class="flex-1">
+                <span x-show="isTopicCompleted('automation')">{{ _("onboarding.review_automation_ready") }}</span>
+                <span x-show="!isTopicCompleted('automation')" class="text-amber-800">{{ _("onboarding.review_automation_later") }}</span>
+              </div>
+              <button type="button" @click="reopenStep(7)" class="text-sm text-indigo-700 hover:underline">{{ _("onboarding.review_change") }}</button>
+            </li>
           </ul>
+          <p class="text-sm text-gray-600 mb-5" x-show="hasDeferredTopics">
+            <i class="fas fa-circle-info text-indigo-600 mr-1" aria-hidden="true"></i>
+            {{ _("onboarding.review_deferred_hint") }}
+          </p>
           <button @click="goNext()"
                   :disabled="loading"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
@@ -558,6 +584,8 @@ function onboardingWizard() {
     configuredDestinationLabels: {{ configured_destination_labels | tojson }},
     selectedDestination: {{ (configured_destination_ids[0] if configured_destination_ids | length == 1 else '') | tojson }},
     integrationCounts: { sources: 0, destinations: 0 },
+    completedTopics: [],
+    skippedTopics: [],
     complimentary: {{ is_complimentary | tojson }},
 
     get progressPercent() {
@@ -566,6 +594,14 @@ function onboardingWizard() {
 
     get selectedDestinationLabel() {
       return this.configuredDestinationLabels[this.selectedDestination] || this.selectedDestination;
+    },
+
+    get hasDeferredTopics() {
+      return this.integrationCounts.sources === 0 || this.skippedTopics.length > 0;
+    },
+
+    isTopicCompleted(topic) {
+      return this.completedTopics.includes(topic) && !this.skippedTopics.includes(topic);
     },
 
     stepLabels: onboardingI18n.stepLabels,
@@ -590,6 +626,8 @@ function onboardingWizard() {
             if (data.profile.subscription_billing_cycle) this.billingCycle = data.profile.subscription_billing_cycle;
             if (data.profile.preferred_destination) this.selectedDestination = data.profile.preferred_destination;
             const journey = data.profile.onboarding_journey || {};
+            this.completedTopics = Array.isArray(journey.completed) ? journey.completed : [];
+            this.skippedTopics = Array.isArray(journey.skipped) ? journey.skipped : [];
             if (journey.space_mode === 'personal' || journey.space_mode === 'shared') {
               this.spaceMode = journey.space_mode;
               this.selectedTribeId = journey.selected_tribe_id || '';
@@ -618,11 +656,21 @@ function onboardingWizard() {
       else if (this.step === 3) await this.savePlan();
       else if (this.step === 6) await this.saveStorage();
       else if (this.step === 8) { await this.completeOnboarding(); return; }
-      if (!this.error) await this.advance();
+      if (!this.error) await this.advance(this.step === 6 ? 'destinations' : null);
     },
 
-    goBack() {
-      if (this.step > 1) this.step--;
+    async goBack() {
+      if (this.step <= 1) return;
+      this.error = '';
+      const previousStep = this.step - 1;
+      try { await this.persistProgress(previousStep); this.step = previousStep; }
+      catch (_) { this.error = onboardingI18n.progressSaveFailed; }
+    },
+
+    async reopenStep(targetStep) {
+      this.error = '';
+      try { await this.persistProgress(targetStep); this.step = targetStep; }
+      catch (_) { this.error = onboardingI18n.progressSaveFailed; }
     },
 
     async persistProgress(nextStep, completedTopic = null, skippedTopic = null) {
@@ -631,6 +679,10 @@ function onboardingWizard() {
         body: JSON.stringify({ current_step: nextStep, completed_topic: completedTopic, skipped_topic: skippedTopic })
       });
       if (!r.ok) throw new Error(onboardingI18n.progressSaveFailed);
+      const data = await r.json();
+      const journey = data.journey || {};
+      this.completedTopics = Array.isArray(journey.completed) ? journey.completed : [];
+      this.skippedTopics = Array.isArray(journey.skipped) ? journey.skipped : [];
     },
 
     async advance(topic = null) {

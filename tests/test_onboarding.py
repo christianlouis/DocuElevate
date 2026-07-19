@@ -166,6 +166,30 @@ class TestOnboardingAPI:
         assert status_response.json()["step"] == 6
         assert status_response.json()["profile"]["onboarding_journey"]["skipped"] == ["sources"]
 
+    def test_status_normalizes_empty_journey_lists(self, ob_client_authed, ob_session):
+        _make_profile(ob_session, _TEST_USER["sub"], onboarding_journey_state="{}")
+
+        data = ob_client_authed.get("/api/onboarding/status").json()
+
+        assert data["profile"]["onboarding_journey"]["completed"] == []
+        assert data["profile"]["onboarding_journey"]["skipped"] == []
+
+    def test_completing_a_skipped_topic_clears_the_skipped_state(self, ob_client_authed):
+        skipped = ob_client_authed.post(
+            "/api/onboarding/progress",
+            json={"current_step": 6, "skipped_topic": "sources"},
+        )
+        assert skipped.status_code == 200
+
+        completed = ob_client_authed.post(
+            "/api/onboarding/progress",
+            json={"current_step": 6, "completed_topic": "sources"},
+        )
+
+        assert completed.status_code == 200
+        assert completed.json()["journey"]["completed"] == ["sources"]
+        assert completed.json()["journey"]["skipped"] == []
+
     def test_progress_rejects_unknown_topic(self, ob_client_authed):
         resp = ob_client_authed.post(
             "/api/onboarding/progress",
