@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.2 (2026-07-19)
+
+### Bug Fixes
+
+- Prevent backup retention from exhausting storage
+  ([#1188](https://github.com/christianlouis/DocuElevate/pull/1188),
+  [`44a381d`](https://github.com/christianlouis/DocuElevate/commit/44a381d9705cd6993e4856b5eeecd573e68bff3a))
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b67b537`](https://github.com/christianlouis/DocuElevate/commit/b67b5370675675984242549fde911417943c1d1a))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ff2dcb9`](https://github.com/christianlouis/DocuElevate/commit/ff2dcb9f5e8447cdc9fe56a674cb061d3a885f8d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4141dec`](https://github.com/christianlouis/DocuElevate/commit/4141dec8d31a812127034b11d4d10018b01277de))
+
+
 ## Unreleased
 
 ### Documentation
