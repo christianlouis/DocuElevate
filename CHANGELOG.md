@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Build System
+
+- **deps**: Update pypdf requirement to >=6.14.2
+  ([#1202](https://github.com/christianlouis/DocuElevate/pull/1202),
+  [`90d56ee`](https://github.com/christianlouis/DocuElevate/commit/90d56ee2d9576be91564f39708b7649128e6465d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`08c321e`](https://github.com/christianlouis/DocuElevate/commit/08c321e75e8849d0010094d058e616d28ee37c52))
+
+
+## Unreleased
+
 
 ## v0.188.4 (2026-07-19)
 
