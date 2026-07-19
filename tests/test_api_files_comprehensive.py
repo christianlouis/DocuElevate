@@ -14,7 +14,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.models import FileRecord, ProcessingLog, TribeMembership
+from app.models import BulkOperation, FileRecord, ProcessingLog, TribeMembership
 from app.utils.tribe_scope import ensure_document_scope
 
 
@@ -646,6 +646,78 @@ class TestFilePreview:
         response = client.get(f"/api/files/{file.id}/preview?version=original")
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_preview_original_active_content_is_neutralized(self, client: TestClient, db_session, tmp_path):
+        """The generic preview endpoint must not execute uploaded HTML."""
+        file_path = tmp_path / "active.html"
+        file_path.write_text("<script>window.top.pwned = true</script>", encoding="utf-8")
+
+        file = FileRecord(
+            filehash="active-html-hash",
+            original_filename="active.html",
+            local_filename=str(file_path),
+            file_size=file_path.stat().st_size,
+            mime_type="text/html",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/preview?version=original")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_preview_filename_is_encoded_by_starlette(self, client: TestClient, db_session, tmp_path):
+        """An uploaded filename cannot inject Content-Disposition parameters."""
+        file_path = tmp_path / "safe.pdf"
+        file_path.write_bytes(b"%PDF-1.4")
+        file = FileRecord(
+            filehash="header-injection-hash",
+            original_filename='report.pdf"; filename="injected.html',
+            local_filename=str(file_path),
+            file_size=file_path.stat().st_size,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/preview?version=original")
+
+        assert response.status_code == 200
+        disposition = response.headers["content-disposition"]
+        assert disposition.startswith("inline;")
+        assert 'filename="injected.html"' not in disposition
+
+        download = client.get(f"/api/files/{file.id}/download?version=original")
+        assert download.status_code == 200
+        download_disposition = download.headers["content-disposition"]
+        assert download_disposition.startswith("attachment;")
+        assert 'filename="injected.html"' not in download_disposition
+
+    def test_preview_processed_conversion_is_served_as_pdf(self, client: TestClient, db_session, tmp_path):
+        """A converted image's processed artifact is a PDF, not the source MIME type."""
+        source_path = tmp_path / "scan.png"
+        source_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+        processed_path = tmp_path / "scan.pdf"
+        processed_path.write_bytes(b"%PDF-1.4")
+
+        file = FileRecord(
+            filehash="converted-image-hash",
+            original_filename="scan.png",
+            local_filename=str(source_path),
+            processed_file_path=str(processed_path),
+            file_size=source_path.stat().st_size,
+            mime_type="image/png",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/preview?version=processed")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
 
     def test_preview_file_not_found(self, client: TestClient, db_session):
         """Test preview for non-existent file."""
@@ -780,7 +852,7 @@ class TestUIUpload:
     @patch("app.tasks.process_document.process_document.delay")
     @patch("app.config.settings.workdir", "/tmp")
     @patch("app.config.settings.max_upload_size", 10485760)
-    def test_ui_upload_pdf_success(self, mock_delay, client: TestClient, tmp_path):
+    def test_ui_upload_pdf_success(self, mock_delay, client: TestClient, db_session, tmp_path):
         """Test successful PDF upload through UI."""
         mock_task = Mock()
         mock_task.id = "task123"
@@ -797,8 +869,24 @@ class TestUIUpload:
             assert response.status_code == 200
             data = response.json()
             assert "task_id" in data
+            assert data["operation_id"]
             assert data["status"] == "queued"
             assert data["original_filename"] == "test.pdf"
+
+            operation = db_session.query(BulkOperation).filter_by(id=data["operation_id"]).one()
+            assert json.loads(operation.task_ids) == ["task123"]
+
+            result = Mock()
+            result.ready.return_value = True
+            result.successful.return_value = True
+            result.failed.return_value = False
+            result.result = None
+            with patch("app.celery_app.celery.AsyncResult", return_value=result):
+                status_response = client.get(f"/api/bulk-operations/{data['operation_id']}")
+            assert status_response.status_code == 200
+            assert status_response.json()["state"] == "completed"
+            assert status_response.json()["failed_items"] == 1
+            assert status_response.json()["file_ids"] == []
 
     @patch("app.api.files.convert_to_pdf")
     @patch("app.config.settings.workdir", "/tmp")
@@ -3362,7 +3450,7 @@ class TestUIUploadFileSplitting:
     """Test file splitting logic in ui-upload (lines 1431-1464)."""
 
     @patch("app.tasks.process_document.process_document.delay")
-    def test_ui_upload_with_file_splitting(self, mock_delay, client: TestClient, tmp_path):
+    def test_ui_upload_with_file_splitting(self, mock_delay, client: TestClient, db_session, tmp_path):
         """Test upload that triggers file splitting into parts."""
         mock_task = Mock()
         mock_task.id = "task-split"
@@ -3391,6 +3479,9 @@ class TestUIUploadFileSplitting:
             data = response.json()
             assert data["status"] == "queued"
             assert data["split_into_parts"] == 2
+            assert data["operation_id"]
+            operation = db_session.query(BulkOperation).filter_by(id=data["operation_id"]).one()
+            assert len(json.loads(operation.task_ids)) == 2
             assert mock_delay.call_count >= 1
 
     @patch("app.tasks.process_document.process_document.delay")

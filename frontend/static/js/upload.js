@@ -469,10 +469,25 @@ function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
           progressBar.className = 'file-progress-bar bg-yellow-400 h-2 rounded-full';
           statusEl.textContent = uploadMessage('duplicate', { fileId: result.duplicate_of.original_file_id });
           statusEl.className = 'text-xs text-yellow-600 mt-1';
+          if (typeof window.onDocuElevateUploadQueued === 'function') {
+            window.onDocuElevateUploadQueued({
+              duplicateFileId: result.duplicate_of.original_file_id,
+              filename: file.name
+            });
+          }
         } else {
+          const taskId = result.task_id || (Array.isArray(result.task_ids) ? result.task_ids[0] : null);
           progressBar.className = 'file-progress-bar bg-green-500 h-2 rounded-full';
-          statusEl.textContent = uploadMessage('successTask', { taskId: result.task_id });
+          statusEl.textContent = uploadMessage('successTask', { taskId: taskId || '' });
           statusEl.className = 'text-xs text-green-600 mt-1';
+          if (typeof window.onDocuElevateUploadQueued === 'function') {
+            window.onDocuElevateUploadQueued({
+              operationId: result.operation_id,
+              taskId,
+              taskIds: result.task_ids || (taskId ? [taskId] : []),
+              filename: file.name
+            });
+          }
         }
         _onUploadSuccess();
         onTerminal();

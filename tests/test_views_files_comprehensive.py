@@ -529,6 +529,51 @@ class TestPreviewOriginalFile:
         assert response.headers["content-type"] == "application/pdf"
         assert "inline" in response.headers.get("content-disposition", "")
 
+    def test_preview_original_image_uses_actual_media_type(self, client: TestClient, db_session, tmp_path):
+        """The browser must receive images as images instead of invalid PDFs."""
+        file_path = tmp_path / "test.png"
+        file_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+        file = FileRecord(
+            filehash="image-hash",
+            original_filename="test.png",
+            local_filename=str(file_path),
+            original_file_path=str(file_path),
+            file_size=8,
+            mime_type="image/png",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/files/{file.id}/preview/original")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert "inline" in response.headers.get("content-disposition", "")
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_preview_original_html_is_neutralized_as_plain_text(self, client: TestClient, db_session, tmp_path):
+        """An uploaded HTML file must not execute under DocuElevate's origin."""
+        file_path = tmp_path / "unsafe.html"
+        file_path.write_text("<script>window.top.pwned = true</script>", encoding="utf-8")
+
+        file = FileRecord(
+            filehash="html-hash",
+            original_filename="unsafe.html",
+            local_filename=str(file_path),
+            original_file_path=str(file_path),
+            file_size=file_path.stat().st_size,
+            mime_type="text/html",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/files/{file.id}/preview/original")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
     def test_preview_original_file_not_found(self, client: TestClient, db_session):
         """Test preview when file record doesn't exist."""
         response = client.get("/files/99999/preview/original")
