@@ -718,7 +718,9 @@ def _test_vector_database_connection(
         return {"success": False, "message": f"Unsupported vector database provider: {provider}"}
     if not settings.vector_index_enabled:
         return {"success": False, "message": "Vector indexing is disabled by the operator"}
-    if not settings.openai_api_key:
+    embedding_base_url = str(settings.openai_base_url or "").rstrip("/")
+    uses_keyless_compatible_endpoint = bool(embedding_base_url and embedding_base_url != "https://api.openai.com/v1")
+    if not settings.openai_api_key and not uses_keyless_compatible_endpoint:
         return {
             "success": False,
             "code": "embedding_provider_not_configured",

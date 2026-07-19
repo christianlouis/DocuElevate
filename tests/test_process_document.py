@@ -752,7 +752,7 @@ def test_process_document_non_pdf_file(db_session, tmp_path):
         mock_celery.send_task = MagicMock()
 
         # Call the task's run method directly
-        result = process_document.run(str(test_image))
+        result = process_document.run(str(test_image), owner_id="owner@example.test")
 
         # Verify that PDF conversion was queued
         assert result["status"] == "Queued for PDF conversion"
@@ -762,6 +762,7 @@ def test_process_document_non_pdf_file(db_session, tmp_path):
         mock_celery.send_task.assert_called_once()
         call_args = mock_celery.send_task.call_args
         assert call_args[0][0] == "app.tasks.convert_to_pdf.convert_to_pdf"
+        assert call_args.kwargs["kwargs"] == {"owner_id": "owner@example.test"}
 
 
 @pytest.mark.unit

@@ -37,6 +37,7 @@ def test_vector_connection_uses_operator_qdrant(monkeypatch):
 def test_vector_connection_rejects_missing_embedding_provider(monkeypatch):
     monkeypatch.setattr("app.config.settings.vector_index_enabled", True)
     monkeypatch.setattr("app.config.settings.openai_api_key", None)
+    monkeypatch.setattr("app.config.settings.openai_base_url", "https://api.openai.com/v1")
 
     with patch("app.utils.vector_index.QdrantVectorIndex.status") as qdrant_status:
         from app.api.integrations import _test_vector_database_connection
@@ -46,6 +47,26 @@ def test_vector_connection_rejects_missing_embedding_provider(monkeypatch):
     assert result["success"] is False
     assert result["code"] == "embedding_provider_not_configured"
     qdrant_status.assert_not_called()
+
+
+def test_vector_connection_probes_keyless_openai_compatible_endpoint(monkeypatch):
+    monkeypatch.setattr("app.config.settings.vector_index_enabled", True)
+    monkeypatch.setattr("app.config.settings.vector_index_collection", "DocuElevate Preprod")
+    monkeypatch.setattr("app.config.settings.openai_api_key", None)
+    monkeypatch.setattr("app.config.settings.openai_base_url", "http://embeddings.internal/v1/")
+
+    with (
+        patch("app.utils.vector_index.QdrantVectorIndex.status", return_value={"collection": "DocuElevate Preprod"}),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection") as ensure_collection,
+        patch("app.utils.similarity.generate_embedding", return_value=[0.1, 0.2, 0.3]) as generate_embedding,
+    ):
+        from app.api.integrations import _test_vector_database_connection
+
+        result = _test_vector_database_connection({"provider": "qdrant"}, None)
+
+    assert result["success"] is True
+    generate_embedding.assert_called_once()
+    ensure_collection.assert_called_once_with(3)
 
 
 def test_vector_upload_indexes_file_record(monkeypatch, tmp_path):

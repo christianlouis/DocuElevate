@@ -762,6 +762,7 @@ def process_document(
         celery.send_task(
             "app.tasks.convert_to_pdf.convert_to_pdf",
             args=[new_local_path, original_filename],
+            kwargs={"owner_id": owner_id},
         )
         return {"file": new_local_path, "status": "Queued for PDF conversion", "file_id": file_id}
 
