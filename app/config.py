@@ -312,6 +312,14 @@ class Settings(BaseSettings):
     admin_username: Optional[str] = None
     admin_password: Optional[str] = None
     session_secret: Optional[str] = None
+    session_secret_previous: Optional[str] = Field(
+        default=None,
+        description=(
+            "Temporary previous SESSION_SECRET used only during an operator-managed "
+            "database encryption-key rotation. Remove it after all encrypted rows have "
+            "been re-encrypted and verified with the current SESSION_SECRET."
+        ),
+    )
     session_lifetime_days: int = Field(
         default=30,
         description=(
@@ -1780,6 +1788,18 @@ class Settings(BaseSettings):
             raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True")
         if info.data.get("auth_enabled") and v and len(v) < 32:
             raise ValueError("SESSION_SECRET must be at least 32 characters long")
+        return v
+
+    @field_validator("session_secret_previous")
+    @classmethod
+    def validate_previous_session_secret(cls, v: str | None, info: object) -> str | None:
+        """Keep the temporary fallback key strong and prevent a no-op rotation."""
+        if not v:
+            return None
+        if len(v) < 32:
+            raise ValueError("SESSION_SECRET_PREVIOUS must be at least 32 characters long")
+        if v == info.data.get("session_secret"):
+            raise ValueError("SESSION_SECRET_PREVIOUS must differ from SESSION_SECRET")
         return v
 
     # Get build date from environment or file

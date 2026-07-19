@@ -28,7 +28,7 @@ All credentials are stored either in environment variables or, when set via the 
 | OAuth refresh tokens | Rotate on revocation / after each re-authorization |
 | Passwords (SMTP, IMAP, FTP, SFTP, Nextcloud, WebDAV) | Every 90 days or on personnel change |
 | Admin password | Every 90 days or on personnel change |
-| `SESSION_SECRET` | On suspected compromise; note all active sessions will be invalidated |
+| `SESSION_SECRET` | On suspected compromise; use the keyring procedure below and expect active sessions to be invalidated |
 
 ---
 
@@ -180,13 +180,39 @@ Update `imap1_password` and/or `imap2_password` after rotating the credentials w
 
 > **Warning:** Rotating `SESSION_SECRET` invalidates all active user sessions. All logged-in users will be signed out immediately.
 
-1. Generate a new secret (minimum 32 characters):
+`SESSION_SECRET` also protects credentials stored in the database. DocuElevate
+supports a short-lived two-key handover so those values can be re-encrypted
+without asking users to reconnect every integration.
+
+1. Generate a new secret (minimum 32 characters) in your secret manager. Do
+   not print it into a shared terminal transcript or commit it to Git.
    ```bash
    python -c "import secrets; print(secrets.token_hex(32))"
    ```
-2. Update the environment variable or `.env` file.
-3. Restart the application.
-4. Existing encrypted settings stored in the database **will no longer be readable** because the encryption key is derived from `SESSION_SECRET`. You must re-enter all sensitive settings that were stored via the UI after rotating this value.
+2. Deploy both keys for the handover:
+   - `SESSION_SECRET` = the new primary key;
+   - `SESSION_SECRET_PREVIOUS` = the current/old key.
+3. Roll API and worker instances through the deployment controller. Verify that
+   all instances are ready before continuing.
+4. Run the transactional migration exactly once from an application container:
+   ```bash
+   python -m app.rotate_encryption_key
+   ```
+   The command emits counts only. If any value cannot be decrypted, the whole
+   transaction is rolled back and the command fails.
+5. Verify that every known encrypted database field uses the new key:
+   ```bash
+   python -m app.rotate_encryption_key --verify-only
+   ```
+6. Remove `SESSION_SECRET_PREVIOUS` from the secret manager and roll API and
+   workers again. Run `--verify-only` once more after the rollout.
+7. Revoke or destroy the old secret and record only the rotation timestamp and
+   counts in the incident log. Never retain the previous key as a permanent
+   fallback.
+
+The migration covers sensitive application settings, per-user integration
+credentials, and per-user IMAP passwords. It is idempotent and encrypts legacy
+plaintext rows encountered during the same transaction.
 
 ---
 
