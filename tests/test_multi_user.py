@@ -443,12 +443,11 @@ class TestMultiUserConfig:
     """Verify the multi-user configuration settings."""
 
     @pytest.mark.unit
-    def test_multi_user_default_disabled(self):
-        """multi_user_enabled should default to False."""
+    def test_multi_user_compatibility_default_disabled(self):
+        """The code fallback remains usable without authentication."""
         from app.config import settings
 
-        # Default is False (overridable via env)
-        assert hasattr(settings, "multi_user_enabled")
+        assert settings.multi_user_enabled is False
 
     @pytest.mark.unit
     def test_default_daily_upload_limit_exists(self):
@@ -617,9 +616,9 @@ class TestUnownedDocsConfig:
     """Verify the new multi-user configuration settings."""
 
     @pytest.mark.unit
-    def test_unowned_docs_visible_default_true(self):
-        """unowned_docs_visible_to_all should default to True."""
-        assert hasattr(settings, "unowned_docs_visible_to_all")
+    def test_unowned_docs_visible_compatibility_default_true(self):
+        """The code fallback preserves legacy auth-free visibility."""
+        assert settings.unowned_docs_visible_to_all is True
 
     @pytest.mark.unit
     def test_default_owner_id_default_none(self):

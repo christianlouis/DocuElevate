@@ -15,12 +15,17 @@ import requests
 # Import testcontainers requirement
 pytest.importorskip("testcontainers", reason="testcontainers not installed")
 
-try:
-    import psycopg2  # noqa: F401
+# Keep the expensive real-service fixtures opt-in to this E2E module.  The
+# regular unit suite must not import them, while this module must be runnable on
+# its own without relying on external pytest command-line configuration.
+pytest_plugins = ("tests.fixtures_integration",)
 
-    _has_psycopg2 = True
+try:
+    import psycopg  # noqa: F401
+
+    _has_psycopg = True
 except ModuleNotFoundError:
-    _has_psycopg2 = False
+    _has_psycopg = False
 
 
 _TEST_CREDENTIAL = "pass"  # noqa: S105
@@ -80,6 +85,7 @@ class TestEndToEndWithRedis:
             # Verify task completed successfully
             assert task_result["status"] == "Completed"
             assert task_result["file"] == sample_text_file
+            result.forget()
 
             # Verify file was actually uploaded to WebDAV server
             filename = os.path.basename(sample_text_file)
@@ -115,20 +121,25 @@ class TestEndToEndWithRedis:
         # Check Redis is accessible
         assert r.ping()
 
-        # Get current queue length
-        initial_queue_length = r.llen("celery")
+        # Use a dedicated queue that the session worker does not consume.  The
+        # old test queued an invalid upload onto the production-like queue and
+        # left a delayed retry behind, contaminating subsequent E2E scenarios.
+        probe_queue = "e2e_queue_probe"
+        initial_queue_length = r.llen(probe_queue)
+        result = None
+        try:
+            result = upload_to_webdav.apply_async(
+                args=["/tmp/test.txt"],
+                kwargs={"file_id": 1},
+                queue=probe_queue,
+            )
 
-        # Queue a task (don't execute, just verify queueing)
-        with patch("app.tasks.upload_to_webdav.settings") as mock_settings:
-            mock_settings.webdav_url = "http://test.com"
-            mock_settings.webdav_username = "user"
-            mock_settings.webdav_password = _TEST_CREDENTIAL
-
-            # This will queue the task in Redis
-            result = upload_to_webdav.apply_async(args=["/tmp/test.txt"], kwargs={"file_id": 1})
-
-            # Verify task ID was generated
             assert result.id is not None
+            assert r.llen(probe_queue) == initial_queue_length + 1
+        finally:
+            if result is not None:
+                result.forget()
+            r.delete(probe_queue)
 
     def test_multiple_tasks_parallel_execution(
         self,
@@ -191,6 +202,7 @@ class TestEndToEndWithRedis:
             for result, file_path in results:
                 task_result = result.get(timeout=5)
                 assert task_result["status"] == "Completed"
+                result.forget()
 
                 # Verify file on server
                 filename = os.path.basename(file_path)
@@ -218,6 +230,8 @@ class TestEndToEndWithRedis:
             patch("app.tasks.upload_to_webdav.settings") as mock_settings,
             patch("app.tasks.upload_to_webdav.log_task_progress"),
             patch("app.tasks.upload_to_webdav.requests.put") as mock_put,
+            patch.object(upload_to_webdav, "retry_delays", [1, 1]),
+            patch.object(upload_to_webdav, "retry_jitter", False),
         ):
             mock_settings.webdav_url = "http://test.com/"
             mock_settings.webdav_username = "user"
@@ -246,8 +260,12 @@ class TestEndToEndWithRedis:
             start_time = time.time()
             while not result.ready():
                 if time.time() - start_time > timeout:
-                    break  # Task might still be retrying
+                    pytest.fail("Retrying WebDAV task did not complete within timeout")
                 time.sleep(0.5)
+
+            assert result.get(timeout=5)["status"] == "Completed"
+            assert mock_put.call_count == 2
+            result.forget()
 
 
 @pytest.mark.integration
@@ -293,8 +311,8 @@ class TestFullInfrastructure:
         assert infra["minio"]["access_key"] is not None
 
     @pytest.mark.skipif(
-        not _has_psycopg2,
-        reason="psycopg2 not installed",
+        not _has_psycopg,
+        reason="psycopg not installed",
     )
     def test_database_with_real_postgres(self, postgres_container, db_session_real):
         """
@@ -304,8 +322,10 @@ class TestFullInfrastructure:
 
         # Create a file record
         file_record = FileRecord(
-            filename="test.pdf",
-            file_path="/tmp/test.pdf",
+            filehash="postgres-e2e-test-pdf",
+            original_filename="test.pdf",
+            local_filename="/tmp/test.pdf",
+            original_file_path="/tmp/test.pdf",
             file_size=1024,
             mime_type="application/pdf",
         )
@@ -317,9 +337,9 @@ class TestFullInfrastructure:
         assert file_record.id is not None
 
         # Query it back
-        queried = db_session_real.query(FileRecord).filter_by(filename="test.pdf").first()
+        queried = db_session_real.query(FileRecord).filter_by(original_filename="test.pdf").first()
         assert queried is not None
-        assert queried.filename == "test.pdf"
+        assert queried.original_filename == "test.pdf"
         assert queried.file_size == 1024
 
     def test_upload_to_multiple_targets(
@@ -363,6 +383,7 @@ class TestFullInfrastructure:
             # Verify WebDAV upload
             result = webdav_result.get(timeout=10)
             assert result["status"] == "Completed"
+            webdav_result.forget()
 
             # Verify file on WebDAV server
             filename = os.path.basename(sample_text_file)
@@ -388,14 +409,22 @@ class TestFullInfrastructure:
         </html>
         """)
 
-        # Convert to PDF using Gotenberg
-        with open(html_file, "rb") as f:
-            files = {"files": f}
+        # Gotenberg's health endpoint can become available shortly before its
+        # Chromium module accepts conversions.  Retry only the documented 503
+        # warm-up response; every other failure remains immediately visible.
+        html = html_file.read_bytes()
+        for _attempt in range(30):
+            # Match the production conversion task exactly: Gotenberg accepts
+            # the entry document under the index.html form field.
+            files = {"index.html": ("index.html", html, "text/html")}
             response = requests.post(
                 f"{gotenberg_container['url']}/forms/chromium/convert/html", files=files, timeout=30
             )
+            if response.status_code != 503:
+                break
+            time.sleep(1)
 
-        assert response.status_code == 200
+        assert response.status_code == 200, response.text
         assert response.headers["Content-Type"] == "application/pdf"
         assert len(response.content) > 0
         assert response.content.startswith(b"%PDF")
@@ -522,8 +551,10 @@ class TestProductionLikeScenarios:
 
         # Step 1: Store in database
         file_record = FileRecord(
-            filename="invoice.pdf",
-            file_path=str(test_doc),
+            filehash="postgres-e2e-invoice-pdf",
+            original_filename="invoice.pdf",
+            local_filename=str(test_doc),
+            original_file_path=str(test_doc),
             file_size=test_doc.stat().st_size,
             mime_type="application/pdf",
         )
@@ -567,6 +598,7 @@ class TestProductionLikeScenarios:
             # Step 5: Verify completion
             task_result = result.get(timeout=10)
             assert task_result["status"] == "Completed"
+            result.forget()
 
             # Step 6: Verify file on WebDAV
             file_url = f"{infra['webdav']['url']}/processed/invoice.pdf"

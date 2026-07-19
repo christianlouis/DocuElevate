@@ -125,9 +125,11 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     users may see non-private documents, but never another owner's private
     documents.
 
-    When ``unowned_docs_visible_to_all`` is ``True`` (default), documents
-    with ``owner_id IS NULL`` (unclaimed) are also included for every
-    authenticated user so they can be discovered and claimed.
+    When ``unowned_docs_visible_to_all`` is ``True``, documents with
+    ``owner_id IS NULL`` (unclaimed) are also included for every authenticated
+    user so they can be discovered and claimed.  Bundled authenticated
+    deployments set it to ``False`` so an absent owner never widens access
+    accidentally.
 
     When multi-user mode is disabled the query is returned unchanged.
 

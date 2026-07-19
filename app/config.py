@@ -345,7 +345,7 @@ class Settings(BaseSettings):
             "Enable multi-user mode with individual document spaces per user. "
             "When enabled, each authenticated user sees only their own documents, "
             "uploads, and search results. Shared settings (AI, OCR) remain global. "
-            "Requires auth_enabled=True. Default: False (single-user/shared mode)."
+            "Requires auth_enabled=True. Default: False (auth-free compatibility fallback)."
         ),
     )
     default_daily_upload_limit: int = Field(
@@ -362,7 +362,7 @@ class Settings(BaseSettings):
             "In multi-user mode, controls whether documents without an owner (owner_id is NULL) "
             "are visible to all authenticated users. When True, unowned documents appear in every "
             "user's file list alongside their own files. When False, only admins can see unowned "
-            "documents. Default: True."
+            "documents. Default: True for compatibility; bundled deployments override this to False."
         ),
     )
     default_owner_id: Optional[str] = Field(

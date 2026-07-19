@@ -540,8 +540,9 @@ Social login lets users sign in with their existing Google, Microsoft, Apple, Dr
 ### Multi-User Mode
 
 When multi-user mode is enabled, each authenticated user gets their own isolated document space.
-Uploads, search results, and file management are scoped to the individual user. Shared settings
-(AI configuration, OCR providers, storage destinations) remain global.
+Uploads, search results, and file management are scoped to the individual user and Tribe. Operator
+settings such as the database and shared AI/OCR infrastructure remain global; user integrations and
+their credentials are stored in the database and scoped to their owner rather than shared globally.
 
 Admin users (determined by `ADMIN_GROUP_NAME`) bypass the user filter and can see all documents.
 
@@ -549,10 +550,15 @@ Requires `AUTH_ENABLED=true`.
 
 | **Variable**                | **Description**                                                                 | **Default** |
 |-----------------------------|---------------------------------------------------------------------------------|-------------|
-| `MULTI_USER_ENABLED`        | Enable multi-user mode with individual document spaces per user.               | `false`     |
+| `MULTI_USER_ENABLED`        | Enable multi-user mode with individual document spaces per user.               | `false`*    |
 | `DEFAULT_DAILY_UPLOAD_LIMIT`| Maximum document uploads allowed per user per day. `0` = unlimited.            | `0`         |
-| `UNOWNED_DOCS_VISIBLE_TO_ALL` | Show unclaimed documents (no owner) to all users. When `false`, only admins see them. | `true` |
+| `UNOWNED_DOCS_VISIBLE_TO_ALL` | Show unclaimed documents (no owner) to all users. When `false`, only admins see them. | `true`* |
 | `DEFAULT_OWNER_ID`          | Automatically assign this owner to newly ingested documents without a session (e.g. IMAP, API). Leave empty to keep unowned. | *(empty)* |
+
+\* These are compatibility fallbacks for embedding DocuElevate without
+authentication. The bundled Docker Compose and `.env.demo` explicitly use the
+recommended secure defaults: `AUTH_ENABLED=true`, `MULTI_USER_ENABLED=true`, and
+`UNOWNED_DOCS_VISIBLE_TO_ALL=false`.
 
 #### Unclaimed Documents
 
@@ -562,7 +568,7 @@ without a user session have `owner_id = NULL` unless `DEFAULT_OWNER_ID` is set. 
 Documents ingested via **per-user integrations** (IMAP or Watch Folder integrations configured through
 the Integrations dashboard) are automatically attributed to the owning user's `owner_id` and are never unclaimed.
 
-- When `UNOWNED_DOCS_VISIBLE_TO_ALL=true` (default), every authenticated user sees unclaimed
+- When `UNOWNED_DOCS_VISIBLE_TO_ALL=true`, every authenticated user sees unclaimed
   documents alongside their own files. This allows users to discover and claim them.
 - When `UNOWNED_DOCS_VISIBLE_TO_ALL=false`, only admins can see unclaimed documents.
 
@@ -1983,7 +1989,8 @@ AUTHENTIK_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
 OAUTH_PROVIDER_NAME=Authentik SSO
 
 # Multi-user mode (requires AUTH_ENABLED=true)
-MULTI_USER_ENABLED=false
+MULTI_USER_ENABLED=true
+UNOWNED_DOCS_VISIBLE_TO_ALL=false
 DEFAULT_DAILY_UPLOAD_LIMIT=0
 
 # Storage services

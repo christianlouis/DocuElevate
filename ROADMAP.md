@@ -1,7 +1,7 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-07-18
-**Version:** 2.2
+**Last Updated:** 2026-07-19
+**Version:** 2.3
 
 ## Vision
 
@@ -19,13 +19,14 @@ For the detailed milestone breakdown and target dates, see [MILESTONES.md](MILES
 
 ## Current Focus and Delivery Order
 
-The automated release number (`0.188.0` at the time of this review) is independent
+The automated release number (`0.188.2` at the time of this review) is independent
 from the named planning anchors below. The team should execute work in dependency
 order, not in numeric-anchor order:
 
 1. **Close the active security and privacy gaps** — rotate the affected Preprod
-   credentials (#1162), harden single-user privacy controls (#1170), and keep
-   secret values out of GitOps, diagnostics, and browser responses.
+   credentials (#1162), complete owner/Tribe assignment for legacy corpora, and
+   keep secret values out of GitOps, diagnostics, and browser responses. The
+   single-user privacy regression (#1170) is closed; its guardrails stay mandatory.
 2. **Make a clean installation genuinely useful** — finish the disposable
    fresh-install journey (#1134, #1151), including integrations, a first processed
    document, a second isolated user, recovery paths, and browser E2E evidence.
@@ -35,9 +36,12 @@ order, not in numeric-anchor order:
 4. **Finish retrieval quality rather than widening brute-force context** — tune
    hybrid ranking (#871), add an evaluation harness (#880), and only then close
    Chat with Library (#478) against cited-answer quality and latency targets.
-5. **Remove operational single points of failure** — restore executable database
-   backups (#1062, #1102), harden maintenance monitors (#1103, #1121), and finish
-   the single-host-loss resilience plan (#902).
+5. **Remove operational single points of failure** — executable backup creation
+   and restore acceptance are complete (#1062, #1102). Next, make credential
+   monitor state transactional (#1190), verify protected archives before retention
+   (#1191), account for abandoned partial archives (#1192), estimate first-backup
+   capacity conservatively (#1193), harden maintenance monitors (#1103, #1121),
+   and finish the single-host-loss resilience plan (#902).
 6. **Build later enterprise and ecosystem layers on proven contracts** — workflow
    editing, RBAC, full organization management, audit, plugins, governance, MCP,
    and agent actions remain sequenced behind the user-facing foundations above.
@@ -45,6 +49,10 @@ order, not in numeric-anchor order:
 GitHub issues and milestones are the source of truth for executable scope. This
 document explains sequencing and product intent; it should not duplicate a sprint
 backlog.
+
+Production promotion is not implied by a merge or Preprod acceptance. The
+production deployment remains pinned to its explicitly approved Evergreen legacy
+image until a separate manual production approval is given.
 
 The current issue inventory also contains post-merge follow-ups. Before starting
 one, verify it against `main` and existing regression tests; close already-delivered

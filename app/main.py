@@ -214,18 +214,15 @@ async def lifespan(app: FastAPI):
 
     ensure_ocr_languages_async()
 
-    # Force settings dump to log for troubleshooting
-    from app.utils.config_validator import dump_all_settings
-
-    dump_all_settings()
-
-    # Validate configuration
-    config_issues = check_all_configs()
+    # Validate only features the operator has started configuring.  A fresh
+    # installation is intentionally useful without SMTP, notifications, or an
+    # external storage destination; strict checks remain available in Settings.
+    config_issues = check_all_configs(configured_only=True)
 
     # Log overall status
-    has_issues = any(config_issues["email"]) or any(
-        len(issues) > 0 for provider, issues in config_issues["storage"].items()
-    )
+    has_issues = any(config_issues.get("auth", [])) or any(config_issues.get("email", []))
+    has_issues = has_issues or any(len(issues) > 0 for issues in config_issues.get("storage", {}).values())
+    has_issues = has_issues or any(config_issues.get("notification", []))
     if has_issues:
         logging.warning("Application started with configuration issues - some features may be unavailable")
     else:

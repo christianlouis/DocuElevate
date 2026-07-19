@@ -1,6 +1,6 @@
 # DocuElevate Milestones
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-07-19
 
 This document outlines the release milestones, versioning strategy, and detailed feature breakdown for DocuElevate.
 
@@ -23,8 +23,12 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 DocuElevate ships continuously via automated semantic versioning. Use **GitHub Releases** for the latest build artifacts and **GitHub Milestones** (below) for roadmap tracking.
 
-**Current stable release at this review:** `v0.188.0` (2026-07-17). The release
+**Current stable release at this review:** `v0.188.2` (2026-07-19). The release
 number is not a claim that the future named milestone outcomes are complete.
+
+The production deployment has its own manually approved release boundary and can
+remain pinned to an older Evergreen image while newer builds are exercised in
+Preprod and disposable Canary environments.
 
 ### Last Completed Named Milestone Anchor: v0.5.0 (Released February 8, 2026)
 - Database-backed settings management with encryption

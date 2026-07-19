@@ -652,7 +652,8 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
-    def test_gmail_uses_all_mail_folder(self, mock_load, mock_imap_class, mock_find_all):
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
+    def test_gmail_uses_all_mail_folder(self, _mock_private_ip, mock_load, mock_imap_class, mock_find_all):
         """Test that Gmail uses All Mail folder when found."""
         mock_load.return_value = {}
         mock_mail = MagicMock()
@@ -679,7 +680,8 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
-    def test_gmail_fallback_to_inbox(self, mock_load, mock_imap_class, mock_find_all):
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
+    def test_gmail_fallback_to_inbox(self, _mock_private_ip, mock_load, mock_imap_class, mock_find_all):
         """Test that Gmail falls back to INBOX when All Mail not found."""
         mock_load.return_value = {}
         mock_mail = MagicMock()
@@ -822,8 +824,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     def test_gmail_labels_and_star(
         self,
+        _mock_private_ip,
         mock_settings,
         mock_save,
         mock_load,
@@ -873,8 +877,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     def test_gmail_labels_disabled_when_gmail_apply_labels_false(
         self,
+        _mock_private_ip,
         mock_settings,
         mock_save,
         mock_load,
@@ -1073,8 +1079,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     def test_readonly_mode_skips_gmail_modifications(
         self,
+        _mock_private_ip,
         mock_settings,
         mock_save,
         mock_load,

@@ -1,5 +1,6 @@
 """Tests for app/utils/config_validator/validators.py module."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -208,6 +209,7 @@ class TestValidateAuthConfig:
             mock_settings.social_auth_microsoft_enabled = False
             mock_settings.social_auth_apple_enabled = False
             mock_settings.social_auth_dropbox_enabled = False
+            mock_settings.allow_local_signup = False
             result = validate_auth_config()
             assert "Neither simple authentication, OIDC, nor social login are properly configured" in result
 
@@ -318,6 +320,56 @@ class TestCheckAllConfigs:
         assert "notification" in result
         assert "auth" in result
 
+    def test_fresh_install_does_not_report_unconfigured_optional_services(self):
+        """Startup mode treats untouched optional integrations as absent, not broken."""
+        fresh_settings = SimpleNamespace(
+            debug=False,
+            auth_enabled=True,
+            session_secret="s" * 32,
+            allow_local_signup=True,
+            admin_username=None,
+            admin_password=None,
+            notification_urls=[],
+        )
+        with patch("app.utils.config_validator.validators.settings", fresh_settings):
+            result = check_all_configs(configured_only=True)
+
+        assert result["auth"] == []
+        assert result["email"] == []
+        assert result["notification"] == []
+        assert all(provider_issues == [] for provider_issues in result["storage"].values())
+
+    def test_fresh_install_logs_optional_services_as_skipped_not_configured(self, caplog):
+        """Green startup logs must not claim absent integrations are configured."""
+        fresh_settings = SimpleNamespace(
+            debug=False,
+            auth_enabled=False,
+            notification_urls=[],
+        )
+        with patch("app.utils.config_validator.validators.settings", fresh_settings):
+            check_all_configs(configured_only=True)
+
+        messages = [record.getMessage() for record in caplog.records]
+        assert "Email is not configured; optional email intake skipped" in messages
+        assert "Dropbox is not configured; optional integration skipped" in messages
+        assert "Notifications are not configured; optional notifications skipped" in messages
+        assert "Dropbox configuration OK" not in messages
+
+    def test_partially_configured_optional_service_remains_actionable(self):
+        """Once configuration starts, missing required fields are still reported."""
+        partial_settings = SimpleNamespace(
+            debug=False,
+            auth_enabled=False,
+            s3_bucket_name="documents",
+            aws_access_key_id=None,
+            aws_secret_access_key=None,
+            notification_urls=[],
+        )
+        with patch("app.utils.config_validator.validators.settings", partial_settings):
+            result = check_all_configs(configured_only=True)
+
+        assert "AWS credentials are not configured" in result["storage"]["s3"]
+
     @patch("app.utils.config_validator.settings_display.dump_all_settings")
     def test_debug_mode_enabled(self, mock_dump):
         """Test that settings are dumped when debug mode is enabled."""
@@ -371,6 +423,20 @@ class TestValidateAuthConfigEdgeCases:
             issues = validate_auth_config()
             # Should have no issues when auth is disabled
             assert len(issues) == 0
+
+    def test_local_signup_is_valid_fresh_install_authentication(self):
+        """The setup journey is a valid auth path before an IdP is configured."""
+        fresh_settings = SimpleNamespace(
+            auth_enabled=True,
+            session_secret="s" * 32,
+            allow_local_signup=True,
+            admin_username=None,
+            admin_password=None,
+        )
+        with patch("app.utils.config_validator.validators.settings", fresh_settings):
+            issues = validate_auth_config()
+
+        assert not any("Neither simple authentication" in issue for issue in issues)
 
 
 @pytest.mark.unit

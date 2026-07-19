@@ -1,6 +1,6 @@
 """Tests for app/tasks/convert_to_pdf.py module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -23,12 +23,10 @@ class TestConvertToPdfMimeTypes:
         with patch("app.tasks.convert_to_pdf.settings") as mock_settings:
             mock_settings.gotenberg_url = None
 
-            mock_self = MagicMock()
-            mock_self.request.id = "test-task-id"
-
             from app.tasks.convert_to_pdf import convert_to_pdf
 
-            result = convert_to_pdf.__wrapped__(mock_self, "/tmp/test.docx")
+            convert_to_pdf.request.id = "test-task-id"
+            result = convert_to_pdf.__wrapped__("/tmp/test.docx")
             assert result is None
 
     @patch("app.tasks.convert_to_pdf.requests")
@@ -45,10 +43,8 @@ class TestConvertToPdfMimeTypes:
             mock_settings.gotenberg_url = "http://localhost:3000"
             mock_settings.http_request_timeout = 30
 
-            mock_self = MagicMock()
-            mock_self.request.id = "test-task-id"
-
             from app.tasks.convert_to_pdf import convert_to_pdf
 
-            result = convert_to_pdf.__wrapped__(mock_self, str(test_file))
+            convert_to_pdf.request.id = "test-task-id"
+            result = convert_to_pdf.__wrapped__(str(test_file))
             assert result is None

@@ -1019,6 +1019,81 @@ class TestSyncSearchIndex:
         mock_update.assert_called_once()
         assert mock_update.call_args[0][1] == "success"
 
+    def test_pristine_install_treats_missing_index_as_empty(self, sj_engine):
+        """A first sync creates the index through the normal indexing path."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        _make_file_record(session, filehash="hash_pristine_search", ocr_text="first searchable document")
+        session.close()
+
+        class MissingIndexError(RuntimeError):
+            code = "index_not_found"
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.side_effect = MissingIndexError("Index documents not found")
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as mock_idx,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result == {
+            "indexed": 1,
+            "skipped": 0,
+            "remaining": 0,
+            "indexable": 1,
+            "already_indexed": 0,
+            "continued": False,
+        }
+        mock_idx.assert_called_once()
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "success"
+
+    def test_pristine_empty_install_reports_clean_zero_result(self, sj_engine):
+        """An empty fresh install succeeds without forcing an empty index."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        class MissingIndexError(RuntimeError):
+            code = "index_not_found"
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.side_effect = MissingIndexError("Index documents not found")
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents") as mock_idx,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result["indexed"] == 0
+        assert result["remaining"] == 0
+        assert result["indexable"] == 0
+        assert result["already_indexed"] == 0
+        mock_idx.assert_not_called()
+        assert mock_update.call_args[0][1] == "success"
+
     def test_handles_meilisearch_fetch_error(self):
         """Error fetching existing IDs from Meilisearch results in failed status."""
         from app.tasks.batch_tasks import sync_search_index

@@ -71,9 +71,13 @@ _ENV = {
 def test_example_and_json_schema_use_the_runtime_api_version():
     root = Path(__file__).resolve().parents[1]
     example = json.loads((root / "examples" / "agentic-setup.preprod.json").read_text(encoding="utf-8"))
+    keyless_example = json.loads((root / "examples" / "agentic-setup.keyless-preprod.json").read_text(encoding="utf-8"))
     schema = json.loads((root / "schemas" / "docuelevate-setup-v1alpha1.schema.json").read_text(encoding="utf-8"))
     assert example["apiVersion"] == MANIFEST_API_VERSION
     assert example["kind"] == MANIFEST_KIND
+    assert keyless_example["apiVersion"] == MANIFEST_API_VERSION
+    assert keyless_example["kind"] == MANIFEST_KIND
+    assert keyless_example["spec"]["settings"] == {}
     assert schema["properties"]["apiVersion"]["const"] == MANIFEST_API_VERSION
     assert schema["properties"]["kind"]["const"] == MANIFEST_KIND
 
@@ -175,3 +179,24 @@ def test_apply_is_idempotent_and_creates_users_personal_scopes_and_shared_tribe(
         second_apply = apply_setup_manifest(db_session, resolved)
     assert second_apply["applied"] == []
     assert db_session.query(SettingsAuditLog).count() == before_audits
+
+
+def test_keyless_apply_completes_with_database_backed_local_admin(db_session):
+    """A local admin replaces the legacy global fallback admin credentials."""
+    manifest = _manifest()
+    manifest["spec"]["completeSetup"] = True
+    manifest["spec"]["settings"].pop("admin_password")
+    resolved = resolve_setup_manifest(manifest, environ=_ENV)
+
+    with (
+        patch(
+            "app.utils.setup_manifest.get_missing_required_settings", return_value=["admin_username", "admin_password"]
+        ),
+        patch("app.utils.setup_manifest.notify_settings_updated"),
+    ):
+        result = apply_setup_manifest(db_session, resolved)
+
+    assert result["success"] is True
+    assert result["setup_completed"] is True
+    assert result["missing_required_settings"] == []
+    assert get_setting_from_db(db_session, "_setup_wizard_completed") == "true"
