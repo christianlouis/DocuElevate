@@ -412,6 +412,17 @@ Navigate to **Admin → Backup & Restore** to:
 - Download backup archives
 - Upload and restore a backup archive
 - Configure retention and remote storage destinations
+- Review current filesystem capacity, the effective local backup budget, and the
+  latest failed backup attempt
+
+Backups are first written as hidden partial archives and only become visible
+after the dump and checksum complete. Before a new dump, DocuElevate applies
+count retention and checks both a free-space reserve and a local-backup budget.
+Adaptive cleanup may reclaim the oldest redundant local copies, but always
+preserves the newest available hourly, daily, and weekly recovery point. If the
+remaining capacity is still unsafe, the dump is skipped before writing data and
+the dashboard shows an actionable diagnostic. For production, mount
+`BACKUP_DIR` on a dedicated volume and configure a remote destination.
 
 ### PostgreSQL – manual backup/restore
 

@@ -10,7 +10,7 @@ Covers:
 
 import gzip
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -284,6 +284,79 @@ class TestBackupTaskHelpers:
 
         assert _archive_ext_for_backend("mssql") == ".sql.gz"
 
+    def test_storage_budget_reclaims_oldest_but_preserves_newest_per_tier(self, tmp_path, db_session):
+        """Adaptive cleanup keeps one recoverable local snapshot for every tier."""
+        from app.tasks.backup_tasks import _apply_storage_budget
+
+        now = datetime.now(timezone.utc)
+        records = []
+        for filename, tier, age in (
+            ("backup_hourly_old.db.gz", "hourly", 3),
+            ("backup_hourly_new.db.gz", "hourly", 1),
+            ("backup_daily_new.db.gz", "daily", 2),
+        ):
+            path = tmp_path / filename
+            path.write_bytes(b"x" * 60)
+            rec = BackupRecord(
+                filename=filename,
+                local_path=str(path),
+                backup_type=tier,
+                size_bytes=60,
+                status="ok",
+                created_at=now - timedelta(hours=age),
+            )
+            db_session.add(rec)
+            records.append(rec)
+        db_session.commit()
+        old_id = records[0].id
+
+        usage = MagicMock(total=10_000, used=1_000, free=9_000)
+        with (
+            patch("app.tasks.backup_tasks.shutil.disk_usage", return_value=usage),
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+        ):
+            mock_settings.backup_max_local_bytes = 130
+            mock_settings.backup_min_free_bytes = 1
+            mock_settings.backup_adaptive_cleanup_enabled = True
+            result = _apply_storage_budget(db_session, tmp_path)
+
+        assert result["has_capacity"] is True
+        assert result["pruned_count"] == 1
+        assert db_session.get(BackupRecord, old_id) is None
+        assert (tmp_path / "backup_hourly_new.db.gz").exists()
+        assert (tmp_path / "backup_daily_new.db.gz").exists()
+
+    def test_storage_budget_refuses_to_delete_last_snapshot_per_tier(self, tmp_path, db_session):
+        """Capacity failure is explicit when only protected recovery points remain."""
+        from app.tasks.backup_tasks import _apply_storage_budget
+
+        path = tmp_path / "backup_hourly_only.db.gz"
+        path.write_bytes(b"x" * 80)
+        db_session.add(
+            BackupRecord(
+                filename=path.name,
+                local_path=str(path),
+                backup_type="hourly",
+                size_bytes=80,
+                status="ok",
+            )
+        )
+        db_session.commit()
+
+        usage = MagicMock(total=10_000, used=1_000, free=9_000)
+        with (
+            patch("app.tasks.backup_tasks.shutil.disk_usage", return_value=usage),
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+        ):
+            mock_settings.backup_max_local_bytes = 50
+            mock_settings.backup_min_free_bytes = 1
+            mock_settings.backup_adaptive_cleanup_enabled = True
+            result = _apply_storage_budget(db_session, tmp_path)
+
+        assert result["has_capacity"] is False
+        assert result["pruned_count"] == 0
+        assert path.exists()
+
     def test_dump_postgresql_success(self, tmp_path):
         """_dump_postgresql() streams pg_dump output into a gzip archive."""
         from unittest.mock import MagicMock
@@ -526,9 +599,12 @@ class TestBackupTaskHelpers:
         db_session.add(old_rec)
         # Two newer records so the old one falls outside retention window
         for i, dt in enumerate([datetime(2026, 1, 1), datetime(2026, 1, 2)]):
+            new_path = tmp_path / f"backup_hourly_new_{i}.db.gz"
+            new_path.write_bytes(b"new")
             db_session.add(
                 BackupRecord(
                     filename=f"backup_hourly_new_{i}.db.gz",
+                    local_path=str(new_path),
                     backup_type="hourly",
                     size_bytes=1,
                     status="ok",
@@ -543,6 +619,36 @@ class TestBackupTaskHelpers:
 
         remaining = db_session.query(BackupRecord).filter_by(filename="backup_hourly_old.db.gz").first()
         assert remaining is None
+
+    def test_failed_attempt_never_counts_as_retained_local_recovery_point(self, tmp_path, db_session):
+        """A newer failure must not evict the only usable local archive."""
+        from app.tasks.backup_tasks import _apply_retention
+
+        good_path = tmp_path / "backup_hourly_good.db.gz"
+        good_path.write_bytes(b"good")
+        good = BackupRecord(
+            filename=good_path.name,
+            local_path=str(good_path),
+            backup_type="hourly",
+            status="ok",
+            created_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        )
+        failed = BackupRecord(
+            filename="backup_hourly_failed.db.gz",
+            local_path=None,
+            backup_type="hourly",
+            status="failed",
+            created_at=datetime.now(timezone.utc),
+        )
+        db_session.add_all([good, failed])
+        db_session.commit()
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.backup_retain_hourly = 1
+            _apply_retention("hourly", db_session)
+
+        assert good_path.exists()
+        assert db_session.get(BackupRecord, good.id) is not None
 
     def test_upload_remote_no_destination(self, tmp_path):
         """_upload_remote() returns None when no destination is configured."""
@@ -579,7 +685,7 @@ class TestBackupTaskHelpers:
             remote_destination=None,
             remote_path=None,
         )
-        _delete_remote_copy(rec)
+        assert _delete_remote_copy(rec) is False
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +741,38 @@ class TestCreateBackupTask:
             result = create_backup("hourly")
         assert result["status"] == "error"
 
+    def test_preflight_capacity_failure_does_not_start_dump(self, tmp_path):
+        """A low-space worker fails safely before creating a partial archive."""
+        from app.tasks.backup_tasks import create_backup
+
+        db_file = tmp_path / "test.db"
+        db_file.write_bytes(b"sqlite")
+        storage = {
+            "has_capacity": False,
+            "free_bytes": 4 * 1024 * 1024,
+            "min_free_bytes": 1024 * 1024 * 1024,
+            "required_bytes": 400 * 1024 * 1024,
+            "backup_bytes": 18 * 1024 * 1024 * 1024,
+            "max_local_bytes": 15 * 1024 * 1024 * 1024,
+            "adaptive_cleanup_enabled": True,
+        }
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._db_path", return_value=db_file),
+            patch("app.tasks.backup_tasks._backup_dir", return_value=tmp_path),
+            patch("app.tasks.backup_tasks._prepare_backup_storage", return_value=storage),
+            patch("app.tasks.backup_tasks._record_backup_failure") as record_failure,
+            patch("app.tasks.backup_tasks._dump_sqlite") as dump,
+        ):
+            mock_settings.backup_enabled = True
+            mock_settings.database_url = f"sqlite:///{db_file}"
+            result = create_backup("hourly")
+
+        assert result["status"] == "error"
+        assert "Insufficient backup storage" in result["detail"]
+        dump.assert_not_called()
+        record_failure.assert_called_once()
+
     def test_successful_backup(self, tmp_path):
         """create_backup creates a .db.gz archive and a BackupRecord."""
         from app.tasks.backup_tasks import create_backup
@@ -667,6 +805,8 @@ class TestCreateBackupTask:
         assert "filename" in result
         assert result["filename"].startswith("backup_hourly_")
         assert result["filename"].endswith(".db.gz")
+        assert (backup_dir / result["filename"]).is_file()
+        assert not list(backup_dir.glob(".*.partial"))
 
     def test_successful_backup_postgresql(self, tmp_path):
         """create_backup creates a .pgsql.gz archive for PostgreSQL databases."""
@@ -777,6 +917,39 @@ class TestBackupAPIEndpoints:
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
+    def test_storage_status_exposes_capacity_and_latest_failure(self, admin_client, bk_engine):
+        """The dashboard API gives an actionable diagnostic without filesystem paths."""
+        Session = sessionmaker(bind=bk_engine)
+        with Session() as db:
+            db.add(
+                BackupRecord(
+                    filename="backup_hourly_failed.pgsql.gz",
+                    backup_type="hourly",
+                    status="failed",
+                    error_detail="Insufficient backup storage: 4 MiB free.",
+                )
+            )
+            db.commit()
+
+        status_payload = {
+            "healthy": False,
+            "total_bytes": 60,
+            "used_bytes": 60,
+            "free_bytes": 0,
+            "backup_bytes": 18,
+            "max_local_bytes": 15,
+            "min_free_bytes": 1,
+            "adaptive_cleanup_enabled": True,
+        }
+        with patch("app.tasks.backup_tasks.backup_storage_status", return_value=status_payload):
+            resp = admin_client.get("/api/admin/backup/storage")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["healthy"] is False
+        assert payload["last_failure"]["detail"].startswith("Insufficient backup storage")
+        assert "local_path" not in payload["last_failure"]
+
     def test_list_backups_non_admin(self, non_admin_client):
         """GET /api/admin/backup/ returns 403 for non-admin users."""
         resp = non_admin_client.get("/api/admin/backup/")
@@ -827,14 +1000,17 @@ class TestBackupAPIEndpoints:
         resp = admin_client.get(f"/api/admin/backup/{rid}/download")
         assert resp.status_code == 404
 
-    def test_delete_backup_admin(self, admin_client, bk_engine):
-        """DELETE /api/admin/backup/{id} removes the record."""
+    def test_delete_backup_admin(self, admin_client, bk_engine, tmp_path):
+        """DELETE /api/admin/backup/{id} removes the local archive and record."""
+        archive = tmp_path / "backup_hourly_to_delete.db.gz"
+        archive.write_bytes(b"backup")
         Session = sessionmaker(bind=bk_engine)
         with Session() as db:
             rec = BackupRecord(
                 filename="backup_hourly_to_delete.db.gz",
+                local_path=str(archive),
                 backup_type="hourly",
-                size_bytes=0,
+                size_bytes=archive.stat().st_size,
                 status="ok",
             )
             db.add(rec)
@@ -844,6 +1020,88 @@ class TestBackupAPIEndpoints:
         resp = admin_client.delete(f"/api/admin/backup/{rid}")
         assert resp.status_code == 200
         assert resp.json()["status"] == "deleted"
+        assert not archive.exists()
+        with Session() as db:
+            assert db.get(BackupRecord, rid) is None
+
+    def test_delete_backup_retains_record_when_local_unlink_fails(self, admin_client, bk_engine, tmp_path):
+        """A failed local unlink must keep the recovery copy in inventory."""
+        archive = tmp_path / "backup_hourly_permission_error.db.gz"
+        archive.write_bytes(b"backup")
+        Session = sessionmaker(bind=bk_engine)
+        with Session() as db:
+            rec = BackupRecord(
+                filename=archive.name,
+                local_path=str(archive),
+                backup_type="hourly",
+                size_bytes=archive.stat().st_size,
+                status="ok",
+            )
+            db.add(rec)
+            db.commit()
+            rid = rec.id
+
+        with patch("app.api.backup.os.remove", side_effect=OSError("permission denied")):
+            resp = admin_client.delete(f"/api/admin/backup/{rid}")
+
+        assert resp.status_code == 502
+        assert "record was retained" in resp.json()["detail"]
+        assert archive.exists()
+        with Session() as db:
+            retained = db.get(BackupRecord, rid)
+            assert retained is not None
+            assert retained.local_path == str(archive)
+
+    def test_delete_backup_retains_unconfirmed_remote_copy(self, admin_client, bk_engine):
+        """Unsupported or failed remote deletion must keep the remote reference."""
+        Session = sessionmaker(bind=bk_engine)
+        with Session() as db:
+            rec = BackupRecord(
+                filename="backup_weekly_remote.pgsql.gz",
+                local_path=None,
+                backup_type="weekly",
+                size_bytes=1024,
+                status="ok",
+                remote_destination="webdav",
+                remote_path="backups/backup_weekly_remote.pgsql.gz",
+            )
+            db.add(rec)
+            db.commit()
+            rid = rec.id
+
+        with patch("app.tasks.backup_tasks._delete_remote_copy", return_value=False):
+            resp = admin_client.delete(f"/api/admin/backup/{rid}")
+
+        assert resp.status_code == 502
+        assert "remote archive" in resp.json()["detail"]
+        with Session() as db:
+            retained = db.get(BackupRecord, rid)
+            assert retained is not None
+            assert retained.remote_path == "backups/backup_weekly_remote.pgsql.gz"
+
+    def test_delete_backup_removes_confirmed_remote_copy(self, admin_client, bk_engine):
+        """A confirmed provider deletion allows the recovery record to be removed."""
+        Session = sessionmaker(bind=bk_engine)
+        with Session() as db:
+            rec = BackupRecord(
+                filename="backup_weekly_remote.pgsql.gz",
+                local_path=None,
+                backup_type="weekly",
+                size_bytes=1024,
+                status="ok",
+                remote_destination="s3",
+                remote_path="backups/backup_weekly_remote.pgsql.gz",
+            )
+            db.add(rec)
+            db.commit()
+            rid = rec.id
+
+        with patch("app.tasks.backup_tasks._delete_remote_copy", return_value=True):
+            resp = admin_client.delete(f"/api/admin/backup/{rid}")
+
+        assert resp.status_code == 200
+        with Session() as db:
+            assert db.get(BackupRecord, rid) is None
 
     def test_delete_backup_not_found(self, admin_client):
         """DELETE /api/admin/backup/99999 returns 404."""
@@ -1035,6 +1293,46 @@ class TestBackupView:
         resp = admin_client.get("/admin/backup")
         assert resp.status_code == 200
         assert b"Backup" in resp.content
+
+    def test_backup_dashboard_renders_actionable_storage_failure(self, admin_client, bk_engine):
+        """A failed preflight is visible with capacity, remedy, and backend-correct restore type."""
+        Session = sessionmaker(bind=bk_engine)
+        with Session() as db:
+            db.add(
+                BackupRecord(
+                    filename="backup_hourly_failed.db.gz",
+                    backup_type="hourly",
+                    status="failed",
+                    error_detail="Insufficient backup storage: 4 MiB free.",
+                )
+            )
+            db.commit()
+
+        storage = {
+            "healthy": False,
+            "total_bytes": 60 * 1024 * 1024,
+            "used_bytes": 60 * 1024 * 1024,
+            "free_bytes": 4 * 1024 * 1024,
+            "backup_bytes": 18 * 1024 * 1024,
+            "max_local_bytes": 15 * 1024 * 1024,
+            "min_free_bytes": 1024 * 1024,
+            "adaptive_cleanup_enabled": True,
+            "storage_error": None,
+        }
+        with (
+            patch("app.tasks.backup_tasks.backup_storage_status", return_value=storage),
+            patch(
+                "starlette.requests.Request.session",
+                new_callable=lambda: property(lambda self: {"user": {"email": "admin@test.com", "is_admin": True}}),
+            ),
+        ):
+            resp = admin_client.get("/admin/backup")
+
+        assert resp.status_code == 200
+        assert 'id="backup-storage-warning-heading"' in resp.text
+        assert "Insufficient backup storage: 4 MiB free." in resp.text
+        assert "Review backup settings" in resp.text
+        assert "(.db.gz)" in resp.text
 
     def test_backup_dashboard_non_admin_redirect(self, non_admin_client):
         """GET /admin/backup redirects non-admin users."""
@@ -1444,9 +1742,11 @@ class TestApplyRetentionOSError:
             mock_settings.backup_retain_daily = 1
             _apply_retention("daily", db_session)
 
-        # Records without remote_path should still be deleted
+        # A failed unlink must not orphan files by deleting their records.
         remaining = db_session.query(BackupRecord).filter_by(backup_type="daily").all()
-        assert len(remaining) <= 1
+        assert len(remaining) == 3
+        assert all(record.local_path for record in remaining)
+        assert all(Path(record.local_path).exists() for record in remaining)
 
     def test_apply_retention_keeps_record_with_remote(self, tmp_path, db_session):
         """_apply_retention() keeps DB record when record still has a remote copy."""
@@ -1456,12 +1756,14 @@ class TestApplyRetentionOSError:
         db_session.add(
             BackupRecord(
                 filename="bkp_new.db.gz",
+                local_path=str(tmp_path / "bkp_new.db.gz"),
                 backup_type="weekly",
                 size_bytes=1,
                 status="ok",
                 created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
             )
         )
+        (tmp_path / "bkp_new.db.gz").write_bytes(b"new")
         old = BackupRecord(
             filename="bkp_old.db.gz",
             local_path=str(tmp_path / "bkp_old.db.gz"),
@@ -1509,7 +1811,7 @@ class TestPruneRemoteBackups:
 
         with (
             patch("app.tasks.backup_tasks.settings") as mock_settings,
-            patch("app.tasks.backup_tasks._delete_remote_copy") as mock_delete,
+            patch("app.tasks.backup_tasks._delete_remote_copy", return_value=True) as mock_delete,
         ):
             mock_settings.backup_retain_hourly = 2
             _prune_remote_backups("hourly", db_session)
@@ -1575,7 +1877,7 @@ class TestPruneRemoteBackups:
 
         with (
             patch("app.tasks.backup_tasks.settings") as mock_settings,
-            patch("app.tasks.backup_tasks._delete_remote_copy"),
+            patch("app.tasks.backup_tasks._delete_remote_copy", return_value=True),
         ):
             mock_settings.backup_retain_weekly = 2
             _prune_remote_backups("weekly", db_session)
@@ -1615,7 +1917,7 @@ class TestPruneRemoteBackups:
 
         with (
             patch("app.tasks.backup_tasks.settings") as mock_settings,
-            patch("app.tasks.backup_tasks._delete_remote_copy"),
+            patch("app.tasks.backup_tasks._delete_remote_copy", return_value=True),
         ):
             mock_settings.backup_retain_hourly = 2
             _prune_remote_backups("hourly", db_session)
@@ -1624,6 +1926,35 @@ class TestPruneRemoteBackups:
         still_there = db_session.query(BackupRecord).filter_by(filename="bkp_old_withlocal.db.gz").first()
         assert still_there is not None
         assert still_there.remote_path is None  # remote path cleared
+
+    def test_prune_remote_backups_keeps_reference_when_delete_fails(self, db_session):
+        """A failed provider deletion must not orphan the remote recovery point."""
+        from app.tasks.backup_tasks import _prune_remote_backups
+
+        for i in range(2):
+            db_session.add(
+                BackupRecord(
+                    filename=f"bkp_remote_{i}.db.gz",
+                    backup_type="daily",
+                    size_bytes=1,
+                    status="ok",
+                    remote_destination="webdav",
+                    remote_path=f"backups/bkp_remote_{i}.db.gz",
+                    created_at=datetime(2026, 1, i + 1, tzinfo=timezone.utc),
+                )
+            )
+        db_session.commit()
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._delete_remote_copy", return_value=False),
+        ):
+            mock_settings.backup_retain_daily = 1
+            _prune_remote_backups("daily", db_session)
+
+        oldest = db_session.query(BackupRecord).filter_by(filename="bkp_remote_0.db.gz").one()
+        assert oldest.remote_destination == "webdav"
+        assert oldest.remote_path == "backups/bkp_remote_0.db.gz"
 
 
 @pytest.mark.unit
@@ -1650,7 +1981,7 @@ class TestDeleteRemoteCopy:
             mock_settings.aws_access_key_id = "key"
             mock_settings.aws_secret_access_key = "secret"
             mock_settings.s3_bucket_name = "my-bucket"
-            _delete_remote_copy(rec)
+            assert _delete_remote_copy(rec) is True
 
         mock_s3.delete_object.assert_called_once_with(Bucket="my-bucket", Key="backups/x.db.gz")
 
@@ -1673,8 +2004,7 @@ class TestDeleteRemoteCopy:
             mock_settings.aws_access_key_id = "key"
             mock_settings.aws_secret_access_key = "secret"
             mock_settings.s3_bucket_name = "my-bucket"
-            # Should not raise
-            _delete_remote_copy(rec)
+            assert _delete_remote_copy(rec) is False
 
     def test_delete_remote_copy_dropbox(self):
         """_delete_remote_copy() calls files_delete_v2 for Dropbox destination."""
@@ -1696,7 +2026,7 @@ class TestDeleteRemoteCopy:
             patch.dict("sys.modules", {"dropbox": mock_dbx_module}),
         ):
             mock_settings.dropbox_refresh_token = "token123"
-            _delete_remote_copy(rec)
+            assert _delete_remote_copy(rec) is True
 
         mock_dbx.files_delete_v2.assert_called_once_with("/backups/x.db.gz")
 
@@ -1710,8 +2040,7 @@ class TestDeleteRemoteCopy:
             remote_destination="email",
             remote_path="email:x.db.gz",
         )
-        # Should not raise
-        _delete_remote_copy(rec)
+        assert _delete_remote_copy(rec) is False
 
     def test_delete_remote_copy_nextcloud_not_implemented(self):
         """_delete_remote_copy() logs debug for nextcloud (not implemented) destination."""
@@ -1723,7 +2052,7 @@ class TestDeleteRemoteCopy:
             remote_destination="nextcloud",
             remote_path="http://nc.example.com/remote.php/dav/backups/x.db.gz",
         )
-        _delete_remote_copy(rec)
+        assert _delete_remote_copy(rec) is False
 
     def test_delete_remote_copy_webdav_not_implemented(self):
         """_delete_remote_copy() logs debug for webdav (not implemented) destination."""
@@ -1735,7 +2064,7 @@ class TestDeleteRemoteCopy:
             remote_destination="webdav",
             remote_path="http://dav.example.com/backups/x.db.gz",
         )
-        _delete_remote_copy(rec)
+        assert _delete_remote_copy(rec) is False
 
     def test_delete_remote_copy_unknown_dest(self):
         """_delete_remote_copy() silently does nothing for an unknown/unrecognized destination."""
@@ -1747,8 +2076,7 @@ class TestDeleteRemoteCopy:
             remote_destination="unknown_provider",
             remote_path="somewhere/x.db.gz",
         )
-        # Should not raise; the try block exits without matching any if/elif
-        _delete_remote_copy(rec)
+        assert _delete_remote_copy(rec) is False
 
 
 @pytest.mark.unit
@@ -2016,6 +2344,10 @@ class TestCreateBackupAdditional:
             patch("app.tasks.backup_tasks._db_path", return_value=db_file),
             patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
             patch("app.tasks.backup_tasks._dump_sqlite", side_effect=RuntimeError("dump error")),
+            patch(
+                "app.tasks.backup_tasks._prepare_backup_storage",
+                return_value={"has_capacity": True},
+            ),
             patch("app.tasks.backup_tasks.SessionLocal", return_value=mock_db_ctx),
         ):
             mock_settings.backup_enabled = True
@@ -2026,6 +2358,8 @@ class TestCreateBackupAdditional:
         assert "dump error" in result["detail"]
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
+        assert not list(backup_dir.glob(".*.partial"))
+        assert not list(backup_dir.glob("backup_*.gz"))
 
     def test_create_backup_with_remote_upload(self, tmp_path):
         """create_backup records remote_destination and prunes remote backups."""
@@ -2132,7 +2466,8 @@ class TestCleanupOldBackupsTask:
         ):
             result = cleanup_old_backups()
 
-        assert result == {"status": "ok"}
+        assert result["status"] == "ok"
+        assert result["storage"]["has_capacity"] is True
         assert mock_apply.call_count == 3
         assert mock_prune.call_count == 3
         for btype in ("hourly", "daily", "weekly"):

@@ -1626,6 +1626,9 @@ See the [Database Configuration Guide](DatabaseConfiguration.md#backup-procedure
 | `BACKUP_RETAIN_HOURLY`         | Number of hourly snapshots to keep (1 per hour = 96 covers 4 days).                         | `96`                |
 | `BACKUP_RETAIN_DAILY`          | Number of daily snapshots to keep (21 = 3 weeks).                                           | `21`                |
 | `BACKUP_RETAIN_WEEKLY`         | Number of weekly snapshots to keep (13 ≈ 3 months).                                         | `13`                |
+| `BACKUP_ADAPTIVE_CLEANUP_ENABLED` | Reclaim oldest redundant local snapshots before a dump when capacity is low; always preserves the newest local snapshot per tier. | `True` |
+| `BACKUP_MIN_FREE_BYTES`        | Free-space reserve on the backup filesystem. `0` automatically reserves 10%, capped at 1 GiB. | `0` |
+| `BACKUP_MAX_LOCAL_BYTES`       | Local-backup byte budget. `0` automatically limits backups to 25% of the filesystem.         | `0` |
 
 **Retention schedule:**
 
@@ -1635,7 +1638,7 @@ See the [Database Configuration Guide](DatabaseConfiguration.md#backup-procedure
 | Daily   | Daily at 02:00   | 21 snapshots      | ~3 weeks     |
 | Weekly  | Sundays at 03:00 | 13 snapshots      | ~3 months    |
 
-Archives beyond the retention window are automatically pruned after each new backup. The **Clean Up** button on the dashboard applies retention immediately. When a remote destination is configured, remote copies follow the same retention policy.
+Archives beyond the retention window are automatically pruned after each new backup. The **Clean Up** button on the dashboard applies retention immediately. Remote copies follow the same retention count when their provider supports confirmed deletion. If deletion is unsupported or fails, DocuElevate preserves the recovery record instead of silently orphaning the remote archive.
 
 > **Note:** Backup and restore is currently supported only for SQLite databases.
 
@@ -2093,7 +2096,16 @@ BACKUP_REMOTE_FOLDER=backups
 BACKUP_RETAIN_HOURLY=96
 BACKUP_RETAIN_DAILY=21
 BACKUP_RETAIN_WEEKLY=13
+BACKUP_ADAPTIVE_CLEANUP_ENABLED=True
+BACKUP_MIN_FREE_BYTES=0             # automatic: 10% reserve, capped at 1 GiB
+BACKUP_MAX_LOCAL_BYTES=0            # automatic: 25% local-backup budget
 ```
+
+For production deployments, mount `BACKUP_DIR` on a dedicated volume and configure a remote destination. Keeping
+database archives on the same volume as original and processed documents is supported for small installations, but
+it couples database growth to document-ingest capacity. Before every dump DocuElevate applies count retention and the
+storage budget; if it cannot preserve both capacity and the newest recovery point in each tier, it skips the dump and
+shows an actionable failure in **Administration → Backup Management** instead of filling the volume.
 
 ## Selective Service Configuration
 

@@ -868,7 +868,7 @@ class BackupRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Human-readable archive filename (e.g. backup_hourly_2026-03-07T12-00-00.db.gz)
+    # Human-readable archive filename (e.g. backup_hourly_2026-03-07T12-00-00-123456.db.gz)
     filename = Column(String(255), nullable=False, unique=True)
 
     # Full path on the local filesystem (may be NULL for remote-only backups)
@@ -885,6 +885,9 @@ class BackupRecord(Base):
 
     # Whether the backup was successfully created
     status = Column(String(20), nullable=False, default="ok")  # ok | failed
+
+    # User-safe diagnostic for the most recent failed attempt
+    error_detail = Column(Text, nullable=True)
 
     # Storage destination where a remote copy was uploaded (e.g. "s3", "dropbox", "email")
     remote_destination = Column(String(50), nullable=True)

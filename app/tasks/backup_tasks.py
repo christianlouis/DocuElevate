@@ -28,6 +28,7 @@ import gzip
 import hashlib
 import logging
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +56,11 @@ _BACKEND_EXTENSIONS: dict[str, str] = {
     "postgresql": ".pgsql.gz",
     "mysql": ".mysql.gz",
 }
+
+_AUTO_BACKUP_BUDGET_DIVISOR = 4
+_AUTO_MIN_FREE_DIVISOR = 10
+_AUTO_MIN_FREE_CAP_BYTES = 1024 * 1024 * 1024
+_AUTO_MIN_FREE_FLOOR_BYTES = 64 * 1024 * 1024
 
 
 def _backup_dir() -> Path:
@@ -107,6 +113,207 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _configured_non_negative_int(name: str, default: int = 0) -> int:
+    """Read a non-negative integer setting without trusting dynamic mocks or corrupt DB values."""
+    raw = getattr(settings, name, default)
+    if isinstance(raw, bool):
+        return default
+    if isinstance(raw, (int, float, str)):
+        try:
+            return max(0, int(raw))
+        except (TypeError, ValueError):
+            pass
+    return default
+
+
+def _adaptive_cleanup_enabled() -> bool:
+    raw = getattr(settings, "backup_adaptive_cleanup_enabled", True)
+    return raw if isinstance(raw, bool) else True
+
+
+def _backup_storage_snapshot(directory: Path) -> dict[str, int]:
+    """Return current filesystem and archive usage without exposing paths."""
+    usage = shutil.disk_usage(directory)
+    backup_bytes = sum(path.stat().st_size for path in directory.glob("backup_*.gz") if path.is_file())
+    configured_budget = _configured_non_negative_int("backup_max_local_bytes")
+    configured_min_free = _configured_non_negative_int("backup_min_free_bytes")
+    max_local_bytes = configured_budget or max(1, usage.total // _AUTO_BACKUP_BUDGET_DIVISOR)
+    min_free_bytes = configured_min_free or min(
+        _AUTO_MIN_FREE_CAP_BYTES,
+        max(_AUTO_MIN_FREE_FLOOR_BYTES, usage.total // _AUTO_MIN_FREE_DIVISOR),
+    )
+    return {
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
+        "free_bytes": usage.free,
+        "backup_bytes": backup_bytes,
+        "max_local_bytes": max_local_bytes,
+        "min_free_bytes": min_free_bytes,
+    }
+
+
+def backup_storage_status() -> dict[str, int | bool | str | None]:
+    """Return a user-safe snapshot for the admin dashboard and diagnostics."""
+    try:
+        state = _backup_storage_snapshot(_backup_dir())
+    except OSError as exc:
+        logger.error("Could not inspect backup storage: %s", exc)
+        return {
+            "total_bytes": 0,
+            "used_bytes": 0,
+            "free_bytes": 0,
+            "backup_bytes": 0,
+            "max_local_bytes": 0,
+            "min_free_bytes": 0,
+            "healthy": False,
+            "adaptive_cleanup_enabled": _adaptive_cleanup_enabled(),
+            "storage_error": str(exc)[:1000],
+        }
+    state["healthy"] = bool(
+        state["free_bytes"] >= state["min_free_bytes"] and state["backup_bytes"] <= state["max_local_bytes"]
+    )
+    state["adaptive_cleanup_enabled"] = _adaptive_cleanup_enabled()
+    state["storage_error"] = None
+    return state
+
+
+def _estimated_backup_bytes(db: object, backup_type: str) -> int:
+    """Estimate the next compressed dump from the newest successful local snapshot."""
+    for restrict_to_tier in (True, False):
+        query = db.query(BackupRecord).filter(BackupRecord.status == "ok", BackupRecord.local_path.isnot(None))
+        if restrict_to_tier:
+            query = query.filter(BackupRecord.backup_type == backup_type)
+        rec = query.order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc()).first()
+        size = getattr(rec, "size_bytes", 0) if rec is not None else 0
+        if isinstance(size, (int, float)) and size > 0:
+            # Leave headroom for normal database growth and gzip ratio changes.
+            return int(size * 1.25)
+    return 0
+
+
+def _apply_storage_budget(
+    db: object,
+    directory: Path,
+    *,
+    required_bytes: int = 0,
+) -> dict[str, int | bool]:
+    """Reclaim redundant local snapshots until the next dump can complete safely.
+
+    The newest available local snapshot in each tier is protected. Remote copies
+    remain recorded when their local copy is reclaimed.
+    """
+    state = _backup_storage_snapshot(directory)
+    required_bytes = max(0, int(required_bytes))
+
+    def has_capacity(snapshot: dict[str, int]) -> bool:
+        return bool(
+            snapshot["free_bytes"] >= snapshot["min_free_bytes"] + required_bytes
+            and snapshot["backup_bytes"] + required_bytes <= snapshot["max_local_bytes"]
+        )
+
+    pruned_count = 0
+    pruned_bytes = 0
+    if not has_capacity(state) and _adaptive_cleanup_enabled():
+        records = (
+            db.query(BackupRecord)
+            .filter(BackupRecord.status == "ok", BackupRecord.local_path.isnot(None))
+            .order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc())
+            .all()
+        )
+        protected_paths: set[str] = set()
+        for tier in _BACKUP_TYPE_RETAIN:
+            newest = next(
+                (
+                    rec
+                    for rec in records
+                    if rec.backup_type == tier and rec.local_path and os.path.exists(rec.local_path)
+                ),
+                None,
+            )
+            if newest is not None:
+                protected_paths.add(str(newest.local_path))
+
+        for rec in reversed(records):
+            local_path = str(rec.local_path or "")
+            if not local_path or local_path in protected_paths or not os.path.exists(local_path):
+                continue
+            try:
+                size = os.path.getsize(local_path)
+                os.remove(local_path)
+            except OSError as exc:
+                logger.warning("Failed to reclaim local backup %s: %s", rec.filename, exc)
+                continue
+            rec.local_path = None
+            if not rec.remote_path:
+                db.delete(rec)
+            pruned_count += 1
+            pruned_bytes += size
+            logger.info("Reclaimed redundant local backup %s (%s bytes)", rec.filename, size)
+            state = _backup_storage_snapshot(directory)
+            if has_capacity(state):
+                break
+        db.commit()
+
+    state = _backup_storage_snapshot(directory)
+    return {
+        **state,
+        "required_bytes": required_bytes,
+        "pruned_count": pruned_count,
+        "pruned_bytes": pruned_bytes,
+        "has_capacity": has_capacity(state),
+        "adaptive_cleanup_enabled": _adaptive_cleanup_enabled(),
+    }
+
+
+def _prepare_backup_storage(backup_type: str, directory: Path) -> dict[str, int | bool]:
+    """Apply normal retention first, then enforce the filesystem safety budget."""
+    with SessionLocal() as db:
+        for tier in _BACKUP_TYPE_RETAIN:
+            _apply_retention(tier, db)
+        required_bytes = _estimated_backup_bytes(db, backup_type)
+        return _apply_storage_budget(db, directory, required_bytes=required_bytes)
+
+
+def _storage_error_detail(state: dict[str, int | bool]) -> str:
+    free_mib = int(state["free_bytes"]) // (1024 * 1024)
+    reserve_mib = (int(state["min_free_bytes"]) + int(state["required_bytes"])) // (1024 * 1024)
+    used_mib = int(state["backup_bytes"]) // (1024 * 1024)
+    budget_mib = int(state["max_local_bytes"]) // (1024 * 1024)
+    cleanup_hint = (
+        "Adaptive cleanup could not reclaim enough redundant snapshots."
+        if state["adaptive_cleanup_enabled"]
+        else "Adaptive cleanup is disabled."
+    )
+    return (
+        "Insufficient backup storage: "
+        f"{free_mib} MiB free (at least {reserve_mib} MiB required); "
+        f"local backups use {used_mib} MiB of a {budget_mib} MiB budget. "
+        f"{cleanup_hint} Configure a separate backup directory or remote destination, or adjust the backup storage limits."
+    )
+
+
+def _record_backup_failure(filename: str, backup_type: str, detail: str) -> None:
+    """Persist a bounded, user-safe failure message for the admin dashboard."""
+    try:
+        with SessionLocal() as db:
+            db.add(
+                BackupRecord(
+                    filename=filename,
+                    local_path=None,
+                    backup_type=backup_type,
+                    size_bytes=0,
+                    checksum=None,
+                    status="failed",
+                    error_detail=detail[:2000],
+                )
+            )
+            db.commit()
+    except Exception:
+        # A full local filesystem can also prevent a SQLite failure record.
+        # Never hide the original backup diagnostic with a secondary write error.
+        logger.exception("Could not persist backup failure status for %s", filename)
 
 
 def _dump_sqlite(db_path: Path, dest: Path) -> None:
@@ -401,25 +608,44 @@ def _apply_retention(backup_type: str, db: object) -> None:
         db: Active SQLAlchemy session.
     """
     retain_attr = _BACKUP_TYPE_RETAIN.get(backup_type, "backup_retain_hourly")
-    retain = int(getattr(settings, retain_attr, 96))
+    # A local tier must always keep at least one recovery point, even if a
+    # stale database-backed setting predates the current validation rules.
+    retain = max(1, int(getattr(settings, retain_attr, 96)))
 
-    # Query ALL records for this tier (with or without a local file) so that
-    # remote-only and already-pruned records still count toward the retention window.
-    records = (
+    # Count actual successful local recovery points. Failed attempts and
+    # remote-only records must never evict the newest usable local archive.
+    candidates = (
         db.query(BackupRecord)
-        .filter(BackupRecord.backup_type == backup_type)
-        .order_by(BackupRecord.created_at.desc())
+        .filter(
+            BackupRecord.backup_type == backup_type,
+            BackupRecord.status == "ok",
+            BackupRecord.local_path.isnot(None),
+        )
+        .order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc())
         .all()
     )
 
+    records = []
+    for rec in candidates:
+        if rec.local_path and os.path.exists(rec.local_path):
+            records.append(rec)
+            continue
+        rec.local_path = None
+        if not rec.remote_path:
+            db.delete(rec)
+
     to_prune = records[retain:]
     for rec in to_prune:
+        removed = not (rec.local_path and os.path.exists(rec.local_path))
         if rec.local_path and os.path.exists(rec.local_path):
             try:
                 os.remove(rec.local_path)
+                removed = True
                 logger.info(f"Pruned local backup: {rec.local_path}")
             except OSError as exc:
                 logger.warning(f"Failed to remove local backup {rec.local_path}: {exc}")
+        if not removed:
+            continue
         rec.local_path = None
         # If no remote copy either, delete the record entirely
         if not rec.remote_path:
@@ -438,20 +664,24 @@ def _prune_remote_backups(backup_type: str, db: object) -> None:
         db: Active SQLAlchemy session.
     """
     retain_attr = _BACKUP_TYPE_RETAIN.get(backup_type, "backup_retain_hourly")
-    retain = int(getattr(settings, retain_attr, 96))
+    retain = max(1, int(getattr(settings, retain_attr, 96)))
 
-    # Query ALL records for this tier so that already-pruned local records
-    # still count toward the retention window.
+    # Count only successful records that still have a remote recovery point.
     records = (
         db.query(BackupRecord)
-        .filter(BackupRecord.backup_type == backup_type)
-        .order_by(BackupRecord.created_at.desc())
+        .filter(
+            BackupRecord.backup_type == backup_type,
+            BackupRecord.status == "ok",
+            BackupRecord.remote_path.isnot(None),
+        )
+        .order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc())
         .all()
     )
 
     to_prune = [r for r in records[retain:] if r.remote_path]
     for rec in to_prune:
-        _delete_remote_copy(rec)
+        if not _delete_remote_copy(rec):
+            continue
         rec.remote_path = None
         rec.remote_destination = None
         if not rec.local_path:
@@ -460,12 +690,17 @@ def _prune_remote_backups(backup_type: str, db: object) -> None:
     db.commit()
 
 
-def _delete_remote_copy(rec: BackupRecord) -> None:  # noqa: C901
-    """Best-effort deletion of the remote copy described by *rec*."""
+def _delete_remote_copy(rec: BackupRecord) -> bool:  # noqa: C901
+    """Best-effort deletion of the remote copy described by *rec*.
+
+    Return ``True`` only when the provider confirms deletion. Retention keeps
+    the database reference when deletion is unsupported or fails so a remote
+    recovery point never becomes an untracked orphan.
+    """
     dest = rec.remote_destination
     remote_path = rec.remote_path
     if not dest or not remote_path:
-        return
+        return False
 
     try:
         if dest == "s3":
@@ -479,6 +714,7 @@ def _delete_remote_copy(rec: BackupRecord) -> None:  # noqa: C901
             )
             s3.delete_object(Bucket=settings.s3_bucket_name, Key=remote_path)
             logger.info(f"Deleted remote S3 backup: s3://{settings.s3_bucket_name}/{remote_path}")
+            return True
 
         elif dest == "dropbox":
             import dropbox as dbx_module
@@ -486,13 +722,19 @@ def _delete_remote_copy(rec: BackupRecord) -> None:  # noqa: C901
             dbx = dbx_module.Dropbox(settings.dropbox_refresh_token)
             dbx.files_delete_v2(remote_path)
             logger.info(f"Deleted remote Dropbox backup: {remote_path}")
+            return True
 
         elif dest in ("ftp", "sftp", "nextcloud", "webdav", "google_drive", "onedrive", "email"):
             # For other providers best-effort is logged only – deletion not implemented yet.
             logger.debug(f"Remote deletion not implemented for destination '{dest}', skipping {remote_path}")
+            return False
+
+        logger.warning("Unknown remote backup destination '%s'; keeping its recovery record", dest)
+        return False
 
     except Exception as exc:
         logger.warning(f"Failed to delete remote backup {remote_path} from {dest}: {exc}")
+        return False
 
 
 def _upload_remote(archive_path: Path, filename: str) -> tuple[str, str] | None:  # noqa: C901
@@ -642,9 +884,19 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
     backend = _db_backend()
     ext = _archive_ext_for_backend(backend)
 
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    # Microseconds prevent concurrent hourly/daily/weekly schedules from
+    # targeting the same archive name at a tier boundary.
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S-%f")
     filename = f"backup_{backup_type}_{ts}{ext}"
-    archive_path = _backup_dir() / filename
+    try:
+        directory = _backup_dir()
+    except OSError as exc:
+        detail = f"Backup directory is unavailable: {exc}"
+        logger.error("%s", detail, exc_info=True)
+        _record_backup_failure(filename, backup_type, detail)
+        return {"status": "error", "detail": detail}
+    archive_path = directory / filename
+    partial_path = directory / f".{filename}.partial"
 
     # SQLite: verify the database file exists before attempting to dump it
     db_path: Path | None = None
@@ -660,6 +912,19 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
         logger.warning(f"Backup task skipped: unsupported database backend '{backend}'.")
         return {"status": "unsupported_db"}
 
+    try:
+        storage_state = _prepare_backup_storage(backup_type, directory)
+    except Exception as exc:
+        detail = f"Backup storage preflight failed: {exc}"
+        logger.error("%s", detail, exc_info=True)
+        _record_backup_failure(filename, backup_type, detail)
+        return {"status": "error", "detail": detail}
+    if not storage_state["has_capacity"]:
+        detail = _storage_error_detail(storage_state)
+        logger.error("Backup skipped before dump: %s", detail)
+        _record_backup_failure(filename, backup_type, detail)
+        return {"status": "error", "detail": detail, "storage": storage_state}
+
     status = "ok"
     checksum: str | None = None
     size_bytes = 0
@@ -671,29 +936,20 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
             # db_path is guaranteed non-None: we returned early if it were None
             if db_path is None:  # pragma: no cover
                 return {"status": "error", "detail": "db_path unexpectedly None"}
-            _dump_sqlite(db_path, archive_path)
+            _dump_sqlite(db_path, partial_path)
         elif backend == "postgresql":
-            _dump_postgresql(settings.database_url, archive_path)
+            _dump_postgresql(settings.database_url, partial_path)
         elif backend == "mysql":
-            _dump_mysql(settings.database_url, archive_path)
-        size_bytes = archive_path.stat().st_size
-        checksum = _sha256(archive_path)
+            _dump_mysql(settings.database_url, partial_path)
+        size_bytes = partial_path.stat().st_size
+        checksum = _sha256(partial_path)
+        partial_path.replace(archive_path)
         logger.info(f"Created {backup_type} backup: {archive_path} ({size_bytes:,} bytes)")
     except Exception as exc:
+        partial_path.unlink(missing_ok=True)
         logger.error(f"Failed to create backup archive {filename}: {exc}", exc_info=True)
         status = "failed"
-        # Record the failure so it is visible in the dashboard
-        with SessionLocal() as db:
-            rec = BackupRecord(
-                filename=filename,
-                local_path=None,
-                backup_type=backup_type,
-                size_bytes=0,
-                checksum=None,
-                status="failed",
-            )
-            db.add(rec)
-            db.commit()
+        _record_backup_failure(filename, backup_type, str(exc))
         return {"status": "error", "detail": str(exc)}
 
     # Optional remote upload
@@ -709,6 +965,7 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
             size_bytes=size_bytes,
             checksum=checksum,
             status=status,
+            error_detail=None,
             remote_destination=remote_destination,
             remote_path=remote_path,
         )
@@ -725,6 +982,7 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
         "size_bytes": size_bytes,
         "status": status,
         "remote_destination": remote_destination,
+        "storage": backup_storage_status(),
     }
 
 
@@ -738,4 +996,5 @@ def cleanup_old_backups() -> dict:
         for btype in ("hourly", "daily", "weekly"):
             _apply_retention(btype, db)
             _prune_remote_backups(btype, db)
-    return {"status": "ok"}
+        storage = _apply_storage_budget(db, _backup_dir())
+    return {"status": "ok", "storage": storage}

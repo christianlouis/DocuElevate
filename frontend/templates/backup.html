@@ -45,6 +45,37 @@
     </div>
   </div>
 
+  {% if not backup_storage.healthy or last_backup_failure %}
+  <section class="mb-6 rounded-lg border-l-4 border-red-500 bg-red-50 p-5 text-red-900"
+           role="alert"
+           aria-labelledby="backup-storage-warning-heading">
+    <h2 id="backup-storage-warning-heading" class="font-semibold">
+      <i class="fas fa-exclamation-triangle mr-2" aria-hidden="true"></i>{{ _("backup.storage_warning_heading") }}
+    </h2>
+    <p class="mt-1 text-sm">
+      {{ _("backup.storage_warning_description") }}
+      {{ backup_storage_free_mib }} MiB {{ _("backup.storage_free") }};
+      {{ backup_storage_used_mib }} / {{ backup_storage_budget_mib }} MiB {{ _("backup.storage_budget_used") }};
+      {{ backup_storage_reserve_mib }} MiB {{ _("backup.storage_reserved") }}.
+    </p>
+    {% if last_backup_failure and last_backup_failure.error_detail %}
+    <p class="mt-2 text-sm font-medium">{{ last_backup_failure.error_detail }}</p>
+    {% endif %}
+    {% if backup_storage.storage_error %}
+    <p class="mt-2 text-sm font-medium">{{ backup_storage.storage_error }}</p>
+    {% endif %}
+    <a href="/settings"
+       class="mt-3 inline-flex min-h-[44px] items-center font-semibold underline">
+      <i class="fas fa-sliders-h mr-2" aria-hidden="true"></i>{{ _("backup.open_settings") }}
+    </a>
+  </section>
+  {% else %}
+  <section class="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800" role="status">
+    <i class="fas fa-check-circle mr-2" aria-hidden="true"></i>{{ _("backup.storage_healthy") }}
+    {{ backup_storage_free_mib }} MiB {{ _("backup.storage_free") }}.
+  </section>
+  {% endif %}
+
   <!-- Status flash (always in DOM; content toggled via aria-live) -->
   <div role="alert" aria-live="polite" aria-atomic="true"
        :class="flashMsg ? '' : 'sr-only'"
@@ -123,14 +154,14 @@
       <i class="fas fa-upload mr-2 text-yellow-500" aria-hidden="true"></i>{{ _("backup.restore_heading") }}
     </h2>
     <p class="text-sm text-gray-500 mb-4">
-      {{ _("backup.restore_desc_pre") }} <code>.db.gz</code> {{ _("backup.restore_desc_mid") }}
+      {{ _("backup.restore_desc_pre") }} <code>{{ backup_archive_extension }}</code> {{ _("backup.restore_desc_mid") }}
       <strong class="text-red-600">{{ _("backup.restore_desc_warning") }}</strong>
     </p>
     <form id="restoreForm" @submit.prevent="submitRestore" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
         <div>
-          <label for="restoreFile" class="block text-sm font-medium text-gray-700 mb-1">{{ _("backup.restore_file_label") }}</label>
+          <label for="restoreFile" class="block text-sm font-medium text-gray-700 mb-1">{{ _("backup.restore_file_label") }} ({{ backup_archive_extension }})</label>
           <input type="file" id="restoreFile" name="file" accept=".gz"
                  required
                  class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
@@ -212,9 +243,10 @@
                   <i class="fas fa-check-circle mr-1" aria-hidden="true"></i> {{ _("backup.status_ok") }}
                 </span>
               {% else %}
-                <span class="inline-flex items-center text-red-600">
+                <span class="inline-flex items-center text-red-600"{% if r.error_detail %} title="{{ r.error_detail }}"{% endif %}>
                   <i class="fas fa-exclamation-circle mr-1" aria-hidden="true"></i> {{ r.status }}
                 </span>
+                {% if r.error_detail %}<p class="mt-1 max-w-md text-xs text-red-700">{{ r.error_detail }}</p>{% endif %}
               {% endif %}
             </td>
             <td class="px-4 py-3 text-sm text-gray-600">
