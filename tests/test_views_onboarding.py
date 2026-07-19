@@ -760,8 +760,8 @@ def test_storage_step_auto_selects_single_destination_but_keeps_external_copy_op
     assert "configuredDestinationIds[0]" in template
     assert "selectedDestinationLabel" in template
     assert "|| !selectedDestination" not in template
-    assert 'onboarding.local_archive_ready_heading' in template
-    assert 'onboarding.no_external_copy_heading' in template
+    assert "onboarding.local_archive_ready_heading" in template
+    assert "onboarding.no_external_copy_heading" in template
     assert 'href="/integrations?onboarding=destination"' in template
     assert "{% if user.is_admin %}" not in template
 
