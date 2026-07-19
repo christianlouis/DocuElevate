@@ -692,6 +692,7 @@ class TestURLUploadEndpoint:
         assert validate_file_type("", "document.pdf") is True
         assert validate_file_type("", "image.jpg") is True
         assert validate_file_type("", "spreadsheet.xlsx") is True
+        assert validate_file_type("", "PRESENTATION.PPTX") is True
 
         # Empty content-type and invalid extension
         assert validate_file_type("", "malware.exe") is False

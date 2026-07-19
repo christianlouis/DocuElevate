@@ -3,7 +3,6 @@ API endpoint for processing files from URLs
 """
 
 import logging
-import mimetypes
 import os
 import urllib.parse
 import uuid
@@ -18,7 +17,7 @@ from app.auth import require_login
 from app.config import settings
 from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.tasks.process_document import process_document
-from app.utils.allowed_types import ALLOWED_MIME_TYPES
+from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 from app.utils.filename_utils import sanitize_filename
 from app.utils.network import is_private_ip
 from app.utils.user_scope import get_document_upload_owner_id
@@ -103,10 +102,8 @@ def validate_file_type(content_type: str, filename: str) -> bool:
 
     # Also check by extension as fallback
     _, ext = os.path.splitext(filename)
-    if ext:
-        guessed_type, _ = mimetypes.guess_type(filename)
-        if guessed_type and guessed_type in ALLOWED_MIME_TYPES:
-            return True
+    if ext.lower() in ALLOWED_EXTENSIONS:
+        return True
 
     return False
 
