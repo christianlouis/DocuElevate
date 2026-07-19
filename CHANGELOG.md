@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+
 ## v0.188.1 (2026-07-18)
 
 ### Bug Fixes
