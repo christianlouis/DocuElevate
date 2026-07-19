@@ -67,7 +67,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: 'pip'
-      - run: pip install djlint>=1.36.0
+      # djLint 1.40.9 crashes while pickling its multiprocessing config on
+      # Python 3.11; keep CI on the last verified release until upstream fixes it.
+      - run: pip install djlint==1.36.4
       - run: djlint frontend/templates/ --lint
 
   terraform-validate:

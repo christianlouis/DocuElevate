@@ -12,7 +12,7 @@ import logging
 from fastapi import HTTPException, Request, status
 from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Query, Session
-from sqlalchemy.sql import false
+from sqlalchemy.sql import Select, false
 
 from app.config import settings
 from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare, TribeMembership
@@ -183,7 +183,7 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     return query.filter(or_(*conditions))
 
 
-def tribe_peer_user_ids(user_id: str):
+def tribe_peer_user_ids(user_id: str) -> Select[tuple[str]]:
     """Return a SQL subquery of users sharing an exact tenant/Tribe scope.
 
     Tenant membership by itself is intentionally insufficient: two Tribes in
