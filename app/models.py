@@ -67,6 +67,25 @@ class TribeMembership(Base):
     __table_args__ = (UniqueConstraint("tribe_id", "user_id", name="uq_tribe_memberships_tribe_user"),)
 
 
+class TribeInvitation(Base):
+    """Auditable, revocable invitation into exactly one Tribe."""
+
+    __tablename__ = "tribe_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), nullable=False, index=True)
+    invitee_id = Column(String, nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="member", server_default="member")
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    invited_by = Column(String, nullable=False, index=True)
+    accepted_by = Column(String, nullable=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class DocumentMetadata(Base):
     __tablename__ = "documents"
 

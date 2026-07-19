@@ -14,7 +14,8 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.models import FileRecord, ProcessingLog
+from app.models import FileRecord, ProcessingLog, TribeMembership
+from app.utils.tribe_scope import ensure_document_scope
 
 
 @pytest.mark.unit
@@ -196,12 +197,18 @@ class TestListFilesAPI:
 class TestGetFileDetails:
     """Tests for GET /api/files/{file_id} endpoint."""
 
-    def test_get_file_details_success(self, client: TestClient, db_session):
-        """Test getting file details for existing file."""
+    def test_get_file_details_success(self, client: TestClient, db_session, tmp_path):
+        """File details reflect the durable original and processed copies."""
+        original_path = tmp_path / "original.pdf"
+        processed_path = tmp_path / "processed.pdf"
+        original_path.write_bytes(b"original")
+        processed_path.write_bytes(b"processed")
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
-            local_filename="/tmp/test.pdf",
+            local_filename=str(tmp_path / "removed-working-copy.pdf"),
+            original_file_path=str(original_path),
+            processed_file_path=str(processed_path),
             file_size=1024,
             mime_type="application/pdf",
         )
@@ -216,6 +223,7 @@ class TestGetFileDetails:
         assert "logs" in data
         assert data["file"]["id"] == file.id
         assert data["file"]["original_filename"] == "test.pdf"
+        assert data["files_on_disk"] == {"original": True, "processed": True}
 
     def test_get_file_details_not_found(self, client: TestClient, db_session):
         """Test getting details for non-existent file."""
@@ -2783,6 +2791,27 @@ class TestAssignOwner:
 class TestAssignOwnerAdminFull:
     """Full tests for assign-owner with admin session via session fixture."""
 
+    @staticmethod
+    def _grant_assignment_scope(db_session, target="newowner"):
+        tenant_id, tribe_id = ensure_document_scope(db_session, None)
+        db_session.add_all(
+            [
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id="admin",
+                    role="admin",
+                ),
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id=target,
+                    role="member",
+                ),
+            ]
+        )
+        db_session.commit()
+
     def test_assign_owner_all_unowned_with_admin_session(self, client: TestClient, db_session):
         """Test full assign-owner flow with admin session."""
 
@@ -2805,13 +2834,14 @@ class TestAssignOwnerAdminFull:
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
+        self._grant_assignment_scope(db_session)
 
         # Patch request.session at the ASGI level by using middleware patch
         with (
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
@@ -2832,12 +2862,13 @@ class TestAssignOwnerAdminFull:
         )
         db_session.add(file)
         db_session.commit()
+        self._grant_assignment_scope(db_session)
 
         with (
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
@@ -2852,7 +2883,7 @@ class TestAssignOwnerAdminFull:
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
@@ -2861,11 +2892,12 @@ class TestAssignOwnerAdminFull:
 
     def test_assign_owner_db_error_returns_500_with_admin(self, client: TestClient, db_session):
         """Test assign-owner returns 500 on DB error with admin session."""
+        self._grant_assignment_scope(db_session)
         with (
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
             patch.object(db_session, "commit", side_effect=Exception("DB error")),
         ):
@@ -3565,7 +3597,24 @@ class TestAssignOwnerWithFileIds:
     """Test assign-owner endpoint with specific file_ids (line 1615)."""
 
     def test_assign_owner_with_file_ids_using_admin_session(self, client: TestClient, db_session):
-        """Test assign-owner with specific file_ids in request body (covers line 1615)."""
+        """Test Tribe-scoped assignment with explicit query file IDs."""
+        tenant_id, tribe_id = ensure_document_scope(db_session, None)
+        db_session.add_all(
+            [
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id="admin",
+                    role="admin",
+                ),
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id="newowner",
+                    role="member",
+                ),
+            ]
+        )
         file1 = FileRecord(
             filehash="hash1",
             original_filename="test1.pdf",
@@ -3581,14 +3630,12 @@ class TestAssignOwnerWithFileIds:
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
-            # Send file_ids as JSON body (the parameter is body-typed, not query-typed)
             response = client.post(
-                "/api/files/assign-owner?owner_id=newowner",
-                json=[file1.id],  # file_ids as JSON body
+                f"/api/files/assign-owner?owner_id=newowner&file_ids={file1.id}",
             )
             assert response.status_code == 200
             data = response.json()

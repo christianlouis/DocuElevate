@@ -247,7 +247,11 @@ def apply_privacy_rule(
 
     changed_ids: list[int] = []
     skipped_manual = 0
+    skipped_ownerless = 0
     for file_record, match in _matching_files(db, owner_id, rule, limit=limit):
+        if file_record.owner_id is None:
+            skipped_ownerless += 1
+            continue
         if file_record.privacy_manual_override is not None:
             skipped_manual += 1
             continue
@@ -272,4 +276,5 @@ def apply_privacy_rule(
         "changed_count": len(changed_ids),
         "changed_file_ids": changed_ids,
         "skipped_manual_override": skipped_manual,
+        "skipped_ownerless": skipped_ownerless,
     }

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.models import FileRecord, PrivacyDecisionAudit, PrivacyRuleModel, SharedLink
-from app.utils.privacy_rules import SINGLE_USER_PRIVACY_OWNER, PrivacyMatch, match_rule_to_file
+from app.utils.privacy_rules import PrivacyMatch, match_rule_to_file
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,15 @@ def queue_privacy_reconciliation(file_ids: list[int]) -> None:
 
 def apply_first_matching_privacy_rule(db: Session, file_record: FileRecord) -> bool:
     """Mark a newly processed file private when its owner's first rule matches."""
+    # Ownerless legacy documents have no principal that can safely hide or
+    # recover them. Keep their current state unchanged; an already-private
+    # legacy document can still be made public through the explicit recovery
+    # endpoint.
+    if file_record.owner_id is None:
+        return False
     if file_record.privacy_manual_override is not None:
         return False
-    rule_owner_id = file_record.owner_id or SINGLE_USER_PRIVACY_OWNER
+    rule_owner_id = file_record.owner_id
     rules = (
         db.query(PrivacyRuleModel)
         .filter(PrivacyRuleModel.owner_id == rule_owner_id, PrivacyRuleModel.enabled.is_(True))

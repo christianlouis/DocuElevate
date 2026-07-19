@@ -128,6 +128,22 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "deployment_label": {
+        "category": "Core",
+        "description": "Optional deployment suffix shown during onboarding, such as Preprod or Canary",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "default_storage_path": {
+        "category": "Core",
+        "description": "Default folder suggested for new source and destination integrations",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "debug": {
         "category": "Core",
         "description": "Enable debug mode for verbose logging",
@@ -948,6 +964,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
         "options": KNOWN_OCR_PROVIDERS,
+    },
+    "ocr_embed_text_layer": {
+        "category": "OCR Engines",
+        "description": (
+            "Run an additional ocrmypdf pass when OCR returns text without a searchable PDF. "
+            "Extracted text remains searchable inside DocuElevate when this is disabled. "
+            "Enable only when output PDFs also need selectable text and the worker has enough memory."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
     },
     "ocr_merge_strategy": {
         "category": "OCR Engines",

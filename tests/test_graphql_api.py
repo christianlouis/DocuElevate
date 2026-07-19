@@ -19,6 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.models import ApplicationSettings, FileRecord, Pipeline, PipelineStep, UserProfile
+from app.utils.tribe_scope import ensure_personal_scope, ensure_tribe_membership
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -417,3 +418,157 @@ class TestGraphQLAuth:
         with patch.object(app_settings, "auth_enabled", True):
             result = gql(client, "{ pipelines { id } }")
         assert "errors" in result
+
+
+@pytest.mark.integration
+class TestGraphQLTenantAndPrivacyIsolation:
+    """GraphQL must enforce the same hard tenant/Tribe boundary as REST and RAG."""
+
+    @staticmethod
+    def _record(db_session, *, owner_id: str, tenant_id: str, tribe_id: str, suffix: str, private: bool = False):
+        record = FileRecord(
+            owner_id=owner_id,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
+            original_filename=f"{suffix}.pdf",
+            local_filename=f"/workdir/tmp/{suffix}.pdf",
+            file_size=100,
+            filehash=f"graphql-{suffix}",
+            is_private=private,
+        )
+        db_session.add(record)
+        db_session.flush()
+        return record
+
+    def test_admin_list_is_limited_to_exact_tribe_and_respects_private_flag(self, client, db_session):
+        tenant_id, alice_tribe = ensure_personal_scope(db_session, "alice")
+        _tenant_id, bob_tribe = ensure_personal_scope(db_session, "bob", tenant_id)
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=alice_tribe,
+            user_id="admin",
+            role="admin",
+        )
+        visible = self._record(
+            db_session,
+            owner_id="alice",
+            tenant_id=tenant_id,
+            tribe_id=alice_tribe,
+            suffix="visible-in-admin-tribe",
+        )
+        private = self._record(
+            db_session,
+            owner_id="alice",
+            tenant_id=tenant_id,
+            tribe_id=alice_tribe,
+            suffix="private-in-admin-tribe",
+            private=True,
+        )
+        other_tribe = self._record(
+            db_session,
+            owner_id="bob",
+            tenant_id=tenant_id,
+            tribe_id=bob_tribe,
+            suffix="outside-admin-tribe",
+        )
+        db_session.commit()
+
+        with (
+            patch("app.api.graphql_api.get_current_user", return_value={"id": "admin", "is_admin": True}),
+            patch("app.api.graphql_api.settings.auth_enabled", True),
+            patch("app.utils.user_scope.settings.multi_user_enabled", True),
+        ):
+            result = gql(client, "{ documents(limit: 100) { id } }")
+
+        assert "errors" not in result
+        returned_ids = {document["id"] for document in result["data"]["documents"]}
+        assert visible.id in returned_ids
+        assert private.id not in returned_ids
+        assert other_tribe.id not in returned_ids
+
+    def test_admin_single_document_cannot_cross_tribe_or_owner_privacy(self, client, db_session):
+        tenant_id, alice_tribe = ensure_personal_scope(db_session, "alice")
+        _tenant_id, bob_tribe = ensure_personal_scope(db_session, "bob", tenant_id)
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=alice_tribe,
+            user_id="admin",
+            role="admin",
+        )
+        private = self._record(
+            db_session,
+            owner_id="alice",
+            tenant_id=tenant_id,
+            tribe_id=alice_tribe,
+            suffix="private-single",
+            private=True,
+        )
+        other_tribe = self._record(
+            db_session,
+            owner_id="bob",
+            tenant_id=tenant_id,
+            tribe_id=bob_tribe,
+            suffix="other-tribe-single",
+        )
+        db_session.commit()
+
+        with (
+            patch("app.api.graphql_api.get_current_user", return_value={"id": "admin", "is_admin": True}),
+            patch("app.api.graphql_api.settings.auth_enabled", True),
+            patch("app.utils.user_scope.settings.multi_user_enabled", True),
+        ):
+            private_result = gql(client, f"{{ document(id: {private.id}) {{ id }} }}")
+            other_result = gql(client, f"{{ document(id: {other_tribe.id}) {{ id }} }}")
+
+        assert private_result["data"]["document"] is None
+        assert other_result["data"]["document"] is None
+
+    def test_platform_admin_cannot_enumerate_another_users_pipelines(self, client, db_session):
+        own = Pipeline(owner_id="admin", name="Admin pipeline")
+        system = Pipeline(owner_id=None, name="System pipeline")
+        other = Pipeline(owner_id="alice", name="Alice pipeline")
+        db_session.add_all([own, system, other])
+        db_session.commit()
+
+        with (
+            patch("app.api.graphql_api.get_current_user", return_value={"id": "admin", "is_admin": True}),
+            patch("app.api.graphql_api.settings.auth_enabled", True),
+            patch("app.api.graphql_api.settings.multi_user_enabled", True),
+        ):
+            list_result = gql(client, "{ pipelines(limit: 100) { id name } }")
+            single_result = gql(client, f"{{ pipeline(id: {other.id}) {{ id name }} }}")
+
+        assert {item["id"] for item in list_result["data"]["pipelines"]} == {own.id, system.id}
+        assert single_result["data"]["pipeline"] is None
+
+    def test_platform_admin_user_directory_is_limited_to_tribe_peers(self, client, db_session):
+        tenant_id, admin_tribe = ensure_personal_scope(db_session, "admin")
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=admin_tribe,
+            user_id="alice",
+            role="member",
+        )
+        ensure_personal_scope(db_session, "mallory", tenant_id)
+        db_session.add_all(
+            [
+                UserProfile(user_id="admin", display_name="Admin"),
+                UserProfile(user_id="alice", display_name="Alice"),
+                UserProfile(user_id="mallory", display_name="Mallory"),
+            ]
+        )
+        db_session.commit()
+
+        with (
+            patch("app.api.graphql_api.get_current_user", return_value={"id": "admin", "is_admin": True}),
+            patch("app.api.graphql_api.settings.auth_enabled", True),
+            patch("app.api.graphql_api.settings.multi_user_enabled", True),
+        ):
+            list_result = gql(client, "{ users(limit: 100) { userId } }")
+            single_result = gql(client, '{ user(userId: "mallory") { userId } }')
+
+        assert {item["userId"] for item in list_result["data"]["users"]} == {"admin", "alice"}
+        assert single_result["data"]["user"] is None

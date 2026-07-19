@@ -595,6 +595,25 @@ class TestLoginMobileRedirect:
         context = mock_tpl.TemplateResponse.call_args.kwargs["context"]
         assert context["message"] == "Sie wurden erfolgreich abgemeldet"
 
+    @pytest.mark.asyncio
+    async def test_login_localizes_allowlisted_message_key(self):
+        from app.auth import login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.query_params = {"message_key": "auth.account_created_success"}
+        mock_request.session = {}
+        mock_request.cookies = {}
+        mock_request.headers = {"accept-language": "de-DE,de;q=0.9"}
+        mock_request.state = MagicMock()
+        mock_request.state.csrf_token = "csrf"
+
+        with patch("app.auth.templates") as mock_tpl:
+            mock_tpl.TemplateResponse.return_value = "page"
+            await login(mock_request)
+
+        context = mock_tpl.TemplateResponse.call_args.kwargs["context"]
+        assert context["message"] == "Das Konto wurde erfolgreich erstellt. Sie können sich jetzt anmelden."
+
 
 # ---------------------------------------------------------------------------
 # social_login()

@@ -33,6 +33,12 @@ env:
   AI_PROVIDER: openai
   OPENAI_MODEL: gpt-4o-mini
 
+  # Local OCR works out of the box; opt into cloud providers explicitly.
+  OCR_PROVIDERS: tesseract
+  # Optional second OCR pass that embeds selectable text into output PDFs.
+  # Disabled by default to keep fresh installations reliable on modest hardware.
+  OCR_EMBED_TEXT_LAYER: "false"
+
   # Azure Document Intelligence (required when OCR_PROVIDERS includes "azure")
   AZURE_REGION: eastus
   AZURE_ENDPOINT: ""   # e.g. https://my-resource.cognitiveservices.azure.com/

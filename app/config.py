@@ -226,8 +226,17 @@ class Settings(BaseSettings):
     # Comma-separated list of OCR engines to use.
     # Supported values: azure, tesseract, easyocr, mistral, google_docai, aws_textract
     # When multiple engines are listed all are run and results are merged.
+    # The packaged image includes Tesseract, so a fresh installation can OCR
+    # scans without requiring a paid cloud credential.  Operators may opt into
+    # Azure or combine providers explicitly.
     # Example: OCR_PROVIDERS=azure,tesseract
-    ocr_providers: str = "azure"
+    ocr_providers: str = "tesseract"
+
+    # Optionally run the resource-intensive ocrmypdf post-processing step when
+    # the selected OCR provider returns text but no searchable PDF. Extracted
+    # OCR text is indexed by DocuElevate regardless, so fresh installations
+    # keep this disabled to work reliably on modest hardware.
+    ocr_embed_text_layer: bool = False
 
     # Strategy for merging results from multiple OCR providers.
     # - ai_merge  : Ask the AI model to produce the best merged text (default).
@@ -262,6 +271,20 @@ class Settings(BaseSettings):
             "When set, this overrides the auto-detected URL for OAuth redirect URIs. "
             "This is required when the application is behind a reverse proxy that does "
             "not forward X-Forwarded-Proto headers correctly."
+        ),
+    )
+    deployment_label: str = Field(
+        default="",
+        description=(
+            "Optional human-readable deployment suffix, for example 'Preprod' or 'Canary'. "
+            "It is displayed during onboarding so users can distinguish installations."
+        ),
+    )
+    default_storage_path: str = Field(
+        default="/DocuElevate",
+        description=(
+            "Default folder suggested for newly configured source and destination integrations. "
+            "Set this per deployment, for example to '/DocuElevate Preprod'."
         ),
     )
 

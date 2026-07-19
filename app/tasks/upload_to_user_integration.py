@@ -73,6 +73,13 @@ logger = logging.getLogger(__name__)
 _MAX_ERROR_LENGTH = 500
 
 
+def _user_facing_upload_error(integration_type: str, error_message: str) -> str:
+    """Return a safe, actionable error for integration cards and progress UI."""
+    if integration_type == IntegrationType.VECTOR_DATABASE:
+        return "Document search indexing failed. Test this integration and verify the AI settings."
+    return error_message
+
+
 # ---------------------------------------------------------------------------
 # Per-type upload helpers
 # ---------------------------------------------------------------------------
@@ -890,6 +897,7 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
 
     except Exception as exc:
         error_msg = str(exc)[:_MAX_ERROR_LENGTH]
+        public_error = _user_facing_upload_error(itype, error_msg)
         logger.error(
             "[%s] Upload to integration %d (%s '%s') failed: %s",
             task_id,
@@ -905,7 +913,7 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
                 integ = db.query(UserIntegration).filter(UserIntegration.id == integration_id).first()
                 if integ:
                     integ.last_used_at = datetime.now(timezone.utc)
-                    integ.last_error = error_msg
+                    integ.last_error = public_error
                     db.commit()
         except Exception as db_exc:  # noqa: BLE001
             logger.warning("[%s] Could not persist last_error for integration %d: %s", task_id, integration_id, db_exc)
@@ -914,7 +922,7 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
             task_id,
             f"upload_to_user_integration_{integration_id}",
             "failure",
-            f"Upload to {itype} '{int_name}' failed: {error_msg}",
+            f"Upload to {itype} '{int_name}' failed: {public_error}",
             file_id=file_id,
         )
         raise

@@ -1103,6 +1103,24 @@ class TestGetEmbeddingClient:
 
         assert result is not None
 
+    @pytest.mark.unit
+    def test_keyless_compatible_endpoint_uses_non_secret_sdk_placeholder(self):
+        """A no-auth local endpoint should satisfy the SDK without inventing a real credential."""
+        from app.utils import similarity
+
+        mock_openai_class = MagicMock(return_value=MagicMock())
+        with (
+            patch.object(similarity.settings, "openai_api_key", None),
+            patch.object(similarity.settings, "openai_base_url", "http://embeddings.internal/v1/"),
+            patch.dict(sys.modules, {"openai": MagicMock(OpenAI=mock_openai_class)}),
+        ):
+            similarity._get_embedding_client()
+
+        mock_openai_class.assert_called_once_with(
+            api_key="not-required",
+            base_url="http://embeddings.internal/v1/",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Unit tests for generate_embedding

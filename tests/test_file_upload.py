@@ -66,6 +66,36 @@ class TestValidFileUploads:
         call_args = mock_celery_tasks["process_document"].call_args
         assert call_args.kwargs["original_filename"] == "document.pdf"
 
+    def test_upload_forwards_authenticated_owner_in_multi_user_mode(self, client: TestClient, mock_celery_tasks):
+        """A direct upload must be queued with the stable authenticated owner."""
+        with (
+            patch("app.utils.user_scope.settings.multi_user_enabled", True),
+            patch("app.utils.user_scope.get_current_owner_id", return_value="julia@example.invalid"),
+        ):
+            response = client.post(
+                "/api/ui-upload",
+                files={"file": ("julia.pdf", io.BytesIO(b"%PDF-1.4\n"), "application/pdf")},
+            )
+
+        assert response.status_code == 200
+        call_args = mock_celery_tasks["process_document"].call_args
+        assert call_args.kwargs["owner_id"] == "julia@example.invalid"
+
+    def test_upload_fails_closed_without_owner_in_multi_user_mode(self, client: TestClient, mock_celery_tasks):
+        """A missing session identity must not create an unowned document."""
+        with (
+            patch("app.utils.user_scope.settings.multi_user_enabled", True),
+            patch("app.utils.user_scope.get_current_owner_id", return_value=None),
+        ):
+            response = client.post(
+                "/api/ui-upload",
+                files={"file": ("unowned.pdf", io.BytesIO(b"%PDF-1.4\n"), "application/pdf")},
+            )
+
+        assert response.status_code == 401
+        mock_celery_tasks["process_document"].assert_not_called()
+        mock_celery_tasks["convert_to_pdf"].assert_not_called()
+
     def test_upload_valid_text_file(self, client: TestClient, mock_celery_tasks):
         """Test uploading a valid text file."""
         text_content = b"This is a test text file.\nWith multiple lines."

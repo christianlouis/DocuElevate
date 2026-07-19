@@ -39,8 +39,15 @@ def _get_embedding_client() -> Any:
     except ImportError as exc:
         raise RuntimeError("The 'openai' package is required for embedding generation") from exc
 
+    base_url = str(settings.openai_base_url or "").rstrip("/")
+    uses_keyless_compatible_endpoint = bool(base_url and base_url != "https://api.openai.com/v1")
+
     return openai.OpenAI(
-        api_key=settings.openai_api_key,
+        # The OpenAI SDK requires a non-empty value even when a local or proxy
+        # endpoint does not authenticate requests.  Never invent a credential
+        # for the public OpenAI endpoint; the readiness probe must fail closed
+        # there when no real key is configured.
+        api_key=settings.openai_api_key or ("not-required" if uses_keyless_compatible_endpoint else None),
         base_url=settings.openai_base_url,
     )
 

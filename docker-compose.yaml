@@ -12,8 +12,8 @@ x-docuelevate-service: &docuelevate-service
     PYTHONPATH: /app
     WORKDIR: /workdir
     REDIS_URL: redis://redis:6379/0
-    CELERY_BROKER_URL: redis://redis:6379/0
-    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+    CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     GOTENBERG_URL: http://gotenberg:3000
     MEILISEARCH_URL: http://meilisearch:7700
     MEILISEARCH_INDEX_NAME: documents
@@ -27,6 +27,8 @@ x-docuelevate-service: &docuelevate-service
     UNOWNED_DOCS_VISIBLE_TO_ALL: "false"
     EXTERNAL_HOSTNAME: localhost:${DOCUELEVATE_PORT:-8000}
     PUBLIC_BASE_URL: http://localhost:${DOCUELEVATE_PORT:-8000}
+    DEPLOYMENT_LABEL: ${DOCUELEVATE_DEPLOYMENT_LABEL:-}
+    DEFAULT_STORAGE_PATH: ${DOCUELEVATE_DEFAULT_STORAGE_PATH:-/DocuElevate}
   volumes:
     - ${DOCUELEVATE_WORKDIR:-workdir-data}:/workdir
     - bootstrap-secrets:/run/docuelevate-bootstrap:ro
@@ -132,7 +134,7 @@ services:
 
   worker:
     <<: *docuelevate-service
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}", "-Q", "document_processor,default,celery"]
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}", "-Q", "document_processor,default,celery,knowledge_research,search_index"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -160,6 +162,7 @@ services:
 
   knowledge-research-worker:
     <<: *docuelevate-service
+    profiles: ["scale"]
     command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "knowledge_research"]
     depends_on:
       bootstrap:
@@ -177,6 +180,7 @@ services:
 
   search-index-worker:
     <<: *docuelevate-service
+    profiles: ["scale"]
     command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "search_index"]
     depends_on:
       bootstrap:

@@ -607,6 +607,22 @@ def test_signup_page_enabled(la_client):
 
 
 @pytest.mark.integration
+def test_signup_page_uses_detected_german_locale(la_client):
+    """The fresh-install signup journey must be consistently localized."""
+    with patch("app.api.local_auth.settings") as mock_settings:
+        mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
+        mock_settings.version = "test"
+        resp = la_client.get("/signup", headers={"accept-language": "de-DE,de;q=0.9"})
+
+    assert resp.status_code == 200
+    assert 'lang="de"' in resp.text
+    assert "Konto erstellen" in resp.text
+    assert "Create your account" not in resp.text
+    assert "/login?message_key=auth.account_created_success" in resp.text
+
+
+@pytest.mark.integration
 def test_verify_email_sent_page(la_client):
     """GET /verify-email-sent returns 200."""
     resp = la_client.get("/verify-email-sent")

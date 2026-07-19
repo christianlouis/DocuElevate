@@ -56,6 +56,7 @@ from app.api.similarity import router as similarity_router
 from app.api.subscriptions import router as subscriptions_router
 from app.api.system_reset import router as system_reset_router
 from app.api.translation import router as translation_router
+from app.api.tribes import router as tribes_router
 from app.api.url_upload import router as url_upload_router
 
 # Import all the individual routers
@@ -118,6 +119,7 @@ router.include_router(qr_auth_router)
 router.include_router(compliance_router)
 router.include_router(system_reset_router)
 router.include_router(translation_router)
+router.include_router(tribes_router)
 router.include_router(classification_rules_router)
 router.include_router(automation_router)
 router.include_router(comments_router)

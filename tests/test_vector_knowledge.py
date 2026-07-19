@@ -540,7 +540,8 @@ def test_knowledge_search_passes_authorized_scope_to_qdrant(db_session):
     assert [item["document_id"] for item in result["results"]] == [11, 12]
 
 
-def test_knowledge_status_hides_global_point_count_from_tenant(db_session):
+@pytest.mark.parametrize("is_admin", [False, True])
+def test_knowledge_status_hides_global_point_count_from_every_tenant_caller(db_session, is_admin):
     record = FileRecord(
         owner_id="alice@example.com",
         filehash="alice-status",
@@ -553,7 +554,7 @@ def test_knowledge_status_hides_global_point_count_from_tenant(db_session):
     db_session.add(record)
     db_session.commit()
     request = Request({"type": "http", "headers": []})
-    request.scope["session"] = {"user": {"email": "alice@example.com"}}
+    request.scope["session"] = {"user": {"email": "alice@example.com", "is_admin": is_admin}}
 
     with (
         patch("app.api.knowledge.settings.vector_index_enabled", True),

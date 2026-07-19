@@ -4,9 +4,14 @@ Covers the /integrations view route, quota rendering, and unit-level
 helpers for subscription-tier limits.
 """
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
 # Integration tests — real HTTP round-trips via the TestClient
@@ -126,6 +131,36 @@ class TestIntegrationsDashboardView:
         response = client.get("/integrations")
         assert response.status_code == 200
         assert b"Upgrade Plan" in response.content
+
+    def test_onboarding_integration_flow_returns_to_setup_after_save(self, client):
+        response = client.get("/integrations?onboarding=destination")
+        assert response.status_code == 200
+        body = response.text
+        assert "Back to setup" in body
+        assert "const ONBOARDING_MODE = true" in body
+        assert "window.location.href = '/onboarding'" in body
+
+    def test_integration_defaults_are_deployment_configurable(self, client):
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        assert 'const DEFAULT_STORAGE_PATH = "/DocuElevate"' in response.text
+
+    def test_vector_database_user_copy_is_translated(self, client):
+        response = client.get("/integrations")
+        assert response.status_code == 200
+        body = response.text
+        assert "Documents are split into searchable sections" in body
+        assert "Documents are chunked and indexed" not in body
+
+
+def test_integrations_dashboard_copy_is_complete_in_english_and_german():
+    template = (_REPO_ROOT / "frontend/templates/integrations_dashboard.html").read_text(encoding="utf-8")
+    keys = set(re.findall(r'["\'](integrations\.[a-z0-9_]+)["\']', template))
+    assert keys
+    for locale in ("en", "de"):
+        translations = json.loads((_REPO_ROOT / f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
+        missing = sorted(keys - translations.keys())
+        assert not missing, f"Missing {locale} integration translations: {missing}"
 
 
 # ---------------------------------------------------------------------------

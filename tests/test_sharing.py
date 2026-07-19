@@ -684,6 +684,51 @@ class TestAutoShareOnMention:
         assert shares[0].id == existing_id
         assert shares[0].role == "editor"  # role unchanged
 
+    def test_tribe_admin_cannot_auto_share_another_owners_document_by_mention(self, client, db_session, monkeypatch):
+        """Mention syntax is not a delegated content-sharing permission."""
+        import app.api.comments as comments_mod
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(comments_mod, "get_current_owner_id", lambda req: "admin")
+        monkeypatch.setattr(comments_mod, "get_current_user_id", lambda req: "admin")
+
+        f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "admin")
+
+        resp = client.post(
+            f"/api/files/{f.id}/comments",
+            json={"body": "@outsider please review this."},
+        )
+
+        assert resp.status_code == 201
+        share = (
+            db_session.query(FileShare)
+            .filter(FileShare.file_id == f.id, FileShare.shared_with_user_id == "outsider")
+            .first()
+        )
+        assert share is None
+
+    @pytest.mark.parametrize("path", ["comments", "annotations"])
+    def test_platform_admin_without_tribe_membership_cannot_read_collaboration_data(
+        self, client, db_session, monkeypatch, path
+    ):
+        """Platform-admin status never widens the document's Tribe boundary."""
+        import app.api.comments as comments_mod
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(comments_mod, "get_current_owner_id", lambda req: "platform-admin")
+        monkeypatch.setattr(
+            "starlette.requests.Request.session",
+            property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+        )
+
+        f = _create_file(db_session, owner_id="alice")
+        response = client.get(f"/api/files/{f.id}/{path}")
+
+        assert response.status_code == 404
+
     def test_mention_skipped_when_single_user_mode(self, client, db_session, monkeypatch):
         import app.api.comments as comments_mod
         from app.config import settings as real_settings
@@ -769,3 +814,25 @@ class TestDeleteFileOwnerOnly:
 
         resp = client.delete(f"/api/files/{f.id}")
         assert resp.status_code == 403
+
+    def test_platform_admin_cannot_delete_another_owners_document(self, client, db_session, monkeypatch):
+        import app.api.files as files_mod
+        import app.utils.user_scope as user_scope_mod
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(real_settings, "allow_file_delete", True)
+        monkeypatch.setattr(files_mod, "get_current_owner_id", lambda req: "platform-admin")
+        monkeypatch.setattr(user_scope_mod, "get_current_owner_id", lambda req: "platform-admin")
+        monkeypatch.setattr(
+            "starlette.requests.Request.session",
+            property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+        )
+
+        f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "platform-admin")
+
+        response = client.delete(f"/api/files/{f.id}")
+
+        assert response.status_code == 403
+        assert db_session.get(FileRecord, f.id) is not None

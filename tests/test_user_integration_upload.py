@@ -221,6 +221,36 @@ class TestUploadToUserIntegration:
 
     @patch("app.tasks.upload_to_user_integration.log_task_progress")
     @patch("app.tasks.upload_to_user_integration.SessionLocal")
+    def test_vector_failure_persists_safe_actionable_error(self, mock_session_local, mock_log_progress, tmp_path):
+        """Provider internals must not be shown on the user's integration card."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+
+        from app.models import IntegrationType
+        from app.tasks.upload_to_user_integration import _UPLOAD_HANDLERS
+
+        integration = _make_integration(
+            int_id=8,
+            int_type=IntegrationType.VECTOR_DATABASE,
+            config_dict={"provider": "qdrant"},
+        )
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = integration
+        raw_provider_error = "secret provider internals"
+        mock_handler = MagicMock(side_effect=RuntimeError(raw_provider_error))
+
+        with patch.dict(_UPLOAD_HANDLERS, {IntegrationType.VECTOR_DATABASE: mock_handler}):
+            with pytest.raises(RuntimeError, match=raw_provider_error):
+                _run_upload_task(str(test_file), integration_id=8, file_id=21)
+
+        assert integration.last_error == (
+            "Document search indexing failed. Test this integration and verify the AI settings."
+        )
+        assert raw_provider_error not in integration.last_error
+
+    @patch("app.tasks.upload_to_user_integration.log_task_progress")
+    @patch("app.tasks.upload_to_user_integration.SessionLocal")
     def test_invalid_config_json_raises_value_error(self, mock_session_local, mock_log_progress, tmp_path):
         """ValueError is raised when integration.config contains invalid JSON."""
         test_file = tmp_path / "doc.pdf"

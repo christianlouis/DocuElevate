@@ -105,7 +105,9 @@ async def integrations_dashboard(request: Request, db: Session = Depends(get_db)
                 "can_add_source": can_add_source,
                 "tier_id": tier_id,
                 "tier_name": tier_name,
-                "is_preprod": bool(request.url.hostname and "preprod" in request.url.hostname.lower()),
+                "default_storage_path": settings.default_storage_path,
+                "onboarding_mode": request.query_params.get("onboarding") in {"source", "destination"},
+                "onboarding_direction": request.query_params.get("onboarding", ""),
                 "default_backfill_token_budget": settings.corpus_backfill_daily_llm_token_budget,
             },
         )

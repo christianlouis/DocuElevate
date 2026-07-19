@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}{{ _("tribes.page_title") }}{% endblock %}
+
+{% block content %}
+<div x-data="tribeJourney()" x-init="init()" class="container mx-auto max-w-6xl px-4 py-8">
+  <header class="mb-7">
+    <h1 class="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
+      <i class="fas fa-people-roof text-indigo-500" aria-hidden="true"></i>
+      {{ _("tribes.heading") }}
+    </h1>
+    <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">{{ _("tribes.subtitle") }}</p>
+  </header>
+
+  <aside class="mb-6 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-100">
+    <div class="flex gap-3">
+      <i class="fas fa-shield-halved mt-0.5" aria-hidden="true"></i>
+      <div>
+        <p class="font-semibold">{{ _("tribes.boundary_title") }}</p>
+        <p class="mt-1">{{ _("tribes.boundary_body") }}</p>
+      </div>
+    </div>
+  </aside>
+
+  <section x-show="inviteToken" x-cloak class="mb-6 rounded-lg border border-blue-300 bg-white p-5 shadow dark:border-blue-800 dark:bg-gray-800" aria-labelledby="invite-heading">
+    <h2 id="invite-heading" class="text-lg font-semibold text-gray-900 dark:text-white">{{ _("tribes.invite_heading") }}</h2>
+    <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ _("tribes.invite_consent") }}</p>
+    <div class="mt-4 flex flex-wrap gap-3">
+      <button type="button" @click="acceptInvite()" :disabled="busy"
+              class="min-h-10 rounded-md bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+        <i class="fas fa-user-check mr-2" aria-hidden="true"></i>
+        <span x-text="busy ? i18n.working : i18n.accept"></span>
+      </button>
+      <button type="button" @click="dismissInvite()" :disabled="busy"
+              class="min-h-10 rounded-md border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+        {{ _("tribes.not_now") }}
+      </button>
+    </div>
+  </section>
+
+  <div x-show="notice" x-cloak class="mb-5 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200" role="status" x-text="notice"></div>
+  <div x-show="error" x-cloak class="mb-5 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200" role="alert" x-text="error"></div>
+
+  <section class="mb-8" aria-labelledby="pending-heading">
+    <h2 id="pending-heading" class="mb-3 text-lg font-semibold text-gray-900 dark:text-white">{{ _("tribes.pending_heading") }}</h2>
+    <div x-show="!loading && pending.length === 0" class="rounded-lg bg-white p-5 text-sm text-gray-500 shadow dark:bg-gray-800 dark:text-gray-400">
+      {{ _("tribes.pending_empty") }}
+    </div>
+    <div class="space-y-3">
+      <template x-for="invitation in pending" :key="invitation.id">
+        <article class="flex flex-col justify-between gap-3 rounded-lg bg-white p-5 shadow sm:flex-row sm:items-center dark:bg-gray-800">
+          <div>
+            <h3 class="font-semibold text-gray-900 dark:text-white" x-text="invitation.tribe_name"></h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <span x-text="roleLabel(invitation.role)"></span> · <span x-text="formatDate(invitation.expires_at)"></span>
+            </p>
+          </div>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ _("tribes.open_link_hint") }}</p>
+        </article>
+      </template>
+    </div>
+  </section>
+
+  <section aria-labelledby="spaces-heading">
+    <div class="mb-3 flex items-center justify-between">
+      <h2 id="spaces-heading" class="text-lg font-semibold text-gray-900 dark:text-white">{{ _("tribes.spaces_heading") }}</h2>
+      <span x-show="loading" class="text-sm text-gray-500"><i class="fas fa-spinner fa-spin mr-2" aria-hidden="true"></i>{{ _("common.loading") }}</span>
+    </div>
+
+    <div x-show="!loading && tribes.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800 dark:text-gray-400">
+      <i class="fas fa-people-group mb-3 text-3xl" aria-hidden="true"></i>
+      <p>{{ _("tribes.spaces_empty") }}</p>
+    </div>
+
+    <div class="space-y-6">
+      <template x-for="tribe in tribes" :key="tribe.tribe_id">
+        <article class="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+          <header class="flex flex-col justify-between gap-3 border-b border-gray-200 px-5 py-4 sm:flex-row sm:items-center dark:border-gray-700">
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 dark:text-white" x-text="tribe.name"></h3>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <span class="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200" x-text="roleLabel(tribe.role)"></span>
+                <span class="ml-2">{{ _("tribes.one_tenant_only") }}</span>
+              </p>
+            </div>
+            <button type="button" @click="toggle(tribe)" class="min-h-10 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+              <span x-text="tribe.expanded ? i18n.hideDetails : i18n.manage"></span>
+            </button>
+          </header>
+
+          <div x-show="tribe.expanded" x-cloak class="space-y-6 p-5">
+            <section>
+              <h4 class="mb-3 font-semibold text-gray-900 dark:text-white">{{ _("tribes.members_heading") }}</h4>
+              <div class="divide-y divide-gray-100 rounded-md border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+                <template x-for="member in tribe.members" :key="member.membership_id">
+                  <div class="flex flex-col justify-between gap-3 p-3 sm:flex-row sm:items-center">
+                    <span class="min-w-0 truncate text-sm font-medium text-gray-800 dark:text-gray-100" x-text="member.user_id"></span>
+                    <div class="flex items-center gap-2">
+                      <select x-model="member.role" @change="changeRole(tribe, member)" :disabled="tribe.role !== 'admin' || busy"
+                              class="min-h-10 rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                        <option value="member">{{ _("tribes.role_member") }}</option>
+                        <option value="routing_manager">{{ _("tribes.role_routing_manager") }}</option>
+                        <option value="admin">{{ _("tribes.role_admin") }}</option>
+                      </select>
+                      <button x-show="tribe.role === 'admin'" type="button" @click="removeMember(tribe, member)" :disabled="busy"
+                              class="min-h-10 rounded-md border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 dark:text-red-300" :aria-label="i18n.removeMember">
+                        <i class="fas fa-user-minus" aria-hidden="true"></i>
+                      </button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </section>
+
+            <section x-show="tribe.role === 'admin'">
+              <h4 class="mb-1 font-semibold text-gray-900 dark:text-white">{{ _("tribes.invite_member_heading") }}</h4>
+              <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ _("tribes.invite_member_help") }}</p>
+              <form @submit.prevent="createInvitation(tribe)" class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_14rem_auto]">
+                <label class="sr-only" :for="'invitee-' + tribe.tribe_id">{{ _("tribes.invitee_label") }}</label>
+                <input :id="'invitee-' + tribe.tribe_id" x-model.trim="tribe.draft.invitee_id" required maxlength="320"
+                       class="min-h-10 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                       placeholder="{{ _('tribes.invitee_placeholder') }}">
+                <label class="sr-only" :for="'invite-role-' + tribe.tribe_id">{{ _("tribes.role_label") }}</label>
+                <select :id="'invite-role-' + tribe.tribe_id" x-model="tribe.draft.role" class="min-h-10 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+                  <option value="member">{{ _("tribes.role_member") }}</option>
+                  <option value="routing_manager">{{ _("tribes.role_routing_manager") }}</option>
+                  <option value="admin">{{ _("tribes.role_admin") }}</option>
+                </select>
+                <button type="submit" :disabled="busy || !tribe.draft.invitee_id" class="min-h-10 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                  {{ _("tribes.create_invite") }}
+                </button>
+              </form>
+
+              <div x-show="tribe.inviteLink" x-cloak class="mt-4 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
+                <p class="text-sm font-semibold text-green-900 dark:text-green-100">{{ _("tribes.link_once_title") }}</p>
+                <p class="mt-1 text-xs text-green-800 dark:text-green-200">{{ _("tribes.link_once_help") }}</p>
+                <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <input readonly :value="tribe.inviteLink" class="min-h-10 flex-1 rounded-md border-green-300 bg-white text-sm dark:border-green-700 dark:bg-gray-800 dark:text-white">
+                  <button type="button" @click="copyInvite(tribe)" class="min-h-10 rounded-md border border-green-400 px-4 py-2 text-sm font-semibold text-green-800 hover:bg-green-100 dark:text-green-200">
+                    <i class="fas fa-copy mr-2" aria-hidden="true"></i>{{ _("tribes.copy_link") }}
+                  </button>
+                </div>
+              </div>
+
+              <div x-show="tribe.invitations.length" class="mt-5">
+                <h5 class="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-100">{{ _("tribes.sent_heading") }}</h5>
+                <template x-for="invitation in tribe.invitations" :key="invitation.id">
+                  <div class="flex flex-col justify-between gap-2 border-t border-gray-100 py-3 text-sm sm:flex-row sm:items-center dark:border-gray-700">
+                    <div>
+                      <span class="font-medium text-gray-800 dark:text-gray-100" x-text="invitation.invitee_id"></span>
+                      <span class="ml-2 text-xs text-gray-500" x-text="invitationStatus(invitation)"></span>
+                    </div>
+                    <button x-show="!invitation.accepted_at && !invitation.revoked_at && !invitation.expired" type="button" @click="revokeInvitation(tribe, invitation)" :disabled="busy"
+                            class="min-h-10 rounded-md border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 dark:text-red-300">
+                      {{ _("tribes.revoke") }}
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </section>
+          </div>
+        </article>
+      </template>
+    </div>
+  </section>
+</div>
+
+<script>
+const tribeI18n = {
+  accept: {{ _("tribes.accept") | tojson }},
+  working: {{ _("tribes.working") | tojson }},
+  manage: {{ _("tribes.manage") | tojson }},
+  hideDetails: {{ _("tribes.hide_details") | tojson }},
+  removeMember: {{ _("tribes.remove_member") | tojson }},
+  copied: {{ _("tribes.copied") | tojson }},
+  accepted: {{ _("tribes.accepted") | tojson }},
+  revoked: {{ _("tribes.revoked") | tojson }},
+  expired: {{ _("tribes.expired") | tojson }},
+  pending: {{ _("tribes.pending") | tojson }},
+  roleMember: {{ _("tribes.role_member") | tojson }},
+  roleRouting: {{ _("tribes.role_routing_manager") | tojson }},
+  roleAdmin: {{ _("tribes.role_admin") | tojson }},
+  loadFailed: {{ _("tribes.load_failed") | tojson }},
+  actionFailed: {{ _("tribes.action_failed") | tojson }},
+  acceptSuccess: {{ _("tribes.accept_success") | tojson }},
+  inviteSuccess: {{ _("tribes.invite_success") | tojson }},
+  roleConfirm: {{ _("tribes.role_confirm") | tojson }},
+  removeConfirm: {{ _("tribes.remove_confirm") | tojson }},
+  revokeConfirm: {{ _("tribes.revoke_confirm") | tojson }}
+};
+
+function tribeJourney() {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  return {
+    tribes: [], pending: [], loading: false, busy: false, error: '', notice: '', inviteToken: '', i18n: tribeI18n,
+    headers(json = false) { return {'X-CSRF-Token': csrf, ...(json ? {'Content-Type': 'application/json'} : {})}; },
+    async request(url, options = {}) {
+      const response = await fetch(url, {...options, headers: {...this.headers(Boolean(options.body)), ...(options.headers || {})}});
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.detail || this.i18n.actionFailed);
+      }
+      return response.status === 204 ? null : response.json();
+    },
+    async init() {
+      const match = window.location.hash.match(/^#invite=(.+)$/);
+      if (match) this.inviteToken = decodeURIComponent(match[1]);
+      await this.reload();
+    },
+    async reload() {
+      this.loading = true; this.error = '';
+      try {
+        const [tribes, pending] = await Promise.all([
+          this.request('/api/tribes'),
+          this.request('/api/tribes/invitations/pending')
+        ]);
+        this.pending = pending;
+        this.tribes = tribes.map(tribe => ({...tribe, expanded: false, members: [], invitations: [], inviteLink: '', draft: {invitee_id: '', role: 'member'}}));
+      } catch (error) { this.error = error.message || this.i18n.loadFailed; }
+      finally { this.loading = false; }
+    },
+    dismissInvite() { this.inviteToken = ''; window.history.replaceState(null, '', window.location.pathname); },
+    async acceptInvite() {
+      this.busy = true; this.error = '';
+      try {
+        const result = await this.request('/api/tribes/invitations/accept', {method: 'POST', body: JSON.stringify({token: this.inviteToken})});
+        this.notice = this.i18n.acceptSuccess.replace('{name}', result.tribe_name || '');
+        this.dismissInvite(); await this.reload();
+      } catch (error) { this.error = error.message; }
+      finally { this.busy = false; }
+    },
+    async toggle(tribe) {
+      tribe.expanded = !tribe.expanded;
+      if (!tribe.expanded || tribe.members.length) return;
+      await this.loadTribe(tribe);
+    },
+    async loadTribe(tribe) {
+      this.busy = true; this.error = '';
+      try {
+        tribe.members = await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/members`);
+        if (tribe.role === 'admin') tribe.invitations = await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/invitations`);
+      } catch (error) { this.error = error.message; }
+      finally { this.busy = false; }
+    },
+    async createInvitation(tribe) {
+      this.busy = true; this.error = ''; tribe.inviteLink = '';
+      try {
+        const invitation = await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/invitations`, {method: 'POST', body: JSON.stringify(tribe.draft)});
+        tribe.inviteLink = `${window.location.origin}/tribes#invite=${encodeURIComponent(invitation.token)}`;
+        tribe.draft = {invitee_id: '', role: 'member'};
+        this.notice = this.i18n.inviteSuccess;
+        tribe.invitations = await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/invitations`);
+      } catch (error) { this.error = error.message; }
+      finally { this.busy = false; }
+    },
+    async copyInvite(tribe) {
+      try { await navigator.clipboard.writeText(tribe.inviteLink); this.notice = this.i18n.copied; }
+      catch (_) { this.error = this.i18n.actionFailed; }
+    },
+    async changeRole(tribe, member) {
+      if (!window.confirm(this.i18n.roleConfirm)) { await this.loadTribe(tribe); return; }
+      this.busy = true; this.error = '';
+      try { await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/members/${member.membership_id}`, {method: 'PATCH', body: JSON.stringify({role: member.role})}); await this.reload(); }
+      catch (error) { this.error = error.message; await this.loadTribe(tribe); }
+      finally { this.busy = false; }
+    },
+    async removeMember(tribe, member) {
+      if (!window.confirm(this.i18n.removeConfirm)) return;
+      this.busy = true; this.error = '';
+      try { await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/members/${member.membership_id}`, {method: 'DELETE'}); await this.reload(); }
+      catch (error) { this.error = error.message; }
+      finally { this.busy = false; }
+    },
+    async revokeInvitation(tribe, invitation) {
+      if (!window.confirm(this.i18n.revokeConfirm)) return;
+      this.busy = true; this.error = '';
+      try { await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/invitations/${invitation.id}/revoke`, {method: 'POST'}); tribe.invitations = await this.request(`/api/tribes/${encodeURIComponent(tribe.tribe_id)}/invitations`); }
+      catch (error) { this.error = error.message; }
+      finally { this.busy = false; }
+    },
+    roleLabel(role) { return role === 'admin' ? this.i18n.roleAdmin : (role === 'routing_manager' ? this.i18n.roleRouting : this.i18n.roleMember); },
+    invitationStatus(invitation) { return invitation.accepted_at ? this.i18n.accepted : (invitation.revoked_at ? this.i18n.revoked : (invitation.expired ? this.i18n.expired : this.i18n.pending)); },
+    formatDate(value) { return new Intl.DateTimeFormat(document.documentElement.lang || 'en', {dateStyle: 'medium'}).format(new Date(value)); }
+  };
+}
+</script>
+{% endblock %}

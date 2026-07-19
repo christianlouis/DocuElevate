@@ -944,12 +944,10 @@ def knowledge_status(request: Request, db: DbSession) -> dict[str, Any]:
         "chunk_overlap_tokens": settings.vector_chunk_overlap_tokens,
         **index_status,
     }
-    user = get_current_user(request)
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-    if settings.multi_user_enabled and not is_admin:
+    if settings.multi_user_enabled:
         # Qdrant reports the global point count for the shared collection.
-        # Ordinary users receive only the size of their relationally
-        # authorized document scope, never another tenant's corpus metrics.
+        # Every caller, including platform and Tribe administrators, receives
+        # only the size of their relationally authorized document scope.
         result.pop("points_count", None)
         result["documents_accessible"] = apply_owner_filter(db.query(FileRecord.id), request).count()
     return result

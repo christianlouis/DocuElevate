@@ -11,6 +11,7 @@ from app.utils.privacy_rules import (
     RULE_TYPE_CONTENT,
     RULE_TYPE_FILENAME,
     RULE_TYPE_METADATA,
+    SINGLE_USER_PRIVACY_OWNER,
     match_privacy_rule,
 )
 from app.utils.tribe_scope import ensure_document_scope
@@ -203,6 +204,59 @@ def test_ownerless_private_legacy_file_can_be_made_public(client, db_session):
     assert response.status_code == 200
     db_session.refresh(record)
     assert record.is_private is False
+
+
+@pytest.mark.unit
+def test_ownerless_file_is_excluded_from_single_user_bulk_privacy_rules(client, db_session):
+    record = _file(db_session, owner="legacy", name="Arztbrief-legacy.pdf", text="Arztbrief")
+    record.owner_id = None
+    rule = PrivacyRuleModel(
+        owner_id=SINGLE_USER_PRIVACY_OWNER,
+        name="Medical legacy documents",
+        rule_type="content_keyword",
+        pattern="Arztbrief",
+        enabled=True,
+    )
+    db_session.add(rule)
+    db_session.commit()
+
+    with (
+        patch("app.api.privacy_rules.get_current_owner_id", return_value=None),
+        patch("app.config.settings.multi_user_enabled", False),
+        patch("app.api.privacy_rules.queue_privacy_reconciliation") as reconcile,
+    ):
+        response = client.post(f"/api/privacy-rules/{rule.id}/apply")
+
+    assert response.status_code == 200
+    assert response.json()["changed_count"] == 0
+    assert response.json()["skipped_ownerless"] == 1
+    db_session.refresh(record)
+    assert record.is_private is False
+    assert db_session.query(PrivacyDecisionAudit).filter_by(file_id=record.id).count() == 0
+    reconcile.assert_called_once_with([])
+
+
+@pytest.mark.unit
+def test_background_privacy_rules_leave_ownerless_file_unchanged(db_session):
+    record = _file(db_session, owner="legacy", name="Arztbrief-background.pdf", text="Arztbrief")
+    record.owner_id = None
+    db_session.add(
+        PrivacyRuleModel(
+            owner_id=SINGLE_USER_PRIVACY_OWNER,
+            name="Medical background documents",
+            rule_type="content_keyword",
+            pattern="Arztbrief",
+            enabled=True,
+        )
+    )
+    db_session.commit()
+
+    assert apply_first_matching_privacy_rule(db_session, record) is False
+    db_session.commit()
+
+    db_session.refresh(record)
+    assert record.is_private is False
+    assert db_session.query(PrivacyDecisionAudit).filter_by(file_id=record.id).count() == 0
 
 
 @pytest.mark.unit

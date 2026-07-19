@@ -17,7 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserProfile
-from app.utils.tribe_scope import personal_tribe_id
+from app.utils.tribe_scope import personal_tribe_id, shared_tribe_id
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -313,6 +313,30 @@ class TestOnboardingAPI:
         assert response.status_code == 409
         assert "invitation" in response.json()["detail"]
         assert ob_session.query(Tribe).filter(Tribe.name == "Family Race").count() == 0
+
+    def test_save_profile_handles_shared_space_creation_race(self, ob_client_authed, ob_session):
+        """A concurrent deterministic-ID collision is returned as a safe 409."""
+        from app.models import Tenant
+
+        requested_name = "Family Race"
+        ob_session.add(Tenant(id=DEFAULT_TENANT_ID, name="Default tenant"))
+        ob_session.flush()
+        ob_session.add(
+            Tribe(
+                id=shared_tribe_id(requested_name),
+                tenant_id=DEFAULT_TENANT_ID,
+                name="Concurrent placeholder",
+            )
+        )
+        ob_session.commit()
+
+        response = ob_client_authed.post(
+            "/api/onboarding/profile",
+            json={"space_mode": "shared", "tribe_name": requested_name},
+        )
+
+        assert response.status_code == 409
+        assert "invitation" in response.json()["detail"]
 
     def test_progress_preserves_explicit_space_selection(self, ob_client_authed):
         profile_response = ob_client_authed.post(

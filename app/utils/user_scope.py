@@ -9,10 +9,10 @@ documents are visible to all users (single-user / shared mode).
 
 import logging
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 from sqlalchemy import and_, or_, select, tuple_
 from sqlalchemy.orm import Query, Session
-from sqlalchemy.sql import false
+from sqlalchemy.sql import Select, false
 
 from app.config import settings
 from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare, TribeMembership
@@ -96,6 +96,26 @@ def get_current_owner_id(request: Request) -> str | None:
     return None
 
 
+def get_document_upload_owner_id(request: Request) -> str | None:
+    """Return the owner that must be attached to a user-initiated upload.
+
+    Single-user installations intentionally keep the historic ``NULL`` owner.
+    In multi-user mode an upload without a stable authenticated owner would
+    create an inaccessible, cross-tenant quarantine record.  Reject that state
+    before any bytes are written or background work is queued.
+    """
+    if not settings.multi_user_enabled:
+        return None
+
+    owner_id = get_current_owner_id(request)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A stable authenticated user is required to upload documents",
+        )
+    return owner_id
+
+
 def apply_owner_filter(query: Query, request: Request) -> Query:
     """Conditionally filter a ``FileRecord`` query by the current user.
 
@@ -161,6 +181,22 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
         conditions.append(and_(in_member_tribe, FileRecord.is_private.is_(False), FileRecord.owner_id.is_(None)))
 
     return query.filter(or_(*conditions))
+
+
+def tribe_peer_user_ids(user_id: str) -> Select[tuple[str]]:
+    """Return a SQL subquery of users sharing an exact tenant/Tribe scope.
+
+    Tenant membership by itself is intentionally insufficient: two Tribes in
+    one SaaS tenant must not disclose their member directory to each other.
+    """
+    member_scopes = select(TribeMembership.tenant_id, TribeMembership.tribe_id).where(
+        TribeMembership.user_id == user_id
+    )
+    return (
+        select(TribeMembership.user_id)
+        .where(tuple_(TribeMembership.tenant_id, TribeMembership.tribe_id).in_(member_scopes))
+        .distinct()
+    )
 
 
 def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> str | None:

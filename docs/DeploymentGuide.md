@@ -101,15 +101,25 @@ This starts:
 | Service | Purpose |
 |---------|---------|
 | `api` | FastAPI web server (port 8000) |
-| `worker` | Celery background task worker |
+| `worker` | Celery background task worker; handles document, research, and search-index queues by default |
 | `beat` | Single Celery scheduler instance |
-| `knowledge-research-worker` | Document research and RAG jobs |
-| `search-index-worker` | Search reconciliation jobs |
 | `postgres` | Persistent application and user configuration database |
 | `redis` | Ephemeral task broker for Celery |
 | `gotenberg` | PDF conversion (LibreOffice headless) |
 | `meilisearch` | Persistent full-text search index |
 | `qdrant` | Persistent vector index for semantic retrieval |
+
+The default stack deliberately uses one worker process for all queues so that a
+fresh installation remains reliable on modest Docker hosts. For a larger or
+busier installation, start the optional dedicated research and search workers:
+
+```bash
+docker-compose --profile scale up -d
+```
+
+The `scale` profile adds `knowledge-research-worker` and
+`search-index-worker`; the default worker remains a safe fallback consumer for
+both queues.
 
 ### Step 4: Verify the Installation
 

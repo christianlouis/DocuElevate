@@ -59,9 +59,25 @@ def test_default_worker_concurrency_fits_small_fresh_install_hosts():
     assert "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}" in command
 
 
-def test_all_celery_redis_routes_are_explicit_and_writable_by_default():
+def test_default_worker_consumes_all_queues_without_optional_scale_workers():
+    compose = _compose()
+    command = compose["services"]["worker"]["command"]
+    queues = command[command.index("-Q") + 1].split(",")
+
+    assert {
+        "document_processor",
+        "default",
+        "celery",
+        "knowledge_research",
+        "search_index",
+    } <= set(queues)
+    assert compose["services"]["knowledge-research-worker"]["profiles"] == ["scale"]
+    assert compose["services"]["search-index-worker"]["profiles"] == ["scale"]
+
+
+def test_celery_redis_routes_keep_local_defaults_and_allow_operator_overrides():
     environment = _compose()["x-docuelevate-service"]["environment"]
 
     assert environment["REDIS_URL"] == "redis://redis:6379/0"
-    assert environment["CELERY_BROKER_URL"] == "redis://redis:6379/0"
-    assert environment["CELERY_RESULT_BACKEND"] == "redis://redis:6379/0"
+    assert environment["CELERY_BROKER_URL"] == "${CELERY_BROKER_URL:-redis://redis:6379/0}"
+    assert environment["CELERY_RESULT_BACKEND"] == "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
