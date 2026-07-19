@@ -23,6 +23,7 @@ from app.middleware.audit_log import get_client_ip
 # Guards at call-sites ensure they are never *called* in single-user mode.
 from app.models import LocalUser as _LocalUser
 from app.models import UserProfile as _UserProfile
+from app.utils.i18n import detect_language
 from app.utils.i18n import translate as _translate
 from app.utils.local_auth import build_session_user as _build_session_user
 from app.utils.local_auth import verify_password as _verify_password
@@ -527,8 +528,14 @@ async def login(request: Request):
             get_client_ip(request),
         )
 
+    current_locale = detect_language(request)
     error = request.query_params.get("error")
     message = request.query_params.get("message")
+    message_key = request.query_params.get("message_key")
+    if message_key in {"auth.account_created_success"}:
+        message = _translate(message_key, current_locale)
+    if message == "You have been logged out successfully":
+        message = _translate("auth.logout_success", current_locale)
     show_oauth = OAUTH_CONFIGURED
 
     # SSO Auto Login: redirect directly to SSO provider if configured
@@ -546,6 +553,8 @@ async def login(request: Request):
             "social_providers": SOCIAL_PROVIDERS,
             "app_version": settings.version,
             "csrf_token": getattr(request.state, "csrf_token", ""),
+            "current_locale": current_locale,
+            "_": lambda key, **kwargs: _translate(key, current_locale, **kwargs),
             # "Create account" link is only shown when multi-user mode AND local signup are both enabled
             "allow_signup": settings.multi_user_enabled and settings.allow_local_signup,
         },
@@ -790,8 +799,8 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
 
     For admin users (*is_admin=True*) the following rules apply:
     - If no profile exists: one is created with the highest subscription tier,
-      ``is_complimentary=True``, and ``onboarding_completed=True`` so that
-      admins skip the first-time setup wizard.
+      ``is_complimentary=True``, and incomplete onboarding.  Administrative
+      privileges do not replace the personal/Tribe and integration journey.
     - If a profile already exists: ``is_complimentary`` is set to ``True``
       and, when the current tier is ``"free"``, the tier is upgraded to the
       highest available plan.  Other admin-managed settings are left intact.
@@ -825,7 +834,7 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
                 display_name=display_name,
                 subscription_tier=highest_tier if is_admin else "free",
                 is_complimentary=is_admin,
-                onboarding_completed=is_admin,
+                onboarding_completed=False,
             )
             db.add(profile)
             db.commit()
@@ -1290,6 +1299,12 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         if mobile_resp:
             logger.info("[MOBILE] admin auth: returning mobile redirect response")
             return mobile_resp
+
+        profile = db.query(_UserProfile).filter(_UserProfile.user_id == username).first()
+        if profile and not profile.onboarding_completed:
+            post_onboarding = request.session.pop("redirect_after_login", "/upload")
+            request.session["post_onboarding_redirect"] = post_onboarding
+            return RedirectResponse(url="/onboarding", status_code=302)
 
         redirect_url = request.session.pop("redirect_after_login", "/upload")
         return RedirectResponse(url=redirect_url, status_code=302)

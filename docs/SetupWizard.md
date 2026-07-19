@@ -67,7 +67,7 @@ Configure the AI provider used for metadata extraction and document understandin
 | Setting | Description | Notes |
 |---------|-------------|-------|
 | `AI_PROVIDER` | The AI backend to use. | Options: `openai`, `azure`, `anthropic`, `gemini`, `ollama`, `openrouter`, `portkey`, `litellm` |
-| `OPENAI_API_KEY` | API key for OpenAI, Azure OpenAI, or LiteLLM-compatible endpoints. | Not required when using Ollama. |
+| `OPENAI_API_KEY` | API key for OpenAI, Azure OpenAI, or LiteLLM-compatible endpoints. | Optional during setup. Required later only when the selected backend needs it; Ollama and an unauthenticated local LiteLLM endpoint do not. |
 | `OPENAI_MODEL` | Default model name (e.g. `gpt-4o-mini`, `claude-3-5-sonnet-20241022`, `llama3.2`). | Used when `AI_MODEL` is not explicitly set. |
 
 > DocuElevate can operate without an AI provider — metadata extraction tasks will be skipped.  You can always add AI credentials later through the [Settings page](SettingsManagement.md).
@@ -78,11 +78,10 @@ Configure the AI provider used for metadata extraction and document understandin
 
 ### Skipping
 
-If you are an advanced user who has already configured settings via environment variables, you can skip the wizard by clicking **Skip for now** or by visiting:
-
-```
-GET /setup/skip
-```
+An authenticated administrator who has already configured the installation by
+other means can skip the wizard using the **Skip setup** action. This is a
+state-changing POST action protected by the normal session and CSRF controls;
+an unauthenticated first-run visitor cannot bypass the required security step.
 
 This writes a `_setup_wizard_skipped` marker to the database so the wizard is not re-shown automatically.
 
@@ -91,7 +90,7 @@ This writes a `_setup_wizard_skipped` marker to the database so the wizard is no
 To re-run the wizard after skipping it:
 
 1. Navigate to **Settings → System** and click **Re-run Setup Wizard**, or
-2. Visit `/setup/undo-skip` directly.
+2. Use **Re-run setup** as an authenticated administrator.
 
 This removes the skip marker and redirects you to Step 1.
 
@@ -99,11 +98,14 @@ This removes the skip marker and redirects you to Step 1.
 
 ## After the Wizard
 
-Once all three steps are complete you are redirected to the home page with a `?setup=complete` confirmation banner.  At that point DocuElevate is operational with the core settings in place.
+Once all three steps are complete, DocuElevate records completion on the
+server, closes the one-time bootstrap session and sends you to the login page.
+The setup URL is administrator-only from then on. A URL query parameter cannot
+bypass an incomplete installation.
 
 **Recommended next steps:**
 
-1. **Configure a storage destination** — Set up at least one output destination where processed documents will be sent:
+1. **Choose optional destinations** — Every processed document is retained in DocuElevate's built-in archive. Add external destinations only when you want another copy or an automated hand-off:
    - [Dropbox Setup](DropboxSetup.md)
    - [Google Drive Setup](GoogleDriveSetup.md)
    - [OneDrive Setup](OneDriveSetup.md)
@@ -117,7 +119,20 @@ Once all three steps are complete you are redirected to the home page with a `?s
 
 ### The per-user onboarding journey
 
-After the operator bootstrap, each user gets a separate, resumable eight-step journey at `/onboarding`: profile, plan, processing, document sources, destinations, automation/notifications, and review. Optional integration steps can be skipped and resumed later. Progress belongs to the user profile in the database, so two users can be at different steps and no API or worker restart is required.
+After the operator bootstrap, each user gets a separate, resumable eight-step journey at `/onboarding`: identity and document space, plan, processing, document sources, destinations, automation/notifications, and review. The first step always creates an isolated personal Tribe. A user may also create a new shared Family/Team Tribe and becomes its administrator; an existing Tribe cannot be joined by entering or guessing its name and requires a later invitation flow. Optional integration steps can be skipped and resumed later. Progress and memberships belong to the database, so two users can be at different steps and no API or worker restart is required.
+
+Self-hosted administrator accounts receive complimentary full access. Their
+journey states that explicitly instead of presenting paid plan choices. The
+processing step also distinguishes the core path from optional AI: uploads,
+embedded-text extraction and OCR remain available without an AI credential;
+metadata extraction and embeddings are shown as not configured rather than as
+successful work.
+
+Completion sends the user to `/upload?onboarding=first-document`, where a
+first-document callout explains that AI metadata and external destinations are
+optional. The processing detail page reports successful and skipped steps
+separately, so a keyless fresh install can be accepted without disguising
+skipped AI work as success.
 
 The journey links to the personal Integrations dashboard. OAuth refresh tokens and other user credentials are encrypted in `user_integrations`; they are never written to environment variables or browser storage. On a preprod hostname, names and suggested folders created by the journey use the `DocuElevate Preprod` / `/DocuElevate Preprod` label to prevent accidental overlap with production resources.
 

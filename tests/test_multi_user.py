@@ -18,7 +18,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.database import Base
-from app.models import ApiToken, FileRecord
+from app.models import ApiToken, FileRecord, Tenant, Tribe, TribeMembership
+from app.utils.tribe_scope import ensure_personal_scope, ensure_tribe_membership
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,8 +48,25 @@ def mu_session(mu_engine):
     session.close()
 
 
-def _create_file_record(session, owner_id=None, filename="test.pdf"):
+def _create_file_record(
+    session,
+    owner_id=None,
+    filename="test.pdf",
+    is_private=False,
+    tenant_id="test-tenant",
+    tribe_id=None,
+):
     """Helper to insert a minimal FileRecord."""
+    tribe_id = tribe_id or (f"personal-{owner_id}" if owner_id else "quarantine")
+    if session.get(Tenant, tenant_id) is None:
+        session.add(Tenant(id=tenant_id, name=tenant_id))
+        session.flush()
+    if session.get(Tribe, tribe_id) is None:
+        session.add(Tribe(id=tribe_id, tenant_id=tenant_id, name=tribe_id))
+        session.flush()
+    if owner_id and not session.query(TribeMembership).filter_by(tribe_id=tribe_id, user_id=owner_id).first():
+        session.add(TribeMembership(tenant_id=tenant_id, tribe_id=tribe_id, user_id=owner_id, role="admin"))
+        session.flush()
     rec = FileRecord(
         filehash="abc123",
         original_filename=filename,
@@ -57,6 +75,9 @@ def _create_file_record(session, owner_id=None, filename="test.pdf"):
         mime_type="application/pdf",
         is_duplicate=False,
         owner_id=owner_id,
+        is_private=is_private,
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     session.add(rec)
     session.commit()
@@ -89,6 +110,11 @@ class TestFileRecordOwnerField:
         """FileRecord created without owner_id should have None."""
         rec = _create_file_record(mu_session)
         assert rec.owner_id is None
+
+    @pytest.mark.unit
+    def test_private_defaults_to_false(self, mu_session):
+        rec = _create_file_record(mu_session)
+        assert rec.is_private is False
 
     @pytest.mark.unit
     def test_owner_id_stores_value(self, mu_session):
@@ -315,10 +341,10 @@ class TestApplyOwnerFilter:
             filtered = apply_owner_filter(query, request)
 
         results = filtered.all()
-        # Alice sees her own file + the unowned file (not Bob's)
-        assert len(results) == 2
+        # Unowned intake is quarantined rather than exposed to unrelated Tribes.
+        assert len(results) == 1
         owner_ids = {r.owner_id for r in results}
-        assert owner_ids == {"alice", None}
+        assert owner_ids == {"alice"}
 
     @pytest.mark.unit
     def test_filters_strictly_when_unowned_not_visible(self, mu_session):
@@ -340,12 +366,13 @@ class TestApplyOwnerFilter:
         assert results[0].owner_id == "alice"
 
     @pytest.mark.unit
-    def test_admin_sees_all_when_enabled(self, mu_session):
-        """Admin users bypass the owner filter in multi-user mode."""
+    def test_admin_is_limited_to_their_tribes(self, mu_session):
+        """Platform administration never widens the Tribe boundary."""
         from app.utils.user_scope import apply_owner_filter
 
         _create_file_record(mu_session, owner_id="alice")
         _create_file_record(mu_session, owner_id="bob")
+        _create_file_record(mu_session, owner_id="bob", filename="private.pdf", is_private=True)
         _create_file_record(mu_session, owner_id=None)
 
         request = _mock_request(user={"preferred_username": "admin", "is_admin": True})
@@ -354,7 +381,42 @@ class TestApplyOwnerFilter:
         with _patch_multi_user(True):
             filtered = apply_owner_filter(query, request)
 
-        assert filtered.count() == 3
+        assert filtered.count() == 0
+
+    @pytest.mark.unit
+    def test_non_private_is_visible_inside_tribe_but_private_is_owner_only(self, mu_session):
+        from app.utils.user_scope import apply_owner_filter
+
+        public = _create_file_record(mu_session, owner_id="alice", tribe_id="family")
+        private = _create_file_record(
+            mu_session,
+            owner_id="alice",
+            filename="private.pdf",
+            is_private=True,
+            tribe_id="family",
+        )
+        mu_session.add(TribeMembership(tenant_id="test-tenant", tribe_id="family", user_id="bob", role="member"))
+        mu_session.commit()
+
+        request = _mock_request(user={"preferred_username": "bob"})
+        with _patch_multi_user(True):
+            results = apply_owner_filter(mu_session.query(FileRecord), request).all()
+
+        assert [record.id for record in results] == [public.id]
+        assert private.id not in {record.id for record in results}
+
+    @pytest.mark.unit
+    def test_private_file_is_hidden_from_named_share(self, mu_session):
+        from app.models import FileShare
+        from app.utils.user_scope import apply_owner_filter
+
+        private_file = _create_file_record(mu_session, owner_id="alice", is_private=True)
+        mu_session.add(FileShare(file_id=private_file.id, owner_id="alice", shared_with_user_id="bob", role="viewer"))
+        mu_session.commit()
+
+        request = _mock_request(user={"preferred_username": "bob"})
+        with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
+            assert apply_owner_filter(mu_session.query(FileRecord), request).all() == []
 
     @pytest.mark.unit
     def test_unauthenticated_sees_nothing_when_enabled(self, mu_session):
@@ -381,12 +443,11 @@ class TestMultiUserConfig:
     """Verify the multi-user configuration settings."""
 
     @pytest.mark.unit
-    def test_multi_user_default_disabled(self):
-        """multi_user_enabled should default to False."""
+    def test_multi_user_compatibility_default_disabled(self):
+        """The code fallback remains usable without authentication."""
         from app.config import settings
 
-        # Default is False (overridable via env)
-        assert hasattr(settings, "multi_user_enabled")
+        assert settings.multi_user_enabled is False
 
     @pytest.mark.unit
     def test_default_daily_upload_limit_exists(self):
@@ -555,9 +616,9 @@ class TestUnownedDocsConfig:
     """Verify the new multi-user configuration settings."""
 
     @pytest.mark.unit
-    def test_unowned_docs_visible_default_true(self):
-        """unowned_docs_visible_to_all should default to True."""
-        assert hasattr(settings, "unowned_docs_visible_to_all")
+    def test_unowned_docs_visible_compatibility_default_true(self):
+        """The code fallback preserves legacy auth-free visibility."""
+        assert settings.unowned_docs_visible_to_all is True
 
     @pytest.mark.unit
     def test_default_owner_id_default_none(self):
@@ -732,6 +793,81 @@ class TestAssignOwnerEndpoint:
             response = client.post("/api/files/assign-owner?owner_id=alice")
         # 403 (non-admin) or 401 (no auth)
         assert response.status_code in [401, 403]
+
+    @pytest.mark.integration
+    def test_platform_admin_cannot_assign_owner_outside_delegated_tribe(self, client, db_session):
+        """A global admin claim cannot cross an explicit Tribe boundary."""
+        tenant_id, victim_tribe = ensure_personal_scope(db_session, "victim")
+        ensure_personal_scope(db_session, "platform-admin", tenant_id)
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=victim_tribe,
+            user_id="target",
+            role="member",
+        )
+        record = FileRecord(
+            owner_id=None,
+            tenant_id=tenant_id,
+            tribe_id=victim_tribe,
+            filehash="cross-tribe-owner-assignment",
+            original_filename="victim.pdf",
+            local_filename="/tmp/victim.pdf",
+            file_size=1,
+            is_private=False,
+        )
+        db_session.add(record)
+        db_session.commit()
+
+        with (
+            _patch_multi_user(True),
+            patch(
+                "starlette.requests.Request.session",
+                new_callable=lambda: property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+            ),
+        ):
+            response = client.post(f"/api/files/assign-owner?owner_id=target&file_ids={record.id}")
+
+        assert response.status_code == 404
+        db_session.refresh(record)
+        assert record.owner_id is None
+
+    @pytest.mark.integration
+    def test_delegated_tribe_admin_can_assign_unowned_document_to_member(self, client, db_session):
+        tenant_id, tribe_id = ensure_personal_scope(db_session, "tribe-admin")
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
+            user_id="target",
+            role="member",
+        )
+        record = FileRecord(
+            owner_id=None,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
+            filehash="delegated-owner-assignment",
+            original_filename="intake.pdf",
+            local_filename="/tmp/intake.pdf",
+            file_size=1,
+            is_private=False,
+        )
+        db_session.add(record)
+        db_session.commit()
+
+        with (
+            _patch_multi_user(True),
+            patch(
+                "starlette.requests.Request.session",
+                new_callable=lambda: property(lambda self: {"user": {"id": "tribe-admin", "is_admin": False}}),
+            ),
+        ):
+            response = client.post(f"/api/files/assign-owner?owner_id=target&file_ids={record.id}")
+
+        assert response.status_code == 200
+        assert response.json()["updated_count"] == 1
+        db_session.refresh(record)
+        assert record.owner_id == "target"
 
 
 class TestAssignOwnerUnit:
@@ -922,7 +1058,7 @@ class TestApplyOwnerFilterEdgeCases:
 
         result_ids = {r.id for r in results}
         assert own.id in result_ids
-        assert orphan.id in result_ids
+        assert orphan.id not in result_ids
         assert other.id not in result_ids
 
     @pytest.mark.unit
@@ -944,8 +1080,8 @@ class TestApplyOwnerFilterEdgeCases:
         assert orphan.id not in result_ids
 
     @pytest.mark.unit
-    def test_admin_always_sees_all(self, mu_session):
-        """Admin user always sees all files, regardless of unowned_docs_visible_to_all."""
+    def test_admin_does_not_cross_tribes(self, mu_session):
+        """Admin status does not grant access outside a membership."""
         from app.utils.user_scope import apply_owner_filter
 
         _create_file_record(mu_session, owner_id="alice")
@@ -957,7 +1093,7 @@ class TestApplyOwnerFilterEdgeCases:
         with _patch_multi_user(True), patch.object(settings, "unowned_docs_visible_to_all", False):
             results = apply_owner_filter(query, request).all()
 
-        assert len(results) == 2
+        assert results == []
 
     @pytest.mark.unit
     def test_no_files_returns_empty(self, mu_session):

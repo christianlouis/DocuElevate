@@ -1,0 +1,82 @@
+{{- if .Values.searchIndexWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-search-index-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: search-index-worker
+spec:
+  replicas: {{ .Values.searchIndexWorker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: search-index-worker
+  template:
+    metadata:
+      labels:
+        {{- include "docuelevate.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: search-index-worker
+      {{- with .Values.searchIndexWorker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.searchIndexWorker.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: search-index-worker
+          image: {{ include "docuelevate.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - app.celery_worker
+            - worker
+            - --loglevel=info
+            - --concurrency={{ .Values.searchIndexWorker.concurrency }}
+            - -Q
+            - search_index
+          envFrom:
+            - configMapRef:
+                name: {{ include "docuelevate.fullname" . }}-config
+            - secretRef:
+                name: {{ include "docuelevate.secretName" . }}
+          {{- with .Values.searchIndexWorker.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.searchIndexWorker.resources | nindent 12 }}
+          volumeMounts:
+            - name: workdir
+              mountPath: /workdir
+      volumes:
+        - name: workdir
+          {{- if .Values.workdir.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.workdir.persistence.existingClaim | default (printf "%s-workdir" (include "docuelevate.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.searchIndexWorker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.searchIndexWorker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.searchIndexWorker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

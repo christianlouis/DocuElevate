@@ -174,15 +174,146 @@ class QdrantVectorIndex:
                 {"vectors": {"size": dimensions, "distance": "Cosine"}},
                 expected=(200, 201),
             )
-            return
+        else:
+            config = response.json().get("result", {}).get("config", {}).get("params", {}).get("vectors", {})
+            current_size = config.get("size") if isinstance(config, dict) else None
+            if current_size is not None and int(current_size) != dimensions:
+                raise VectorIndexError(
+                    f"Collection {self.collection!r} uses {current_size} dimensions, but "
+                    f"{settings.embedding_model!r} returned {dimensions}"
+                )
 
-        config = response.json().get("result", {}).get("config", {}).get("params", {}).get("vectors", {})
-        current_size = config.get("size") if isinstance(config, dict) else None
-        if current_size is not None and int(current_size) != dimensions:
-            raise VectorIndexError(
-                f"Collection {self.collection!r} uses {current_size} dimensions, but "
-                f"{settings.embedding_model!r} returned {dimensions}"
+        # Qdrant needs payload indexes to evaluate tenant and document filters
+        # before vector ranking without scanning the whole shared collection.
+        for field_name, field_schema in (
+            ("tenant_id", "keyword"),
+            ("tribe_id", "keyword"),
+            ("owner_id", "keyword"),
+            ("document_id", "integer"),
+            ("is_private", "bool"),
+        ):
+            self._request(
+                "PUT",
+                f"/collections/{self.collection}/index?wait=true",
+                {"field_name": field_name, "field_schema": field_schema},
+                expected=(200, 201),
             )
+
+    @staticmethod
+    def _owner_condition(owner_id: str | None) -> dict[str, Any]:
+        if owner_id is None:
+            return {"is_null": {"key": "owner_id"}}
+        return {"key": "owner_id", "match": {"value": owner_id}}
+
+    @classmethod
+    def _authorization_filter(
+        cls,
+        *,
+        owner_id: str | None,
+        shared_document_ids: list[int] | None,
+        include_unowned: bool,
+        tribe_scopes: list[tuple[str, str]] | None = None,
+    ) -> dict[str, Any] | None:
+        scope_filter: dict[str, Any] | None = None
+        tenant_filter: dict[str, Any] | None = None
+        if tribe_scopes is not None:
+            tenant_ids = sorted({tenant_id for tenant_id, _tribe_id in tribe_scopes})
+            scope_filter = (
+                {
+                    "should": [
+                        {
+                            "must": [
+                                {"key": "tenant_id", "match": {"value": tenant_id}},
+                                {"key": "tribe_id", "match": {"value": tribe_id}},
+                            ]
+                        }
+                        for tenant_id, tribe_id in tribe_scopes
+                    ]
+                }
+                if tribe_scopes
+                else {"key": "tribe_id", "match": {"value": "__no_authorized_tribe__"}}
+            )
+            tenant_filter = (
+                {"key": "tenant_id", "match": {"any": tenant_ids}}
+                if tenant_ids
+                else {"key": "tenant_id", "match": {"value": "__no_authorized_tenant__"}}
+            )
+
+        conditions: list[dict[str, Any]] = []
+        if owner_id is not None:
+            owner_condition: dict[str, Any] = cls._owner_condition(owner_id)
+            conditions.append(
+                {"must": [scope_filter, owner_condition]} if scope_filter is not None else owner_condition
+            )
+            if scope_filter is not None and tribe_scopes:
+                # Points written before Tribe payloads existed remain usable
+                # for their owner during the rolling reindex. Requiring both
+                # fields to be absent prevents this compatibility path from
+                # weakening newly scoped points.
+                conditions.append(
+                    {
+                        "must": [
+                            {"is_null": {"key": "tenant_id"}},
+                            {"is_null": {"key": "tribe_id"}},
+                            owner_condition,
+                        ]
+                    }
+                )
+        if scope_filter is not None:
+            conditions.append(
+                {
+                    "must": [
+                        scope_filter,
+                        {"key": "is_private", "match": {"value": False}},
+                    ]
+                }
+            )
+        if shared_document_ids:
+            shared_condition: dict[str, Any] = {
+                "key": "document_id",
+                "match": {"any": shared_document_ids},
+            }
+            conditions.append(
+                {
+                    "must": [
+                        shared_condition,
+                        {"key": "is_private", "match": {"value": False}},
+                    ]
+                }
+                if scope_filter is not None
+                else shared_condition
+            )
+            if scope_filter is not None and tribe_scopes:
+                conditions.append(
+                    {
+                        "must": [
+                            {"is_null": {"key": "tenant_id"}},
+                            {"is_null": {"key": "tribe_id"}},
+                            shared_condition,
+                            {"key": "is_private", "match": {"value": False}},
+                        ]
+                    }
+                )
+        if include_unowned:
+            unowned_conditions = [
+                cls._owner_condition(None),
+                {"key": "is_private", "match": {"value": False}},
+            ]
+            if tenant_filter is not None:
+                unowned_conditions.insert(0, tenant_filter)
+            conditions.append({"must": unowned_conditions})
+            if tribe_scopes:
+                conditions.append(
+                    {
+                        "must": [
+                            {"is_null": {"key": "tenant_id"}},
+                            {"is_null": {"key": "tribe_id"}},
+                            cls._owner_condition(None),
+                            {"key": "is_private", "match": {"value": False}},
+                        ]
+                    }
+                )
+        return {"should": conditions} if conditions else None
 
     def index_document(self, file_record: Any) -> int:
         """Replace all indexed chunks for one FileRecord and return their count."""
@@ -230,7 +361,10 @@ class QdrantVectorIndex:
                     "vector": vector,
                     "payload": {
                         "document_id": file_record.id,
+                        "tenant_id": getattr(file_record, "tenant_id", "default"),
+                        "tribe_id": getattr(file_record, "tribe_id", "default-quarantine"),
                         "owner_id": file_record.owner_id,
+                        "is_private": bool(getattr(file_record, "is_private", False)),
                         "file_hash": file_record.filehash,
                         "content_hash": digest,
                         "index_version": index_version,
@@ -264,14 +398,68 @@ class QdrantVectorIndex:
             f"/collections/{self.collection}/points/delete?wait=true",
             {
                 "filter": {
-                    "must": [{"key": "document_id", "match": {"value": file_record.id}}],
+                    "must": [
+                        {"key": "document_id", "match": {"value": file_record.id}},
+                        self._owner_condition(file_record.owner_id),
+                    ],
                     "must_not": [{"key": "index_version", "match": {"value": index_version}}],
                 }
             },
         )
         return len(points)
 
-    def search(self, query: str, *, limit: int, score_threshold: float | None = None) -> list[dict[str, Any]]:
+    def delete_documents(self, document_ids: list[int], *, owner_id: str | None) -> None:
+        """Delete derived chunks for owner-scoped documents."""
+        if not document_ids:
+            return
+        self._request(
+            "POST",
+            f"/collections/{self.collection}/points/delete?wait=true",
+            {
+                "filter": {
+                    "must": [
+                        {"key": "document_id", "match": {"any": document_ids}},
+                        self._owner_condition(owner_id),
+                    ]
+                }
+            },
+            expected=(200, 404),
+        )
+
+    def set_document_privacy(self, document_id: int, *, owner_id: str | None, is_private: bool) -> bool:
+        """Update privacy payloads without recomputing document embeddings.
+
+        A missing collection means no vector payload exists yet and is a clean
+        no-op, not a privacy failure.
+        """
+        response = self._request(
+            "POST",
+            f"/collections/{self.collection}/points/payload?wait=true",
+            {
+                "payload": {"is_private": bool(is_private)},
+                "filter": {
+                    "must": [
+                        {"key": "document_id", "match": {"value": document_id}},
+                        self._owner_condition(owner_id),
+                    ]
+                },
+            },
+            expected=(200, 201, 404),
+        )
+        return response.status_code != 404
+
+    def search(
+        self,
+        query: str,
+        *,
+        limit: int,
+        score_threshold: float | None = None,
+        document_ids: list[int] | None = None,
+        owner_id: str | None = None,
+        shared_document_ids: list[int] | None = None,
+        include_unowned: bool = False,
+        tribe_scopes: list[tuple[str, str]] | None = None,
+    ) -> list[dict[str, Any]]:
         vector = generate_embeddings([query])[0]
         body: dict[str, Any] = {
             "query": vector,
@@ -281,6 +469,23 @@ class QdrantVectorIndex:
         }
         if score_threshold is not None:
             body["score_threshold"] = score_threshold
+        authorization_filter = self._authorization_filter(
+            owner_id=owner_id,
+            shared_document_ids=shared_document_ids,
+            include_unowned=include_unowned,
+            tribe_scopes=tribe_scopes,
+        )
+        if document_ids is not None:
+            if not document_ids:
+                return []
+            document_filter = {"key": "document_id", "match": {"any": document_ids}}
+            body["filter"] = (
+                {"must": [document_filter, authorization_filter]}
+                if authorization_filter
+                else {"must": [document_filter]}
+            )
+        elif authorization_filter is not None:
+            body["filter"] = authorization_filter
 
         response = self._request(
             "POST",

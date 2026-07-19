@@ -11,6 +11,35 @@ const DEFAULT_UPLOAD_QUEUE_DELAY_MS = 500;
 /** Maximum number of 429 retries before a file is permanently marked failed. */
 const MAX_RATE_LIMIT_RETRIES = 5;
 
+const DEFAULT_UPLOAD_I18N = {
+  queuedBatch: 'Queued {count} file(s) for upload…',
+  allComplete: 'All uploads completed ({done}/{total})',
+  uploadingBatch: 'Uploading files ({done}/{total})',
+  statusQueued: 'Queued',
+  unsupportedType: 'Unsupported file type',
+  tooLarge: 'Exceeds 500 MB limit',
+  retryExhausted: 'Failed: rate limit retries exhausted',
+  uploading: 'Uploading…',
+  uploadingPercent: 'Uploading: {percent}%',
+  duplicate: 'Duplicate – already processed (file #{fileId})',
+  successTask: 'Success: Task ID: {taskId}',
+  retryRateLimit: 'Rate limited – queued to retry…',
+  errorHttp: 'Error: HTTP {status}',
+  errorNetwork: 'Error: Network error',
+  urlSuccess: 'Success! File "{filename}" ({size}) downloaded and queued for processing.',
+  urlError: 'Error: {detail}',
+  urlNetworkError: 'Network error: {detail}',
+};
+
+function uploadMessage(key, values = {}) {
+  const configured = window.uploadI18n || {};
+  let message = configured[key] || DEFAULT_UPLOAD_I18N[key] || key;
+  Object.entries(values).forEach(([name, value]) => {
+    message = message.replaceAll(`{${name}}`, String(value));
+  });
+  return message;
+}
+
 // ── Accepted MIME types (mirrors app/utils/allowed_types.py) ─────────────────
 // All types processable by Gotenberg (LibreOffice, Chromium, or Markdown routes).
 const ACCEPTED_TYPES = {
@@ -271,7 +300,7 @@ function processFiles(files, progressContainer, statusMessage) {
   if (!fileArray.length) return;
 
   if (statusMessage) {
-    statusMessage.textContent = `Queued ${fileArray.length} file(s) for upload…`;
+    statusMessage.textContent = uploadMessage('queuedBatch', { count: fileArray.length });
   }
 
   // Per-batch counters tracked in closure variables (avoids fragile DOM queries).
@@ -281,10 +310,10 @@ function processFiles(files, progressContainer, statusMessage) {
   function updateStatus() {
     if (!statusMessage) return;
     if (done === total) {
-      statusMessage.textContent = `All uploads completed (${done}/${total})`;
+      statusMessage.textContent = uploadMessage('allComplete', { done, total });
       window.dispatchEvent(new CustomEvent('allUploadsComplete', { detail: { total, completed: done } }));
     } else {
-      statusMessage.textContent = `Uploading files (${done}/${total})`;
+      statusMessage.textContent = uploadMessage('uploadingBatch', { done, total });
     }
   }
 
@@ -306,7 +335,7 @@ function processFiles(files, progressContainer, statusMessage) {
       <div class="w-full bg-gray-200 h-2 rounded-full mt-1">
         <div class="file-progress-bar bg-gray-300 h-2 rounded-full" style="width:0%"></div>
       </div>
-      <div class="file-status text-xs text-gray-400 mt-1">Queued</div>
+      <div class="file-status text-xs text-gray-400 mt-1">${window.escapeHtml(uploadMessage('statusQueued'))}</div>
     `;
     if (progressContainer) progressContainer.appendChild(row);
     return {
@@ -336,7 +365,7 @@ function processFiles(files, progressContainer, statusMessage) {
       // Validate before hitting the network.
       if (!_isAcceptedFile(item.file)) {
         item.progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
-        item.statusEl.textContent = 'Unsupported file type';
+        item.statusEl.textContent = uploadMessage('unsupportedType');
         item.statusEl.className = 'text-xs text-red-500 mt-1';
         active--;
         markDone();
@@ -347,7 +376,7 @@ function processFiles(files, progressContainer, statusMessage) {
 
       if (item.file.size > MAX_FILE_SIZE) {
         item.progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
-        item.statusEl.textContent = 'Exceeds 500 MB limit';
+        item.statusEl.textContent = uploadMessage('tooLarge');
         item.statusEl.className = 'text-xs text-red-500 mt-1';
         active--;
         markDone();
@@ -366,7 +395,7 @@ function processFiles(files, progressContainer, statusMessage) {
               queue.unshift(item);
             } else {
               item.progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
-              item.statusEl.textContent = 'Failed: rate limit retries exhausted';
+              item.statusEl.textContent = uploadMessage('retryExhausted');
               item.statusEl.className = 'text-xs text-red-500 mt-1';
               markDone();
             }
@@ -407,7 +436,7 @@ function _isAcceptedFile(file) {
  * @returns {Promise<{rateLimited: boolean, retryAfterSeconds: number}>}
  */
 function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
-  statusEl.textContent = 'Uploading…';
+  statusEl.textContent = uploadMessage('uploading');
   statusEl.className = 'text-xs text-gray-600 mt-1';
   progressBar.style.width = '0%';
   progressBar.className = 'file-progress-bar bg-blue-500 h-2 rounded-full';
@@ -426,7 +455,7 @@ function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
       if (e.lengthComputable) {
         const pct = Math.round((e.loaded / e.total) * 100);
         progressBar.style.width = pct + '%';
-        statusEl.textContent = `Uploading: ${pct}%`;
+        statusEl.textContent = uploadMessage('uploadingPercent', { percent: pct });
       }
     };
 
@@ -438,12 +467,27 @@ function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
         if (result.status === 'duplicate' && result.duplicate_of) {
           // Exact duplicate – no processing task was created
           progressBar.className = 'file-progress-bar bg-yellow-400 h-2 rounded-full';
-          statusEl.textContent = `Duplicate – already processed (file #${result.duplicate_of.original_file_id})`;
+          statusEl.textContent = uploadMessage('duplicate', { fileId: result.duplicate_of.original_file_id });
           statusEl.className = 'text-xs text-yellow-600 mt-1';
+          if (typeof window.onDocuElevateUploadQueued === 'function') {
+            window.onDocuElevateUploadQueued({
+              duplicateFileId: result.duplicate_of.original_file_id,
+              filename: file.name
+            });
+          }
         } else {
+          const taskId = result.task_id || (Array.isArray(result.task_ids) ? result.task_ids[0] : null);
           progressBar.className = 'file-progress-bar bg-green-500 h-2 rounded-full';
-          statusEl.textContent = `Success: Task ID: ${result.task_id}`;
+          statusEl.textContent = uploadMessage('successTask', { taskId: taskId || '' });
           statusEl.className = 'text-xs text-green-600 mt-1';
+          if (typeof window.onDocuElevateUploadQueued === 'function') {
+            window.onDocuElevateUploadQueued({
+              operationId: result.operation_id,
+              taskId,
+              taskIds: result.task_ids || (taskId ? [taskId] : []),
+              filename: file.name
+            });
+          }
         }
         _onUploadSuccess();
         onTerminal();
@@ -458,13 +502,13 @@ function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
           if (reset) retryAfter = Math.max(reset - Math.floor(Date.now() / 1000), 1);
         }
         progressBar.className = 'file-progress-bar bg-yellow-400 h-2 rounded-full';
-        statusEl.textContent = 'Rate limited – queued to retry…';
+        statusEl.textContent = uploadMessage('retryRateLimit');
         statusEl.className = 'text-xs text-yellow-600 mt-1';
         resolve({ rateLimited: true, retryAfterSeconds: retryAfter });
 
       } else {
         progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
-        statusEl.textContent = `Error: HTTP ${xhr.status}`;
+        statusEl.textContent = uploadMessage('errorHttp', { status: xhr.status });
         statusEl.className = 'text-xs text-red-500 mt-1';
         onTerminal();
         resolve({ rateLimited: false, retryAfterSeconds: 0 });
@@ -473,7 +517,7 @@ function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
 
     xhr.onerror = () => {
       progressBar.className = 'file-progress-bar bg-red-500 h-2 rounded-full';
-      statusEl.textContent = 'Error: Network error';
+      statusEl.textContent = uploadMessage('errorNetwork');
       statusEl.className = 'text-xs text-red-500 mt-1';
       onTerminal();
       resolve({ rateLimited: false, retryAfterSeconds: 0 });
@@ -546,4 +590,3 @@ function initDragAndDrop(element, progressContainer, statusMessage, options = {}
     if (files.length > 0) processFiles(files, progressContainer, statusMessage);
   });
 }
-

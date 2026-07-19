@@ -806,7 +806,7 @@ def get_ocr_providers(language: Optional[str] = None) -> List[OCRProvider]:
     """Return a list of configured OCR provider instances.
 
     Reads ``settings.ocr_providers`` (comma-separated provider names) and
-    returns one instantiated provider per entry.  Falls back to ``["azure"]``
+    returns one instantiated provider per entry.  Falls back to ``["tesseract"]``
     when the setting is absent.
 
     Args:
@@ -815,7 +815,7 @@ def get_ocr_providers(language: Optional[str] = None) -> List[OCRProvider]:
             per-call language configuration (Tesseract and EasyOCR).  Pass
             ``None`` or ``"auto"`` to use the global settings.
     """
-    raw = getattr(settings, "ocr_providers", None) or "azure"
+    raw = getattr(settings, "ocr_providers", None) or "tesseract"
     provider_names = [name.strip().lower() for name in raw.split(",") if name.strip()]
 
     # Normalise "auto" to None so providers fall back to global settings
@@ -835,8 +835,8 @@ def get_ocr_providers(language: Optional[str] = None) -> List[OCRProvider]:
         logger.debug(f"Registered OCR provider: {name}")
 
     if not providers:
-        logger.warning("No valid OCR providers configured, falling back to Azure.")
-        providers.append(AzureOCRProvider())
+        logger.warning("No valid OCR providers configured, falling back to Tesseract.")
+        providers.append(TesseractOCRProvider())
 
     return providers
 

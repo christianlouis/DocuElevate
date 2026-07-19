@@ -10,7 +10,7 @@ import os
 import uuid
 import zipfile
 from datetime import datetime, timezone
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, List, Literal, Optional, cast
 
 import aiofiles
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -23,16 +23,24 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
-from app.models import BulkOperation, FileProcessingStep, FileRecord, ProcessingLog
+from app.models import BulkOperation, FileProcessingStep, FileRecord, PrivacyRuleModel, ProcessingLog, TribeMembership
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
 from app.utils.file_operations import hash_file
+from app.utils.file_privacy import apply_privacy_decision, queue_privacy_reconciliation
 from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
-from app.utils.user_scope import apply_owner_filter, get_current_owner_id, get_file_role
+from app.utils.preview_media import safe_preview_media_type
+from app.utils.privacy_rules import SINGLE_USER_PRIVACY_OWNER, match_rule_to_file
+from app.utils.user_scope import (
+    apply_owner_filter,
+    get_current_owner_id,
+    get_document_upload_owner_id,
+    get_file_role,
+)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -40,6 +48,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+def _delete_vector_chunks(file_records: list[FileRecord]) -> None:
+    """Remove derived Qdrant data with owner-scoped filters before DB deletion."""
+    if not settings.vector_index_enabled or not file_records:
+        return
+    from collections import defaultdict
+
+    from app.utils.vector_index import QdrantVectorIndex
+
+    documents_by_owner: dict[str | None, list[int]] = defaultdict(list)
+    for record in file_records:
+        documents_by_owner[record.owner_id].append(record.id)
+    index = QdrantVectorIndex()
+    for owner_id, document_ids in documents_by_owner.items():
+        index.delete_documents(document_ids, owner_id=owner_id)
 
 
 class BulkPipelineAssignment(BaseModel):
@@ -55,6 +79,12 @@ class BulkTagRequest(BaseModel):
     file_ids: list[int] = Field(..., min_length=1)
     tags: list[str] = Field(..., min_length=1)
     mode: Literal["add", "replace"] = "add"
+
+
+class FilePrivacyRequest(BaseModel):
+    """Owner-controlled document privacy state."""
+
+    is_private: bool
 
 
 def _bulk_action_status(
@@ -115,6 +145,73 @@ def _serialize_bulk_operation(operation: BulkOperation) -> dict:
     }
 
 
+def _record_upload_operation(db: Session, request: Request, task_ids: list[str]) -> str | None:
+    """Persist owner-scoped upload tracking without making upload success depend on it."""
+    try:
+        operation = _record_bulk_operation(
+            db,
+            request,
+            "upload",
+            len(task_ids),
+            state="queued",
+            task_ids=task_ids,
+        )
+        db.commit()
+        return operation.id
+    except Exception:
+        db.rollback()
+        logger.exception("Could not persist upload progress operation")
+        return None
+
+
+@router.delete("/files/{file_id}/privacy/override")
+@require_login
+def clear_file_privacy_override(request: Request, file_id: int, db: DbSession):
+    """Return a file to owner-scoped automatic privacy handling."""
+    owner_id = get_current_owner_id(request)
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if file_record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if get_file_role(file_record, owner_id, db) != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the file owner can change privacy")
+
+    matched_rule = None
+    matched_evidence = None
+    privacy_owner_id = owner_id or SINGLE_USER_PRIVACY_OWNER
+    rules = (
+        db.query(PrivacyRuleModel)
+        .filter(PrivacyRuleModel.owner_id == privacy_owner_id, PrivacyRuleModel.enabled.is_(True))
+        .order_by(PrivacyRuleModel.priority.desc(), PrivacyRuleModel.id)
+        .all()
+    )
+    for rule in rules:
+        match = match_rule_to_file(rule, file_record)
+        if match.matched:
+            matched_rule = rule
+            matched_evidence = match
+            break
+
+    apply_privacy_decision(
+        db,
+        file_record,
+        is_private=matched_rule is not None,
+        source="rule" if matched_rule else "automatic",
+        manual_override=None,
+        rule=matched_rule,
+        match=matched_evidence,
+        decision_owner_id=privacy_owner_id,
+    )
+    db.commit()
+    db.refresh(file_record)
+    queue_privacy_reconciliation([cast(int, file_record.id)])
+    return {
+        "file_id": file_record.id,
+        "is_private": file_record.is_private,
+        "mode": "automatic",
+        "matched_rule_id": matched_rule.id if matched_rule else None,
+    }
+
+
 @router.get("/bulk-operations/{operation_id}")
 @require_login
 def get_bulk_operation(request: Request, operation_id: str, db: DbSession):
@@ -126,7 +223,12 @@ def get_bulk_operation(request: Request, operation_id: str, db: DbSession):
     owner_id = get_current_owner_id(request)
     user = request.session.get("user")
     is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-    if not is_admin and operation.owner_id != owner_id:
+    # Upload progress may include a failure that happened before a FileRecord
+    # existed.  It therefore remains strictly bound to the uploading owner;
+    # platform-admin status is not a cross-tenant bypass.
+    if operation.action == "upload" and operation.owner_id != owner_id:
+        raise HTTPException(status_code=404, detail="Bulk operation not found")
+    if operation.action != "upload" and not is_admin and operation.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="Bulk operation not found")
 
     task_ids = json.loads(operation.task_ids or "[]")
@@ -136,14 +238,38 @@ def get_bulk_operation(request: Request, operation_id: str, db: DbSession):
         results = [celery.AsyncResult(task_id) for task_id in task_ids]
         recorded_result = json.loads(operation.result or "{}")
         enqueue_failures = len(recorded_result.get("errors", []))
-        operation.completed_items = sum(result.successful() for result in results)
-        operation.failed_items = enqueue_failures + sum(result.failed() for result in results)
+        successful_results = sum(result.successful() for result in results)
+        failed_results = sum(result.failed() for result in results)
+        if operation.action == "upload":
+            # Conversion failures intentionally return None after logging a
+            # user-safe error, so Celery calls them successful unless we treat
+            # a terminal None result as a failed intake.
+            failed_results += sum(result.successful() and result.result is None for result in results)
+            successful_results -= sum(result.successful() and result.result is None for result in results)
+        operation.completed_items = successful_results
+        operation.failed_items = enqueue_failures + failed_results
         ready_items = sum(result.ready() for result in results)
         operation.state = "completed" if ready_items == len(results) else "running"
         db.commit()
         db.refresh(operation)
 
-    return _serialize_bulk_operation(operation)
+    payload = _serialize_bulk_operation(operation)
+    if operation.action == "upload":
+        task_ids = json.loads(operation.task_ids or "[]")
+        accessible_ids = apply_owner_filter(db.query(FileRecord.id), request).subquery()
+        payload["file_ids"] = [
+            row[0]
+            for row in (
+                db.query(ProcessingLog.file_id)
+                .filter(
+                    ProcessingLog.task_id.in_(task_ids),
+                    ProcessingLog.file_id.in_(db.query(accessible_ids.c.id)),
+                )
+                .distinct()
+                .all()
+            )
+        ]
+    return payload
 
 
 def _normalize_tags(tags: list[str]) -> list[str]:
@@ -346,6 +472,8 @@ def list_files_api(
                 "file_size": f.file_size,
                 "mime_type": f.mime_type,
                 "legal_hold": f.legal_hold,
+                "is_private": f.is_private,
+                "privacy_manual_override": f.privacy_manual_override,
                 "created_at": f.created_at.isoformat() if f.created_at else None,
                 "processing_status": statuses.get(
                     f.id,
@@ -425,8 +553,15 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     # Get processing status
     processing_status = _get_file_processing_status(db, file_id)
 
-    # Check if files exist on disk
-    files_on_disk = {"original": (os.path.exists(file_record.local_filename) if file_record.local_filename else False)}
+    # ``local_filename`` is the temporary working copy and is intentionally
+    # removed after finalization.  Report the immutable archive copy as the
+    # original once it exists, while retaining the working-copy fallback for
+    # documents that are still processing or predate ``original_file_path``.
+    original_path = file_record.original_file_path or file_record.local_filename
+    files_on_disk = {
+        "original": bool(original_path and os.path.exists(original_path)),
+        "processed": bool(file_record.processed_file_path and os.path.exists(file_record.processed_file_path)),
+    }
 
     return {
         "file": {
@@ -437,6 +572,8 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
             "file_size": file_record.file_size,
             "mime_type": file_record.mime_type,
             "legal_hold": file_record.legal_hold,
+            "is_private": file_record.is_private,
+            "privacy_manual_override": file_record.privacy_manual_override,
             "created_at": (file_record.created_at.isoformat() if file_record.created_at else None),
         },
         "processing_status": processing_status,
@@ -445,13 +582,53 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     }
 
 
+@router.put("/files/{file_id}/privacy")
+@require_login
+def set_file_privacy(request: Request, file_id: int, body: FilePrivacyRequest, db: DbSession):
+    """Set the canonical privacy flag; only the document owner may do so."""
+    owner_id = get_current_owner_id(request)
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if file_record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+    if get_file_role(file_record, owner_id, db) != "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the file owner can change privacy",
+        )
+    if not settings.multi_user_enabled and file_record.owner_id is None and body.is_private:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assign an owner before marking this document private",
+        )
+
+    revoked_links = apply_privacy_decision(
+        db,
+        file_record,
+        is_private=body.is_private,
+        source="manual",
+        manual_override=body.is_private,
+        decision_owner_id=owner_id or SINGLE_USER_PRIVACY_OWNER,
+    )
+    db.commit()
+    db.refresh(file_record)
+    queue_privacy_reconciliation([cast(int, file_record.id)])
+    logger.info(
+        "File privacy changed: file_id=%s is_private=%s revoked_links=%s",
+        file_id,
+        body.is_private,
+        revoked_links,
+    )
+    return {"file_id": file_record.id, "is_private": file_record.is_private}
+
+
 @router.delete("/files/{file_id}")
 @require_login
 def delete_file_record(request: Request, file_id: int, db: DbSession):
     """
     Delete a file record from the database.
     This only removes the database entry, not the actual file.
-    Only the file owner (or an admin) may delete a document.
+    Only the file owner may delete a document. Administrative status never
+    overrides owner control.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -468,20 +645,21 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
         if file_record.legal_hold:
             raise HTTPException(status_code=409, detail="File is under legal hold and cannot be deleted")
 
-        # Enforce owner-only deletion in multi-user mode
-        user = request.session.get("user")
-        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-        if not is_admin:
-            owner_id = get_current_owner_id(request)
-            role = get_file_role(file_record, owner_id, db)
-            if role != "owner":
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only the file owner can delete this document",
-                )
+        owner_id = get_current_owner_id(request)
+        role = get_file_role(file_record, owner_id, db)
+        if role != "owner":
+            raise HTTPException(
+                status_code=403,
+                detail="Only the file owner can delete this document",
+            )
 
         # Log the deletion
         logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
+
+        # Derived vector chunks contain source text and must be removed before
+        # the authoritative record disappears. Owner scope is retained in the
+        # Qdrant delete filter as defense in depth.
+        _delete_vector_chunks([file_record])
 
         # Delete the record
         db.delete(file_record)
@@ -506,7 +684,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     """
     Delete multiple file records from the database.
     This only removes the database entries, not the actual files.
-    Only the file owner (or an admin) may delete each document.
+    Only the file owner may delete each document.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -527,17 +705,13 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
                 detail=f"Files under legal hold cannot be deleted. File IDs: {held_ids}",
             )
 
-        # Enforce owner-only deletion in multi-user mode
-        user = request.session.get("user")
-        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-        if not is_admin:
-            owner_id = get_current_owner_id(request)
-            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
-            if non_owner_ids:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"You can only delete files you own. Not owner of file IDs: {non_owner_ids}",
-                )
+        owner_id = get_current_owner_id(request)
+        non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+        if non_owner_ids:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You can only delete files you own. Not owner of file IDs: {non_owner_ids}",
+            )
 
         deleted_count = len(file_records)
         deleted_ids = [f.id for f in file_records]
@@ -553,6 +727,8 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
 
         # Log the deletion
         logger.info(f"Bulk deleting {deleted_count} file records: IDs={deleted_ids}")
+
+        _delete_vector_chunks(file_records)
 
         # Delete the selected records in one statement after access checks.
         query.delete(synchronize_session=False)
@@ -1514,11 +1690,18 @@ def get_file_preview(
                 detail="Invalid version parameter. Use 'original' or 'processed'",
             )
 
-        # Return the file
+        declared_media_type = "application/pdf" if version == "processed" else file_record.mime_type
+
+        # Return the file. Active uploaded formats are neutralized so a preview
+        # cannot become a stored-XSS document under the DocuElevate origin.
         return FileResponse(
             path=file_path,
-            media_type=file_record.mime_type or "application/pdf",
-            headers={"Content-Disposition": f'inline; filename="{file_record.original_filename}"'},
+            media_type=safe_preview_media_type(declared_media_type, file_path),
+            filename=file_record.original_filename,
+            content_disposition_type="inline",
+            headers={
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     except HTTPException:
@@ -1599,8 +1782,9 @@ def download_file(
         # Return the file with attachment disposition to trigger download
         return FileResponse(
             path=file_path,
-            media_type=file_record.mime_type or "application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{file_record.original_filename}"'},
+            media_type="application/pdf" if version == "processed" else (file_record.mime_type or "application/pdf"),
+            filename=file_record.original_filename,
+            content_disposition_type="attachment",
         )
 
     except HTTPException:
@@ -1640,7 +1824,12 @@ async def _save_upload_file_chunks(file: UploadFile, target_path: str, max_size:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
 
-def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: str) -> dict | None:
+def _check_for_exact_duplicate(
+    db: DbSession,
+    target_path: str,
+    safe_filename: str,
+    owner_id: str | None = None,
+) -> dict | None:
     """Check for an exact duplicate of the uploaded file.
 
     Returns a dict with duplicate info when the file's SHA-256 hash matches an
@@ -1652,12 +1841,15 @@ def _check_for_exact_duplicate(db: DbSession, target_path: str, safe_filename: s
 
     try:
         filehash = hash_file(target_path)
-        existing = (
-            db.query(FileRecord)
-            .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-            .order_by(FileRecord.id.asc())
-            .first()
-        )
+        query = db.query(FileRecord).filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
+        # A global duplicate probe leaks another tenant's document ID and
+        # filename and prevents the new tenant from obtaining an independently
+        # owned record.  Deduplication in multi-user mode is therefore scoped
+        # to the uploading owner.  Storage-level blob deduplication can still
+        # be introduced later behind an opaque, tenant-safe abstraction.
+        if settings.multi_user_enabled:
+            query = query.filter(FileRecord.owner_id == owner_id)
+        existing = query.order_by(FileRecord.id.asc()).first()
         if existing:
             logger.info(f"Exact duplicate detected on upload: '{safe_filename}' matches file ID {existing.id}")
             return {
@@ -1720,7 +1912,7 @@ async def ui_upload(
     target_path = os.path.join(workdir, target_filename)
 
     # Determine the owner_id for multi-user document isolation
-    upload_owner_id = get_current_owner_id(request) if settings.multi_user_enabled else None
+    upload_owner_id = get_document_upload_owner_id(request)
 
     # Enforce subscription tier upload quotas (multi-user mode only) BEFORE writing the file
     # so that users who have exceeded their quota do not waste bandwidth or disk I/O.
@@ -1773,7 +1965,7 @@ async def ui_upload(
     # processing task.  When deduplication is enabled and the file already
     # exists, we skip processing entirely, clean up the temp file, and
     # return the existing file's information to the caller.
-    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename)
+    exact_duplicate = _check_for_exact_duplicate(db, target_path, safe_filename, upload_owner_id)
     if exact_duplicate:
         # Remove the just-saved temp file — it's a duplicate.
         try:
@@ -1821,9 +2013,11 @@ async def ui_upload(
 
             # Remove the original file after successful splitting
             os.remove(target_path)
+            operation_id = _record_upload_operation(db, request, task_ids)
 
             return {
                 "task_ids": task_ids,
+                "operation_id": operation_id,
                 "status": "queued",
                 "original_filename": safe_filename,
                 "stored_filename": target_filename,
@@ -1865,8 +2059,10 @@ async def ui_upload(
         logger.warning(f"Unsupported MIME type {mime_type} for {target_path}, attempting conversion")
         task = convert_to_pdf.delay(target_path, original_filename=safe_filename, owner_id=upload_owner_id)
 
+    operation_id = _record_upload_operation(db, request, [task.id])
     return {
         "task_id": task.id,
+        "operation_id": operation_id,
         "status": "queued",
         "original_filename": safe_filename,
         "stored_filename": target_filename,
@@ -1895,7 +2091,7 @@ def claim_file(request: Request, file_id: int, db: DbSession):
     if owner_id is None:
         raise HTTPException(status_code=401, detail="Authentication required to claim a document")
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=404, detail=f"File record with ID {file_id} not found")
 
@@ -1904,7 +2100,12 @@ def claim_file(request: Request, file_id: int, db: DbSession):
             return {"status": "already_owned", "message": "You already own this document", "file_id": file_id}
         raise HTTPException(status_code=403, detail="This document is already owned by another user")
 
+    from app.utils.tribe_scope import ensure_personal_scope
+
+    tenant_id, tribe_id = ensure_personal_scope(db, owner_id, file_record.tenant_id)
     file_record.owner_id = owner_id
+    file_record.tenant_id = tenant_id
+    file_record.tribe_id = tribe_id
     try:
         db.commit()
     except Exception as e:
@@ -1932,15 +2133,20 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
     if owner_id is None:
         raise HTTPException(status_code=401, detail="Authentication required to claim documents")
 
-    file_records = db.query(FileRecord).filter(FileRecord.id.in_(file_ids)).all()
+    file_records = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id.in_(file_ids)), request).all()
     if not file_records:
         raise HTTPException(status_code=404, detail="No files found with the provided IDs")
 
     claimed = []
     skipped = []
+    from app.utils.tribe_scope import ensure_personal_scope
+
     for rec in file_records:
         if rec.owner_id is None:
+            tenant_id, tribe_id = ensure_personal_scope(db, owner_id, rec.tenant_id)
             rec.owner_id = owner_id
+            rec.tenant_id = tenant_id
+            rec.tribe_id = tribe_id
             claimed.append(rec.id)
         else:
             skipped.append({"file_id": rec.id, "reason": "already owned"})
@@ -1964,9 +2170,14 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
 
 @router.post("/files/assign-owner")
 @require_login
-def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), file_ids: list[int] | None = None):
+def assign_owner(
+    request: Request,
+    db: DbSession,
+    owner_id: str = Query(...),
+    file_ids: list[int] | None = Query(None),
+):
     """
-    Admin-only: assign an owner to documents.
+    Tribe-admin-only: assign an owner to unclaimed documents.
 
     If ``file_ids`` is provided, only those files are updated.  If omitted,
     **all** currently unowned documents (``owner_id IS NULL``) are assigned
@@ -1975,28 +2186,54 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
     if not settings.multi_user_enabled:
         raise HTTPException(status_code=400, detail="Multi-user mode is not enabled")
 
-    user = request.session.get("user")
-    if not isinstance(user, dict) or not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Only admins can assign document owners")
+    actor_id = get_current_owner_id(request)
+    if not actor_id:
+        raise HTTPException(status_code=403, detail="A stable Tribe administrator identity is required")
 
     if not owner_id or not owner_id.strip():
         raise HTTPException(status_code=422, detail="owner_id must be a non-empty string")
     owner_id = owner_id.strip()
 
+    requested_ids = set(file_ids or [])
+    query = apply_owner_filter(db.query(FileRecord), request).filter(
+        FileRecord.owner_id.is_(None),
+        FileRecord.is_private.is_(False),
+    )
     if file_ids is not None:
-        # Assign to specific files
-        updated = (
-            db.query(FileRecord)
-            .filter(FileRecord.id.in_(file_ids))
-            .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
-        )
-    else:
-        # Assign to all currently unowned documents
-        updated = (
-            db.query(FileRecord)
-            .filter(FileRecord.owner_id.is_(None))
-            .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
-        )
+        query = query.filter(FileRecord.id.in_(requested_ids))
+    candidates = query.all()
+
+    # A platform-admin bit is not a document authorization grant. Ownership
+    # assignment is accepted only inside Tribes where the actor is explicitly
+    # delegated as an administrator and the new owner is already a member.
+    actor_scopes = {
+        (tenant_id, tribe_id)
+        for tenant_id, tribe_id in db.query(TribeMembership.tenant_id, TribeMembership.tribe_id)
+        .filter(TribeMembership.user_id == actor_id, TribeMembership.role == "admin")
+        .all()
+    }
+    if not actor_scopes:
+        raise HTTPException(status_code=403, detail="Tribe administrator access is required")
+    target_scopes = {
+        (tenant_id, tribe_id)
+        for tenant_id, tribe_id in db.query(TribeMembership.tenant_id, TribeMembership.tribe_id)
+        .filter(TribeMembership.user_id == owner_id)
+        .all()
+    }
+    assignable = [
+        record
+        for record in candidates
+        if (record.tenant_id, record.tribe_id) in actor_scopes and (record.tenant_id, record.tribe_id) in target_scopes
+    ]
+
+    if file_ids is not None and {record.id for record in assignable} != requested_ids:
+        # Keep cross-tenant/Tribe existence opaque and avoid surprising partial
+        # reassignment when one selected document is outside the delegated scope.
+        raise HTTPException(status_code=404, detail="One or more assignable files were not found")
+
+    for file_record in assignable:
+        file_record.owner_id = owner_id
+    updated = len(assignable)
 
     try:
         db.commit()
@@ -2051,7 +2288,7 @@ def assign_pipeline_to_file(
 
     is_admin_user = bool(user and user.get("is_admin"))
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 

@@ -1,0 +1,78 @@
+{{- if .Values.agenticSetup.enabled }}
+{{- if not .Values.agenticSetup.manifest }}
+{{- fail "agenticSetup.manifest is required when agenticSetup.enabled=true" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-agentic-setup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agentic-setup
+data:
+  setup.json: |-
+    {{- .Values.agenticSetup.manifest | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-agentic-setup-{{ .Release.Revision }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agentic-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  ttlSecondsAfterFinished: {{ .Values.agenticSetup.ttlSecondsAfterFinished }}
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "docuelevate.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: agentic-setup
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: setup
+          image: {{ include "docuelevate.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - >-
+              python -m app.agentic_setup plan /config/setup.json &&
+              python -m app.agentic_setup apply /config/setup.json
+          envFrom:
+            - configMapRef:
+                name: {{ include "docuelevate.fullname" . }}-config
+            - secretRef:
+                name: {{ include "docuelevate.secretName" . }}
+            {{- if .Values.agenticSetup.existingSecret }}
+            - secretRef:
+                name: {{ .Values.agenticSetup.existingSecret }}
+            {{- end }}
+          volumeMounts:
+            - name: setup-manifest
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: setup-manifest
+          configMap:
+            name: {{ include "docuelevate.fullname" . }}-agentic-setup
+{{- end }}

@@ -428,6 +428,28 @@ class LiteLLMProvider(AIProvider):
         return _require_text_content(_content)
 
 
+def is_ai_provider_configured() -> bool:
+    """Return whether the active AI provider has its required connection settings."""
+    provider = (settings.ai_provider or "openai").lower()
+    if provider in {"openai", "azure"}:
+        return bool(settings.openai_api_key)
+    if provider == "litellm":
+        return bool(settings.openai_api_key) or bool(
+            settings.openai_base_url and settings.openai_base_url != "https://api.openai.com/v1"
+        )
+    if provider == "anthropic":
+        return bool(settings.anthropic_api_key)
+    if provider == "gemini":
+        return bool(settings.gemini_api_key)
+    if provider == "ollama":
+        return bool(settings.ollama_base_url)
+    if provider == "openrouter":
+        return bool(settings.openrouter_api_key)
+    if provider == "portkey":
+        return bool(settings.portkey_api_key)
+    return False
+
+
 def get_ai_provider() -> AIProvider:
     """Factory function that creates and returns the configured AI provider.
 

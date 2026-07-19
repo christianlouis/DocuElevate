@@ -1113,7 +1113,8 @@ class TestConnectionTestEndpoint:
             "config": {"url": "https://example.com/webdav"},
             "credentials": {"username": "user1", "password": "password123"},
         }
-        resp = int_client.post("/api/integrations/test", json=payload)
+        with unittest.mock.patch("app.utils.network.is_private_ip", return_value=False):
+            resp = int_client.post("/api/integrations/test", json=payload)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1140,7 +1141,8 @@ class TestConnectionTestEndpoint:
             "config": {"url": "https://example.com/webdav"},
             "credentials": {"username": "user1", "password": "wrong"},
         }
-        resp = int_client.post("/api/integrations/test", json=payload)
+        with unittest.mock.patch("app.utils.network.is_private_ip", return_value=False):
+            resp = int_client.post("/api/integrations/test", json=payload)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -1157,7 +1159,8 @@ class TestConnectionTestEndpoint:
             "config": {"url": "https://example.com/webdav"},
             "credentials": {},
         }
-        resp = int_client.post("/api/integrations/test", json=payload)
+        with unittest.mock.patch("app.utils.network.is_private_ip", return_value=False):
+            resp = int_client.post("/api/integrations/test", json=payload)
 
         assert resp.status_code == 200
         data = resp.json()

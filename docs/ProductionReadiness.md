@@ -174,6 +174,21 @@ RATE_LIMITING_ENABLED=true   # default — ensure not overridden to false
 REDIS_URL=redis://redis:6379/0
 ```
 
+For high-availability Redis deployments, route both Celery endpoints through
+a primary-aware service or load balancer. DocuElevate verifies the result
+backend's Redis role and an ephemeral write before a worker consumes tasks.
+It also reconnects and retries result writes when an established connection
+receives `ReadOnlyError` after primary demotion:
+
+```env
+CELERY_BROKER_URL=redis://redis-primary-router:6379/0
+CELERY_RESULT_BACKEND=redis://redis-primary-router:6379/0
+```
+
+Never point `CELERY_RESULT_BACKEND` at a generic service that can select a
+replica. A worker deliberately refuses to start when only a read-only route is
+available.
+
 See the [Configuration Guide — Rate Limiting](ConfigurationGuide.md#rate-limiting) for per-endpoint tuning.
 
 ### Secrets Management
@@ -317,13 +332,14 @@ worker:
 
 ### Worker Queue Tuning
 
-Celery workers process three queues with different priorities:
+Celery workers process four queues with different priorities:
 
 | Queue | Purpose |
 |-------|---------|
 | `document_processor` | Main document processing tasks (OCR, conversion) |
 | `default` | Metadata extraction, storage uploads |
 | `celery` | Built-in Celery management tasks |
+| `knowledge_research` | Interactive, exhaustive document research jobs |
 
 To dedicate workers to specific queues in high-volume deployments:
 
@@ -333,7 +349,22 @@ celery -A app.celery_worker worker -Q document_processor --concurrency=4
 
 # General worker — everything else
 celery -A app.celery_worker worker -Q default,celery --concurrency=2
+
+# Interactive research worker — isolate user-facing analysis from backfills
+celery -A app.celery_worker worker -Q knowledge_research --concurrency=1
+
+# Search reconciliation worker — drain large lexical-index gaps independently
+celery -A app.celery_worker worker -Q search_index --concurrency=1
 ```
+
+Run at least one `knowledge_research` worker wherever the knowledge chat API is
+enabled. Keep its concurrency deliberately low and scale it independently;
+otherwise long corpus imports can delay an interactive research job before it
+even starts.
+
+Run one `search_index` worker wherever Meilisearch is enabled. It processes
+bounded bulk updates and can drain a restored corpus without occupying document
+pipeline or interactive research capacity.
 
 ---
 

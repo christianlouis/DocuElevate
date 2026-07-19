@@ -233,6 +233,23 @@ class TestAppriseInitialization:
         # Should still return instance
         assert result == mock_apprise_instance
 
+    @patch("app.utils.notification.apprise.Apprise")
+    @patch("app.utils.notification.settings")
+    def test_init_failure_does_not_log_provider_secret(self, mock_settings, mock_apprise_class, caplog):
+        """Provider exceptions must not copy credentials into application logs."""
+        import app.utils.notification
+        from app.utils.notification import init_apprise
+
+        app.utils.notification._apprise = None
+        secret = "provider-secret-must-not-appear"
+        mock_settings.notification_urls = [f"custom://user:{secret}@example.com"]
+        mock_apprise_class.return_value.add.side_effect = RuntimeError(secret)
+
+        with caplog.at_level("DEBUG"):
+            init_apprise()
+
+        assert secret not in caplog.text
+
 
 @pytest.mark.unit
 class TestSendNotification:
@@ -371,6 +388,33 @@ class TestSendNotification:
         result = send_notification("Test", "Message")
 
         assert result is False
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
+    def test_server_failure_does_not_log_provider_secret(self, mock_settings, mock_init_apprise, caplog):
+        """Neither a provider repr nor its exception may expose credentials."""
+        from app.utils.notification import send_notification
+
+        secret = "provider-secret-must-not-appear"
+
+        class NotifyExample:
+            def __str__(self):
+                return f"custom://user:{secret}@example.com"
+
+            def notify(self, **_kwargs):
+                raise RuntimeError(secret)
+
+        mock_settings.notification_urls = ["configured"]
+        mock_apprise = MagicMock()
+        mock_apprise.servers = [NotifyExample()]
+        mock_init_apprise.return_value = mock_apprise
+
+        with caplog.at_level("DEBUG"):
+            result = send_notification("Test", "Message")
+
+        assert result is False
+        assert secret not in caplog.text
+        assert "via Example" in caplog.text
 
 
 @pytest.mark.unit

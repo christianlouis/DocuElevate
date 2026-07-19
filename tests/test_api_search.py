@@ -121,6 +121,58 @@ class TestMeilisearchIndexDocument:
             result = index_document(_FakeRecord(), "some text", {})
             assert result is False
 
+    def test_index_documents_commits_one_bulk_update(self):
+        """Batch indexing waits until the Meilisearch update is committed."""
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_task = MagicMock(task_uid=42)
+        mock_client.get_index.return_value = mock_index
+        mock_index.add_documents.return_value = mock_task
+        mock_client.wait_for_task.return_value = MagicMock(status="succeeded")
+
+        class _FakeRecord:
+            original_filename = "invoice.pdf"
+            mime_type = "application/pdf"
+            file_size = 2048
+            created_at = None
+
+            def __init__(self, file_id):
+                self.id = file_id
+
+        documents = [
+            (_FakeRecord(1), "first", {"document_type": "Invoice"}),
+            (_FakeRecord(2), "second", {"document_type": "Invoice"}),
+        ]
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import index_documents
+
+            assert index_documents(documents) == 2
+
+        payload = mock_index.add_documents.call_args.args[0]
+        assert [document["file_id"] for document in payload] == [1, 2]
+        mock_client.wait_for_task.assert_called_once_with(42, timeout_in_ms=120_000)
+
+    def test_index_documents_rejects_failed_meilisearch_task(self):
+        """An accepted update is not counted when Meilisearch later rejects it."""
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_index.add_documents.return_value = MagicMock(task_uid=43)
+        mock_client.get_index.return_value = mock_index
+        mock_client.wait_for_task.return_value = MagicMock(status="failed")
+
+        class _FakeRecord:
+            id = 1
+            original_filename = "invoice.pdf"
+            mime_type = "application/pdf"
+            file_size = 2048
+            created_at = None
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import index_documents
+
+            assert index_documents([(_FakeRecord(), "text", {})]) == 0
+
 
 @pytest.mark.unit
 class TestMeilisearchSearchDocuments:
@@ -193,6 +245,37 @@ class TestMeilisearchSearchDocuments:
         assert "filter" in search_params
         assert 'mime_type = "application/pdf"' in search_params["filter"]
         assert 'language = "de"' in search_params["filter"]
+
+    def test_search_with_file_id_allowlist(self):
+        """Owner-scoped callers can filter before Meilisearch ranking."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents("London", file_ids=[12, 42], page=1, per_page=10)
+
+        search_params = mock_index.search.call_args.args[1]
+        assert search_params["filter"] == "file_id IN [12, 42]"
+
+    def test_search_can_require_all_query_terms(self):
+        """Research retrieval can prevent broad fallback term matching."""
+        mock_client, mock_index = self._make_mock_client(hits=[], total=0)
+
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            from app.utils.meilisearch_client import search_documents
+
+            search_documents('"Motel One" booking stay', matching_strategy="all")
+
+        search_params = mock_index.search.call_args.args[1]
+        assert search_params["matchingStrategy"] == "all"
+
+        mock_index.search.reset_mock()
+        with patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client):
+            search_documents("invoice")
+
+        default_search_params = mock_index.search.call_args.args[1]
+        assert "matchingStrategy" not in default_search_params
 
     def test_search_with_tags_filter(self):
         """search_documents passes tags filter to Meilisearch."""
@@ -345,12 +428,16 @@ class TestSearchAPIEndpoint:
     def test_search_endpoint_with_filters(self, client):
         """GET /api/search with optional filters passes them to search_documents."""
         mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "invoice"}
-        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+        with (
+            patch("app.api.search.settings.multi_user_enabled", False),
+            patch("app.api.search.search_documents", return_value=mock_result) as mock_search,
+        ):
             response = client.get("/api/search?q=invoice&mime_type=application/pdf&language=en&page=2&per_page=10")
 
         assert response.status_code == 200
         mock_search.assert_called_once_with(
             "invoice",
+            file_ids=None,
             mime_type="application/pdf",
             document_type=None,
             language="en",
@@ -373,12 +460,16 @@ class TestSearchAPIEndpoint:
     def test_search_endpoint_pagination_defaults(self, client):
         """GET /api/search uses default page=1 per_page=20."""
         mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "test"}
-        with patch("app.api.search.search_documents", return_value=mock_result) as mock_search:
+        with (
+            patch("app.api.search.settings.multi_user_enabled", False),
+            patch("app.api.search.search_documents", return_value=mock_result) as mock_search,
+        ):
             response = client.get("/api/search?q=test")
 
         assert response.status_code == 200
         mock_search.assert_called_once_with(
             "test",
+            file_ids=None,
             mime_type=None,
             document_type=None,
             language=None,
@@ -392,6 +483,22 @@ class TestSearchAPIEndpoint:
             page=1,
             per_page=20,
         )
+
+    def test_search_endpoint_scopes_shared_index_in_multi_user_mode(self, client):
+        """The external search index receives only IDs authorized by the DB scope."""
+        mock_result = {"results": [], "total": 0, "page": 1, "pages": 0, "query": "private"}
+        scoped_query = MagicMock()
+        scoped_query.order_by.return_value.all.return_value = [(11,), (42,)]
+
+        with (
+            patch("app.api.search.settings.multi_user_enabled", True),
+            patch("app.api.search.apply_owner_filter", return_value=scoped_query),
+            patch("app.api.search.search_documents", return_value=mock_result) as mock_search,
+        ):
+            response = client.get("/api/search?q=private")
+
+        assert response.status_code == 200
+        assert mock_search.call_args.kwargs["file_ids"] == [11, 42]
 
     def test_search_endpoint_date_filters(self, client):
         """GET /api/search with date_from and date_to passes them as int."""

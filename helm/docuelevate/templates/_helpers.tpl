@@ -6,6 +6,13 @@ Expand the name of the chart.
 {{- end }}
 
 {{/*
+Name of the Secret injected into every DocuElevate process.
+*/}}
+{{- define "docuelevate.secretName" -}}
+{{- default (printf "%s-secret" (include "docuelevate.fullname" .)) .Values.secrets.existingSecret }}
+{{- end }}
+
+{{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this.
 If release name contains chart name it will be used as a full name.
@@ -82,6 +89,24 @@ then fall back to the bundled Redis service URL.
 {{- printf "redis://%s-redis-master:6379/0" .Release.Name }}
 {{- else }}
 {{- "" }}
+{{- end }}
+{{- end }}
+
+{{/* Resolve an optional dedicated Celery broker URL. */}}
+{{- define "docuelevate.celeryBrokerUrl" -}}
+{{- if .Values.secrets.CELERY_BROKER_URL }}
+{{- .Values.secrets.CELERY_BROKER_URL }}
+{{- else }}
+{{- include "docuelevate.redisUrl" . }}
+{{- end }}
+{{- end }}
+
+{{/* Resolve an optional dedicated Celery result-backend URL. */}}
+{{- define "docuelevate.celeryResultBackend" -}}
+{{- if .Values.secrets.CELERY_RESULT_BACKEND }}
+{{- .Values.secrets.CELERY_RESULT_BACKEND }}
+{{- else }}
+{{- include "docuelevate.redisUrl" . }}
 {{- end }}
 {{- end }}
 

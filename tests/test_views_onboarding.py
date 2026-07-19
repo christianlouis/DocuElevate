@@ -1,5 +1,8 @@
 """Tests for app/views/onboarding.py covering _get_configured_destinations() and onboarding_page() route."""
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,7 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
-from app.models import UserProfile
+from app.models import UserIntegration, UserProfile
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -618,7 +623,16 @@ class TestOnboardingPage:
         try:
             with (
                 patch("app.views.onboarding.templates") as mock_templates,
-                patch("app.views.onboarding.get_all_tiers", return_value=["free"]),
+                patch(
+                    "app.views.onboarding.get_all_tiers",
+                    return_value=[
+                        {
+                            "id": "free",
+                            "name": "Free",
+                            "tagline": "Try DocuElevate free — no credit card needed",
+                        }
+                    ],
+                ),
                 patch("app.views.onboarding._get_configured_destinations", return_value=[{"id": "s3"}]),
             ):
                 mock_templates.TemplateResponse.return_value = mock_template_response
@@ -629,9 +643,141 @@ class TestOnboardingPage:
             assert context["request"] is mock_req
             assert context["user"] == user
             assert context["configured_destinations"] == []
+            assert context["configured_destination_ids"] == []
+            assert context["configured_destination_labels"] == {}
             assert context["legacy_destinations"] == [{"id": "s3"}]
             assert context["instance_label"] == "DocuElevate"
-            assert context["tiers"] == ["free"]
+            assert context["tiers"] == [
+                {
+                    "id": "free",
+                    "name": "Free",
+                    "tagline": "Try DocuElevate free — no credit card needed",
+                    "localize_name": True,
+                    "localize_tagline": True,
+                }
+            ]
+            assert context["is_complimentary"] is False
+            assert isinstance(context["ai_configured"], bool)
         finally:
             db.close()
             Base.metadata.drop_all(bind=engine)
+
+    @pytest.mark.asyncio
+    async def test_database_plan_copy_is_not_overridden_by_stock_localization(self):
+        """Plan Designer names and taglines remain authoritative in onboarding."""
+        from app.views.onboarding import onboarding_page
+
+        engine = _make_engine()
+        db = _make_session(engine)
+        mock_req = _make_mock_request(session_user={"sub": "custom-plan-user"})
+        custom_plan = {
+            "id": "starter",
+            "name": "Family Archive",
+            "tagline": "Configured by the instance administrator",
+        }
+
+        try:
+            with (
+                patch("app.views.onboarding.templates") as mock_templates,
+                patch("app.views.onboarding.get_all_tiers", return_value=[custom_plan]),
+                patch("app.views.onboarding._get_configured_destinations", return_value=[]),
+            ):
+                await onboarding_page(mock_req, db)
+
+            tier = mock_templates.TemplateResponse.call_args[0][1]["tiers"][0]
+            assert tier["name"] == "Family Archive"
+            assert tier["tagline"] == "Configured by the instance administrator"
+            assert tier["localize_name"] is False
+            assert tier["localize_tagline"] is False
+        finally:
+            db.close()
+            Base.metadata.drop_all(bind=engine)
+
+    @pytest.mark.asyncio
+    async def test_single_user_destination_and_deployment_labels_reach_template(self):
+        """A sole personal destination is selectable by default and paths come from deployment config."""
+        from app.views.onboarding import onboarding_page
+
+        engine = _make_engine()
+        db = _make_session(engine)
+        db.add(
+            UserIntegration(
+                owner_id="canary-user",
+                direction="DESTINATION",
+                integration_type="VECTOR_DATABASE",
+                name="Canary Qdrant",
+                is_active=True,
+            )
+        )
+        db.commit()
+        mock_req = _make_mock_request(session_user={"sub": "canary-user"})
+
+        try:
+            with (
+                patch("app.views.onboarding.templates") as mock_templates,
+                patch("app.views.onboarding.get_all_tiers", return_value=[]),
+                patch("app.views.onboarding._settings.deployment_label", "Preprod Canary"),
+                patch("app.views.onboarding._settings.default_storage_path", "/DocuElevate Preprod Canary"),
+            ):
+                await onboarding_page(mock_req, db)
+
+            context = mock_templates.TemplateResponse.call_args[0][1]
+            assert context["configured_destination_ids"] == ["vector_database"]
+            assert context["configured_destination_labels"] == {"vector_database": "Canary Qdrant"}
+            assert context["instance_label"] == "DocuElevate Preprod Canary"
+            assert context["suggested_storage_path"] == "/DocuElevate Preprod Canary"
+        finally:
+            db.close()
+            Base.metadata.drop_all(bind=engine)
+
+    @pytest.mark.asyncio
+    async def test_complimentary_admin_context_keeps_included_access(self):
+        """A self-hosted admin sees included access instead of a paid plan chooser."""
+        from app.views.onboarding import onboarding_page
+
+        engine = _make_engine()
+        db = _make_session(engine)
+        _make_profile(db, "admin-user", onboarding_completed=False, is_complimentary=True)
+        mock_req = _make_mock_request(session_user={"sub": "admin-user"})
+
+        try:
+            with (
+                patch("app.views.onboarding.templates") as mock_templates,
+                patch("app.views.onboarding.get_all_tiers", return_value=[]),
+                patch("app.views.onboarding._get_configured_destinations", return_value=[]),
+            ):
+                await onboarding_page(mock_req, db)
+
+            context = mock_templates.TemplateResponse.call_args[0][1]
+            assert context["is_complimentary"] is True
+        finally:
+            db.close()
+            Base.metadata.drop_all(bind=engine)
+
+
+def test_storage_step_auto_selects_single_destination_but_keeps_external_copy_optional():
+    template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
+    assert "configuredDestinationIds[0]" in template
+    assert "selectedDestinationLabel" in template
+    assert "|| !selectedDestination" not in template
+    assert "onboarding.local_archive_ready_heading" in template
+    assert "onboarding.no_external_copy_heading" in template
+    assert 'href="/integrations?onboarding=destination"' in template
+    assert "{% if user.is_admin %}" not in template
+
+
+@pytest.mark.unit
+def test_onboarding_copy_is_complete_in_english_and_german():
+    """Every onboarding translation used by the journey has en/de copy."""
+    template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
+    keys = set(re.findall(r'["\'](onboarding\.[a-z0-9_]+)["\']', template))
+    keys.discard("onboarding.tier_")  # Dynamic prefix used with the finite tier IDs below.
+    for tier_id in ("free", "starter", "professional", "business"):
+        keys.add(f"onboarding.tier_{tier_id}_name")
+        keys.add(f"onboarding.tier_{tier_id}_tagline")
+
+    assert keys, "Expected onboarding translation keys in the template"
+    for locale in ("en", "de"):
+        translations = json.loads((_REPO_ROOT / f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
+        missing = sorted(keys - translations.keys())
+        assert not missing, f"Missing {locale} onboarding translations: {missing}"

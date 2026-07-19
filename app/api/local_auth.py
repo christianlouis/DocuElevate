@@ -26,6 +26,7 @@ from starlette.responses import RedirectResponse
 from app.config import settings
 from app.database import get_db
 from app.models import LocalUser, UserProfile
+from app.utils.i18n import detect_language
 from app.utils.i18n import translate as _translate
 from app.utils.local_auth import (
     build_session_user,
@@ -45,6 +46,20 @@ templates = Jinja2Templates(directory=str(_templates_dir))
 templates.env.globals["_"] = lambda key, **kwargs: _translate(key, "en", **kwargs)
 
 DbSession = Annotated[Session, Depends(get_db)]
+
+
+def _localized_template_context(request: Request, **context: object) -> dict[str, object]:
+    """Build language-aware context for standalone local-auth pages."""
+    current_locale = detect_language(request)
+
+    def _translate_for_request(key: str, **kwargs: object) -> str:
+        return _translate(key, current_locale, **kwargs)
+
+    return {
+        "current_locale": current_locale,
+        "_": _translate_for_request,
+        **context,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -103,17 +118,22 @@ async def signup_page(request: Request) -> Any:
     return templates.TemplateResponse(
         request,
         "signup.html",
-        context={
-            "csrf_token": getattr(request.state, "csrf_token", ""),
-            "app_version": settings.version,
-        },
+        context=_localized_template_context(
+            request,
+            csrf_token=getattr(request.state, "csrf_token", ""),
+            app_version=settings.version,
+        ),
     )
 
 
 @router.get("/verify-email-sent", include_in_schema=False)
 async def verify_email_sent_page(request: Request) -> Any:
     """Render the verify-email-sent confirmation page."""
-    return templates.TemplateResponse(request, "verify_email_sent.html")
+    return templates.TemplateResponse(
+        request,
+        "verify_email_sent.html",
+        context=_localized_template_context(request),
+    )
 
 
 @router.get("/forgot-username", include_in_schema=False)
@@ -122,10 +142,11 @@ async def forgot_username_page(request: Request) -> Any:
     return templates.TemplateResponse(
         request,
         "forgot_username.html",
-        context={
-            "csrf_token": getattr(request.state, "csrf_token", ""),
-            "app_version": settings.version,
-        },
+        context=_localized_template_context(
+            request,
+            csrf_token=getattr(request.state, "csrf_token", ""),
+            app_version=settings.version,
+        ),
     )
 
 
@@ -135,10 +156,11 @@ async def forgot_password_page(request: Request) -> Any:
     return templates.TemplateResponse(
         request,
         "forgot_password.html",
-        context={
-            "csrf_token": getattr(request.state, "csrf_token", ""),
-            "app_version": settings.version,
-        },
+        context=_localized_template_context(
+            request,
+            csrf_token=getattr(request.state, "csrf_token", ""),
+            app_version=settings.version,
+        ),
     )
 
 
@@ -149,11 +171,12 @@ async def reset_password_page(request: Request) -> Any:
     return templates.TemplateResponse(
         request,
         "password_reset_form.html",
-        context={
-            "token": token,
-            "csrf_token": getattr(request.state, "csrf_token", ""),
-            "app_version": settings.version,
-        },
+        context=_localized_template_context(
+            request,
+            token=token,
+            csrf_token=getattr(request.state, "csrf_token", ""),
+            app_version=settings.version,
+        ),
     )
 
 

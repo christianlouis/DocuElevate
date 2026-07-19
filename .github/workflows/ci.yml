@@ -1,6 +1,7 @@
 name: CI Pipeline
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
     tags: ['v*', '[0-9]+.*']
@@ -66,8 +67,27 @@ jobs:
         with:
           python-version: "3.11"
           cache: 'pip'
-      - run: pip install djlint>=1.36.0
+      # djLint 1.40.9 crashes while pickling its multiprocessing config on
+      # Python 3.11; keep CI on the last verified release until upstream fixes it.
+      - run: pip install djlint==1.36.4
       - run: djlint frontend/templates/ --lint
+
+  terraform-validate:
+    name: Terraform Deployment Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.8.5"
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive examples/terraform
+      - name: Initialize providers without a backend
+        run: terraform -chdir=examples/terraform/kubernetes init -backend=false -input=false
+      - name: Validate the Kubernetes deployment module
+        run: terraform -chdir=examples/terraform/kubernetes validate
 
   # ══════════════════════════════════════════════════════════════════════════
   # Stage 2: Parallel Heavy Lifters (Consolidated for Efficiency)
@@ -150,8 +170,8 @@ jobs:
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: [run-tests, mypy, dependency-scan, html-lint, migration-chain]
-    if: github.event_name == 'push'
+    needs: [run-tests, mypy, dependency-scan, html-lint, migration-chain, terraform-validate]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -240,7 +260,7 @@ jobs:
     name: Update Preprod K8s Manifest
     runs-on: ubuntu-latest
     needs: [build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     steps:
       - name: Compute image tag
         id: tag

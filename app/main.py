@@ -30,6 +30,7 @@ from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_ha
 from app.middleware.request_size_limit import RequestSizeLimitMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.utils.config_validator import check_all_configs
+from app.utils.log_safety import restrict_sensitive_provider_logging
 from app.utils.notification import init_apprise, notify_shutdown, notify_startup
 from app.utils.sentry import init_sentry
 
@@ -58,7 +59,8 @@ from app.views.files import router as files_router
 # traditional (non-container) deployments and centralised SIEM ingestion.
 #
 # Noisy third-party loggers (httpx, httpcore, authlib, etc.) are pinned to
-# WARNING when the app-level is DEBUG to keep output useful.
+# WARNING when the app-level is DEBUG to keep output useful. Provider SDKs
+# that can include prompts or document text are always pinned to WARNING.
 # ---------------------------------------------------------------------------
 _explicit_log_level = os.environ.get("LOG_LEVEL")
 if settings.debug and _explicit_log_level is None:
@@ -138,6 +140,8 @@ if _effective_level_int <= logging.DEBUG:
     ):
         logging.getLogger(_noisy).setLevel(logging.WARNING)
 
+restrict_sensitive_provider_logging()
+
 _startup_logger = logging.getLogger(__name__)
 _startup_logger.info(
     "Root logging level set to %s (debug=%s, format=%s, syslog=%s)",
@@ -210,18 +214,15 @@ async def lifespan(app: FastAPI):
 
     ensure_ocr_languages_async()
 
-    # Force settings dump to log for troubleshooting
-    from app.utils.config_validator import dump_all_settings
-
-    dump_all_settings()
-
-    # Validate configuration
-    config_issues = check_all_configs()
+    # Validate only features the operator has started configuring.  A fresh
+    # installation is intentionally useful without SMTP, notifications, or an
+    # external storage destination; strict checks remain available in Settings.
+    config_issues = check_all_configs(configured_only=True)
 
     # Log overall status
-    has_issues = any(config_issues["email"]) or any(
-        len(issues) > 0 for provider, issues in config_issues["storage"].items()
-    )
+    has_issues = any(config_issues.get("auth", [])) or any(config_issues.get("email", []))
+    has_issues = has_issues or any(len(issues) > 0 for issues in config_issues.get("storage", {}).values())
+    has_issues = has_issues or any(config_issues.get("notification", []))
     if has_issues:
         logging.warning("Application started with configuration issues - some features may be unavailable")
     else:

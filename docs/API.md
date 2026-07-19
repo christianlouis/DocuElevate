@@ -136,6 +136,41 @@ curl -X GET "http://<your-docuelevate-instance>/api/files" \
 
 ## Common Endpoints
 
+### Owner-controlled file privacy
+
+`FileRecord.is_private` is the canonical authorization flag. A private document
+is readable only by its owner unless the owner creates a new explicit share link.
+Changing the flag never changes the owner, tribe, pipeline, storage path, routing,
+or delivery history.
+
+Owners can create automatic rules based on filename patterns, OCR/content
+keywords, or extracted metadata. Preview is read-only. Retroactive apply changes
+only matching files' privacy flag, and an explicit manual owner choice always
+wins until the owner returns the file to automatic handling.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `PUT` | `/api/files/{file_id}/privacy` | Set a manual private/public owner override |
+| `DELETE` | `/api/files/{file_id}/privacy/override` | Return the file to automatic privacy rules |
+| `GET` | `/api/privacy-rules/` | List the current owner's rules |
+| `POST` | `/api/privacy-rules/` | Create an owner-scoped rule |
+| `PUT` | `/api/privacy-rules/{rule_id}` | Update an owner-scoped rule |
+| `DELETE` | `/api/privacy-rules/{rule_id}` | Delete an owner-scoped rule |
+| `POST` | `/api/privacy-rules/{rule_id}/preview` | Preview owner-file matches without mutation |
+| `POST` | `/api/privacy-rules/{rule_id}/apply` | Mark matching owner files private, skipping manual overrides |
+
+The access decision is evaluated in this order: authenticated tenant membership,
+then Tribe membership or a file-specific share, and finally the file's canonical
+`is_private` flag. A non-private file is normally visible only to authorised
+members of its one Tribe; it is never global or internet-public. A direct share
+can grant access to one file inside the same tenant without adding the recipient
+to that Tribe. A private file remains owner-only in authenticated document access.
+Administrator status does not bypass either boundary. Explicit share links remain
+a separate, owner-controlled access path.
+
+Privacy is committed before Meilisearch or Qdrant indexing. Derived index payloads
+are reconciled asynchronously, while the relational database remains authoritative.
+
 ### DearConcierge knowledge bridge
 
 The preproduction knowledge bridge provides one ingestion path and one
@@ -184,19 +219,30 @@ source with `source_type: "dropbox"`, `folder_path`, `recursive: true`, and
 `true_up_existing: true`. The first watch cycle queues a durable recursive true-up;
 later cycles reuse the completed Dropbox cursor and fetch only changes.
 
+For a RAG-first historical import, set `backfill_index_first_enabled: true`.
+Setting `backfill_deferred_ocr_enabled: true` additionally starts a bounded OCR-only
+second pass after the initial Dropbox listing completes. Documents move through
+`needs_ocr`, `ocr_queued`, `indexing`, and `indexed`; non-PDF office documents
+remain explicitly marked `needs_conversion` for the conversion pass. This path
+deliberately skips metadata extraction and normal storage destinations.
+
 Qdrant is available as the `VECTOR_DATABASE` destination type. It uses the
 operator-managed vector-index connection, so the user integration needs only
 `{"provider":"qdrant"}` and no credentials.
 
 #### Source-backed semantic retrieval
 
-Vector retrieval is available only when `VECTOR_INDEX_ENABLED=true`. Qdrant results
-are always checked against DocuElevate's authoritative owner/share rules before any
-passage is returned.
+Vector retrieval is available only when `VECTOR_INDEX_ENABLED=true`. A SaaS deployment
+uses one private Qdrant collection with indexed `owner_id` and `document_id` payloads.
+Owner, explicit-share, and optional unowned-document filters are applied inside Qdrant
+before ranking. Results are then checked again against DocuElevate's authoritative
+relational owner/share rules before any passage is returned. Ordinary users never see
+the collection's global point count through the status endpoint.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/knowledge/search` | Return ranked, cited passages visible to the caller |
+| `POST` | `/api/knowledge/chat` | Answer from accessible document evidence and return numbered sources plus retrieval coverage |
 | `GET` | `/api/knowledge/documents/{file_id}` | Return authoritative OCR text and metadata for a cited document |
 | `POST` | `/api/knowledge/documents/{file_id}/index` | Rebuild one accessible document's chunks |
 | `POST` | `/api/knowledge/reindex?limit=1000` | Queue an idempotent accessible-corpus backfill |
@@ -212,6 +258,20 @@ curl -X POST "https://<preprod-host>/api/knowledge/search" \
 Each result contains a `document_id`, score, cited `text`, chunk position, source
 filename/title, and `source_url`. Use the cited-document endpoint only when the full
 OCR text is needed.
+
+The chat endpoint accepts `message`, optional `history`, `limit`, and
+`score_threshold`. It uses the independently configured `RAG_CHAT_MODEL`. Questions
+about counts, maxima, or trends trigger broader semantic plus full-text retrieval.
+The response includes a `coverage` object; when `coverage.truncated` is true, the
+answer is an evidence-backed lower bound rather than a claim about the complete
+corpus.
+
+```bash
+curl -X POST "https://<preprod-host>/api/knowledge/chat" \
+  -H "Authorization: Bearer <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"How has my HbA1c changed over the years?","history":[]}'
+```
 
 #### MCP adapter contract
 

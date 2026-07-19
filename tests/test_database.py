@@ -198,6 +198,19 @@ class TestInitDb:
                     "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
                 )
             )
+            # backup_records was created by migration 021 and must exist
+            # before migration 063 adds actionable failure details.
+            conn.execute(
+                text(
+                    "CREATE TABLE backup_records ("
+                    "id INTEGER PRIMARY KEY, filename VARCHAR(255) NOT NULL UNIQUE, "
+                    "local_path VARCHAR(1024), backup_type VARCHAR(20) NOT NULL, "
+                    "size_bytes INTEGER NOT NULL DEFAULT 0, checksum VARCHAR(64), "
+                    "status VARCHAR(20) NOT NULL DEFAULT 'ok', "
+                    "remote_destination VARCHAR(50), remote_path VARCHAR(1024), "
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
             conn.execute(text("INSERT INTO alembic_version VALUES ('026_add_scheduled_jobs')"))
 
@@ -216,6 +229,9 @@ class TestInitDb:
         assert "owner_id" in columns
         assert "expires_at" in columns
         assert "is_active" in columns
+
+        backup_columns = {col["name"] for col in inspector.get_columns("backup_records")}
+        assert "error_detail" in backup_columns
 
         test_engine.dispose()
 
@@ -837,6 +853,10 @@ class TestAlembicUpgrade:
         # Verify alembic_version table exists and has a revision
         inspector = inspect(engine)
         assert "alembic_version" in inspector.get_table_names()
+        version_column = next(
+            column for column in inspector.get_columns("alembic_version") if column["name"] == "version_num"
+        )
+        assert version_column["type"].length == 255
 
         with engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))

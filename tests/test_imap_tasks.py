@@ -475,6 +475,85 @@ class TestPullAllInboxes:
         assert mock_check.call_count == 2
         mock_release.assert_called_once()
 
+    @patch("app.tasks.imap_tasks._pull_user_integration_imap")
+    @patch("app.tasks.imap_tasks._pull_user_imap_accounts")
+    @patch("app.tasks.imap_tasks.check_and_pull_mailbox")
+    @patch("app.tasks.imap_tasks.release_lock")
+    @patch("app.tasks.imap_tasks.acquire_lock", return_value=True)
+    @patch("app.tasks.imap_tasks.settings")
+    def test_fresh_install_silently_skips_empty_legacy_mailboxes(
+        self,
+        mock_settings,
+        _mock_acquire,
+        mock_release,
+        mock_check,
+        mock_user_accounts,
+        mock_user_integrations,
+        caplog,
+    ):
+        """Empty legacy slots are disabled, not broken configuration."""
+        mock_settings.imap1_host = None
+        mock_settings.imap1_port = 993
+        mock_settings.imap1_username = None
+        mock_settings.imap1_password = None
+        mock_settings.imap1_ssl = True
+        mock_settings.imap1_delete_after_process = False
+        mock_settings.imap2_host = None
+        mock_settings.imap2_port = 993
+        mock_settings.imap2_username = None
+        mock_settings.imap2_password = None
+        mock_settings.imap2_ssl = True
+        mock_settings.imap2_delete_after_process = False
+
+        pull_all_inboxes()
+
+        mock_check.assert_not_called()
+        mock_user_accounts.assert_called_once()
+        mock_user_integrations.assert_called_once()
+        mock_release.assert_called_once()
+        assert "missing config" not in caplog.text
+
+    @patch("app.tasks.imap_tasks._pull_user_integration_imap")
+    @patch("app.tasks.imap_tasks._pull_user_imap_accounts")
+    @patch("app.tasks.imap_tasks.check_and_pull_mailbox")
+    @patch("app.tasks.imap_tasks.release_lock")
+    @patch("app.tasks.imap_tasks.acquire_lock", return_value=True)
+    @patch("app.tasks.imap_tasks.settings")
+    def test_partial_legacy_mailbox_is_still_validated(
+        self,
+        mock_settings,
+        _mock_acquire,
+        _mock_release,
+        mock_check,
+        _mock_user_accounts,
+        _mock_user_integrations,
+    ):
+        """A partly entered mailbox must remain visible to validation."""
+        mock_settings.imap1_host = "imap.example.com"
+        mock_settings.imap1_port = 993
+        mock_settings.imap1_username = None
+        mock_settings.imap1_password = None
+        mock_settings.imap1_ssl = True
+        mock_settings.imap1_delete_after_process = False
+        mock_settings.imap2_host = None
+        mock_settings.imap2_port = 993
+        mock_settings.imap2_username = None
+        mock_settings.imap2_password = None
+        mock_settings.imap2_ssl = True
+        mock_settings.imap2_delete_after_process = False
+
+        pull_all_inboxes()
+
+        mock_check.assert_called_once_with(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username=None,
+            password=None,
+            use_ssl=True,
+            delete_after_process=False,
+        )
+
     @patch("app.tasks.imap_tasks.acquire_lock")
     def test_skips_when_lock_held(self, mock_acquire):
         """Test that execution is skipped when lock cannot be acquired."""
@@ -487,9 +566,22 @@ class TestPullAllInboxes:
     @patch("app.tasks.imap_tasks.check_and_pull_mailbox")
     @patch("app.tasks.imap_tasks.release_lock")
     @patch("app.tasks.imap_tasks.acquire_lock")
-    def test_releases_lock_on_exception(self, mock_acquire, mock_release, mock_check):
+    @patch("app.tasks.imap_tasks.settings")
+    def test_releases_lock_on_exception(self, mock_settings, mock_acquire, mock_release, mock_check):
         """Test that lock is released even when exception occurs."""
         mock_acquire.return_value = True
+        mock_settings.imap1_host = "imap.example.com"
+        mock_settings.imap1_port = 993
+        mock_settings.imap1_username = "user"
+        mock_settings.imap1_password = _TEST_CREDENTIAL
+        mock_settings.imap1_ssl = True
+        mock_settings.imap1_delete_after_process = False
+        mock_settings.imap2_host = None
+        mock_settings.imap2_port = 993
+        mock_settings.imap2_username = None
+        mock_settings.imap2_password = None
+        mock_settings.imap2_ssl = True
+        mock_settings.imap2_delete_after_process = False
         mock_check.side_effect = Exception("Test error")
 
         with pytest.raises(Exception):
@@ -560,7 +652,8 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
-    def test_gmail_uses_all_mail_folder(self, mock_load, mock_imap_class, mock_find_all):
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
+    def test_gmail_uses_all_mail_folder(self, _mock_private_ip, mock_load, mock_imap_class, mock_find_all):
         """Test that Gmail uses All Mail folder when found."""
         mock_load.return_value = {}
         mock_mail = MagicMock()
@@ -587,7 +680,8 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.load_processed_emails")
-    def test_gmail_fallback_to_inbox(self, mock_load, mock_imap_class, mock_find_all):
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
+    def test_gmail_fallback_to_inbox(self, _mock_private_ip, mock_load, mock_imap_class, mock_find_all):
         """Test that Gmail falls back to INBOX when All Mail not found."""
         mock_load.return_value = {}
         mock_mail = MagicMock()
@@ -730,8 +824,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     def test_gmail_labels_and_star(
         self,
+        _mock_private_ip,
         mock_settings,
         mock_save,
         mock_load,
@@ -781,8 +877,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     def test_gmail_labels_disabled_when_gmail_apply_labels_false(
         self,
+        _mock_private_ip,
         mock_settings,
         mock_save,
         mock_load,
@@ -981,8 +1079,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     def test_readonly_mode_skips_gmail_modifications(
         self,
+        _mock_private_ip,
         mock_settings,
         mock_save,
         mock_load,

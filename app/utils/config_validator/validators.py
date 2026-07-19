@@ -64,7 +64,12 @@ def validate_auth_config() -> list[str]:
             getattr(settings, f"social_auth_{p}_enabled", False) for p in ("google", "microsoft", "apple", "dropbox")
         )
 
-        if not using_simple_auth and not using_oidc and not using_social_login:
+        # A fresh installation deliberately starts without an external identity
+        # provider.  The setup wizard/local signup flow is a valid authentication
+        # path until the operator configures OAuth or OIDC.
+        using_local_signup = bool(getattr(settings, "allow_local_signup", False))
+
+        if not using_simple_auth and not using_oidc and not using_social_login and not using_local_signup:
             issues.append("Neither simple authentication, OIDC, nor social login are properly configured")
 
         # If using OIDC, check for provider name
@@ -246,8 +251,19 @@ def validate_notification_config() -> list[str]:
     return issues
 
 
-def check_all_configs() -> dict[str, list[str] | dict[str, list[str]]]:
-    """Run all configuration validations and log results"""
+def _has_any_setting(*names: str) -> bool:
+    """Return whether an optional feature has any operator-supplied config."""
+    return any(getattr(settings, name, None) not in (None, "", [], ()) for name in names)
+
+
+def check_all_configs(*, configured_only: bool = False) -> dict[str, list[str] | dict[str, list[str]]]:
+    """Run configuration validations and log actionable results.
+
+    ``configured_only`` is used at application startup.  Optional integrations
+    that have not been started are not broken and therefore must not make a
+    clean installation look unhealthy.  The strict validators remain available
+    to the settings and credential-checking surfaces.
+    """
     from app.utils.config_validator.settings_display import dump_all_settings
 
     logger.info("Validating application configuration...")
@@ -265,22 +281,55 @@ def check_all_configs() -> dict[str, list[str] | dict[str, list[str]]]:
 
     # Check email config
     email_issues = validate_email_config()
-    if email_issues:
+    email_configured = _has_any_setting("email_host", "email_username", "email_password")
+    if configured_only and not email_configured:
+        email_issues = []
+    if configured_only and not email_configured:
+        logger.info("Email is not configured; optional email intake skipped")
+    elif email_issues:
         logger.warning(f"Email configuration issues: {', '.join(email_issues)}")
     else:
         logger.info("Email configuration OK")
 
     # Check storage configs
     storage_issues = validate_storage_configs()
+    provider_configured: dict[str, bool] = {provider: True for provider in storage_issues}
+    if configured_only:
+        provider_settings = {
+            "dropbox": ("dropbox_app_key", "dropbox_app_secret", "dropbox_refresh_token"),
+            "nextcloud": ("nextcloud_upload_url", "nextcloud_username", "nextcloud_password"),
+            "sftp": ("sftp_host", "sftp_private_key", "sftp_password"),
+            "email": ("dest_email_host", "dest_email_default_recipient"),
+            "evernote": ("evernote_auth_token",),
+            "s3": ("s3_bucket_name", "aws_access_key_id", "aws_secret_access_key"),
+            "ftp": ("ftp_host", "ftp_username", "ftp_password"),
+            "webdav": ("webdav_url", "webdav_username", "webdav_password"),
+            "google_drive": ("google_drive_credentials_json", "google_drive_folder_id"),
+            "paperless": ("paperless_host", "paperless_ngx_api_token"),
+            "onedrive": ("onedrive_client_id", "onedrive_client_secret", "onedrive_refresh_token"),
+            "uptime_kuma": ("uptime_kuma_url",),
+        }
+        provider_configured = {provider: _has_any_setting(*provider_settings[provider]) for provider in storage_issues}
+        storage_issues = {
+            provider: issues if provider_configured[provider] else [] for provider, issues in storage_issues.items()
+        }
     for provider, issues in storage_issues.items():
-        if issues:
+        if configured_only and not provider_configured[provider]:
+            logger.info("%s is not configured; optional integration skipped", provider.replace("_", " ").title())
+        elif issues:
             logger.warning(f"{provider.capitalize()} configuration issues: {', '.join(issues)}")
         else:
             logger.info(f"{provider.capitalize()} configuration OK")
 
     # Check notification configuration
-    notification_issues = validate_notification_config()
-    if notification_issues:
+    notification_configured = _has_any_setting("notification_urls")
+    if configured_only and not notification_configured:
+        notification_issues = []
+    else:
+        notification_issues = validate_notification_config()
+    if configured_only and not notification_configured:
+        logger.info("Notifications are not configured; optional notifications skipped")
+    elif notification_issues:
         logger.warning(f"Notification configuration issues: {', '.join(notification_issues)}")
     else:
         logger.info("Notification configuration OK")

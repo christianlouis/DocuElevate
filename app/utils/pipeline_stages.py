@@ -17,6 +17,9 @@ ALWAYS_SHOW_STAGES: frozenset[str] = frozenset({"create_file_record"})
 
 LEGACY_STAGE_ALIASES: dict[str, str] = {
     "process_with_azure_document_intelligence": "process_with_ocr",
+    # User-specific destinations are the same logical terminal distribution
+    # stage as the legacy/global destination dispatcher.
+    "send_to_user_destinations": "send_to_all_destinations",
 }
 
 

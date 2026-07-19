@@ -710,7 +710,7 @@ def _test_google_drive_connection(config: dict[str, Any] | None, credentials: di
 def _test_vector_database_connection(
     config: dict[str, Any] | None, credentials: dict[str, Any] | None
 ) -> dict[str, Any]:
-    """Test the operator-managed Qdrant destination without exposing credentials."""
+    """Test the complete Qdrant destination, including embedding generation."""
     from app.config import settings
 
     provider = str((config or {}).get("provider") or "qdrant").lower()
@@ -718,15 +718,40 @@ def _test_vector_database_connection(
         return {"success": False, "message": f"Unsupported vector database provider: {provider}"}
     if not settings.vector_index_enabled:
         return {"success": False, "message": "Vector indexing is disabled by the operator"}
+    embedding_base_url = str(settings.openai_base_url or "").rstrip("/")
+    uses_keyless_compatible_endpoint = bool(embedding_base_url and embedding_base_url != "https://api.openai.com/v1")
+    if not settings.openai_api_key and not uses_keyless_compatible_endpoint:
+        return {
+            "success": False,
+            "code": "embedding_provider_not_configured",
+            "message": "Document search needs an embedding provider. Complete AI setup first.",
+        }
     try:
         from app.utils.vector_index import QdrantVectorIndex
 
-        status_result = QdrantVectorIndex().status()
+        index = QdrantVectorIndex()
+        status_result = index.status()
         collection = status_result.get("collection") or settings.vector_index_collection
-        return {"success": True, "message": f"Qdrant collection '{collection}' is ready"}
     except Exception as exc:  # noqa: BLE001
         logger.warning("Qdrant destination test failed: %s", exc)
         return {"success": False, "message": "Qdrant connection failed — check operator configuration"}
+
+    try:
+        from app.utils.similarity import generate_embedding
+
+        probe = generate_embedding("DocuElevate document search readiness probe")
+        if not probe:
+            raise ValueError("Embedding provider returned an empty vector")
+        index.ensure_collection(len(probe))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Vector destination embedding test failed: %s", exc)
+        return {
+            "success": False,
+            "code": "embedding_provider_check_failed",
+            "message": "Embedding provider check failed — verify AI settings",
+        }
+
+    return {"success": True, "message": f"Qdrant collection '{collection}' and embeddings are ready"}
 
 
 _CONNECTION_TESTERS: dict[str, Any] = {

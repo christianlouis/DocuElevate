@@ -34,6 +34,17 @@ class TestSearchPage:
         assert 'id="search-results"' in response.text
         assert "/api/search" in response.text
 
+    def test_search_page_contains_source_grounded_document_chat(self, client):
+        response = client.get("/search")
+        assert response.status_code == 200
+        text = response.text
+        assert 'id="chat-mode-btn"' in text
+        assert 'id="knowledge-chat-log"' in text
+        assert 'id="knowledge-chat-input"' in text
+        assert "/api/knowledge/chat" in text
+        assert "source.source_url" in text
+        assert "data.sources.length" in text
+
     def test_search_page_query_too_long(self, client):
         """GET /search?q=<very long> returns 422 for exceeding max_length."""
         long_query = "a" * 600

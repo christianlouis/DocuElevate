@@ -25,9 +25,12 @@ DearConcierge MCP adapter --------------------------> retrieval API
 ```
 
 The relational database and document work directory remain authoritative. Qdrant is
-a derived index that can be deleted and rebuilt. Search results are never trusted for
-authorization: document IDs returned by Qdrant are checked against the relational
-owner/share model before any text is returned.
+a derived index that can be deleted and rebuilt. Multi-user installations use one
+private collection with payload indexes for `owner_id` and `document_id`. Owner and
+explicit-share filters run before vector ranking; the document IDs returned by Qdrant
+are then checked against the relational owner/share model again before any text is
+returned. Owner-scoped cleanup removes derived chunks before a document record is
+deleted.
 
 Qdrant is configured as a normal `VECTOR_DATABASE` destination on the user's
 integration dashboard. The connection remains operator-managed, while destination
@@ -71,6 +74,9 @@ subsequent polls continue from Dropbox's change cursor.
   crash resumes without duplicating unchanged documents.
 - Source files are never deleted during the corpus import.
 - Progress reports discovered, downloaded, skipped, queued, failed, and last cursor.
+- An optional bounded second pass OCRs index-first scans with no embedded text and
+  sends the resulting text directly to Qdrant without metadata LLM work or legacy
+  destination distribution.
 
 ### KB-4: Chunk vector index
 
@@ -80,10 +86,19 @@ subsequent polls continue from Dropbox's change cursor.
 - Replacement is idempotent and retains the old index if embedding generation fails.
 - An explicit corpus backfill and a health endpoint exist.
 - Qdrant is private to the cluster and protected by its own API key.
+- In multi-user mode, pre-ranking owner/share filters isolate tenants in the shared
+  collection; ordinary status responses omit global corpus sizes.
 
 ### KB-5: Retrieval and MCP
 
 - Semantic search returns ranked cited passages and never returns unauthorized payloads.
+- Interactive document chat answers only from accessible evidence, returns numbered
+  source links, and uses a separately configurable RAG model.
+- Cross-document questions about counts, maxima, and trends combine semantic and
+  full-text candidates. Limited retrieval is disclosed and must not be presented as a
+  corpus-complete result.
+- The lexical index reconciler pages through the full Meilisearch corpus and commits
+  missing documents in resumable bulk updates on its own worker queue.
 - A cited document endpoint returns authoritative OCR text and metadata for follow-up.
 - OAuth-authenticated browser clients and Bearer-token clients use the same endpoints.
 - The MCP server is a stateless adapter exposing `search_documents` and `get_document`;
@@ -94,8 +109,9 @@ subsequent polls continue from Dropbox's change cursor.
 - Automated tests cover intake authentication, idempotency, path safety, size/type
   validation, outbound retries, Dropbox resume, chunk overlap, Qdrant replacement,
   authorization filtering, and source citations.
-- A preprod smoke test imports a representative Dropbox subset, rebuilds Qdrant from
-  scratch, and answers agreed DearConcierge questions with traceable source documents.
+- A preprod smoke test imports a representative Dropbox subset, rebuilds Qdrant and
+  Meilisearch from scratch, and answers agreed DearConcierge questions with traceable
+  source documents and explicit coverage.
 - Production deployment, Evergreen enablement, and credential changes require explicit
   approval after the evidence above is reviewed.
 

@@ -10,6 +10,797 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`66af7d2`](https://github.com/christianlouis/DocuElevate/commit/66af7d2a8e71ed895a69e758909b98b0395453ad))
+
+
+## Unreleased
+
+
+## v0.188.2 (2026-07-19)
+
+### Bug Fixes
+
+- Prevent backup retention from exhausting storage
+  ([#1188](https://github.com/christianlouis/DocuElevate/pull/1188),
+  [`44a381d`](https://github.com/christianlouis/DocuElevate/commit/44a381d9705cd6993e4856b5eeecd573e68bff3a))
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b67b537`](https://github.com/christianlouis/DocuElevate/commit/b67b5370675675984242549fde911417943c1d1a))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ff2dcb9`](https://github.com/christianlouis/DocuElevate/commit/ff2dcb9f5e8447cdc9fe56a674cb061d3a885f8d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4141dec`](https://github.com/christianlouis/DocuElevate/commit/4141dec8d31a812127034b11d4d10018b01277de))
+
+
+## Unreleased
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ff2dcb9`](https://github.com/christianlouis/DocuElevate/commit/ff2dcb9f5e8447cdc9fe56a674cb061d3a885f8d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4141dec`](https://github.com/christianlouis/DocuElevate/commit/4141dec8d31a812127034b11d4d10018b01277de))
+
+
+## Unreleased
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4141dec`](https://github.com/christianlouis/DocuElevate/commit/4141dec8d31a812127034b11d4d10018b01277de))
+
+
+## Unreleased
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+
+## v0.188.1 (2026-07-18)
+
+### Bug Fixes
+
+- Make Celery Redis result storage failover-safe
+  ([#1182](https://github.com/christianlouis/DocuElevate/pull/1182),
+  [`5ccf858`](https://github.com/christianlouis/DocuElevate/commit/5ccf8586402be555a393ab3c6aed80f9281e1227))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`86a312b`](https://github.com/christianlouis/DocuElevate/commit/86a312bb47e1b638a030e8ffa59a042c841059e7))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`49f892d`](https://github.com/christianlouis/DocuElevate/commit/49f892d2866b46c7e8579fcd4fbe0423f864680c))
+
+- **changelog**: Update changelog [skip ci]
+  ([`69bb41e`](https://github.com/christianlouis/DocuElevate/commit/69bb41e09b00b26fbd578925c416368d8f05573f))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`86a312b`](https://github.com/christianlouis/DocuElevate/commit/86a312bb47e1b638a030e8ffa59a042c841059e7))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`69bb41e`](https://github.com/christianlouis/DocuElevate/commit/69bb41e09b00b26fbd578925c416368d8f05573f))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`86a312b`](https://github.com/christianlouis/DocuElevate/commit/86a312bb47e1b638a030e8ffa59a042c841059e7))
+
+
+## v0.188.0 (2026-07-17)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`b4572fd`](https://github.com/christianlouis/DocuElevate/commit/b4572fd8d4b4fae30b83f10dd989da9099edf652))
+
+### Features
+
+- Release onboarding document spaces
+  ([#1169](https://github.com/christianlouis/DocuElevate/pull/1169),
+  [`3e34082`](https://github.com/christianlouis/DocuElevate/commit/3e34082bc0841ae0ea223cbfaf764201baf8990f))
+
+
+## Unreleased
+
+
+## v0.187.0 (2026-07-17)
+
+### Bug Fixes
+
+- Enforce exact Terraform environment names
+  ([#1166](https://github.com/christianlouis/DocuElevate/pull/1166),
+  [`d1bf8b1`](https://github.com/christianlouis/DocuElevate/commit/d1bf8b11450734182e39d4ed5080190ee6d7ad9a))
+
+### Features
+
+- Harden Terraform deployment contract
+  ([#1166](https://github.com/christianlouis/DocuElevate/pull/1166),
+  [`d1bf8b1`](https://github.com/christianlouis/DocuElevate/commit/d1bf8b11450734182e39d4ed5080190ee6d7ad9a))
+
+
+## v0.186.5 (2026-07-17)
+
+### Bug Fixes
+
+- Cover redaction review edge cases
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Keep Uptime Kuma tokens out of logs
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Preserve non-secret policy diagnostics
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Redact configuration diagnostics fail closed
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+### Continuous Integration
+
+- Validate reviewed redaction fix ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+- Validate strict config redaction
+  ([#1167](https://github.com/christianlouis/DocuElevate/pull/1167),
+  [`e43140c`](https://github.com/christianlouis/DocuElevate/commit/e43140cebd5fde4d78a5f70efb8f5798a4168a54))
+
+
+## v0.186.4 (2026-07-17)
+
+### Bug Fixes
+
+- Guard encrypted PDFs before forced OCR
+  ([#1165](https://github.com/christianlouis/DocuElevate/pull/1165),
+  [`d9af6eb`](https://github.com/christianlouis/DocuElevate/commit/d9af6eba46d7bb0af814660def69808bb26b9462))
+
+- Handle encrypted PDFs without worker retries
+  ([#1165](https://github.com/christianlouis/DocuElevate/pull/1165),
+  [`d9af6eb`](https://github.com/christianlouis/DocuElevate/commit/d9af6eba46d7bb0af814660def69808bb26b9462))
+
+
+## v0.186.3 (2026-07-17)
+
+### Bug Fixes
+
+- Build finalized release commits ([#1164](https://github.com/christianlouis/DocuElevate/pull/1164),
+  [`205f828`](https://github.com/christianlouis/DocuElevate/commit/205f8283cebdbff910ddf4da5fd6a8c0c8db488d))
+
+
+## v0.186.2 (2026-07-17)
+
+### Bug Fixes
+
+- Secure notification logs and release version sync
+  ([#1161](https://github.com/christianlouis/DocuElevate/pull/1161),
+  [`cbbd10c`](https://github.com/christianlouis/DocuElevate/commit/cbbd10c6c82d0ae5c6b089f6e52d288975381096))
+
+
+## v0.186.1 (2026-07-17)
+
+### Bug Fixes
+
+- Prevent settings credential disclosure
+  ([#1158](https://github.com/christianlouis/DocuElevate/pull/1158),
+  [`4e7ea1a`](https://github.com/christianlouis/DocuElevate/commit/4e7ea1a3abf5f94233f3051fab8e65dff3626922))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f0da92c`](https://github.com/christianlouis/DocuElevate/commit/f0da92c02e96b457c15e891be877d09ff3289270))
+
+- **changelog**: Update changelog [skip ci]
+  ([`8205a38`](https://github.com/christianlouis/DocuElevate/commit/8205a38d65f8b66b90c8ccedbdd0f1d614b53d8c))
+
+### Testing
+
+- Model quarantine membership for claim views
+  ([#1156](https://github.com/christianlouis/DocuElevate/pull/1156),
+  [`7683b52`](https://github.com/christianlouis/DocuElevate/commit/7683b525cbb2e73bc56455ad8c00a0ab1e114492))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`8205a38`](https://github.com/christianlouis/DocuElevate/commit/8205a38d65f8b66b90c8ccedbdd0f1d614b53d8c))
+
+### Testing
+
+- Model quarantine membership for claim views
+  ([#1156](https://github.com/christianlouis/DocuElevate/pull/1156),
+  [`7683b52`](https://github.com/christianlouis/DocuElevate/commit/7683b525cbb2e73bc56455ad8c00a0ab1e114492))
+
+
+## Unreleased
+
+### Testing
+
+- Model quarantine membership for claim views
+  ([#1156](https://github.com/christianlouis/DocuElevate/pull/1156),
+  [`7683b52`](https://github.com/christianlouis/DocuElevate/commit/7683b525cbb2e73bc56455ad8c00a0ab1e114492))
+
+
+## v0.186.0 (2026-07-16)
+
+### Bug Fixes
+
+- Isolate quarantine intake by tribe
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+- Migrate legacy document scopes safely
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+- Preserve tenant-scoped document shares
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+### Features
+
+- Add tenant and tribe isolation foundation
+  ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155),
+  [`f011a54`](https://github.com/christianlouis/DocuElevate/commit/f011a54b6c91b5678099471956d10fc187955202))
+
+
+## v0.185.1 (2026-07-16)
+
+### Bug Fixes
+
+- Classify inflected German research questions
+  ([#1154](https://github.com/christianlouis/DocuElevate/pull/1154),
+  [`968853b`](https://github.com/christianlouis/DocuElevate/commit/968853bff2d3f9d9d95b424591167229268927ca))
+
+
+## v0.185.0 (2026-07-16)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e4962f0`](https://github.com/christianlouis/DocuElevate/commit/e4962f02096d39a36f603f9ce0c5358eb83afb61))
+
+### Features
+
+- Document owner-controlled file privacy
+  ([#1153](https://github.com/christianlouis/DocuElevate/pull/1153),
+  [`4707fac`](https://github.com/christianlouis/DocuElevate/commit/4707fac204bca3c11144a8a2a60679a978927b7e))
+
+
+## Unreleased
+
+
+## v0.184.12 (2026-07-16)
+
+### Bug Fixes
+
+- Reset database pool in Celery child processes
+  ([#1150](https://github.com/christianlouis/DocuElevate/pull/1150),
+  [`33ffe23`](https://github.com/christianlouis/DocuElevate/commit/33ffe231f3d20ccafb612097d22399820bc2de16))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9fc114d`](https://github.com/christianlouis/DocuElevate/commit/9fc114d6a24acad8ba477b10f99201ec8d3f6693))
+
+
+## Unreleased
+
+
+## v0.184.11 (2026-07-16)
+
+### Bug Fixes
+
+- Expose document privacy in single-user mode
+  ([#1149](https://github.com/christianlouis/DocuElevate/pull/1149),
+  [`bdd1fc4`](https://github.com/christianlouis/DocuElevate/commit/bdd1fc434a81b47ed6cf6fae3d4e8e268d38f5f4))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`712e9b0`](https://github.com/christianlouis/DocuElevate/commit/712e9b0595915d7768e2ec8e8cc3bdbf0ee4e36f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4658eb9`](https://github.com/christianlouis/DocuElevate/commit/4658eb9c406b9fd81eaa38a2297338481eb8b005))
+
+- **changelog**: Update changelog [skip ci]
+  ([`de301d0`](https://github.com/christianlouis/DocuElevate/commit/de301d02e18ec3072da4e2c19afff3430ecd672d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0ec6c7d`](https://github.com/christianlouis/DocuElevate/commit/0ec6c7d114089e5a78fa6beb7944d52e4f548c81))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`4658eb9`](https://github.com/christianlouis/DocuElevate/commit/4658eb9c406b9fd81eaa38a2297338481eb8b005))
+
+- **changelog**: Update changelog [skip ci]
+  ([`de301d0`](https://github.com/christianlouis/DocuElevate/commit/de301d02e18ec3072da4e2c19afff3430ecd672d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0ec6c7d`](https://github.com/christianlouis/DocuElevate/commit/0ec6c7d114089e5a78fa6beb7944d52e4f548c81))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`de301d0`](https://github.com/christianlouis/DocuElevate/commit/de301d02e18ec3072da4e2c19afff3430ecd672d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0ec6c7d`](https://github.com/christianlouis/DocuElevate/commit/0ec6c7d114089e5a78fa6beb7944d52e4f548c81))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0ec6c7d`](https://github.com/christianlouis/DocuElevate/commit/0ec6c7d114089e5a78fa6beb7944d52e4f548c81))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`fb9f952`](https://github.com/christianlouis/DocuElevate/commit/fb9f9521bde60ecaea3c59a30fa4afbca1af9e22))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`7efee8e`](https://github.com/christianlouis/DocuElevate/commit/7efee8e33b881660e4b7f33aa6052d5bfa1167a9))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e96a8c6`](https://github.com/christianlouis/DocuElevate/commit/e96a8c6bbf04190ca19833a039bcba802e936d46))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f7c6b4`](https://github.com/christianlouis/DocuElevate/commit/2f7c6b4950d56a344aebe6639dad41fd2579d33e))
+
+
+## Unreleased
+
+
+## v0.184.10 (2026-07-16)
+
+### Bug Fixes
+
+- Align research scope with indexed corpus
+  ([`f102e7c`](https://github.com/christianlouis/DocuElevate/commit/f102e7c8f0c29564769f6d2a32e6d788d0d72290))
+
+
+## v0.184.9 (2026-07-16)
+
+### Performance Improvements
+
+- Batch search reconciliation updates
+  ([`5f69f3c`](https://github.com/christianlouis/DocuElevate/commit/5f69f3c2b23c891989b841715d434bac4b1ad824))
+
+
+## v0.184.8 (2026-07-16)
+
+### Bug Fixes
+
+- Recognize Meilisearch SDK documents
+  ([`cd40089`](https://github.com/christianlouis/DocuElevate/commit/cd40089030168541664e5b9aefd204441832fce8))
+
+
+## v0.184.7 (2026-07-16)
+
+### Bug Fixes
+
+- Bound search reconciliation payloads
+  ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+- Reconcile large search indexes safely
+  ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+- Verify search batch completion ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1125](https://github.com/christianlouis/DocuElevate/pull/1125),
+  [`ab3263c`](https://github.com/christianlouis/DocuElevate/commit/ab3263cb58d4194683b57e6c4ccedd61b7359289))
+
+
+## v0.184.6 (2026-07-16)
+
+### Bug Fixes
+
+- **helm**: Add knowledge research worker
+  ([#1123](https://github.com/christianlouis/DocuElevate/pull/1123),
+  [`1fed0b2`](https://github.com/christianlouis/DocuElevate/commit/1fed0b21c0b7f1f74569e674d61a2e25eda508fa))
+
+- **research**: Isolate interactive jobs from backfill queue
+  ([#1123](https://github.com/christianlouis/DocuElevate/pull/1123),
+  [`1fed0b2`](https://github.com/christianlouis/DocuElevate/commit/1fed0b21c0b7f1f74569e674d61a2e25eda508fa))
+
+### Code Style
+
+- Apply ruff auto-fix ([#1123](https://github.com/christianlouis/DocuElevate/pull/1123),
+  [`1fed0b2`](https://github.com/christianlouis/DocuElevate/commit/1fed0b21c0b7f1f74569e674d61a2e25eda508fa))
+
+
+## v0.184.5 (2026-07-16)
+
+### Bug Fixes
+
+- **research**: Reject ungrounded results and retry DB
+  ([#1118](https://github.com/christianlouis/DocuElevate/pull/1118),
+  [`f9692b1`](https://github.com/christianlouis/DocuElevate/commit/f9692b1ac30d05ad3072fe3088e0b0b547abbd0b))
+
+
+## v0.184.4 (2026-07-15)
+
+### Bug Fixes
+
+- **research**: Ground evidence in cited documents
+  ([#1116](https://github.com/christianlouis/DocuElevate/pull/1116),
+  [`507addd`](https://github.com/christianlouis/DocuElevate/commit/507addd5a29d87cf7853d9468d05986b9a7994b3))
+
+
+## v0.184.3 (2026-07-15)
+
+### Bug Fixes
+
+- **research**: Resolve subject aliases and result semantics
+  ([#1115](https://github.com/christianlouis/DocuElevate/pull/1115),
+  [`586b75a`](https://github.com/christianlouis/DocuElevate/commit/586b75ab458de0d3b2f2ff00677af6ff91382a2b))
+
+
+## v0.184.2 (2026-07-15)
+
+### Bug Fixes
+
+- **research**: Version evidence-faithful corpus answers
+  ([#1113](https://github.com/christianlouis/DocuElevate/pull/1113),
+  [`fb0db57`](https://github.com/christianlouis/DocuElevate/commit/fb0db570e1828381a4ccd6a6d616efb5fdb1b091))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`f9ab73f`](https://github.com/christianlouis/DocuElevate/commit/f9ab73f6f1a33e5d697b7bb5ad801abb9cf69736))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`5951746`](https://github.com/christianlouis/DocuElevate/commit/595174678ad3996d7c0ab80fda505f2b46e62b9e))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9efcb60`](https://github.com/christianlouis/DocuElevate/commit/9efcb60a1c1448859bbcd936b82623b0960dd781))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`f9ab73f`](https://github.com/christianlouis/DocuElevate/commit/f9ab73f6f1a33e5d697b7bb5ad801abb9cf69736))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9efcb60`](https://github.com/christianlouis/DocuElevate/commit/9efcb60a1c1448859bbcd936b82623b0960dd781))
+
+
+## Unreleased
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`f9ab73f`](https://github.com/christianlouis/DocuElevate/commit/f9ab73f6f1a33e5d697b7bb5ad801abb9cf69736))
+
+
+## v0.184.1 (2026-07-15)
+
+### Bug Fixes
+
+- Prevent provider SDK prompt logging
+  ([#1108](https://github.com/christianlouis/DocuElevate/pull/1108),
+  [`d1718d9`](https://github.com/christianlouis/DocuElevate/commit/d1718d95092c3021dc578ed519891a57a1f21221))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`ef80651`](https://github.com/christianlouis/DocuElevate/commit/ef80651d34a3b5e9433bb085d85cf60cc0f17c5d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`988ae28`](https://github.com/christianlouis/DocuElevate/commit/988ae287238f3b7bf465fa825c16d8af1902b065))
+
+- **changelog**: Update changelog [skip ci]
+  ([`3870662`](https://github.com/christianlouis/DocuElevate/commit/3870662394969160b49bd9e0d98af35304e33e7f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9485cbf`](https://github.com/christianlouis/DocuElevate/commit/9485cbfcfb0e563c497c1fa3ac92f8a93d8227ac))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e6e3bfa`](https://github.com/christianlouis/DocuElevate/commit/e6e3bfade1ce43d7dd60d3f6566decbe5d258d29))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`988ae28`](https://github.com/christianlouis/DocuElevate/commit/988ae287238f3b7bf465fa825c16d8af1902b065))
+
+- **changelog**: Update changelog [skip ci]
+  ([`3870662`](https://github.com/christianlouis/DocuElevate/commit/3870662394969160b49bd9e0d98af35304e33e7f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9485cbf`](https://github.com/christianlouis/DocuElevate/commit/9485cbfcfb0e563c497c1fa3ac92f8a93d8227ac))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e6e3bfa`](https://github.com/christianlouis/DocuElevate/commit/e6e3bfade1ce43d7dd60d3f6566decbe5d258d29))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`3870662`](https://github.com/christianlouis/DocuElevate/commit/3870662394969160b49bd9e0d98af35304e33e7f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9485cbf`](https://github.com/christianlouis/DocuElevate/commit/9485cbfcfb0e563c497c1fa3ac92f8a93d8227ac))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e6e3bfa`](https://github.com/christianlouis/DocuElevate/commit/e6e3bfade1ce43d7dd60d3f6566decbe5d258d29))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9485cbf`](https://github.com/christianlouis/DocuElevate/commit/9485cbfcfb0e563c497c1fa3ac92f8a93d8227ac))
+
+- **changelog**: Update changelog [skip ci]
+  ([`e6e3bfa`](https://github.com/christianlouis/DocuElevate/commit/e6e3bfade1ce43d7dd60d3f6566decbe5d258d29))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e6e3bfa`](https://github.com/christianlouis/DocuElevate/commit/e6e3bfade1ce43d7dd60d3f6566decbe5d258d29))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f55b4bf`](https://github.com/christianlouis/DocuElevate/commit/f55b4bf62108713a757c7461a39a1ba500d8a0d3))
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`b0dbc02`](https://github.com/christianlouis/DocuElevate/commit/b0dbc02b49ef20fe715c31b6c34992f54667f7d5))
+
+
+## Unreleased
+
+
+## v0.184.0 (2026-07-15)
+
+### Bug Fixes
+
+- Harden deferred corpus handoffs ([#1089](https://github.com/christianlouis/DocuElevate/pull/1089),
+  [`33773f3`](https://github.com/christianlouis/DocuElevate/commit/33773f33f9310769f06c264a911042ac4cf9ebfa))
+
+### Features
+
+- Index deferred corpus OCR backlog
+  ([#1089](https://github.com/christianlouis/DocuElevate/pull/1089),
+  [`33773f3`](https://github.com/christianlouis/DocuElevate/commit/33773f33f9310769f06c264a911042ac4cf9ebfa))
+
+
+## v0.183.8 (2026-07-15)
+
+### Bug Fixes
+
+- Bound corpus prefetch lookahead ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+- Register corpus concurrency setting
+  ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f54d779`](https://github.com/christianlouis/DocuElevate/commit/f54d779065f7b1604de8439a97d8e0c592cba839))
+
+### Performance Improvements
+
+- Parallelize index-first Dropbox downloads
+  ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+- Reuse Dropbox clients per prefetch worker
+  ([#1086](https://github.com/christianlouis/DocuElevate/pull/1086),
+  [`924417f`](https://github.com/christianlouis/DocuElevate/commit/924417fd397c766bec7c392ed49dec2900349bea))
+
+
+## Unreleased
+
+
 ## v0.183.7 (2026-07-15)
 
 ### Bug Fixes

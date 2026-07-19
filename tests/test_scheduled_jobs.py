@@ -1001,7 +1001,7 @@ class TestSyncSearchIndex:
 
         with (
             patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
-            patch("app.utils.meilisearch_client.index_document", return_value=True) as mock_idx,
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as mock_idx,
             patch("app.tasks.batch_tasks._update_job_status") as mock_update,
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
@@ -1015,7 +1015,83 @@ class TestSyncSearchIndex:
 
         assert result["indexed"] == 1
         mock_idx.assert_called_once()
+        assert mock_idx.call_args[0][0][0][2]["document_type"] == "invoice"
         mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "success"
+
+    def test_pristine_install_treats_missing_index_as_empty(self, sj_engine):
+        """A first sync creates the index through the normal indexing path."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        _make_file_record(session, filehash="hash_pristine_search", ocr_text="first searchable document")
+        session.close()
+
+        class MissingIndexError(RuntimeError):
+            code = "index_not_found"
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.side_effect = MissingIndexError("Index documents not found")
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as mock_idx,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result == {
+            "indexed": 1,
+            "skipped": 0,
+            "remaining": 0,
+            "indexable": 1,
+            "already_indexed": 0,
+            "continued": False,
+        }
+        mock_idx.assert_called_once()
+        mock_update.assert_called_once()
+        assert mock_update.call_args[0][1] == "success"
+
+    def test_pristine_empty_install_reports_clean_zero_result(self, sj_engine):
+        """An empty fresh install succeeds without forcing an empty index."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        class MissingIndexError(RuntimeError):
+            code = "index_not_found"
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.side_effect = MissingIndexError("Index documents not found")
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents") as mock_idx,
+            patch("app.tasks.batch_tasks._update_job_status") as mock_update,
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result["indexed"] == 0
+        assert result["remaining"] == 0
+        assert result["indexable"] == 0
+        assert result["already_indexed"] == 0
+        mock_idx.assert_not_called()
         assert mock_update.call_args[0][1] == "success"
 
     def test_handles_meilisearch_fetch_error(self):
@@ -1036,6 +1112,43 @@ class TestSyncSearchIndex:
         assert "error" in result
         mock_update.assert_called_once()
         assert mock_update.call_args[0][1] == "failed"
+
+    def test_continues_large_reconciliation_after_committed_batch(self, sj_engine):
+        """A bounded successful batch schedules the next resumable batch."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        _make_file_record(session, filehash="hash_continue_1", ocr_text="first")
+        _make_file_record(session, filehash="hash_continue_2", ocr_text="second")
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.return_value = MagicMock(results=[])
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len),
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+            patch.object(sync_search_index, "apply_async") as apply_async,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=1, continue_until_complete=True)
+            real_session.close()
+
+        assert result["indexed"] == 1
+        assert result["remaining"] == 1
+        assert result["continued"] is True
+        apply_async.assert_called_once_with(
+            kwargs={"batch_size": 1, "continue_until_complete": True},
+            countdown=2,
+        )
 
 
 # ===========================================================================
@@ -1360,7 +1473,7 @@ class TestSyncSearchIndexAdditional:
     """Additional coverage tests for sync_search_index."""
 
     def test_counts_skipped_on_indexing_failure(self, sj_engine):
-        """When index_document returns False, the document is counted as skipped."""
+        """When batch indexing fails, the document is counted as skipped."""
         from app.tasks.batch_tasks import sync_search_index
 
         Session = sessionmaker(bind=sj_engine)
@@ -1377,7 +1490,7 @@ class TestSyncSearchIndexAdditional:
 
         with (
             patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
-            patch("app.utils.meilisearch_client.index_document", return_value=False),
+            patch("app.utils.meilisearch_client.index_documents", return_value=0),
             patch("app.tasks.batch_tasks._update_job_status") as mock_update,
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
@@ -1417,7 +1530,7 @@ class TestSyncSearchIndexAdditional:
 
         with (
             patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
-            patch("app.utils.meilisearch_client.index_document", return_value=True) as mock_idx,
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as mock_idx,
             patch("app.tasks.batch_tasks._update_job_status") as mock_update,
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
@@ -1432,9 +1545,90 @@ class TestSyncSearchIndexAdditional:
         # The record should still be indexed with empty metadata.
         assert result["indexed"] == 1
         call_args = mock_idx.call_args
-        assert call_args[0][2] == {}  # metadata is empty dict
+        assert call_args[0][0][0][2] == {}  # metadata is empty dict
         mock_update.assert_called_once()
         assert mock_update.call_args[0][1] == "success"
+
+    def test_pages_through_every_existing_document_id(self):
+        """Reconciliation is not capped at the first Meilisearch page."""
+        from meilisearch.models.document import Document
+
+        from app.tasks.batch_tasks import _get_all_search_index_ids
+
+        first_page = MagicMock(results=[{"file_id": 1}, Document({"file_id": "2"})])
+        final_page = MagicMock(results=[{"file_id": 3}])
+        index = MagicMock()
+        index.get_documents.side_effect = [first_page, final_page]
+
+        with patch("app.tasks.batch_tasks._SEARCH_ID_PAGE_SIZE", 2):
+            result = _get_all_search_index_ids(index)
+
+        assert result == {1, 2, 3}
+        assert index.get_documents.call_args_list[0].args[0]["offset"] == 0
+        assert index.get_documents.call_args_list[1].args[0]["offset"] == 2
+
+    def test_splits_bulk_updates_by_ocr_payload_size(self, sj_engine):
+        """Large OCR documents cannot combine into an oversized HTTP payload."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        _make_file_record(session, filehash="hash_payload_1", ocr_text="1234")
+        _make_file_record(session, filehash="hash_payload_2", ocr_text="5678")
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.return_value = MagicMock(results=[])
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as index_documents,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+            patch("app.tasks.batch_tasks._SEARCH_INDEX_CHUNK_CHAR_LIMIT", 5),
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=10)
+            real_session.close()
+
+        assert result["indexed"] == 2
+        assert index_documents.call_count == 2
+
+    def test_commits_small_reconciliation_run_in_one_update(self, sj_engine):
+        """Small documents use one update instead of paying per-chunk task latency."""
+        from app.tasks.batch_tasks import sync_search_index
+
+        session = sessionmaker(bind=sj_engine)()
+        for index in range(51):
+            _make_file_record(session, filehash=f"hash_bulk_{index}", ocr_text="searchable")
+        session.close()
+
+        mock_client = MagicMock()
+        mock_index = MagicMock()
+        mock_client.get_index.return_value = mock_index
+        mock_index.get_documents.return_value = MagicMock(results=[])
+
+        with (
+            patch("app.utils.meilisearch_client.get_meilisearch_client", return_value=mock_client),
+            patch("app.utils.meilisearch_client.index_documents", side_effect=len) as index_documents,
+            patch("app.tasks.batch_tasks._update_job_status"),
+            patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
+            patch("app.tasks.batch_tasks.settings") as mock_settings,
+        ):
+            mock_settings.meilisearch_index_name = "documents"
+            real_session = sessionmaker(bind=sj_engine)()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = sync_search_index(batch_size=51)
+            real_session.close()
+
+        assert result["indexed"] == 51
+        index_documents.assert_called_once()
 
 
 @pytest.mark.unit

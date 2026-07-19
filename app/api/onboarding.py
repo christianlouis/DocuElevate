@@ -8,15 +8,23 @@ select a storage destination, and mark onboarding as complete.
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import UserIntegration, UserProfile
+from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserIntegration, UserProfile
 from app.utils.subscription import TIERS
+from app.utils.tribe_scope import (
+    canonical_tribe_name,
+    ensure_personal_scope,
+    ensure_tribe_membership,
+    personal_tribe_id,
+    shared_tribe_id,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -56,6 +64,8 @@ class ProfileBody(BaseModel):
 
     display_name: str | None = Field(default=None, max_length=255)
     contact_email: str | None = Field(default=None, max_length=255)
+    space_mode: Literal["personal", "shared"] = "personal"
+    tribe_name: str | None = Field(default=None, max_length=255)
 
 
 class PlanBody(BaseModel):
@@ -89,10 +99,7 @@ class ProgressBody(BaseModel):
 
 def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
     """Serialize a UserProfile to a plain dict for API responses."""
-    try:
-        journey = json.loads(profile.onboarding_journey_state or "{}")
-    except (TypeError, json.JSONDecodeError):
-        journey = {}
+    journey = _journey_state(profile)
     return {
         "user_id": profile.user_id,
         "display_name": profile.display_name,
@@ -109,6 +116,15 @@ def _profile_to_dict(profile: UserProfile) -> dict[str, Any]:
     }
 
 
+def _journey_state(profile: UserProfile) -> dict[str, Any]:
+    """Load the non-sensitive onboarding journey state safely."""
+    try:
+        journey = json.loads(profile.onboarding_journey_state or "{}")
+    except (TypeError, json.JSONDecodeError):
+        journey = {}
+    return journey if isinstance(journey, dict) else {}
+
+
 def _get_or_create_profile(db: Session, user_id: str) -> UserProfile:
     """Return the UserProfile for *user_id*, creating one if it does not exist."""
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
@@ -117,6 +133,27 @@ def _get_or_create_profile(db: Session, user_id: str) -> UserProfile:
         db.add(profile)
         db.flush()
     return profile
+
+
+def _spaces_for_user(db: Session, user_id: str) -> list[dict[str, Any]]:
+    """Return only the Tribes the authenticated user belongs to."""
+    rows = (
+        db.query(TribeMembership, Tribe)
+        .join(Tribe, Tribe.id == TribeMembership.tribe_id)
+        .filter(TribeMembership.user_id == user_id)
+        .order_by(Tribe.created_at.asc(), Tribe.name.asc())
+        .all()
+    )
+    return [
+        {
+            "tenant_id": tribe.tenant_id,
+            "tribe_id": tribe.id,
+            "name": tribe.name,
+            "role": membership.role,
+            "is_personal": tribe.id == personal_tribe_id(user_id, tribe.tenant_id),
+        }
+        for membership, tribe in rows
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +170,16 @@ def get_onboarding_status(request: Request, db: DbSession) -> dict[str, Any]:
     """
     user_id = _get_current_user_id(request)
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+    spaces = _spaces_for_user(db, user_id)
 
     if profile is None:
-        return {"completed": False, "step": 1, "profile": None, "integrations": {"sources": 0, "destinations": 0}}
+        return {
+            "completed": False,
+            "step": 1,
+            "profile": None,
+            "spaces": spaces,
+            "integrations": {"sources": 0, "destinations": 0},
+        }
 
     # Derive a sensible current step from saved data so the wizard can resume.
     step = profile.onboarding_current_step or 1
@@ -148,6 +192,7 @@ def get_onboarding_status(request: Request, db: DbSession) -> dict[str, Any]:
         "completed": bool(profile.onboarding_completed),
         "step": step,
         "profile": _profile_to_dict(profile),
+        "spaces": spaces,
         "integrations": {
             "sources": sum(1 for (direction,) in integrations if direction == "SOURCE"),
             "destinations": sum(1 for (direction,) in integrations if direction == "DESTINATION"),
@@ -160,10 +205,7 @@ def save_progress(request: Request, body: ProgressBody, db: DbSession) -> dict[s
     """Save a per-user resume point without accepting credentials or arbitrary settings."""
     user_id = _get_current_user_id(request)
     profile = _get_or_create_profile(db, user_id)
-    try:
-        journey = json.loads(profile.onboarding_journey_state or "{}")
-    except (TypeError, json.JSONDecodeError):
-        journey = {}
+    journey = _journey_state(profile)
 
     completed = set(journey.get("completed", []))
     skipped = set(journey.get("skipped", []))
@@ -174,9 +216,9 @@ def save_progress(request: Request, body: ProgressBody, db: DbSession) -> dict[s
             target.add(topic)
 
     profile.onboarding_current_step = body.current_step
-    profile.onboarding_journey_state = json.dumps(
-        {"completed": sorted(completed), "skipped": sorted(skipped)}, separators=(",", ":")
-    )
+    journey["completed"] = sorted(completed)
+    journey["skipped"] = sorted(skipped)
+    profile.onboarding_journey_state = json.dumps(journey, separators=(",", ":"))
     try:
         db.commit()
         db.refresh(profile)
@@ -192,14 +234,78 @@ def save_progress(request: Request, body: ProgressBody, db: DbSession) -> dict[s
 
 @router.post("/profile", summary="Save profile step during onboarding")
 def save_profile(request: Request, body: ProfileBody, db: DbSession) -> dict[str, Any]:
-    """Persist the user's display name and contact email from the profile step."""
+    """Persist the profile and establish the user's first safe document spaces."""
     user_id = _get_current_user_id(request)
+    shared_name = " ".join((body.tribe_name or "").split())
+    shared_tribe: Tribe | None = None
+
+    if body.space_mode == "shared":
+        if not shared_name:
+            raise HTTPException(status_code=422, detail="Enter a name for the shared space")
+        canonical_name = canonical_tribe_name(shared_name)
+        if canonical_name.startswith("personal space for "):
+            raise HTTPException(status_code=422, detail="Choose a different shared space name")
+        shared_tribe = next(
+            (
+                tribe
+                for tribe in db.query(Tribe).filter(Tribe.tenant_id == DEFAULT_TENANT_ID).all()
+                if canonical_tribe_name(tribe.name) == canonical_name
+            ),
+            None,
+        )
+        if shared_tribe is not None:
+            membership = (
+                db.query(TribeMembership)
+                .filter(
+                    TribeMembership.tribe_id == shared_tribe.id,
+                    TribeMembership.user_id == user_id,
+                )
+                .first()
+            )
+            if membership is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="This shared space cannot be created. Ask its administrator for an invitation.",
+                )
+
     profile = _get_or_create_profile(db, user_id)
 
     if body.display_name is not None:
         profile.display_name = body.display_name
     if body.contact_email is not None:
         profile.contact_email = body.contact_email
+
+    ensure_personal_scope(db, user_id)
+    if body.space_mode == "shared" and shared_tribe is None:
+        shared_tribe = Tribe(
+            id=shared_tribe_id(shared_name),
+            tenant_id=DEFAULT_TENANT_ID,
+            name=shared_name,
+        )
+        try:
+            with db.begin_nested():
+                db.add(shared_tribe)
+                db.flush()
+        except IntegrityError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="This shared space cannot be created. Ask its administrator for an invitation.",
+            ) from exc
+    if body.space_mode == "shared" and shared_tribe is not None:
+        ensure_tribe_membership(
+            db,
+            tenant_id=DEFAULT_TENANT_ID,
+            tribe_id=shared_tribe.id,
+            user_id=user_id,
+            role="admin",
+        )
+
+    journey = _journey_state(profile)
+    journey["space_mode"] = body.space_mode
+    journey["selected_tribe_id"] = (
+        shared_tribe.id if body.space_mode == "shared" and shared_tribe is not None else personal_tribe_id(user_id)
+    )
+    profile.onboarding_journey_state = json.dumps(journey, separators=(",", ":"))
 
     try:
         db.commit()
@@ -209,7 +315,7 @@ def save_profile(request: Request, body: ProfileBody, db: DbSession) -> dict[str
         raise
 
     logger.info("Onboarding: saved profile for user %s", user_id)
-    return _profile_to_dict(profile)
+    return {**_profile_to_dict(profile), "spaces": _spaces_for_user(db, user_id)}
 
 
 @router.post("/plan", summary="Save plan selection during onboarding")
@@ -288,13 +394,17 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
 
     The redirect URL is read from ``request.session["post_onboarding_redirect"]`` (stored by
     ``oauth_callback`` when it reroutes a first-time user to the wizard) and defaults to
-    ``/upload`` when the session key is absent.
+    ``/upload?onboarding=first-document`` when the session key is absent. A
+    plain ``/upload`` saved by the authentication flow is normalized to the
+    same first-document destination, while explicit custom redirects are
+    preserved.
     """
     user_id = _get_current_user_id(request)
     profile = _get_or_create_profile(db, user_id)
     profile.onboarding_completed = True
     profile.onboarding_completed_at = datetime.now(tz=timezone.utc)
     profile.onboarding_current_step = 8
+    ensure_personal_scope(db, user_id)
 
     try:
         db.commit()
@@ -302,6 +412,8 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
         db.rollback()
         raise
 
-    redirect_url = request.session.pop("post_onboarding_redirect", "/upload")
+    redirect_url = request.session.pop("post_onboarding_redirect", "/upload?onboarding=first-document")
+    if redirect_url == "/upload":
+        redirect_url = "/upload?onboarding=first-document"
     logger.info("Onboarding: completed for user %s, redirecting to %s", user_id, redirect_url)
     return {"success": True, "redirect_url": redirect_url}

@@ -5,6 +5,7 @@ These tests verify that the process_document task correctly handles file process
 and doesn't cause DetachedInstanceError when accessing database objects.
 """
 
+from contextlib import nullcontext
 from unittest.mock import MagicMock, patch
 
 import pypdf
@@ -118,6 +119,95 @@ startxref
         mock_extract.delay.assert_called_once()
         call_args = mock_extract.delay.call_args
         assert call_args[0][2] == file_record.id  # Third argument should be file_id
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_index_first_persists_embedded_text_without_metadata_pipeline(db_session, tmp_path):
+    immutable_pdf = tmp_path / "original.pdf"
+    immutable_pdf.write_bytes(b"%PDF-1.4")
+    working_pdf = tmp_path / "working.pdf"
+    working_pdf.write_bytes(b"%PDF-1.4")
+    record = FileRecord(
+        filehash="abc",
+        original_filename="index-first.pdf",
+        local_filename=str(working_pdf),
+        original_file_path=str(immutable_pdf),
+        file_size=8,
+        mime_type="application/pdf",
+    )
+    db_session.add(record)
+    db_session.commit()
+    file_id = record.id
+
+    with (
+        patch("app.tasks.process_document.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.process_document.log_task_progress"),
+        patch("app.tasks.vector_index.index_document_vectors.delay") as index_vectors,
+    ):
+        from app.tasks.process_document import _complete_index_first_document
+
+        result = _complete_index_first_document(
+            task_id="index-task",
+            file_id=file_id,
+            extracted_text="Project deadline is Friday.",
+            original_filename="index-first.pdf",
+            original_input_path=str(working_pdf),
+            working_path=str(working_pdf),
+        )
+
+    record = db_session.query(FileRecord).filter(FileRecord.id == file_id).one()
+    assert result["status"] == "Queued for vector indexing"
+    assert record.ocr_text == "Project deadline is Friday."
+    assert record.document_title == "index-first"
+    assert record.local_filename == str(immutable_pdf)
+    assert not working_pdf.exists()
+    index_vectors.assert_called_once_with(record.id, source_task_id="index-task")
+
+
+@pytest.mark.unit
+@pytest.mark.requires_db
+def test_index_first_pending_never_deletes_only_remaining_source(db_session, tmp_path):
+    only_copy = tmp_path / "only-copy.pdf"
+    only_copy.write_bytes(b"%PDF-1.4")
+    record = FileRecord(
+        filehash="only-copy",
+        original_filename="only-copy.pdf",
+        local_filename=str(only_copy),
+        original_file_path=None,
+        file_size=8,
+        mime_type="application/pdf",
+    )
+    db_session.add(record)
+    db_session.commit()
+
+    with (
+        patch("app.tasks.process_document.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.tasks.process_document.log_task_progress") as progress,
+    ):
+        from app.tasks.process_document import _mark_index_first_pending
+
+        result = _mark_index_first_pending(
+            "index-task",
+            record.id,
+            "No usable embedded text",
+            original_input_path=str(only_copy),
+            working_path=str(only_copy),
+            embedded_text_checked=True,
+        )
+
+    db_session.refresh(record)
+    assert result["status"] == "Index-first pending OCR"
+    assert only_copy.exists()
+    assert record.local_filename == str(only_copy)
+    assert any(
+        call.args[1:4] == ("check_text", "success", "No embedded text found; deferred to the corpus OCR pass")
+        for call in progress.call_args_list
+    )
+    assert any(
+        call.args[1:4] == ("extract_text", "skipped", "No embedded text available; deferred to the corpus OCR pass")
+        for call in progress.call_args_list
+    )
 
 
 @pytest.mark.unit
@@ -662,7 +752,7 @@ def test_process_document_non_pdf_file(db_session, tmp_path):
         mock_celery.send_task = MagicMock()
 
         # Call the task's run method directly
-        result = process_document.run(str(test_image))
+        result = process_document.run(str(test_image), owner_id="owner@example.test")
 
         # Verify that PDF conversion was queued
         assert result["status"] == "Queued for PDF conversion"
@@ -672,6 +762,10 @@ def test_process_document_non_pdf_file(db_session, tmp_path):
         mock_celery.send_task.assert_called_once()
         call_args = mock_celery.send_task.call_args
         assert call_args[0][0] == "app.tasks.convert_to_pdf.convert_to_pdf"
+        assert call_args.kwargs["kwargs"] == {
+            "owner_id": "owner@example.test",
+            "file_id": result["file_id"],
+        }
 
 
 @pytest.mark.unit
@@ -725,7 +819,7 @@ startxref
         patch("app.tasks.process_document.SessionLocal") as mock_session_local,
         patch("app.tasks.process_document.settings") as mock_settings,
         patch("app.tasks.process_document.log_task_progress"),
-        patch("app.tasks.process_document.pypdf.PdfReader") as mock_pdf_reader,
+        patch("app.tasks.process_document.open_pdf_reader") as mock_pdf_reader,
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)

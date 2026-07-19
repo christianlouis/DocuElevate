@@ -36,6 +36,7 @@ from app.models import (  # noqa: F401
     FileRecord,
     ImapIngestionProfile,
     InAppNotification,
+    KnowledgeResearchJob,
     LocalUser,
     MobileDevice,
     Pipeline,

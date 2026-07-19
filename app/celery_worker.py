@@ -33,12 +33,14 @@ from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt  # noqa: F401
 from app.tasks.finalize_document_storage import finalize_document_storage  # noqa: F401
 from app.tasks.imap_tasks import pull_all_inboxes  # noqa: F401
+from app.tasks.knowledge_research import cleanup_knowledge_research_jobs, run_knowledge_research  # noqa: F401
 from app.tasks.monitor_stalled_steps import monitor_stalled_steps  # noqa: F401
 
 # **Ensure all tasks are imported before Celery starts**
 from app.tasks.process_document import process_document  # noqa: F401
 from app.tasks.process_with_azure_document_intelligence import process_with_azure_document_intelligence  # noqa: F401
 from app.tasks.process_with_ocr import process_with_ocr  # noqa: F401
+from app.tasks.reconcile_file_privacy import reconcile_file_privacy  # noqa: F401
 from app.tasks.refine_text_with_gpt import refine_text_with_gpt  # noqa: F401
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages  # noqa: F401
 from app.tasks.send_to_all import send_to_all_destinations  # noqa: F401
@@ -74,6 +76,8 @@ logger = logging.getLogger(__name__)
 register_settings_reload_signal()
 
 celery.conf.task_routes = {
+    "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
+    "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     "app.tasks.*": {"queue": "default"},
 }
 
@@ -144,6 +148,11 @@ celery.conf.beat_schedule = {
         "schedule": crontab(hour="0", minute="5"),  # 00:05 UTC daily
         "options": {"expires": 3600},
     },
+    "cleanup-knowledge-research-jobs": {
+        "task": "app.tasks.knowledge_research.cleanup_knowledge_research_jobs",
+        "schedule": crontab(hour="3", minute="30"),
+        "options": {"expires": 3600},
+    },
     # ── Database backup tasks ──────────────────────────────────────────────
     # Hourly backup (kept for 4 days)
     "backup-hourly": (
@@ -167,11 +176,12 @@ celery.conf.beat_schedule = {
         if settings.backup_enabled
         else None
     ),
-    # Weekly backup (kept for 13 weeks) – runs every Sunday at 03:00 UTC
+    # Weekly backup (kept for 13 weeks) – runs every Sunday at 03:10 UTC.
+    # The offset avoids competing with the hourly snapshot at 03:00.
     "backup-weekly": (
         {
             "task": "app.tasks.backup_tasks.create_backup",
-            "schedule": crontab(hour="3", minute="0", day_of_week="0"),
+            "schedule": crontab(hour="3", minute="10", day_of_week="0"),
             "kwargs": {"backup_type": "weekly"},
             "options": {"expires": 3600},
         }

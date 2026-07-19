@@ -14,7 +14,8 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.models import FileRecord, ProcessingLog
+from app.models import BulkOperation, FileRecord, ProcessingLog, TribeMembership
+from app.utils.tribe_scope import ensure_document_scope
 
 
 @pytest.mark.unit
@@ -196,12 +197,18 @@ class TestListFilesAPI:
 class TestGetFileDetails:
     """Tests for GET /api/files/{file_id} endpoint."""
 
-    def test_get_file_details_success(self, client: TestClient, db_session):
-        """Test getting file details for existing file."""
+    def test_get_file_details_success(self, client: TestClient, db_session, tmp_path):
+        """File details reflect the durable original and processed copies."""
+        original_path = tmp_path / "original.pdf"
+        processed_path = tmp_path / "processed.pdf"
+        original_path.write_bytes(b"original")
+        processed_path.write_bytes(b"processed")
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
-            local_filename="/tmp/test.pdf",
+            local_filename=str(tmp_path / "removed-working-copy.pdf"),
+            original_file_path=str(original_path),
+            processed_file_path=str(processed_path),
             file_size=1024,
             mime_type="application/pdf",
         )
@@ -216,6 +223,7 @@ class TestGetFileDetails:
         assert "logs" in data
         assert data["file"]["id"] == file.id
         assert data["file"]["original_filename"] == "test.pdf"
+        assert data["files_on_disk"] == {"original": True, "processed": True}
 
     def test_get_file_details_not_found(self, client: TestClient, db_session):
         """Test getting details for non-existent file."""
@@ -638,6 +646,78 @@ class TestFilePreview:
         response = client.get(f"/api/files/{file.id}/preview?version=original")
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_preview_original_active_content_is_neutralized(self, client: TestClient, db_session, tmp_path):
+        """The generic preview endpoint must not execute uploaded HTML."""
+        file_path = tmp_path / "active.html"
+        file_path.write_text("<script>window.top.pwned = true</script>", encoding="utf-8")
+
+        file = FileRecord(
+            filehash="active-html-hash",
+            original_filename="active.html",
+            local_filename=str(file_path),
+            file_size=file_path.stat().st_size,
+            mime_type="text/html",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/preview?version=original")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_preview_filename_is_encoded_by_starlette(self, client: TestClient, db_session, tmp_path):
+        """An uploaded filename cannot inject Content-Disposition parameters."""
+        file_path = tmp_path / "safe.pdf"
+        file_path.write_bytes(b"%PDF-1.4")
+        file = FileRecord(
+            filehash="header-injection-hash",
+            original_filename='report.pdf"; filename="injected.html',
+            local_filename=str(file_path),
+            file_size=file_path.stat().st_size,
+            mime_type="application/pdf",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/preview?version=original")
+
+        assert response.status_code == 200
+        disposition = response.headers["content-disposition"]
+        assert disposition.startswith("inline;")
+        assert 'filename="injected.html"' not in disposition
+
+        download = client.get(f"/api/files/{file.id}/download?version=original")
+        assert download.status_code == 200
+        download_disposition = download.headers["content-disposition"]
+        assert download_disposition.startswith("attachment;")
+        assert 'filename="injected.html"' not in download_disposition
+
+    def test_preview_processed_conversion_is_served_as_pdf(self, client: TestClient, db_session, tmp_path):
+        """A converted image's processed artifact is a PDF, not the source MIME type."""
+        source_path = tmp_path / "scan.png"
+        source_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+        processed_path = tmp_path / "scan.pdf"
+        processed_path.write_bytes(b"%PDF-1.4")
+
+        file = FileRecord(
+            filehash="converted-image-hash",
+            original_filename="scan.png",
+            local_filename=str(source_path),
+            processed_file_path=str(processed_path),
+            file_size=source_path.stat().st_size,
+            mime_type="image/png",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/api/files/{file.id}/preview?version=processed")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
 
     def test_preview_file_not_found(self, client: TestClient, db_session):
         """Test preview for non-existent file."""
@@ -772,7 +852,7 @@ class TestUIUpload:
     @patch("app.tasks.process_document.process_document.delay")
     @patch("app.config.settings.workdir", "/tmp")
     @patch("app.config.settings.max_upload_size", 10485760)
-    def test_ui_upload_pdf_success(self, mock_delay, client: TestClient, tmp_path):
+    def test_ui_upload_pdf_success(self, mock_delay, client: TestClient, db_session, tmp_path):
         """Test successful PDF upload through UI."""
         mock_task = Mock()
         mock_task.id = "task123"
@@ -789,8 +869,24 @@ class TestUIUpload:
             assert response.status_code == 200
             data = response.json()
             assert "task_id" in data
+            assert data["operation_id"]
             assert data["status"] == "queued"
             assert data["original_filename"] == "test.pdf"
+
+            operation = db_session.query(BulkOperation).filter_by(id=data["operation_id"]).one()
+            assert json.loads(operation.task_ids) == ["task123"]
+
+            result = Mock()
+            result.ready.return_value = True
+            result.successful.return_value = True
+            result.failed.return_value = False
+            result.result = None
+            with patch("app.celery_app.celery.AsyncResult", return_value=result):
+                status_response = client.get(f"/api/bulk-operations/{data['operation_id']}")
+            assert status_response.status_code == 200
+            assert status_response.json()["state"] == "completed"
+            assert status_response.json()["failed_items"] == 1
+            assert status_response.json()["file_ids"] == []
 
     @patch("app.api.files.convert_to_pdf")
     @patch("app.config.settings.workdir", "/tmp")
@@ -2272,6 +2368,37 @@ class TestCheckForExactDuplicate:
             assert result["duplicate_type"] == "exact"
             assert result["original_file_id"] == existing.id
 
+    def test_check_duplicate_does_not_cross_tenant_boundary(self, db_session, tmp_path):
+        """A matching hash owned by another user must not be disclosed or reused."""
+        from app.api.files import _check_for_exact_duplicate
+        from app.utils.file_operations import hash_file
+
+        test_file = tmp_path / "private.pdf"
+        test_file.write_bytes(b"%PDF-1.4 same bytes, different tenant")
+        existing = FileRecord(
+            filehash=hash_file(str(test_file)),
+            original_filename="julia-private.pdf",
+            local_filename=str(test_file),
+            file_size=test_file.stat().st_size,
+            mime_type="application/pdf",
+            is_duplicate=False,
+            owner_id="julia@example.test",
+        )
+        db_session.add(existing)
+        db_session.commit()
+
+        with patch("app.api.files.settings") as mock_settings:
+            mock_settings.enable_deduplication = True
+            mock_settings.multi_user_enabled = True
+            result = _check_for_exact_duplicate(
+                db_session,
+                str(test_file),
+                "christian-private.pdf",
+                "christian@example.test",
+            )
+
+        assert result is None
+
     def test_check_duplicate_hash_error_returns_none(self, db_session, tmp_path):
         """Test that hash errors return None (graceful fallback)."""
         from app.api.files import _check_for_exact_duplicate
@@ -2752,6 +2879,27 @@ class TestAssignOwner:
 class TestAssignOwnerAdminFull:
     """Full tests for assign-owner with admin session via session fixture."""
 
+    @staticmethod
+    def _grant_assignment_scope(db_session, target="newowner"):
+        tenant_id, tribe_id = ensure_document_scope(db_session, None)
+        db_session.add_all(
+            [
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id="admin",
+                    role="admin",
+                ),
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id=target,
+                    role="member",
+                ),
+            ]
+        )
+        db_session.commit()
+
     def test_assign_owner_all_unowned_with_admin_session(self, client: TestClient, db_session):
         """Test full assign-owner flow with admin session."""
 
@@ -2774,13 +2922,14 @@ class TestAssignOwnerAdminFull:
         db_session.add(file1)
         db_session.add(file2)
         db_session.commit()
+        self._grant_assignment_scope(db_session)
 
         # Patch request.session at the ASGI level by using middleware patch
         with (
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
@@ -2801,12 +2950,13 @@ class TestAssignOwnerAdminFull:
         )
         db_session.add(file)
         db_session.commit()
+        self._grant_assignment_scope(db_session)
 
         with (
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
@@ -2821,7 +2971,7 @@ class TestAssignOwnerAdminFull:
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
@@ -2830,11 +2980,12 @@ class TestAssignOwnerAdminFull:
 
     def test_assign_owner_db_error_returns_500_with_admin(self, client: TestClient, db_session):
         """Test assign-owner returns 500 on DB error with admin session."""
+        self._grant_assignment_scope(db_session)
         with (
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
             patch.object(db_session, "commit", side_effect=Exception("DB error")),
         ):
@@ -3299,7 +3450,7 @@ class TestUIUploadFileSplitting:
     """Test file splitting logic in ui-upload (lines 1431-1464)."""
 
     @patch("app.tasks.process_document.process_document.delay")
-    def test_ui_upload_with_file_splitting(self, mock_delay, client: TestClient, tmp_path):
+    def test_ui_upload_with_file_splitting(self, mock_delay, client: TestClient, db_session, tmp_path):
         """Test upload that triggers file splitting into parts."""
         mock_task = Mock()
         mock_task.id = "task-split"
@@ -3328,6 +3479,9 @@ class TestUIUploadFileSplitting:
             data = response.json()
             assert data["status"] == "queued"
             assert data["split_into_parts"] == 2
+            assert data["operation_id"]
+            operation = db_session.query(BulkOperation).filter_by(id=data["operation_id"]).one()
+            assert len(json.loads(operation.task_ids)) == 2
             assert mock_delay.call_count >= 1
 
     @patch("app.tasks.process_document.process_document.delay")
@@ -3534,7 +3688,24 @@ class TestAssignOwnerWithFileIds:
     """Test assign-owner endpoint with specific file_ids (line 1615)."""
 
     def test_assign_owner_with_file_ids_using_admin_session(self, client: TestClient, db_session):
-        """Test assign-owner with specific file_ids in request body (covers line 1615)."""
+        """Test Tribe-scoped assignment with explicit query file IDs."""
+        tenant_id, tribe_id = ensure_document_scope(db_session, None)
+        db_session.add_all(
+            [
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id="admin",
+                    role="admin",
+                ),
+                TribeMembership(
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    user_id="newowner",
+                    role="member",
+                ),
+            ]
+        )
         file1 = FileRecord(
             filehash="hash1",
             original_filename="test1.pdf",
@@ -3550,14 +3721,12 @@ class TestAssignOwnerWithFileIds:
             patch("app.api.files.settings") as mock_settings,
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"is_admin": True}}),
+                new_callable=lambda: property(lambda self: {"user": {"id": "admin", "is_admin": True}}),
             ),
         ):
             mock_settings.multi_user_enabled = True
-            # Send file_ids as JSON body (the parameter is body-typed, not query-typed)
             response = client.post(
-                "/api/files/assign-owner?owner_id=newowner",
-                json=[file1.id],  # file_ids as JSON body
+                f"/api/files/assign-owner?owner_id=newowner&file_ids={file1.id}",
             )
             assert response.status_code == 200
             data = response.json()

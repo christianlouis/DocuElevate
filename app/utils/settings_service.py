@@ -8,6 +8,7 @@ This module provides functionality to:
 """
 
 import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -25,7 +26,7 @@ SETTING_METADATA = {
         "category": "Core",
         "description": "Database connection URL (e.g., sqlite:///path/to/db.sqlite). Use the Database Wizard for guided setup.",
         "type": "string",
-        "sensitive": False,
+        "sensitive": True,
         "required": True,
         "restart_required": True,
         "help_link": "/database-wizard",
@@ -33,10 +34,26 @@ SETTING_METADATA = {
     },
     "redis_url": {
         "category": "Core",
-        "description": "Redis connection URL for Celery task queue",
+        "description": "Default Redis connection URL for Celery broker and result storage",
         "type": "string",
-        "sensitive": False,
+        "sensitive": True,
         "required": True,
+        "restart_required": True,
+    },
+    "celery_broker_url": {
+        "category": "Core",
+        "description": "Optional dedicated Redis URL for the Celery task broker; defaults to Redis URL",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+    },
+    "celery_result_backend": {
+        "category": "Core",
+        "description": "Optional dedicated Redis URL for Celery task results; defaults to Redis URL",
+        "type": "string",
+        "sensitive": True,
+        "required": False,
         "restart_required": True,
     },
     "db_pool_size": {
@@ -110,6 +127,22 @@ SETTING_METADATA = {
         "sensitive": False,
         "required": False,
         "restart_required": True,
+    },
+    "deployment_label": {
+        "category": "Core",
+        "description": "Optional deployment suffix shown during onboarding, such as Preprod or Canary",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "default_storage_path": {
+        "category": "Core",
+        "description": "Default folder suggested for new source and destination integrations",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
     },
     "debug": {
         "category": "Core",
@@ -189,6 +222,18 @@ SETTING_METADATA = {
         "sensitive": True,
         "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
+    },
+    "session_secret_previous": {
+        "category": "Authentication",
+        "description": (
+            "Temporary previous session-encryption key used only while running the documented "
+            "database key-rotation command. Remove immediately after verification."
+        ),
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+        "environment_only": True,
     },
     "session_lifetime_days": {
         "category": "Authentication",
@@ -733,6 +778,73 @@ SETTING_METADATA = {
             "mistral",
         ],
     },
+    "rag_chat_model": {
+        "category": "AI Services",
+        "description": "Model used only for source-grounded document chat (independent from metadata extraction and OCR refinement)",
+        "type": "model_picker",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "suggested_models": [
+            "gpt-5-nano",
+            "gpt-5-mini",
+            "gpt-5",
+            "gpt-4o-mini",
+            "gpt-4o",
+            "claude-3-5-haiku-20241022",
+            "claude-3-5-sonnet-20241022",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "llama3.2",
+        ],
+    },
+    "rag_query_planner_model": {
+        "category": "AI Services",
+        "description": "Optional model for the short document-retrieval planning request; empty reuses the RAG chat model",
+        "type": "model_picker",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "suggested_models": ["gpt-5-nano", "gpt-5-mini", "gpt-4o-mini", "gpt-4o"],
+    },
+    "rag_research_target_seconds": {
+        "category": "AI Services",
+        "description": "Target response seconds for adaptive document research (p90 SLO, not a hard timeout)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 15,
+        "max": 300,
+    },
+    "rag_research_lexical_min_score": {
+        "category": "AI Services",
+        "description": "Minimum Meilisearch ranking score for planned research candidates",
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 0.0,
+        "max": 1.0,
+    },
+    "rag_research_semantic_min_score": {
+        "category": "AI Services",
+        "description": "Minimum Qdrant similarity score for semantic research expansion",
+        "type": "float",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+        "min": 0.0,
+        "max": 1.0,
+    },
+    "knowledge_research_retention_days": {
+        "category": "AI Services",
+        "description": "Days to retain completed, failed, or cancelled document research questions and answers",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "anthropic_api_key": {
         "category": "AI Services",
         "description": "Anthropic API key (required when AI_PROVIDER=anthropic)",
@@ -864,6 +976,18 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
         "options": KNOWN_OCR_PROVIDERS,
+    },
+    "ocr_embed_text_layer": {
+        "category": "OCR Engines",
+        "description": (
+            "Run an additional ocrmypdf pass when OCR returns text without a searchable PDF. "
+            "Extracted text remains searchable inside DocuElevate when this is disabled. "
+            "Enable only when output PDFs also need selectable text and the worker has enough memory."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
     },
     "ocr_merge_strategy": {
         "category": "OCR Engines",
@@ -2169,6 +2293,56 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "corpus_backfill_download_concurrency": {
+        "category": "Processing",
+        "description": (
+            "Parallel Dropbox downloads for opt-in index-first initial backfills; bounded to 8 (default: 1)"
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_deferred_ocr_enabled": {
+        "category": "Processing",
+        "description": ("Run a bounded OCR-only second pass for index-first corpus documents without embedded text"),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_ocr_batch_size": {
+        "category": "Processing",
+        "description": "Maximum deferred corpus OCR tasks queued per coordinator pass (default: 2)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_ocr_recheck_seconds": {
+        "category": "Processing",
+        "description": "Seconds between deferred corpus OCR backlog capacity checks (default: 30)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_reconcile_batch_size": {
+        "category": "Processing",
+        "description": "Maximum stale corpus ledger items reconciled per coordinator pass (default: 10)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "corpus_backfill_stale_queue_seconds": {
+        "category": "Processing",
+        "description": "Minimum queued age before interrupted corpus work is recovered (default: 900 seconds)",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "corpus_backfill_queue_high_watermark": {
         "category": "Processing",
         "description": "Pause corpus backfills at this queued plus worker-reserved Celery depth (default: 50)",
@@ -2529,6 +2703,37 @@ SETTING_METADATA = {
     "backup_retain_weekly": {
         "category": "Backup",
         "description": "Number of weekly backups to retain (default 13 ≈ 3 months / 91 days).",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_adaptive_cleanup_enabled": {
+        "category": "Backup",
+        "description": (
+            "Remove the oldest redundant local snapshots before a dump when storage is low. "
+            "The newest local snapshot in every tier is always preserved."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_min_free_bytes": {
+        "category": "Backup",
+        "description": (
+            "Free bytes to preserve on the backup filesystem. Zero automatically reserves 10%, capped at 1 GiB."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_max_local_bytes": {
+        "category": "Backup",
+        "description": (
+            "Maximum bytes for local backup archives. Zero automatically uses 25% of the backup filesystem."
+        ),
         "type": "integer",
         "sensitive": False,
         "required": False,
@@ -3575,16 +3780,27 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str], changed_by: 
     try:
         # Check if this setting is sensitive and should be encrypted
         metadata = get_setting_metadata(key)
+        if metadata.get("environment_only", False):
+            logger.error("Refusing to persist environment-only setting %s", key)
+            db.rollback()
+            return False
         storage_value = value
 
-        if metadata.get("sensitive", False) and value:
-            from app.utils.encryption import encrypt_value, is_encryption_available
+        is_sensitive = bool(metadata.get("sensitive", False))
+        if is_sensitive and value:
+            from app.utils.encryption import encrypt_value, is_encrypted, is_encryption_available
 
             if is_encryption_available():
                 storage_value = encrypt_value(value)
+                if not is_encrypted(storage_value):
+                    logger.error("Refusing to store sensitive setting %s because encryption failed", key)
+                    db.rollback()
+                    return False
                 logger.debug(f"Encrypted sensitive setting: {key}")
             else:
-                logger.warning(f"Storing sensitive setting {key} in plaintext (encryption unavailable)")
+                logger.error("Refusing to store sensitive setting %s because encryption is unavailable", key)
+                db.rollback()
+                return False
 
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         old_storage_value = setting.value if setting else None
@@ -3595,24 +3811,13 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str], changed_by: 
             setting = ApplicationSettings(key=key, value=storage_value)
             db.add(setting)
 
-        # Determine human-readable old value for audit log (decrypt if needed)
-        old_display_value = None
-        if old_storage_value is not None:
-            if metadata.get("sensitive", False):
-                try:
-                    from app.utils.encryption import decrypt_value
-
-                    old_display_value = decrypt_value(old_storage_value)
-                except Exception:
-                    old_display_value = old_storage_value
-            else:
-                old_display_value = old_storage_value
-
         # Write audit log entry
         audit_entry = SettingsAuditLog(
             key=key,
-            old_value=old_display_value,
-            new_value=value,
+            # Sensitive history stays encrypted at rest. API responses redact
+            # it, while rollback decrypts only the selected value in memory.
+            old_value=old_storage_value,
+            new_value=storage_value,
             changed_by=changed_by,
             action="update",
         )
@@ -3676,25 +3881,11 @@ def delete_setting_from_db(db: Session, key: str, changed_by: str = "system") ->
     try:
         setting = db.query(ApplicationSettings).filter(ApplicationSettings.key == key).first()
         if setting:
-            # Capture old value for audit log (decrypt if sensitive)
-            metadata = get_setting_metadata(key)
-            old_display_value = None
-            if setting.value is not None:
-                if metadata.get("sensitive", False):
-                    try:
-                        from app.utils.encryption import decrypt_value
-
-                        old_display_value = decrypt_value(setting.value)
-                    except Exception:
-                        old_display_value = setting.value
-                else:
-                    old_display_value = setting.value
-
             db.delete(setting)
 
             audit_entry = SettingsAuditLog(
                 key=key,
-                old_value=old_display_value,
+                old_value=setting.value,
                 new_value=None,
                 changed_by=changed_by,
                 action="delete",
@@ -3743,6 +3934,8 @@ def get_settings_by_category() -> Dict[str, List[str]]:
     """
     categories = {}
     for key, metadata in SETTING_METADATA.items():
+        if metadata.get("environment_only", False):
+            continue
         category = metadata.get("category", "Other")
         if category not in categories:
             categories[category] = []
@@ -3762,6 +3955,8 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
         Tuple of (is_valid, error_message)
     """
     metadata = get_setting_metadata(key)
+    if metadata.get("environment_only", False):
+        return False, f"{key} must be configured through the deployment secret"
     setting_type = metadata.get("type", "string")
 
     # Check required fields
@@ -3775,13 +3970,35 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
 
     elif setting_type == "integer":
         try:
-            int(value)
+            num = int(value)
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
         except ValueError:
             return False, f"{key} must be an integer"
+
+    elif setting_type == "float":
+        try:
+            num = float(value)
+            if not math.isfinite(num):
+                return False, f"{key} must be a finite number"
+            min_val = metadata.get("min")
+            max_val = metadata.get("max")
+            if min_val is not None and num < min_val:
+                return False, f"{key} must be >= {min_val}"
+            if max_val is not None and num > max_val:
+                return False, f"{key} must be <= {max_val}"
+        except (TypeError, ValueError):
+            return False, f"{key} must be a number"
 
     elif setting_type == "slider":
         try:
             num = float(value)
+            if not math.isfinite(num):
+                return False, f"{key} must be a finite number"
             min_val = metadata.get("min")
             max_val = metadata.get("max")
             if min_val is not None and num < min_val:
@@ -3793,7 +4010,7 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
 
     # Special validation for specific keys
     if key == "session_secret" and value and len(value) < 32:
-        return False, "session_secret must be at least 32 characters"
+        return False, f"{key} must be at least 32 characters"
 
     return True, None
 
@@ -3916,6 +4133,16 @@ def rollback_setting(db: Session, key: str, history_id: int, changed_by: str = "
             # The old value was empty – remove the current db value to revert to ENV/default
             return delete_setting_from_db(db, key, changed_by=changed_by)
         else:
+            if get_setting_metadata(key).get("sensitive", False):
+                from app.utils.encryption import decrypt_value, is_encrypted
+
+                if not is_encrypted(target_value):
+                    logger.error("Rollback refused for legacy plaintext sensitive history: %s", key)
+                    return False
+                target_value = decrypt_value(target_value)
+                if target_value in {"[ENCRYPTED - Cannot decrypt]", "[DECRYPTION FAILED]"}:
+                    logger.error("Rollback could not decrypt sensitive history: %s", key)
+                    return False
             return save_setting_to_db(db, key, target_value, changed_by=changed_by)
     except SQLAlchemyError as e:
         logger.error(f"Error rolling back setting {key} to history entry {history_id}: {e}")

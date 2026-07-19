@@ -207,7 +207,12 @@ class TestConvertToPdf:
                     mock_detect_ext.return_value = ".docx"
 
                     convert_to_pdf.request.id = "test-task-id"
-                    result = convert_to_pdf.__wrapped__("/tmp/test.docx", "document.docx")
+                    result = convert_to_pdf.__wrapped__(
+                        "/tmp/test.docx",
+                        "document.docx",
+                        owner_id="owner@example.test",
+                        file_id=42,
+                    )
 
                     # Verify Gotenberg was called
                     mock_post.assert_called_once()
@@ -219,7 +224,12 @@ class TestConvertToPdf:
                     assert len(write_calls) > 0
 
                     # Verify process_document was queued
-                    mock_process.delay.assert_called_once()
+                    mock_process.delay.assert_called_once_with(
+                        "/tmp/test.pdf",
+                        original_filename="document.pdf",
+                        file_id=42,
+                        owner_id="owner@example.test",
+                    )
 
                     # Verify result
                     assert result == "/tmp/test.pdf"

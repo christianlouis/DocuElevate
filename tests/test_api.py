@@ -2,6 +2,8 @@
 Integration tests for API endpoints.
 """
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -16,10 +18,9 @@ class TestHealthEndpoints:
         # Accept 200 (OK), 303 (setup wizard redirect), 307/308 (other redirects)
         assert response.status_code in [200, 303, 307, 308]
 
-    def test_root_redirects_to_setup_wizard_when_setup_required(self, client: TestClient):
+    @patch("app.utils.setup_wizard.is_setup_required", return_value=True)
+    def test_root_redirects_to_setup_wizard_when_setup_required(self, _setup_required, client: TestClient):
         """Test that GET / redirects to setup wizard when setup is required."""
-        # With test env vars (OPENAI_API_KEY=test-key, AZURE_AI_KEY=test-key),
-        # is_setup_required() returns True, so we should get a redirect to /setup
         response = client.get("/", follow_redirects=False)
 
         # Should return 303 See Other (setup wizard redirect)
@@ -29,13 +30,24 @@ class TestHealthEndpoints:
         assert "Location" in response.headers
         assert response.headers["Location"] == "/setup?step=1"
 
-    def test_root_returns_200_when_setup_complete(self, client: TestClient):
-        """Test that GET /?setup=complete bypasses the setup wizard check."""
-        # The ?setup=complete query param should bypass the wizard check
+    @patch("app.utils.setup_wizard.is_setup_required", return_value=True)
+    def test_root_query_cannot_bypass_required_setup(self, _setup_required, client: TestClient):
+        """A client-controlled query parameter cannot waive required setup."""
         response = client.get("/?setup=complete", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"] == "/setup?step=1"
 
-        # Should return 200 OK (renders the index page)
-        assert response.status_code == 200
+    @patch("app.utils.setup_wizard.is_setup_required", return_value=True)
+    @patch("app.utils.settings_service.get_setting_from_db")
+    def test_agentic_setup_completion_marker_bypasses_legacy_fallback_check(
+        self, get_setting, _setup_required, client: TestClient
+    ):
+        """A server-owned completion marker wins over absent fallback admin envs."""
+        get_setting.side_effect = lambda _db, key: "true" if key == "_setup_wizard_completed" else None
+
+        response = client.get("/", follow_redirects=False)
+
+        assert response.status_code != 303 or response.headers.get("location") != "/setup?step=1"
 
     def test_setup_wizard_page_accessible(self, client: TestClient):
         """Test that GET /setup?step=1 returns 200."""

@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.utils.config_validator.masking import mask_sensitive_value
+from app.utils.config_validator.masking import mask_database_url, mask_sensitive_value
 from app.utils.settings_service import (
     SETTING_METADATA,
     get_all_settings_from_db,
@@ -97,7 +97,9 @@ async def settings_page(request: Request, db: Session = Depends(get_db)):
 
                 # Mask sensitive values
                 display_value = value
-                if metadata.get("sensitive") and value:
+                if key == "database_url" and value:
+                    display_value = mask_database_url(str(value))
+                elif metadata.get("sensitive") and value:
                     display_value = mask_sensitive_value(value)
 
                 settings_data[category].append(

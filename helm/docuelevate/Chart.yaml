@@ -7,11 +7,10 @@ description: >
 type: application
 
 # Chart version — bump on every chart change (independent of appVersion).
-version: 0.1.0
+version: 0.2.0
 
 # Application version — kept in sync with the VERSION file.
-appVersion: "0.54.0"
-
+appVersion: "0.188.2"
 keywords:
   - document-management
   - ocr

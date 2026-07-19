@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Setup Wizard - DocuElevate{% endblock %}
+{% block title %}{{ _("setup.page_title") }}{% endblock %}
 
 {% block head_extra %}
 <style>
@@ -28,18 +28,18 @@
     <div class="text-center mb-8">
       <h1 class="text-4xl font-bold text-gray-900 mb-2">
         <i class="fas fa-magic text-indigo-600"></i>
-        DocuElevate Setup Wizard
+        {{ _("setup.heading") }}
       </h1>
       <p class="text-lg text-gray-600">
-        Welcome! Let's configure your system in just a few steps.
+        {{ _("setup.welcome") }}
       </p>
     </div>
 
     <!-- Progress Bar -->
     <div class="mb-8">
       <div class="flex justify-between items-center mb-2">
-        <span class="text-sm font-medium text-gray-700">Step {{ current_step }} of {{ max_step }}</span>
-        <span class="text-sm font-medium text-gray-700">{{ progress_percent }}% Complete</span>
+        <span class="text-sm font-medium text-gray-700">{{ _("setup.step") }} {{ current_step }} {{ _("setup.of") }} {{ max_step }}</span>
+        <span class="text-sm font-medium text-gray-700">{{ progress_percent }}% {{ _("setup.complete") }}</span>
       </div>
       <div class="w-full bg-gray-200 rounded-full h-3">
         <div class="bg-indigo-600 h-3 rounded-full transition-all duration-500" style="width: {{ progress_percent }}%"></div>
@@ -57,7 +57,7 @@
             {% endif %}
           </div>
           <span class="text-xs mt-1 {% if step_num == current_step %}text-indigo-600 font-semibold{% else %}text-gray-500{% endif %}">
-            {% if step_num == 1 %}Infrastructure{% elif step_num == 2 %}Security{% elif step_num == 3 %}AI Services{% endif %}
+            {% if step_num == 1 %}{{ _("setup.step_infrastructure") }}{% elif step_num == 2 %}{{ _("setup.step_security") }}{% elif step_num == 3 %}{{ _("setup.step_ai") }}{% endif %}
           </span>
         </div>
         {% endfor %}
@@ -71,19 +71,25 @@
       <div class="bg-indigo-600 px-6 py-4">
         <h2 class="text-2xl font-bold text-white">
           <i class="fas fa-cog mr-2"></i>
-          {{ step_category }}
+          {{ _(step_category_key) }}
         </h2>
-        <p class="text-indigo-100 mt-1">Configure essential settings for this category</p>
+        <p class="text-indigo-100 mt-1">{{ _("setup.category_description") }}</p>
       </div>
 
       <!-- Card Body -->
       <form method="post" action="/setup" class="px-6 py-8">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
         <input type="hidden" name="step" value="{{ current_step }}">
 
         {% if request.query_params.get('error') == 'save_failed' %}
         <div class="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-          <p class="font-bold">⚠️ Error</p>
-          <p>Failed to save settings. Please try again.</p>
+          <p class="font-bold">⚠️ {{ _("setup.error") }}</p>
+          <p>{{ _("setup.save_failed") }}</p>
+        </div>
+        {% elif request.query_params.get('error') == 'required_missing' %}
+        <div class="mb-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+          <p class="font-bold">{{ _("setup.required_missing_heading") }}</p>
+          <p>{{ _("setup.required_missing_description") }}</p>
         </div>
         {% endif %}
 
@@ -91,19 +97,19 @@
           {% for setting in settings %}
           <div class="border-b border-gray-200 pb-6 last:border-b-0">
             <label for="{{ setting.key }}" class="block text-sm font-medium text-gray-900 mb-1">
-              {{ setting.label }}
-              {% if setting.default is none or setting.key in ['admin_password'] %}
+              {{ _(setting.label_key) if setting.label_key else setting.label }}
+              {% if setting.get('required', false) %}
               <span class="text-red-600">*</span>
               {% endif %}
             </label>
 
             <p class="text-xs text-gray-500 mb-3">
-              {{ setting.description }}
+              {{ _(setting.description_key) if setting.description_key else setting.description }}
             </p>
 
             {% if setting.bootstrap %}
             <div class="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-              <strong>Deployment bootstrap setting.</strong> {{ setting.bootstrap_reason }}
+              <strong>{{ _("setup.bootstrap_setting") }}</strong> {{ _(setting.bootstrap_reason_key) if setting.bootstrap_reason_key else setting.bootstrap_reason }}
             </div>
             {% endif %}
 
@@ -113,10 +119,11 @@
               id="{{ setting.key }}"
               value="{% if setting.current_value %}configured{% endif %}"
               disabled
+              autocomplete="off"
               class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
               aria-describedby="{{ setting.key }}-bootstrap-help"
             />
-            <p id="{{ setting.key }}-bootstrap-help" class="mt-1 text-xs text-gray-500">Source: deployment environment. The value is intentionally not copied into the application database.</p>
+            <p id="{{ setting.key }}-bootstrap-help" class="mt-1 text-xs text-gray-500">{{ _("setup.bootstrap_source") }}</p>
             {% elif setting.key == 'session_secret' %}
             <!-- Special handling for session_secret with auto-generate -->
             <div class="space-y-2">
@@ -125,13 +132,13 @@
                   <input type="radio" name="session_secret_mode" value="auto" checked
                          class="form-radio text-indigo-600"
                          onchange="document.getElementById('session_secret').value = 'auto-generate'; document.getElementById('session_secret').disabled = true;">
-                  <span class="ml-2 text-sm">Auto-generate (recommended)</span>
+                  <span class="ml-2 text-sm">{{ _("setup.auto_generate") }}</span>
                 </label>
                 <label class="inline-flex items-center">
                   <input type="radio" name="session_secret_mode" value="manual"
                          class="form-radio text-indigo-600"
                          onchange="document.getElementById('session_secret').value = ''; document.getElementById('session_secret').disabled = false; document.getElementById('session_secret').focus();">
-                  <span class="ml-2 text-sm">Enter manually</span>
+                  <span class="ml-2 text-sm">{{ _("setup.enter_manually") }}</span>
                 </label>
               </div>
               <input
@@ -141,7 +148,7 @@
                 value="auto-generate"
                 disabled
                 class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-100"
-                placeholder="Will be auto-generated"
+                placeholder="{{ _('setup.auto_generate_placeholder') }}"
               />
             </div>
             {% else %}
@@ -163,29 +170,38 @@
               name="{{ setting.key }}"
               value="{{ setting.current_value if setting.current_value else '' }}"
               class="wizard-input w-full px-4 py-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              placeholder="{{ setting.description }}"
-              {% if setting.default is none or setting.key in ['admin_password'] %}required{% endif %}
+              placeholder="{{ _(setting.description_key) if setting.description_key else setting.description }}"
+              {% if setting.key == 'admin_username' %}autocomplete="username"
+              {% elif setting.key == 'admin_password' %}autocomplete="new-password"
+              {% elif setting.sensitive %}autocomplete="off"
+              {% endif %}
+              {% if setting.get('required', false) %}required{% endif %}
             />
             {% endif %}
             {% endif %}
 
             {% if setting.value_source == 'db' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">DB</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">{{ _("setup.source_db") }}</span>
             {% elif setting.value_source == 'env' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">ENV</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">{{ _("setup.source_env") }}</span>
             {% elif setting.value_source == 'default' %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 mt-1">DEFAULT</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 mt-1">{{ _("setup.source_default") }}</span>
             {% endif %}
 
             {% if setting.key == 'admin_password' %}
             <p class="mt-2 text-xs text-amber-600">
               <i class="fas fa-exclamation-triangle"></i>
-              <strong>Important:</strong> Choose a strong password. This cannot be recovered if lost.
+              <strong>{{ _("setup.important") }}</strong> {{ _("setup.password_warning") }}
             </p>
-            {% elif setting.sensitive %}
+            {% elif setting.key == 'openai_api_key' %}
+            <p class="mt-2 text-xs text-blue-700">
+              <i class="fas fa-info-circle"></i>
+              {{ _("setup.ai_optional_hint") }}
+            </p>
+            {% elif setting.sensitive and not setting.bootstrap %}
             <p class="mt-2 text-xs text-gray-500">
               <i class="fas fa-lock"></i>
-              This value will be encrypted at rest in the database.
+              {{ _("setup.encrypted_hint") }}
             </p>
             {% endif %}
           </div>
@@ -198,13 +214,18 @@
             {% if setup_skipped %}
             <span class="text-sm text-amber-600 font-medium">
               <i class="fas fa-exclamation-triangle"></i>
-              Setup was previously skipped.
+              {{ _("setup.previously_skipped") }}
             </span>
             {% elif current_step == 1 %}
-            <a href="/setup/skip" class="text-sm text-gray-600 hover:text-gray-900">
+            {% if is_logged_in %}
+            <button type="submit"
+                    formaction="/setup/skip"
+                    formmethod="post"
+                    class="text-sm text-gray-600 hover:text-gray-900">
               <i class="fas fa-forward"></i>
-              Skip setup (advanced users)
-            </a>
+              {{ _("setup.skip_admin") }}
+            </button>
+            {% endif %}
             {% endif %}
           </div>
 
@@ -213,17 +234,17 @@
             <a href="/setup?step={{ current_step - 1 }}"
                class="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
               <i class="fas fa-arrow-left mr-2"></i>
-              Previous
+              {{ _("setup.previous") }}
             </a>
             {% endif %}
 
             <button type="submit"
                     class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-lg">
               {% if current_step < max_step %}
-              Next Step
+              {{ _("setup.next_step") }}
               <i class="fas fa-arrow-right ml-2"></i>
               {% else %}
-              Complete Setup
+              {{ _("setup.complete_setup") }}
               <i class="fas fa-check ml-2"></i>
               {% endif %}
             </button>
@@ -236,16 +257,20 @@
     <div class="mt-6 text-center">
       <p class="text-sm text-gray-600">
         <i class="fas fa-info-circle"></i>
-        All settings can be changed later in the Settings page.
+        {{ _("setup.change_later") }}
       </p>
       <p class="text-xs text-gray-500 mt-2">
-        Fields marked with <span class="text-red-600">*</span> are required.
+        {{ _("setup.required_prefix") }} <span class="text-red-600">*</span> {{ _("setup.required_suffix") }}
       </p>
       {% if setup_skipped %}
-      <p class="text-xs text-amber-600 mt-2">
+      <div class="text-xs text-amber-600 mt-2">
         <i class="fas fa-info-circle"></i>
-        You previously skipped the setup wizard. <a href="/setup/undo-skip" class="underline hover:text-amber-800">Click here to re-run it.</a>
-      </p>
+        {{ _("setup.previously_skipped_description") }}
+        <form method="post" action="/setup/undo-skip" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token | default('', true) }}">
+          <button type="submit" class="underline hover:text-amber-800">{{ _("setup.rerun_now") }}</button>
+        </form>
+      </div>
       {% endif %}
     </div>
 

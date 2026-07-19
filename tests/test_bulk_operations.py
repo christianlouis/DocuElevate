@@ -55,6 +55,30 @@ class TestSingleFileOperations:
 class TestBulkOperations:
     """Tests for bulk file operations."""
 
+    def test_upload_progress_is_owner_scoped_even_for_platform_admin(self, client: TestClient, db_session):
+        """An admin claim must not reveal another tenant's pre-record upload status."""
+        operation = BulkOperation(
+            id="11111111-1111-1111-1111-111111111111",
+            owner_id="alice",
+            action="upload",
+            state="queued",
+            total_items=1,
+            completed_items=0,
+            failed_items=0,
+            task_ids='["alice-upload-task"]',
+            result="{}",
+        )
+        db_session.add(operation)
+        db_session.commit()
+
+        with patch(
+            "starlette.requests.Request.session",
+            new_callable=lambda: property(lambda self: {"user": {"id": "bob", "is_admin": True}}),
+        ):
+            response = client.get(f"/api/bulk-operations/{operation.id}")
+
+        assert response.status_code == 404
+
     def test_bulk_delete_success(self, client: TestClient, db_session):
         """Test bulk deletion of files."""
         # Create sample files

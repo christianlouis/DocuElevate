@@ -300,7 +300,7 @@ def ensure_ocr_languages_from_settings() -> dict[str, list[str]]:
 
     result: dict[str, list[str]] = {"tesseract_missing": [], "easyocr_failed": []}
 
-    providers_raw = getattr(settings, "ocr_providers", None) or "azure"
+    providers_raw = getattr(settings, "ocr_providers", None) or "tesseract"
     active_providers = {p.strip().lower() for p in providers_raw.split(",") if p.strip()}
 
     # Always ensure Tesseract language data when ocrmypdf is on the system PATH.

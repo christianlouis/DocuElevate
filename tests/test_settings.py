@@ -34,6 +34,15 @@ class TestSettingsService:
         value = get_setting_from_db(db_session, "test_key")
         assert value == "test_value"
 
+    def test_environment_only_setting_cannot_be_persisted(self, db_session: Session):
+        result = save_setting_to_db(db_session, "session_secret_previous", "x" * 32)
+        valid, message = validate_setting_value("session_secret_previous", "x" * 32)
+
+        assert result is False
+        assert db_session.query(ApplicationSettings).filter_by(key="session_secret_previous").first() is None
+        assert valid is False
+        assert message == "session_secret_previous must be configured through the deployment secret"
+
     def test_update_existing_setting(self, db_session: Session):
         """Test updating an existing setting"""
         # Save initial value
@@ -166,6 +175,19 @@ class TestSettingsService:
             f"and will not appear on the settings page: {sorted(missing)}"
         )
 
+    def test_previous_session_secret_is_environment_only(self):
+        metadata = SETTING_METADATA["session_secret_previous"]
+        assert metadata["sensitive"] is True
+        assert metadata["restart_required"] is True
+        assert metadata["environment_only"] is True
+
+    def test_redis_connection_urls_are_sensitive_restart_settings(self):
+        """Redis URLs can contain credentials and only apply after process restart."""
+        for setting in ("redis_url", "celery_broker_url", "celery_result_backend"):
+            metadata = SETTING_METADATA[setting]
+            assert metadata["sensitive"] is True
+            assert metadata["restart_required"] is True
+
     def test_setting_metadata_has_required_fields(self):
         """Test that every SETTING_METADATA entry has the required keys."""
         required_keys = {"category", "description", "type", "sensitive", "required", "restart_required"}
@@ -219,6 +241,20 @@ class TestSettingsService:
         is_valid, error = validate_setting_value("near_duplicate_threshold", "not_a_number")
         assert is_valid is False
         assert "must be a number" in error
+
+    def test_validate_float_value(self):
+        """Float settings reject invalid and out-of-range values."""
+        is_valid, error = validate_setting_value("rag_research_lexical_min_score", "0.65")
+        assert is_valid is True
+        assert error is None
+
+        is_valid, error = validate_setting_value("rag_research_lexical_min_score", "abc")
+        assert is_valid is False
+        assert "must be a number" in error
+
+        is_valid, error = validate_setting_value("rag_research_lexical_min_score", "1.5")
+        assert is_valid is False
+        assert "must be <= 1.0" in error
 
     def test_s3_storage_class_has_dropdown_options(self):
         """Test that s3_storage_class uses a dropdown with valid options."""
@@ -349,6 +385,23 @@ class TestSettingsPrecedence:
 
         # Should still have default value
         assert test_settings.test_value == "default"
+
+    def test_environment_only_database_value_is_ignored(self, db_session: Session):
+        from pydantic_settings import BaseSettings
+
+        class TestSettings(BaseSettings):
+            session_secret_previous: str | None = None
+
+            class Config:
+                env_file = None
+
+        db_session.add(ApplicationSettings(key="session_secret_previous", value="must-not-load"))
+        db_session.commit()
+        test_settings = TestSettings()
+
+        load_settings_from_db(test_settings, db_session)
+
+        assert test_settings.session_secret_previous is None
 
 
 @pytest.mark.unit

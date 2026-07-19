@@ -10,9 +10,11 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
+from app.config import settings
 from app.database import get_db
 from app.models import FileRecord, ProcessingLog
 from app.utils.input_validation import validate_task_id
+from app.utils.user_scope import apply_owner_filter
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -55,6 +57,9 @@ def list_processing_logs(
     ]
     """
     query = db.query(ProcessingLog)
+    if settings.multi_user_enabled:
+        accessible_ids = apply_owner_filter(db.query(FileRecord.id), request).subquery()
+        query = query.filter(ProcessingLog.file_id.in_(db.query(accessible_ids.c.id)))
 
     # Apply filters
     if file_id is not None:
@@ -93,7 +98,7 @@ def get_file_processing_logs(request: Request, file_id: int, db: DbSession):
     Also includes file metadata if the file exists.
     """
     # Check if file exists
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=404, detail=f"File with ID {file_id} not found")
 
@@ -136,7 +141,11 @@ def get_task_processing_logs(request: Request, task_id: str, db: DbSession):
     """
     validate_task_id(task_id)
     # Get all logs for this task
-    logs = db.query(ProcessingLog).filter(ProcessingLog.task_id == task_id).order_by(ProcessingLog.timestamp).all()
+    query = db.query(ProcessingLog).filter(ProcessingLog.task_id == task_id)
+    if settings.multi_user_enabled:
+        accessible_ids = apply_owner_filter(db.query(FileRecord.id), request).subquery()
+        query = query.filter(ProcessingLog.file_id.in_(db.query(accessible_ids.c.id)))
+    logs = query.order_by(ProcessingLog.timestamp).all()
 
     if not logs:
         raise HTTPException(status_code=404, detail=f"No logs found for task {task_id}")

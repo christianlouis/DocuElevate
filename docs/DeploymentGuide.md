@@ -7,6 +7,7 @@ This guide covers all supported deployment methods for DocuElevate.
 - [Prerequisites](#prerequisites)
 - [Docker Compose Deployment](#docker-compose-deployment) *(recommended for single-server)*
 - [Kubernetes / Helm Deployment](#kubernetes--helm-deployment) *(recommended for production scale-out)*
+- [Terraform Deployment](#terraform-deployment) *(declarative Kubernetes deployment)*
 - [Production Considerations](#production-considerations)
 - [Scaling](#scaling)
 - [Backup Procedures](#backup-procedures)
@@ -36,13 +37,58 @@ git clone https://github.com/christianlouis/DocuElevate.git
 cd DocuElevate
 ```
 
-### Step 2: Configure Environment Variables
+### Step 2: Optionally provide operator-owned app credentials
 
-```bash
-cp .env.demo .env
+The included Compose stack does **not** require a `.env` file. On first start it
+creates a stable session secret and PostgreSQL password in a private Docker
+volume. PostgreSQL, Redis, Gotenberg, Meilisearch and Qdrant are wired
+automatically. The browser setup journey stores user choices and encrypted user
+credentials in PostgreSQL, so workers pick up changes without editing every
+container environment or restarting the stack.
+
+Create `.env` only for credentials owned by the deployment operator, such as an
+OAuth application client ID/secret or an AI-provider key that should be shared
+by this installation:
+
+```dotenv
+# Optional examples — do not copy end-user OAuth tokens here.
+OPENAI_API_KEY=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
 ```
 
-Edit `.env` with your settings. See the [Configuration Guide](ConfigurationGuide.md) for all options.
+Fresh installations store documents in the private `workdir-data` Docker named
+volume. This avoids host-specific paths and makes a disposable Canary safe to
+create and remove. Existing operators who intentionally want a host directory
+can opt in without changing the Compose file:
+
+```dotenv
+DOCUELEVATE_WORKDIR=/srv/docuelevate/workdir
+```
+
+The containers themselves keep `/workdir` as their working directory, so a
+legacy relative SQLite `DATABASE_URL` also continues to resolve against the
+persisted document path during an upgrade.
+
+Run a parallel disposable Canary on another local port without changing the
+Compose file or colliding with an existing DocuElevate installation:
+
+```bash
+COMPOSE_PROJECT_NAME=docuelevate-canary-preprod \
+DOCUELEVATE_PORT=8180 \
+docker-compose up -d --build
+```
+
+The browser journey is then available at `http://localhost:8180`, and generated
+callback/base URLs use the same port automatically. Remove the complete Canary,
+including its generated bootstrap secret and all named data volumes, with:
+
+```bash
+COMPOSE_PROJECT_NAME=docuelevate-canary-preprod \
+docker-compose down --volumes --remove-orphans
+```
+
+See the [Configuration Guide](ConfigurationGuide.md) for all optional settings.
 
 ### Step 3: Run with Docker Compose
 
@@ -55,14 +101,40 @@ This starts:
 | Service | Purpose |
 |---------|---------|
 | `api` | FastAPI web server (port 8000) |
-| `worker` | Celery background task worker |
-| `redis` | Message broker for Celery |
+| `worker` | Celery background task worker; handles document, research, and search-index queues by default |
+| `beat` | Single Celery scheduler instance |
+| `postgres` | Persistent application and user configuration database |
+| `redis` | Ephemeral task broker for Celery |
 | `gotenberg` | PDF conversion (LibreOffice headless) |
-| `meilisearch` | Full-text search engine (port 7700) |
+| `meilisearch` | Persistent full-text search index |
+| `qdrant` | Persistent vector index for semantic retrieval |
+
+The default stack deliberately uses one worker process for all queues so that a
+fresh installation remains reliable on modest Docker hosts. For a larger or
+busier installation, start the optional dedicated research and search workers:
+
+```bash
+docker-compose --profile scale up -d
+```
+
+The `scale` profile adds `knowledge-research-worker` and
+`search-index-worker`; the default worker remains a safe fallback consumer for
+both queues.
 
 ### Step 4: Verify the Installation
 
-Access the web interface at `http://localhost:8000` and the API docs at `http://localhost:8000/docs`.
+Access the web interface at `http://localhost:8000` and complete the deployment
+wizard. Then create normal user accounts and follow the per-user onboarding
+journey. Multi-user isolation is enabled by default and unowned documents are
+not visible to ordinary users.
+
+For automated or AI-operated installations, use the versioned
+[Agentic setup](AgenticSetup.md) manifest. Its `plan` and `apply` commands use
+the same database validation and encryption contract as the browser journey.
+
+The API readiness endpoint is
+`http://localhost:8000/api/diagnostic/healthz/ready`; optional API documentation
+is available at `http://localhost:8000/docs` when enabled.
 
 ---
 
@@ -76,6 +148,8 @@ The Helm chart at `helm/docuelevate/` packages all components into a single, con
 - Persistent volumes for workdir and Meilisearch data
 - Alembic database migration Job (pre-install/upgrade hook)
 - TLS Ingress via any controller (nginx, Traefik, etc.)
+- An optional, idempotent agentic setup Job after migrations
+- Existing Kubernetes Secrets managed by 1Password / External Secrets
 
 ### Prerequisites
 
@@ -261,6 +335,16 @@ Internet
 
 ---
 
+## Terraform Deployment
+
+The reference Terraform configuration deploys this Helm chart and optionally
+applies the same versioned setup manifest used by an automation agent. It does
+not accept raw secrets: runtime and initial-setup credentials are referenced by
+existing Kubernetes Secret names so they do not enter Terraform state.
+
+See the [Terraform deployment guide](TerraformDeployment.md) and the runnable
+[`examples/terraform/kubernetes`](https://github.com/christianlouis/DocuElevate/tree/main/examples/terraform/kubernetes) module.
+
 ## Production Considerations
 
 ### Database
@@ -400,6 +484,12 @@ Regularly back up:
 2. The database (PostgreSQL `pg_dump` or SQLite file)
 3. The Meilisearch data directory (`/meili_data`)
 4. Your `.env` / Helm values file (store securely, it contains secrets)
+
+Mount `BACKUP_DIR` on a dedicated volume when possible and configure a remote backup destination. DocuElevate's
+adaptive local policy reserves free space, limits backup archives to a safe share of their filesystem, and preserves
+the newest local hourly, daily, and weekly recovery point while reclaiming older redundant copies. The effective
+capacity and any failed attempt are visible under **Administration → Backup Management**. A backup archive is written
+as a hidden partial file and only becomes downloadable after the dump and checksum complete.
 
 ---
 

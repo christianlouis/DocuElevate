@@ -1,0 +1,46 @@
+{
+  "apiVersion": "docuelevate.org/v1alpha1",
+  "kind": "DocuElevateSetup",
+  "metadata": {
+    "name": "DocuElevate Preprod Keyless Canary"
+  },
+  "spec": {
+    "completeSetup": true,
+    "settings": {},
+    "users": [
+      {
+        "email": "christian@example.test",
+        "username": "christian",
+        "displayName": "Christian",
+        "password": {
+          "fromEnv": "DOCUELEVATE_SETUP_CHRISTIAN_PASSWORD"
+        },
+        "isAdmin": true
+      },
+      {
+        "email": "julia@example.test",
+        "username": "julia",
+        "displayName": "Julia",
+        "password": {
+          "fromEnv": "DOCUELEVATE_SETUP_JULIA_PASSWORD"
+        },
+        "isAdmin": false
+      }
+    ],
+    "tribes": [
+      {
+        "name": "Krakau Family Preprod",
+        "members": [
+          {
+            "email": "christian@example.test",
+            "role": "admin"
+          },
+          {
+            "email": "julia@example.test",
+            "role": "member"
+          }
+        ]
+      }
+    ]
+  }
+}

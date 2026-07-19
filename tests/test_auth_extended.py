@@ -555,6 +555,65 @@ class TestLoginMobileRedirect:
 
         assert "mobile_redirect_uri" not in mock_request.session
 
+    @pytest.mark.asyncio
+    async def test_login_uses_detected_german_locale(self):
+        """The standalone login template must not silently fall back to English."""
+        from app.auth import login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.query_params = {}
+        mock_request.session = {}
+        mock_request.cookies = {}
+        mock_request.headers = {"accept-language": "de-DE,de;q=0.9,en;q=0.8"}
+        mock_request.state = MagicMock()
+        mock_request.state.csrf_token = "csrf"
+
+        with patch("app.auth.templates") as mock_tpl:
+            mock_tpl.TemplateResponse.return_value = "page"
+            await login(mock_request)
+
+        context = mock_tpl.TemplateResponse.call_args.kwargs["context"]
+        assert context["current_locale"] == "de"
+        assert context["_"]("auth.sign_in") == "Anmelden"
+
+    @pytest.mark.asyncio
+    async def test_login_localizes_logout_message(self):
+        from app.auth import login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.query_params = {"message": "You have been logged out successfully"}
+        mock_request.session = {}
+        mock_request.cookies = {}
+        mock_request.headers = {"accept-language": "de-DE,de;q=0.9"}
+        mock_request.state = MagicMock()
+        mock_request.state.csrf_token = "csrf"
+
+        with patch("app.auth.templates") as mock_tpl:
+            mock_tpl.TemplateResponse.return_value = "page"
+            await login(mock_request)
+
+        context = mock_tpl.TemplateResponse.call_args.kwargs["context"]
+        assert context["message"] == "Sie wurden erfolgreich abgemeldet"
+
+    @pytest.mark.asyncio
+    async def test_login_localizes_allowlisted_message_key(self):
+        from app.auth import login
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.query_params = {"message_key": "auth.account_created_success"}
+        mock_request.session = {}
+        mock_request.cookies = {}
+        mock_request.headers = {"accept-language": "de-DE,de;q=0.9"}
+        mock_request.state = MagicMock()
+        mock_request.state.csrf_token = "csrf"
+
+        with patch("app.auth.templates") as mock_tpl:
+            mock_tpl.TemplateResponse.return_value = "page"
+            await login(mock_request)
+
+        context = mock_tpl.TemplateResponse.call_args.kwargs["context"]
+        assert context["message"] == "Das Konto wurde erfolgreich erstellt. Sie können sich jetzt anmelden."
+
 
 # ---------------------------------------------------------------------------
 # social_login()
@@ -1699,6 +1758,38 @@ class TestAuthAdminExtended:
             result = await auth(mock_request, db=self._make_db(None))
 
         assert result is mobile_resp
+
+    @pytest.mark.asyncio
+    async def test_first_admin_login_enters_product_onboarding(self):
+        """A fresh-install admin must complete the same product journey as other users."""
+        from app.auth import auth
+        from app.models import UserProfile
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.form = AsyncMock(return_value={"username": "adminuser", "password": "adminpass"})
+        mock_request.session = {}
+        mock_request.headers = {}
+
+        profile = UserProfile(user_id="adminuser", onboarding_completed=False)
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.side_effect = [None, profile]
+
+        with (
+            patch("app.auth.settings") as mock_settings,
+            patch("app.auth._ensure_user_profile"),
+            patch("app.auth._record_login_event"),
+            patch("app.auth._create_mobile_redirect", return_value=None),
+            patch("app.utils.session_manager.create_session"),
+        ):
+            mock_settings.admin_username = "adminuser"
+            mock_settings.admin_password = "adminpass"
+            mock_settings.multi_user_enabled = True
+
+            result = await auth(mock_request, db=mock_db)
+
+        assert isinstance(result, RedirectResponse)
+        assert result.headers["location"] == "/onboarding"
+        assert mock_request.session["post_onboarding_redirect"] == "/upload"
 
 
 # ---------------------------------------------------------------------------

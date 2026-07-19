@@ -33,6 +33,12 @@ env:
   AI_PROVIDER: openai
   OPENAI_MODEL: gpt-4o-mini
 
+  # Local OCR works out of the box; opt into cloud providers explicitly.
+  OCR_PROVIDERS: tesseract
+  # Optional second OCR pass that embeds selectable text into output PDFs.
+  # Disabled by default to keep fresh installations reliable on modest hardware.
+  OCR_EMBED_TEXT_LAYER: "false"
+
   # Azure Document Intelligence (required when OCR_PROVIDERS includes "azure")
   AZURE_REGION: eastus
   AZURE_ENDPOINT: ""   # e.g. https://my-resource.cognitiveservices.azure.com/
@@ -64,8 +70,13 @@ env:
 # and leave these blank, then mount the Secret yourself.
 # ---------------------------------------------------------------------------
 secrets:
+  # Prefer a Secret created by External Secrets, 1Password Connect or your
+  # platform. When set, the chart does not create or own a Secret.
+  existingSecret: ""
   DATABASE_URL: ""         # e.g. postgresql://user:pass@postgres:5432/docuelevate
   REDIS_URL: ""            # leave blank to use bundled Redis
+  CELERY_BROKER_URL: ""    # optional; falls back to REDIS_URL
+  CELERY_RESULT_BACKEND: "" # optional; must resolve to a writable primary
   SESSION_SECRET: ""       # min 32-char random string — generate with: openssl rand -hex 32
   OPENAI_API_KEY: ""
   AZURE_AI_KEY: ""
@@ -190,6 +201,56 @@ worker:
     capabilities:
       drop: ["ALL"]
 
+knowledgeResearchWorker:
+  enabled: true
+  replicaCount: 1
+  concurrency: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+searchIndexWorker:
+  enabled: true
+  replicaCount: 1
+  concurrency: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
 # ---------------------------------------------------------------------------
 # Shared workdir volume (api + worker mount the same PVC)
 # ---------------------------------------------------------------------------
@@ -304,3 +365,18 @@ migrations:
   enabled: true
   # Automatically deleted after successful completion
   ttlSecondsAfterFinished: 120
+
+# ---------------------------------------------------------------------------
+# Declarative post-install setup
+# Runs the same validated, idempotent manifest used by the local agentic CLI.
+# Secret values referenced with fromEnv must exist in secrets.existingSecret
+# (or in the chart-managed Secret for disposable development installs).
+# ---------------------------------------------------------------------------
+agenticSetup:
+  enabled: false
+  manifest: ""
+  # Optional second Secret containing only fromEnv values used by the setup
+  # manifest (for example initial user passwords). It is not injected into the
+  # long-running API or worker pods.
+  existingSecret: ""
+  ttlSecondsAfterFinished: 300

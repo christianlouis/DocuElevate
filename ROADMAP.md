@@ -1,7 +1,7 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-07-14
-**Version:** 2.1
+**Last Updated:** 2026-07-19
+**Version:** 2.3
 
 ## Vision
 
@@ -19,29 +19,44 @@ For the detailed milestone breakdown and target dates, see [MILESTONES.md](MILES
 
 ## Current Focus and Delivery Order
 
-The automated release number (`0.176.x` at the time of this review) is independent
+The automated release number (`0.188.2` at the time of this review) is independent
 from the named planning anchors below. The team should execute work in dependency
 order, not in numeric-anchor order:
 
-1. **Stabilize the processing foundation** — close post-merge correctness work
-   (#1007), make workflow state/retries/status match execution (#388), and finish
-   the single-host-loss resilience plan (#902).
-2. **Complete the existing search experience** — saved searches (#870),
-   preview-first results (#872), and safe bulk actions (#873).
-3. **Add retrieval foundations** — choose one vector-store architecture (#477),
-   implement semantic retrieval (#480), then hybrid ranking and evaluation (#871).
-4. **Make orchestration configurable** — only after #388, build the workflow
-   editor (#875), scheduling (#876), and reusable templates (#877).
-5. **Make AI quality measurable before expanding AI UX** — build the extraction
-   evaluation harness (#880) before confidence scoring (#878), review queues
-   (#879), or Chat with Library (#478).
-6. **Build enterprise and ecosystem layers on stable contracts** — RBAC,
-   multi-tenancy, audit, plugins, governance, MCP, and agent actions remain later
-   tracks and must not displace the foundation work above.
+1. **Close the active security and privacy gaps** — rotate the affected Preprod
+   credentials (#1162), complete owner/Tribe assignment for legacy corpora, and
+   keep secret values out of GitOps, diagnostics, and browser responses. The
+   single-user privacy regression (#1170) is closed; its guardrails stay mandatory.
+2. **Make a clean installation genuinely useful** — finish the disposable
+   fresh-install journey (#1134, #1151), including integrations, a first processed
+   document, a second isolated user, recovery paths, and browser E2E evidence.
+3. **Complete Family/Tribe document separation** — deliver recipient profiles,
+   explainable classification, per-user routing, review, invitations, delegated
+   administration, and owner-controlled privacy (#1142–#1147).
+4. **Finish retrieval quality rather than widening brute-force context** — tune
+   hybrid ranking (#871), add an evaluation harness (#880), and only then close
+   Chat with Library (#478) against cited-answer quality and latency targets.
+5. **Remove operational single points of failure** — executable backup creation
+   and restore acceptance are complete (#1062, #1102). Next, make credential
+   monitor state transactional (#1190), verify protected archives before retention
+   (#1191), account for abandoned partial archives (#1192), estimate first-backup
+   capacity conservatively (#1193), harden maintenance monitors (#1103, #1121),
+   and finish the single-host-loss resilience plan (#902).
+6. **Build later enterprise and ecosystem layers on proven contracts** — workflow
+   editing, RBAC, full organization management, audit, plugins, governance, MCP,
+   and agent actions remain sequenced behind the user-facing foundations above.
 
 GitHub issues and milestones are the source of truth for executable scope. This
 document explains sequencing and product intent; it should not duplicate a sprint
 backlog.
+
+Production promotion is not implied by a merge or Preprod acceptance. The
+production deployment remains pinned to its explicitly approved Evergreen legacy
+image until a separate manual production approval is given.
+
+The current issue inventory also contains post-merge follow-ups. Before starting
+one, verify it against `main` and existing regression tests; close already-delivered
+findings with evidence instead of carrying stale work forward.
 
 ## Preprod Pilot: DearConcierge Knowledge Bridge
 
@@ -72,12 +87,17 @@ release. Delivery is split into independently reversible slices:
    - Keep the existing whole-document embedding for duplicate detection; vector export is
      optional and idempotent.
    - Provide explicit backfill and health/status operations for the existing corpus.
-5. **P0 — DearConcierge retrieval contract**
+5. **P0 — Complete lexical corpus index**
+   - Reconcile every processed, non-duplicate document into Meilisearch without a
+     fixed corpus-size ceiling.
+   - Use bounded, resumable bulk updates on a dedicated worker and expose the
+     remaining gap so exhaustive answers cannot silently claim incomplete coverage.
+6. **P0 — DearConcierge retrieval contract**
    - Expose authenticated semantic search and cited full-text retrieval with DocuElevate's
      existing owner/share checks applied to every result.
    - Support OAuth browser sessions and personal Bearer tokens first; add an MCP adapter as
      a thin client over the same API rather than duplicating authorization logic.
-6. **P0 — Preprod acceptance and promotion gate**
+7. **P0 — Preprod acceptance and promotion gate**
    - Prove retry/idempotency, owner isolation, Dropbox resume, vector backfill, citation
      retrieval, and end-to-end DearConcierge queries in preprod.
    - Do not change the production image or enable the Evergreen sender without a separate,
@@ -114,6 +134,9 @@ Conductor, and Signal are currently planning-track names because their former
 - Full-text search and document discovery
 - Multi-destination distribution (cloud providers, DMS, protocols, email)
 - Admin UI for configuration (database-backed settings, encryption, setup wizard)
+- [x] Tenant/Tribe document boundary foundation with canonical per-file `is_private` enforcement
+- [x] Per-user onboarding creates an isolated personal Tribe and can create an initial shared Family/Team Tribe
+- [ ] Tribe membership, invitations, delegated routing administration, and explicit shared-intake UI (#1146)
 - Production hardening building blocks (CI/CD, security docs, deployment guides)
 
 ## Feature Landscape (Themes)

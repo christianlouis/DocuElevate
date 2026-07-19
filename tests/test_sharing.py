@@ -2,7 +2,15 @@
 
 import pytest
 
-from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecord, FileShare, UserProfile
+from app.models import (
+    FILE_SHARE_ROLE_EDITOR,
+    FILE_SHARE_ROLE_VIEWER,
+    FileRecord,
+    FileShare,
+    TribeMembership,
+    UserProfile,
+)
+from app.utils.tribe_scope import ensure_document_scope, ensure_personal_scope
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -11,6 +19,7 @@ from app.models import FILE_SHARE_ROLE_EDITOR, FILE_SHARE_ROLE_VIEWER, FileRecor
 
 def _create_file(db_session, owner_id="owner1") -> FileRecord:
     """Create a minimal owned FileRecord."""
+    tenant_id, tribe_id = ensure_document_scope(db_session, owner_id)
     f = FileRecord(
         owner_id=owner_id,
         filehash="sharehash",
@@ -18,6 +27,8 @@ def _create_file(db_session, owner_id="owner1") -> FileRecord:
         local_filename="shared.pdf",
         file_size=1024,
         mime_type="application/pdf",
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     db_session.add(f)
     db_session.commit()
@@ -27,6 +38,7 @@ def _create_file(db_session, owner_id="owner1") -> FileRecord:
 
 def _create_unowned_file(db_session) -> FileRecord:
     """Create a FileRecord with no owner."""
+    tenant_id, tribe_id = ensure_document_scope(db_session, None)
     f = FileRecord(
         owner_id=None,
         filehash="unownedhash",
@@ -34,6 +46,8 @@ def _create_unowned_file(db_session) -> FileRecord:
         local_filename="unowned.pdf",
         file_size=512,
         mime_type="application/pdf",
+        tenant_id=tenant_id,
+        tribe_id=tribe_id,
     )
     db_session.add(f)
     db_session.commit()
@@ -47,6 +61,18 @@ def _create_profile(db_session, user_id: str, display_name: str | None = None) -
     db_session.commit()
     db_session.refresh(p)
     return p
+
+
+def _add_tribe_member(db_session, file_record: FileRecord, user_id: str) -> None:
+    db_session.add(
+        TribeMembership(
+            tenant_id=file_record.tenant_id,
+            tribe_id=file_record.tribe_id,
+            user_id=user_id,
+            role="member",
+        )
+    )
+    db_session.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -80,9 +106,25 @@ class TestGetFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
         db_session.add(share)
         db_session.commit()
+        assert get_file_role(f, "bob", db_session) == FILE_SHARE_ROLE_VIEWER
+
+    def test_file_share_does_not_require_or_grant_file_tribe_membership(self, db_session, monkeypatch):
+        from app.config import settings as real_settings
+        from app.utils.user_scope import get_file_role
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        f = _create_file(db_session, owner_id="alice")
+        _tenant_id, bob_tribe_id = ensure_personal_scope(db_session, "bob", f.tenant_id)
+        db_session.add(
+            FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
+        )
+        db_session.commit()
+
+        assert bob_tribe_id != f.tribe_id
         assert get_file_role(f, "bob", db_session) == FILE_SHARE_ROLE_VIEWER
 
     def test_shared_editor_returns_editor(self, db_session, monkeypatch):
@@ -91,10 +133,23 @@ class TestGetFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "carol")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="carol", role=FILE_SHARE_ROLE_EDITOR)
         db_session.add(share)
         db_session.commit()
         assert get_file_role(f, "carol", db_session) == FILE_SHARE_ROLE_EDITOR
+
+    def test_private_file_ignores_named_share(self, db_session, monkeypatch):
+        from app.config import settings as real_settings
+        from app.utils.user_scope import get_file_role
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        f = _create_file(db_session, owner_id="alice")
+        f.is_private = True
+        db_session.add(FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role="viewer"))
+        db_session.commit()
+        assert get_file_role(f, "alice", db_session) == "owner"
+        assert get_file_role(f, "bob", db_session) is None
 
     def test_unowned_file_returns_viewer_when_setting_allows(self, db_session, monkeypatch):
         from app.utils import user_scope
@@ -103,7 +158,7 @@ class TestGetFileRole:
         monkeypatch.setattr(user_scope.settings, "unowned_docs_visible_to_all", True)
         f = _create_unowned_file(db_session)
         role = user_scope.get_file_role(f, "anyone", db_session)
-        assert role == FILE_SHARE_ROLE_VIEWER
+        assert role is None
 
     def test_none_user_returns_none(self, db_session, monkeypatch):
         from app.config import settings as real_settings
@@ -153,6 +208,7 @@ class TestHasFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role=FILE_SHARE_ROLE_VIEWER)
         db_session.add(share)
         db_session.commit()
@@ -164,6 +220,7 @@ class TestHasFileRole:
 
         monkeypatch.setattr(real_settings, "multi_user_enabled", True)
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "carol")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="carol", role=FILE_SHARE_ROLE_EDITOR)
         db_session.add(share)
         db_session.commit()
@@ -253,6 +310,20 @@ class TestCreateShare:
         assert data["role"] == "viewer"
         assert data["file_id"] == f.id
 
+    def test_private_file_cannot_create_named_share(self, client, db_session, monkeypatch):
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", False)
+        f = _create_file(db_session, owner_id="alice")
+        f.is_private = True
+        db_session.commit()
+
+        response = client.post(
+            f"/api/files/{f.id}/shares",
+            json={"shared_with_user_id": "bob", "role": "viewer"},
+        )
+        assert response.status_code == 409
+
     def test_owner_can_share_with_editor(self, client, db_session, monkeypatch):
         import app.api.sharing as sharing_mod
         from app.config import settings as real_settings
@@ -267,6 +338,9 @@ class TestCreateShare:
         )
         assert resp.status_code == 201
         assert resp.json()["role"] == "editor"
+        carol_membership = db_session.query(TribeMembership).filter_by(user_id="carol").one()
+        assert carol_membership.tenant_id == f.tenant_id
+        assert carol_membership.tribe_id != f.tribe_id
 
     def test_non_owner_cannot_share(self, client, db_session, monkeypatch):
         import app.api.sharing as sharing_mod
@@ -524,6 +598,7 @@ class TestListSharedWith:
         monkeypatch.setattr(sharing_mod, "get_current_owner_id", lambda req: "bob")
 
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role="viewer")
         db_session.add(share)
         db_session.commit()
@@ -577,6 +652,9 @@ class TestAutoShareOnMention:
         )
         assert share is not None
         assert share.role == FILE_SHARE_ROLE_VIEWER
+        bob_membership = db_session.query(TribeMembership).filter_by(user_id="bob").one()
+        assert bob_membership.tenant_id == f.tenant_id
+        assert bob_membership.tribe_id != f.tribe_id
 
     def test_mention_does_not_duplicate_share(self, client, db_session, monkeypatch):
         """Mentioning a user that already has a share does not create a duplicate."""
@@ -605,6 +683,51 @@ class TestAutoShareOnMention:
         assert len(shares) == 1
         assert shares[0].id == existing_id
         assert shares[0].role == "editor"  # role unchanged
+
+    def test_tribe_admin_cannot_auto_share_another_owners_document_by_mention(self, client, db_session, monkeypatch):
+        """Mention syntax is not a delegated content-sharing permission."""
+        import app.api.comments as comments_mod
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(comments_mod, "get_current_owner_id", lambda req: "admin")
+        monkeypatch.setattr(comments_mod, "get_current_user_id", lambda req: "admin")
+
+        f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "admin")
+
+        resp = client.post(
+            f"/api/files/{f.id}/comments",
+            json={"body": "@outsider please review this."},
+        )
+
+        assert resp.status_code == 201
+        share = (
+            db_session.query(FileShare)
+            .filter(FileShare.file_id == f.id, FileShare.shared_with_user_id == "outsider")
+            .first()
+        )
+        assert share is None
+
+    @pytest.mark.parametrize("path", ["comments", "annotations"])
+    def test_platform_admin_without_tribe_membership_cannot_read_collaboration_data(
+        self, client, db_session, monkeypatch, path
+    ):
+        """Platform-admin status never widens the document's Tribe boundary."""
+        import app.api.comments as comments_mod
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(comments_mod, "get_current_owner_id", lambda req: "platform-admin")
+        monkeypatch.setattr(
+            "starlette.requests.Request.session",
+            property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+        )
+
+        f = _create_file(db_session, owner_id="alice")
+        response = client.get(f"/api/files/{f.id}/{path}")
+
+        assert response.status_code == 404
 
     def test_mention_skipped_when_single_user_mode(self, client, db_session, monkeypatch):
         import app.api.comments as comments_mod
@@ -665,6 +788,7 @@ class TestDeleteFileOwnerOnly:
         monkeypatch.setattr(user_scope_mod, "get_current_owner_id", lambda req: "bob")
 
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "bob")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="bob", role="viewer")
         db_session.add(share)
         db_session.commit()
@@ -683,9 +807,32 @@ class TestDeleteFileOwnerOnly:
         monkeypatch.setattr(user_scope_mod, "get_current_owner_id", lambda req: "carol")
 
         f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "carol")
         share = FileShare(file_id=f.id, owner_id="alice", shared_with_user_id="carol", role="editor")
         db_session.add(share)
         db_session.commit()
 
         resp = client.delete(f"/api/files/{f.id}")
         assert resp.status_code == 403
+
+    def test_platform_admin_cannot_delete_another_owners_document(self, client, db_session, monkeypatch):
+        import app.api.files as files_mod
+        import app.utils.user_scope as user_scope_mod
+        from app.config import settings as real_settings
+
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(real_settings, "allow_file_delete", True)
+        monkeypatch.setattr(files_mod, "get_current_owner_id", lambda req: "platform-admin")
+        monkeypatch.setattr(user_scope_mod, "get_current_owner_id", lambda req: "platform-admin")
+        monkeypatch.setattr(
+            "starlette.requests.Request.session",
+            property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+        )
+
+        f = _create_file(db_session, owner_id="alice")
+        _add_tribe_member(db_session, f, "platform-admin")
+
+        response = client.delete(f"/api/files/{f.id}")
+
+        assert response.status_code == 403
+        assert db_session.get(FileRecord, f.id) is not None

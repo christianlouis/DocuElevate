@@ -48,7 +48,7 @@ async def list_backups(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """Return all backup records, newest first."""
-    records = db.query(BackupRecord).order_by(BackupRecord.created_at.desc()).all()
+    records = db.query(BackupRecord).order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc()).all()
     return [
         {
             "id": r.id,
@@ -57,6 +57,7 @@ async def list_backups(
             "size_bytes": r.size_bytes,
             "checksum": r.checksum,
             "status": r.status,
+            "error_detail": r.error_detail,
             "local_path": r.local_path,
             "remote_destination": r.remote_destination,
             "remote_path": r.remote_path,
@@ -65,6 +66,31 @@ async def list_backups(
         }
         for r in records
     ]
+
+
+@router.get("/storage")
+async def backup_storage(_admin: AdminUser, db: Session = Depends(get_db)) -> dict:
+    """Return user-safe local backup capacity and the latest failure."""
+    from app.tasks.backup_tasks import backup_storage_status
+
+    last_failure = (
+        db.query(BackupRecord)
+        .filter(BackupRecord.status == "failed")
+        .order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc())
+        .first()
+    )
+    return {
+        **backup_storage_status(),
+        "last_failure": (
+            {
+                "filename": last_failure.filename,
+                "detail": last_failure.error_detail,
+                "created_at": last_failure.created_at.isoformat() if last_failure.created_at else None,
+            }
+            if last_failure
+            else None
+        ),
+    }
 
 
 @router.post("/create")
@@ -228,16 +254,42 @@ async def delete_backup(
     _admin: AdminUser,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Delete a backup record (and local file if present)."""
+    """Delete every confirmed backup copy before removing its recovery record."""
     rec = db.get(BackupRecord, backup_id)
     if rec is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
 
+    failures: list[str] = []
     if rec.local_path and os.path.exists(rec.local_path):
         try:
             os.remove(rec.local_path)
+            rec.local_path = None
         except OSError as exc:
             logger.warning(f"Could not remove local backup file {rec.local_path}: {exc}")
+            failures.append("local archive")
+    elif rec.local_path:
+        # Reconcile an already-missing local copy while preserving any remote one.
+        rec.local_path = None
+
+    if rec.remote_path:
+        from app.tasks.backup_tasks import _delete_remote_copy
+
+        if _delete_remote_copy(rec):
+            rec.remote_path = None
+            rec.remote_destination = None
+        else:
+            failures.append("remote archive")
+
+    if failures:
+        db.commit()
+        remaining = " and ".join(failures)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                f"Could not delete the {remaining}. The backup record was retained so the remaining recovery copy "
+                "is not lost from inventory."
+            ),
+        )
 
     db.delete(rec)
     db.commit()

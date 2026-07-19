@@ -42,8 +42,12 @@ def load_settings_from_db(settings_obj: object, db_session: Session) -> None:
             key = db_setting.key
             value = db_setting.value
 
-            # Decrypt sensitive settings before applying to the settings object
             metadata = get_setting_metadata(key)
+            if metadata.get("environment_only", False):
+                logger.warning("Ignoring environment-only database setting: %s", key)
+                continue
+
+            # Decrypt sensitive settings before applying to the settings object
             if metadata.get("sensitive", False) and value:
                 try:
                     from app.utils.encryption import decrypt_value

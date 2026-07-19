@@ -4,9 +4,11 @@ Utility functions for file processing status determination.
 
 from typing import Dict, List
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
+from app.utils.pipeline_stages import normalize_stage_name
 from app.utils.step_manager import TERMINAL_STEP, get_file_overall_status
 
 
@@ -115,7 +117,14 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
             FileProcessingStep.updated_at,
             FileProcessingStep.created_at,
         )
-        .filter(FileProcessingStep.file_id.in_(file_ids), FileProcessingStep.step_name.in_(REAL_STEPS))
+        .filter(
+            FileProcessingStep.file_id.in_(file_ids),
+            or_(
+                FileProcessingStep.step_name.in_(REAL_STEPS),
+                FileProcessingStep.step_name == "send_to_user_destinations",
+                FileProcessingStep.step_name.like("upload_to_user_integration_%"),
+            ),
+        )
         .all()
     )
 
@@ -155,7 +164,11 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
             # The pipeline is dynamic: steps may be skipped, added, or
             # left "pending" depending on the file type and processing path.
             # The terminal step is the authoritative completion signal.
-            terminal_step = next((s for s in file_steps if s.step_name == TERMINAL_STEP), None)
+            terminal_steps = [s for s in file_steps if normalize_stage_name(s.step_name) == TERMINAL_STEP]
+            terminal_step = next(
+                (s for s in terminal_steps if s.status == "success"),
+                terminal_steps[0] if terminal_steps else None,
+            )
 
             if has_errors:
                 status = "failed"

@@ -1,5 +1,8 @@
 """Tests for app/utils/setup_wizard.py module."""
 
+import json
+import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +13,8 @@ from app.utils.setup_wizard import (
     get_wizard_steps,
     is_setup_required,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.unit
@@ -24,7 +29,18 @@ class TestGetRequiredSettings:
 
     def test_each_setting_has_required_keys(self):
         """Test that each setting has the expected keys."""
-        required_keys = {"key", "label", "description", "type", "sensitive", "wizard_step", "wizard_category"}
+        required_keys = {
+            "key",
+            "label",
+            "label_key",
+            "description",
+            "description_key",
+            "type",
+            "sensitive",
+            "wizard_step",
+            "wizard_category",
+            "wizard_category_key",
+        }
         for setting in get_required_settings():
             assert required_keys.issubset(set(setting.keys())), f"Missing keys in {setting.get('key', 'unknown')}"
 
@@ -82,6 +98,12 @@ class TestGetRequiredSettings:
         assert len(ai_provider["options"]) > 0
         assert "openai" in ai_provider["options"]
 
+    def test_ai_api_key_is_optional_during_bootstrap(self):
+        """A fresh installation can finish before an AI key is available."""
+        settings_map = {s["key"]: s for s in get_required_settings()}
+        assert settings_map["openai_api_key"]["required"] is False
+        assert settings_map["admin_password"]["required"] is True
+
     def test_settings_have_string_type(self):
         """Test that all settings have the 'string' type."""
         for setting in get_required_settings():
@@ -103,9 +125,11 @@ class TestIsSetupRequired:
         result = is_setup_required()
         assert isinstance(result, bool)
 
-    def test_setup_required_when_admin_password_is_none(self):
-        """Test that setup is required when admin_password is None (test environment default)."""
-        # In the test environment, admin_password defaults to None which is a placeholder value
+    @patch("app.utils.setup_wizard.settings")
+    def test_setup_required_when_admin_password_is_none(self, mock_settings):
+        """Test that setup is required when admin_password is None."""
+        mock_settings.session_secret = "a_very_long_real_session_secret_that_is_definitely_not_placeholder"
+        mock_settings.admin_password = None
         result = is_setup_required()
         assert result is True
 
@@ -143,15 +167,15 @@ class TestIsSetupRequired:
 
     @patch("app.utils.setup_wizard.settings")
     def test_handles_exception_gracefully(self, mock_settings):
-        """Test that exceptions are handled gracefully and return False (fail open)."""
+        """An unreadable security state keeps the installation in setup."""
 
         def raise_error():
             raise RuntimeError("boom")
 
         type(mock_settings).session_secret = property(lambda s: raise_error())
-        # This should not raise - it returns False on error (fail open)
+        # This should not raise and must fail closed.
         result = is_setup_required()
-        assert result is False
+        assert result is True
 
 
 @pytest.mark.unit
@@ -163,11 +187,10 @@ class TestGetMissingRequiredSettings:
         result = get_missing_required_settings()
         assert isinstance(result, list)
 
-    def test_includes_placeholder_settings(self):
-        """Test that settings with placeholder values are included."""
+    def test_excludes_optional_placeholder_settings(self):
+        """Optional settings are not reported missing even with placeholder values."""
         missing = get_missing_required_settings()
-        # In test environment, openai_api_key is "test-key" which is a placeholder
-        assert "openai_api_key" in missing
+        assert "openai_api_key" not in missing
 
     @patch("app.utils.setup_wizard.settings")
     def test_returns_empty_when_all_configured(self, mock_settings):
@@ -234,8 +257,8 @@ class TestGetMissingRequiredSettings:
         assert "session_secret" in missing
 
     @patch("app.utils.setup_wizard.settings")
-    def test_detects_placeholder_bracket_format_as_missing(self, mock_settings):
-        """Test that <KEY_NAME> formatted placeholders are detected as missing."""
+    def test_ignores_optional_bracket_placeholder(self, mock_settings):
+        """Optional settings remain optional even with bracket placeholders."""
         mock_settings.database_url = "sqlite:///./real.db"
         mock_settings.redis_url = "redis://localhost:6379/0"
         mock_settings.workdir = "/data/workdir"
@@ -247,11 +270,11 @@ class TestGetMissingRequiredSettings:
         mock_settings.openai_api_key = "<OPENAI_API_KEY>"
         mock_settings.openai_model = "gpt-4o-mini"
         missing = get_missing_required_settings()
-        assert "openai_api_key" in missing
+        assert "openai_api_key" not in missing
 
     @patch("app.utils.setup_wizard.settings")
-    def test_detects_test_key_placeholder_as_missing(self, mock_settings):
-        """Test that 'test-key' is detected as a missing placeholder."""
+    def test_ignores_optional_test_key_placeholder(self, mock_settings):
+        """Optional settings remain optional even with test placeholders."""
         mock_settings.database_url = "sqlite:///./real.db"
         mock_settings.redis_url = "redis://localhost:6379/0"
         mock_settings.workdir = "/data/workdir"
@@ -263,7 +286,7 @@ class TestGetMissingRequiredSettings:
         mock_settings.openai_api_key = "test-key"
         mock_settings.openai_model = "gpt-4o-mini"
         missing = get_missing_required_settings()
-        assert "openai_api_key" in missing
+        assert "openai_api_key" not in missing
 
 
 @pytest.mark.unit
@@ -336,3 +359,22 @@ class TestGetWizardSteps:
         for settings_list in steps.values():
             all_keys.extend([s["key"] for s in settings_list])
         assert len(all_keys) == len(set(all_keys)), "Some settings appear in multiple steps"
+
+
+@pytest.mark.unit
+def test_setup_copy_is_complete_in_english_and_german():
+    """The instance setup must not fall back to raw keys or mixed-language copy."""
+    template = (_REPO_ROOT / "frontend/templates/setup_wizard.html").read_text(encoding="utf-8")
+    template_keys = set(re.findall(r'["\'](setup\.[a-z0-9_]+)["\']', template))
+    metadata_keys = {
+        str(setting[key])
+        for setting in get_required_settings()
+        for key in ("label_key", "description_key", "wizard_category_key", "bootstrap_reason_key")
+        if setting.get(key)
+    }
+    keys = template_keys | metadata_keys
+
+    for locale in ("en", "de"):
+        translations = json.loads((_REPO_ROOT / f"frontend/translations/{locale}.json").read_text(encoding="utf-8"))
+        missing = sorted(keys - translations.keys())
+        assert not missing, f"Missing {locale} setup translations: {missing}"

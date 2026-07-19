@@ -133,6 +133,8 @@ def _wipe_database(db: Session) -> dict[str, int]:
         FileProcessingStep,
         FileRecord,
         InAppNotification,
+        PrivacyDecisionAudit,
+        PrivacyRuleModel,
         ProcessingLog,
         SavedSearch,
         SettingsAuditLog,
@@ -148,6 +150,7 @@ def _wipe_database(db: Session) -> dict[str, int]:
         ("file_processing_steps", FileProcessingStep),
         ("processing_logs", ProcessingLog),
         ("shared_links", SharedLink),
+        ("privacy_decision_audits", PrivacyDecisionAudit),
         ("in_app_notifications", InAppNotification),
         ("user_notification_preferences", UserNotificationPreference),
         ("user_notification_targets", UserNotificationTarget),
@@ -158,6 +161,7 @@ def _wipe_database(db: Session) -> dict[str, int]:
         ("audit_logs", AuditLog),
         ("backup_records", BackupRecord),
         ("document_metadata", DocumentMetadata),
+        ("privacy_rules", PrivacyRuleModel),
         ("files", FileRecord),
     ]
 

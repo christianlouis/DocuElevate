@@ -5,6 +5,7 @@ Tests all view endpoints with success and error cases, proper mocking, and edge 
 Target: Bring coverage from 8.77% to 70%+
 """
 
+import base64
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -12,8 +13,19 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from itsdangerous import TimestampSigner
 
 from app.models import FileProcessingStep, FileRecord, ProcessingLog
+
+TEST_SESSION_SECRET = "test_secret_key_for_testing_must_be_at_least_32_characters_long"
+
+
+def _make_user_session_cookie(user_id: str) -> str:
+    """Create a signed browser session for an ordinary document owner."""
+    session_data = {"user": {"id": user_id, "is_admin": False}}
+    signer = TimestampSigner(TEST_SESSION_SECRET)
+    data = base64.b64encode(json.dumps(session_data).encode()).decode("utf-8")
+    return signer.sign(data).decode("utf-8")
 
 
 @pytest.mark.unit
@@ -427,6 +439,26 @@ class TestComputeStepSummary:
         assert summary["uploads"]["success"] >= 1
         assert summary["uploads"]["failure"] >= 1
 
+    def test_compute_step_summary_keeps_skipped_separate_from_success(self):
+        """Optional unavailable steps must not inflate the successful-step count."""
+        from datetime import datetime
+
+        from app.views.files import _compute_step_summary
+
+        now = datetime.now()
+        logs = [
+            Mock(step_name="create_file_record", status="success", timestamp=now),
+            Mock(step_name="extract_metadata_with_gpt", status="skipped", timestamp=now),
+            Mock(step_name="upload_to_dropbox", status="skipped", timestamp=now),
+        ]
+
+        summary = _compute_step_summary(logs)
+
+        assert summary["main"]["success"] == 1
+        assert summary["main"]["skipped"] == 1
+        assert summary["uploads"]["success"] == 0
+        assert summary["uploads"]["skipped"] == 1
+
     def test_compute_step_summary_uses_profile_steps_for_expected_rows(self):
         """Profile-aware fallback summary counts expected unstarted steps as queued."""
         from app.views.files import _compute_step_summary
@@ -496,6 +528,51 @@ class TestPreviewOriginalFile:
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert "inline" in response.headers.get("content-disposition", "")
+
+    def test_preview_original_image_uses_actual_media_type(self, client: TestClient, db_session, tmp_path):
+        """The browser must receive images as images instead of invalid PDFs."""
+        file_path = tmp_path / "test.png"
+        file_path.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+        file = FileRecord(
+            filehash="image-hash",
+            original_filename="test.png",
+            local_filename=str(file_path),
+            original_file_path=str(file_path),
+            file_size=8,
+            mime_type="image/png",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/files/{file.id}/preview/original")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert "inline" in response.headers.get("content-disposition", "")
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_preview_original_html_is_neutralized_as_plain_text(self, client: TestClient, db_session, tmp_path):
+        """An uploaded HTML file must not execute under DocuElevate's origin."""
+        file_path = tmp_path / "unsafe.html"
+        file_path.write_text("<script>window.top.pwned = true</script>", encoding="utf-8")
+
+        file = FileRecord(
+            filehash="html-hash",
+            original_filename="unsafe.html",
+            local_filename=str(file_path),
+            original_file_path=str(file_path),
+            file_size=file_path.stat().st_size,
+            mime_type="text/html",
+        )
+        db_session.add(file)
+        db_session.commit()
+
+        response = client.get(f"/files/{file.id}/preview/original")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/plain; charset=utf-8"
+        assert response.headers["x-content-type-options"] == "nosniff"
 
     def test_preview_original_file_not_found(self, client: TestClient, db_session):
         """Test preview when file record doesn't exist."""
@@ -1343,8 +1420,8 @@ class TestComputeStepSummaryAdditional:
         assert summary["main"]["success"] == 1
         assert summary["total_main_steps"] == 1
 
-    def test_compute_step_summary_unknown_status_not_counted(self):
-        """Test that unknown statuses are not counted in main_counts (lines 577->576)."""
+    def test_compute_step_summary_counts_skipped_status(self):
+        """Skipped work is a first-class outcome and remains separate from success."""
         from app.views.files import _compute_step_summary
 
         now = datetime.now()
@@ -1353,9 +1430,8 @@ class TestComputeStepSummaryAdditional:
         ]
 
         summary = _compute_step_summary(logs)
-        # "skipped" is not in main_counts, so total counts should stay 0
-        total = sum(summary["main"].values())
-        assert total == 0
+        assert summary["main"]["skipped"] == 1
+        assert summary["main"]["success"] == 0
 
     def test_compute_step_summary_unknown_upload_status_not_counted(self):
         """Test that unknown statuses in upload counts are not counted (lines 582->581)."""
@@ -2079,6 +2155,19 @@ class TestOwnerDisplayAndClaim:
     """Tests that owner info and claim button appear correctly on file views."""
 
     def _make_file(self, db_session, owner_id=None) -> FileRecord:
+        from app.utils.tribe_scope import ensure_document_scope, ensure_tribe_membership
+
+        tenant_id, tribe_id = ensure_document_scope(db_session, owner_id)
+        if owner_id is None:
+            # Claim actions are available only to users admitted to the shared
+            # intake quarantine. Tenant membership by itself must not expose
+            # unowned documents from another Tribe.
+            ensure_tribe_membership(
+                db_session,
+                tenant_id=tenant_id,
+                tribe_id=tribe_id,
+                user_id="viewer@example.com",
+            )
         file_rec = FileRecord(
             filehash=uuid.uuid4().hex,
             original_filename="doc.pdf",
@@ -2086,17 +2175,24 @@ class TestOwnerDisplayAndClaim:
             file_size=512,
             mime_type="application/pdf",
             owner_id=owner_id,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
         )
         db_session.add(file_rec)
         db_session.commit()
         db_session.refresh(file_rec)
         return file_rec
 
+    @staticmethod
+    def _authenticate(client: TestClient, user_id: str) -> None:
+        client.cookies.set("session", _make_user_session_cookie(user_id))
+
     # ── /files/{id} (file_summary.html) ──────────────────────────────────
 
     def test_summary_shows_owner_when_multi_user_enabled(self, client, db_session):
         """Owner ID is rendered in file summary when multi-user mode is on."""
         file_rec = self._make_file(db_session, owner_id="alice@example.com")
+        self._authenticate(client, "alice@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2105,6 +2201,7 @@ class TestOwnerDisplayAndClaim:
     def test_summary_shows_unowned_label_for_unowned_file(self, client, db_session):
         """'Unowned' label is rendered in file summary for files without an owner."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2113,6 +2210,7 @@ class TestOwnerDisplayAndClaim:
     def test_summary_shows_claim_button_for_unowned_file(self, client, db_session):
         """Claim Ownership button appears on file summary for an unowned file."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2121,6 +2219,7 @@ class TestOwnerDisplayAndClaim:
     def test_summary_no_claim_button_when_owned(self, client, db_session):
         """No Claim Ownership button when the file already has an owner."""
         file_rec = self._make_file(db_session, owner_id="bob@example.com")
+        self._authenticate(client, "bob@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")
         assert response.status_code == 200
@@ -2140,6 +2239,7 @@ class TestOwnerDisplayAndClaim:
     def test_detail_shows_owner_when_multi_user_enabled(self, client, db_session):
         """Owner ID is rendered in file detail view when multi-user mode is on."""
         file_rec = self._make_file(db_session, owner_id="charlie@example.com")
+        self._authenticate(client, "charlie@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/detail")
         assert response.status_code == 200
@@ -2148,16 +2248,62 @@ class TestOwnerDisplayAndClaim:
     def test_detail_shows_claim_button_for_unowned_file(self, client, db_session):
         """Claim Ownership button appears in file detail view for an unowned file."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/detail")
         assert response.status_code == 200
         assert b"Claim Ownership" in response.content
+
+    @pytest.mark.parametrize(
+        ("is_private", "expected_state", "next_privacy_value"),
+        [
+            (False, b"Visible to the Tribe", "true"),
+            (True, b"Private", "false"),
+        ],
+    )
+    def test_detail_shows_privacy_control_in_single_user_mode(
+        self, client, db_session, is_private, expected_state, next_privacy_value
+    ):
+        """Owned single-user documents render the state and inverse privacy action."""
+        file_rec = self._make_file(db_session, owner_id="owner@example.com")
+        file_rec.is_private = is_private
+        db_session.commit()
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b'id="privacy-state"' in response.content
+        assert b'id="privacy-toggle"' in response.content
+        assert expected_state in response.content
+        assert f"setFilePrivacy({file_rec.id}, {next_privacy_value})".encode() in response.content
+        assert b"/shared-links?file_id=" not in response.content
+
+    def test_detail_does_not_allow_private_override_for_unowned_single_user_file(self, client, db_session):
+        """An ownerless document cannot be made private and orphaned on activation."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b'id="privacy-toggle"' not in response.content
+        assert b'id="privacy-owner-required"' in response.content
+        assert b"/shared-links?file_id=" not in response.content
+
+    def test_detail_allows_ownerless_private_legacy_file_to_be_made_visible(self, client, db_session):
+        """A previously private legacy document retains a recovery action."""
+        file_rec = self._make_file(db_session, owner_id=None)
+        file_rec.is_private = True
+        db_session.commit()
+        with patch("app.config.settings.multi_user_enabled", False):
+            response = client.get(f"/files/{file_rec.id}/detail")
+        assert response.status_code == 200
+        assert b'id="privacy-toggle"' in response.content
+        assert f"setFilePrivacy({file_rec.id}, false)".encode() in response.content
 
     # ── /files/{id}/annotations (file_annotations.html) ──────────────────
 
     def test_annotations_shows_owner_info(self, client, db_session):
         """Owner info is rendered on the annotations page in multi-user mode."""
         file_rec = self._make_file(db_session, owner_id="dave@example.com")
+        self._authenticate(client, "dave@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/annotations")
         assert response.status_code == 200
@@ -2166,6 +2312,7 @@ class TestOwnerDisplayAndClaim:
     def test_annotations_shows_claim_button_for_unowned_file(self, client, db_session):
         """Claim Ownership button appears on annotations page for unowned file."""
         file_rec = self._make_file(db_session, owner_id=None)
+        self._authenticate(client, "viewer@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/annotations")
         assert response.status_code == 200
@@ -2174,6 +2321,7 @@ class TestOwnerDisplayAndClaim:
     def test_annotations_no_claim_button_when_owned(self, client, db_session):
         """No Claim Ownership button on annotations page when file has an owner."""
         file_rec = self._make_file(db_session, owner_id="eve@example.com")
+        self._authenticate(client, "eve@example.com")
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}/annotations")
         assert response.status_code == 200
@@ -2187,6 +2335,8 @@ class TestOwnerDisplayAndClaim:
         profile = UserProfile(user_id="frank@example.com", display_name="Frank Lastname")
         db_session.add(profile)
         db_session.commit()
+
+        self._authenticate(client, "frank@example.com")
 
         with patch("app.config.settings.multi_user_enabled", True):
             response = client.get(f"/files/{file_rec.id}")

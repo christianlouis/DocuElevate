@@ -5,6 +5,32 @@
 <div class="flex flex-col items-center justify-center p-4 sm:p-8">
   <h1 class="text-2xl sm:text-3xl font-bold mb-6 sm:mb-8">{{ _("upload.page_title") }}</h1>
 
+  {% if request.query_params.get("onboarding") == "first-document" %}
+  <div class="w-full max-w-2xl mb-6 rounded-xl border border-blue-200 bg-blue-50 p-5" role="status">
+    <div class="flex gap-3">
+      <i class="fas fa-file-circle-plus text-blue-600 mt-1" aria-hidden="true"></i>
+      <div>
+        <h2 class="font-bold text-blue-900">{{ _("upload.first_document_heading") }}</h2>
+        <p class="text-sm text-blue-800 mt-1">{{ _("upload.first_document_description") }}</p>
+        <p id="firstDocumentTracker" class="text-sm font-medium text-blue-900 mt-3" aria-live="polite">
+          <span id="firstDocumentTrackerText">{{ _("upload.first_document_ready_to_upload") }}</span>
+          <span id="firstDocumentElapsed" class="hidden tabular-nums"></span>
+        </p>
+        <a id="firstDocumentDelayedLink"
+           href="/files"
+           class="hidden mt-2 inline-flex min-h-[44px] items-center font-semibold text-blue-800 underline">
+          <i class="fas fa-folder-open mr-2" aria-hidden="true"></i>{{ _("upload.first_document_open_files") }}
+        </a>
+        <a id="firstDocumentRetryLink"
+           href="/upload?onboarding=first-document"
+           class="hidden mt-2 inline-flex min-h-[44px] items-center font-semibold text-red-800 underline">
+          <i class="fas fa-rotate-right mr-2" aria-hidden="true"></i>{{ _("upload.first_document_retry") }}
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- File Upload Section -->
   <div class="w-full max-w-2xl mb-6 sm:mb-8">
     <h2 class="text-xl font-semibold mb-4">{{ _("upload.section_device") }}</h2>
@@ -37,7 +63,6 @@
         <!-- Browse Files button (all devices) -->
         <button
           type="button"
-          onclick="document.getElementById('fileInput').click()"
           class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 mb-4"
           style="min-height:44px;"
         >
@@ -132,6 +157,29 @@
     concurrency: {{ upload_concurrency }},
     queueDelayMs: {{ upload_queue_delay_ms }}
   };
+  window.uploadI18n = {
+    queuedBatch: {{ _("upload.queue_queued") | tojson }},
+    allComplete: {{ _("upload.queue_complete") | tojson }},
+    uploadingBatch: {{ _("upload.queue_uploading") | tojson }},
+    statusQueued: {{ _("upload.status_queued") | tojson }},
+    unsupportedType: {{ _("upload.error_unsupported_type") | tojson }},
+    tooLarge: {{ _("upload.error_too_large") | tojson }},
+    retryExhausted: {{ _("upload.error_retry_exhausted") | tojson }},
+    uploading: {{ _("upload.uploading") | tojson }},
+    uploadingPercent: {{ _("upload.uploading_percent") | tojson }},
+    duplicate: {{ _("upload.duplicate") | tojson }},
+    successTask: {{ _("upload.success_task") | tojson }},
+    retryRateLimit: {{ _("upload.retry_rate_limit") | tojson }},
+    errorHttp: {{ _("upload.error_http") | tojson }},
+    errorNetwork: {{ _("upload.error_network") | tojson }},
+    urlSuccess: {{ _("upload.url_success") | tojson }},
+    urlError: {{ _("upload.url_error") | tojson }},
+    urlNetworkError: {{ _("upload.url_network_error") | tojson }},
+    firstDocumentQueued: {{ _("upload.first_document_queued") | tojson }},
+    firstDocumentOpening: {{ _("upload.first_document_opening") | tojson }},
+    firstDocumentDelayed: {{ _("upload.first_document_delayed") | tojson }},
+    firstDocumentFailed: {{ _("upload.first_document_failed") | tojson }}
+  };
 </script>
 <script src="/static/js/upload.js"></script>
 <script>
@@ -140,8 +188,115 @@
   const fileInput = document.getElementById("fileInput");
   const statusMessage = document.getElementById("statusMessage");
   const uploadProgress = document.getElementById("uploadProgress");
+  const firstDocumentMode = new URLSearchParams(window.location.search).get("onboarding") === "first-document";
+  const firstDocumentTrackerText = document.getElementById("firstDocumentTrackerText");
+  const firstDocumentElapsed = document.getElementById("firstDocumentElapsed");
+  const firstDocumentDelayedLink = document.getElementById("firstDocumentDelayedLink");
+  const firstDocumentRetryLink = document.getElementById("firstDocumentRetryLink");
+  let followingFirstDocument = false;
+  let firstDocumentTimer = null;
 
-  dropZone.addEventListener("click", () => fileInput.click());
+  function formatFirstDocumentElapsed(startedAt) {
+    const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+
+  function updateFirstDocumentTracker(message, startedAt = null) {
+    if (firstDocumentTrackerText) {
+      firstDocumentTrackerText.textContent = message;
+    }
+    if (!firstDocumentElapsed || startedAt === null) {
+      return;
+    }
+    firstDocumentElapsed.classList.remove("hidden");
+    firstDocumentElapsed.textContent = ` · ${formatFirstDocumentElapsed(startedAt)}`;
+  }
+
+  function startFirstDocumentTimer(startedAt) {
+    if (firstDocumentTimer !== null) {
+      window.clearInterval(firstDocumentTimer);
+    }
+    firstDocumentTimer = window.setInterval(() => {
+      updateFirstDocumentTracker(uploadMessage("firstDocumentQueued"), startedAt);
+    }, 1000);
+  }
+
+  async function followFirstDocument({ operationId = null, taskId = null, duplicateFileId = null }) {
+    if (!firstDocumentMode || followingFirstDocument) {
+      return false;
+    }
+    followingFirstDocument = true;
+    const startedAt = Date.now();
+    window.sessionStorage.setItem("docuelevate.firstDocumentStartedAt", String(startedAt));
+    updateFirstDocumentTracker(uploadMessage("firstDocumentQueued"), startedAt);
+    startFirstDocumentTimer(startedAt);
+
+    if (duplicateFileId) {
+      updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
+      window.location.href = `/files/${encodeURIComponent(duplicateFileId)}/process?onboarding=first-document`;
+      return true;
+    }
+
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      try {
+        const statusUrl = operationId
+          ? `/api/bulk-operations/${encodeURIComponent(operationId)}`
+          : `/api/logs/task/${encodeURIComponent(taskId)}`;
+        const response = await fetch(statusUrl);
+        if (response.ok) {
+          const payload = await response.json();
+          const fileId = operationId
+            ? payload.file_ids?.[0]
+            : payload.logs.find((entry) => entry.file_id !== null)?.file_id;
+          if (fileId) {
+            updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
+            window.location.href = `/files/${encodeURIComponent(fileId)}/process?onboarding=first-document`;
+            return true;
+          }
+          if (operationId && payload.state === "completed" && payload.failed_items > 0) {
+            if (firstDocumentTimer !== null) {
+              window.clearInterval(firstDocumentTimer);
+            }
+            updateFirstDocumentTracker(uploadMessage("firstDocumentFailed"), startedAt);
+            firstDocumentRetryLink?.classList.remove("hidden");
+            return false;
+          }
+        } else if (response.status !== 404) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        // The processing queue remains authoritative. Keep polling so a brief
+        // API or database interruption does not strand the onboarding journey.
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    }
+
+    if (firstDocumentTimer !== null) {
+      window.clearInterval(firstDocumentTimer);
+    }
+    updateFirstDocumentTracker(uploadMessage("firstDocumentDelayed"), startedAt);
+    firstDocumentDelayedLink?.classList.remove("hidden");
+    followingFirstDocument = false;
+    return false;
+  }
+
+  window.onDocuElevateUploadQueued = followFirstDocument;
+
+  dropZone.addEventListener("click", (event) => {
+    // The hidden input lives inside the drop zone, so its programmatic click
+    // bubbles back here. Ignore that event to open exactly one native picker.
+    if (event.target !== fileInput) {
+      fileInput.click();
+    }
+  });
+
+  dropZone.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      fileInput.click();
+    }
+  });
 
   function handleDragOver(e) {
     e.preventDefault();
@@ -195,7 +350,7 @@
     const filename = urlFilename.value.trim();
 
     if (!url) {
-      showUrlStatus("Please enter a URL", "error");
+      showUrlStatus({{ _("upload.error_url_required") | tojson }}, "error");
       return;
     }
 
@@ -203,16 +358,16 @@
     try {
       new URL(url);
     } catch (error) {
-      showUrlStatus("Invalid URL format", "error");
+      showUrlStatus({{ _("upload.error_invalid_url") | tojson }}, "error");
       return;
     }
 
     // Show loading state
-    showUrlStatus("Downloading file from URL...", "info");
+    showUrlStatus({{ _("upload.downloading") | tojson }}, "info");
 
     const submitButton = urlUploadForm.querySelector('button[type="submit"]');
     const originalButtonText = submitButton.textContent;
-    submitButton.textContent = "Processing...";
+    submitButton.textContent = {{ _("upload.button_processing") | tojson }};
     submitButton.disabled = true;
 
     try {
@@ -233,22 +388,26 @@
 
       if (response.ok) {
         showUrlStatus(
-          `Success! File "${data.filename}" (${formatBytes(data.size)}) downloaded and queued for processing.`,
+          uploadMessage('urlSuccess', { filename: data.filename, size: formatBytes(data.size) }),
           "success"
         );
         // Clear form
         urlInput.value = "";
         urlFilename.value = "";
 
-        // Optionally redirect to files page after short delay
-        setTimeout(() => {
-          window.location.href = "/files";
-        }, 2000);
+        if (firstDocumentMode) {
+          void followFirstDocument({ taskId: data.task_id });
+        } else {
+          // Keep the established bulk-upload journey outside onboarding.
+          setTimeout(() => {
+            window.location.href = "/files";
+          }, 2000);
+        }
       } else {
-        showUrlStatus(`Error: ${data.detail || "Failed to process URL"}`, "error");
+        showUrlStatus(uploadMessage('urlError', { detail: data.detail || {{ _("upload.error_url_processing") | tojson }} }), "error");
       }
     } catch (error) {
-      showUrlStatus(`Network error: ${error.message}`, "error");
+      showUrlStatus(uploadMessage('urlNetworkError', { detail: error.message }), "error");
     } finally {
       submitButton.textContent = originalButtonText;
       submitButton.disabled = false;

@@ -15,15 +15,25 @@ Configuration is primarily done through environment variables specified in a `.e
 | `DB_MAX_OVERFLOW`      | Additional connections beyond `DB_POOL_SIZE` under burst load (PostgreSQL/MySQL only). | `20` |
 | `DB_POOL_TIMEOUT`      | Seconds to wait for a pool connection before raising `TimeoutError` (PostgreSQL/MySQL only). | `30` |
 | `DB_POOL_RECYCLE`      | Recycle connections after this many seconds to avoid stale connections (PostgreSQL/MySQL only). | `1800` |
-| `REDIS_URL`            | URL for Redis, used by Celery for broker & result store. | `redis://redis:6379/0`         |
+| `REDIS_URL`            | Shared Redis URL for caching and as the default Celery route. | `redis://redis:6379/0`         |
+| `CELERY_BROKER_URL`    | Optional dedicated Celery broker URL; falls back to `REDIS_URL`. | unset |
+| `CELERY_RESULT_BACKEND` | Optional dedicated Celery result-backend URL; must resolve to a writable primary and falls back to `REDIS_URL`. | unset |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
+| `DEPLOYMENT_LABEL`     | Optional label shown during onboarding so users can distinguish installations. | *(empty)* |
+| `DEFAULT_STORAGE_PATH` | Default folder suggested for newly configured sources and destinations. Give non-production deployments a clearly separated path. | `/DocuElevate` |
 | `ALLOW_FILE_DELETE`    | Enable file deletion in the web interface (`true`/`false`). | `true`                      |
 | `COMPLIANCE_ENABLED`   | Enable the compliance templates dashboard (GDPR, HIPAA, SOC 2). | `true`                      |
 | `FACTORY_RESET_ON_STARTUP` | Wipe all user data on every startup (demo/testing). | `false` |
 | `ENABLE_FACTORY_RESET` | Show the System Reset page in the admin UI.         | `false` |
+
+For example, a disposable preproduction Canary should use
+`DEPLOYMENT_LABEL="Preprod Canary"` and
+`DEFAULT_STORAGE_PATH="/DocuElevate Preprod Canary"`. These are deployment
+settings, not image build parameters, so the same image can be promoted safely
+without inheriting another environment's folders.
 
 ### DearConcierge knowledge bridge (preproduction pilot)
 
@@ -42,6 +52,7 @@ secret manager; do not store them in `.env` files committed to source control.
 | `VECTOR_CHUNK_OVERLAP_TOKENS` | Token overlap between adjacent chunks. | `80` |
 | `VECTOR_EMBEDDING_BATCH_TOKENS` | Maximum aggregate tokens per embedding request; larger documents use multiple ordered requests. | `200000` |
 | `VECTOR_INDEX_TIMEOUT_SECONDS` | Qdrant request timeout. | `30` |
+| `RAG_CHAT_MODEL` | Model used only for source-grounded document chat. This is independent from metadata/OCR model selection and can be changed from database-backed settings without restarting app or workers. | `gpt-5-nano` |
 | `DOCUMENT_INTAKE_SHARED_SECRET` | Optional dedicated secret for the controlled legacy sender. | unset |
 | `DOCUMENT_INTAKE_SHARED_OWNER_ID` | Owner/principal assigned to shared-secret intake. | `legacy-bridge` |
 | `DOCUMENT_BRIDGE_ENABLED` | Send completed documents to another DocuElevate intake. | `false` |
@@ -49,6 +60,12 @@ secret manager; do not store them in `.env` files committed to source control.
 | `DOCUMENT_BRIDGE_BEARER_TOKEN` | Preferred destination personal API token. | unset |
 | `DOCUMENT_BRIDGE_SHARED_SECRET` | Dedicated intake-secret fallback when no Bearer token is used. | unset |
 | `DOCUMENT_BRIDGE_SOURCE` | Provenance label included in deliveries. | `docuelevate-legacy` |
+
+In multi-user mode, DocuElevate keeps a single operator-managed Qdrant collection and
+isolates tenants with indexed `owner_id` and `document_id` payload filters before
+ranking. Explicitly shared document IDs are added to the caller's filter. Relational
+authorization is checked again before source text is returned, and ordinary users do
+not receive global collection sizes from the knowledge status API.
 
 Example preproduction service configuration (secret values omitted):
 
@@ -59,6 +76,7 @@ VECTOR_INDEX_COLLECTION=docuelevate_documents
 VECTOR_CHUNK_TOKENS=600
 VECTOR_CHUNK_OVERLAP_TOKENS=80
 VECTOR_EMBEDDING_BATCH_TOKENS=200000
+RAG_CHAT_MODEL=gpt-5-nano
 ```
 
 The vector collection is derived state. PostgreSQL and the document work directory
@@ -75,6 +93,10 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `PROCESSALL_THROTTLE_THRESHOLD`   | Number of files above which throttling is applied. Files <= threshold are processed immediately.  | `20`        |
 | `PROCESSALL_THROTTLE_DELAY`       | Delay in seconds between each task submission when throttling is active.                          | `3`         |
 | `CORPUS_BACKFILL_BATCH_SIZE` | Maximum provider entries requested per Dropbox corpus page. | `10` |
+| `CORPUS_BACKFILL_DOWNLOAD_CONCURRENCY` | Parallel Dropbox downloads for opt-in index-first initial backfills; bounded to 8. | `1` |
+| `CORPUS_BACKFILL_DEFERRED_OCR_ENABLED` | Run a low-priority OCR-only second pass for index-first documents without embedded text. | `false` |
+| `CORPUS_BACKFILL_OCR_BATCH_SIZE` | Maximum deferred OCR tasks queued per coordinator pass. | `2` |
+| `CORPUS_BACKFILL_OCR_RECHECK_SECONDS` | Seconds between deferred OCR backlog capacity checks. | `30` |
 | `CORPUS_BACKFILL_QUEUE_HIGH_WATERMARK` | Pause corpus backfills at this queued plus worker-reserved Celery depth. | `50` |
 | `CORPUS_BACKFILL_RESUME_DELAY_SECONDS` | Seconds before a queue-limited backfill checks capacity again. | `30` |
 | `CORPUS_BACKFILL_TASK_PRIORITY` | Celery Redis priority for corpus coordinator tasks; `9` runs behind normal priority `0` work. | `9` |
@@ -82,12 +104,19 @@ Control how the `/processall` endpoint handles large batches of files to prevent
 | `CORPUS_BACKFILL_LLM_TOKEN_RESERVATION_PER_DOCUMENT` | Tokens reserved per queued corpus document; metadata prompt/output headroom is enforced automatically. | `10000` |
 | `METADATA_MAX_INPUT_TOKENS` | Maximum document-text tokens sent to metadata extraction; keeps the beginning plus a short ending. | `8000` |
 
-Dropbox Watch Folder integrations may override the first three defaults with
-`backfill_batch_size`, `backfill_queue_high_watermark`, and
-`backfill_resume_delay_seconds` in their database-backed integration config.
+Dropbox Watch Folder integrations may override these defaults with
+`backfill_batch_size`, `backfill_download_concurrency`, `backfill_deferred_ocr_enabled`,
+`backfill_ocr_batch_size`, `backfill_ocr_recheck_seconds`, `backfill_queue_high_watermark`,
+and `backfill_resume_delay_seconds` in their database-backed integration config.
 The importer commits progress after every queued document and reuses the
 Dropbox cursor, so pausing or restarting a worker does not require rescanning
 the completed portion of the corpus.
+
+When deferred OCR is enabled, the fast first pass still indexes embedded PDF
+text immediately. After the initial true-up completes, scanned PDFs and images
+marked `needs_ocr` are processed in bounded, low-priority batches. Their OCR text
+goes directly to the vector index; metadata LLM extraction and destination
+distribution remain skipped.
 
 **Example Usage**: When processing 25 files with default settings:
 - Files are staggered: file 0 at 0s, file 1 at 3s, file 2 at 6s, etc.
@@ -511,8 +540,9 @@ Social login lets users sign in with their existing Google, Microsoft, Apple, Dr
 ### Multi-User Mode
 
 When multi-user mode is enabled, each authenticated user gets their own isolated document space.
-Uploads, search results, and file management are scoped to the individual user. Shared settings
-(AI configuration, OCR providers, storage destinations) remain global.
+Uploads, search results, and file management are scoped to the individual user and Tribe. Operator
+settings such as the database and shared AI/OCR infrastructure remain global; user integrations and
+their credentials are stored in the database and scoped to their owner rather than shared globally.
 
 Admin users (determined by `ADMIN_GROUP_NAME`) bypass the user filter and can see all documents.
 
@@ -520,10 +550,15 @@ Requires `AUTH_ENABLED=true`.
 
 | **Variable**                | **Description**                                                                 | **Default** |
 |-----------------------------|---------------------------------------------------------------------------------|-------------|
-| `MULTI_USER_ENABLED`        | Enable multi-user mode with individual document spaces per user.               | `false`     |
+| `MULTI_USER_ENABLED`        | Enable multi-user mode with individual document spaces per user.               | `false`*    |
 | `DEFAULT_DAILY_UPLOAD_LIMIT`| Maximum document uploads allowed per user per day. `0` = unlimited.            | `0`         |
-| `UNOWNED_DOCS_VISIBLE_TO_ALL` | Show unclaimed documents (no owner) to all users. When `false`, only admins see them. | `true` |
+| `UNOWNED_DOCS_VISIBLE_TO_ALL` | Show unclaimed documents (no owner) to all users. When `false`, only admins see them. | `true`* |
 | `DEFAULT_OWNER_ID`          | Automatically assign this owner to newly ingested documents without a session (e.g. IMAP, API). Leave empty to keep unowned. | *(empty)* |
+
+\* These are compatibility fallbacks for embedding DocuElevate without
+authentication. The bundled Docker Compose and `.env.demo` explicitly use the
+recommended secure defaults: `AUTH_ENABLED=true`, `MULTI_USER_ENABLED=true`, and
+`UNOWNED_DOCS_VISIBLE_TO_ALL=false`.
 
 #### Unclaimed Documents
 
@@ -533,7 +568,7 @@ without a user session have `owner_id = NULL` unless `DEFAULT_OWNER_ID` is set. 
 Documents ingested via **per-user integrations** (IMAP or Watch Folder integrations configured through
 the Integrations dashboard) are automatically attributed to the owning user's `owner_id` and are never unclaimed.
 
-- When `UNOWNED_DOCS_VISIBLE_TO_ALL=true` (default), every authenticated user sees unclaimed
+- When `UNOWNED_DOCS_VISIBLE_TO_ALL=true`, every authenticated user sees unclaimed
   documents alongside their own files. This allows users to discover and claim them.
 - When `UNOWNED_DOCS_VISIBLE_TO_ALL=false`, only admins can see unclaimed documents.
 
@@ -584,6 +619,11 @@ DocuElevate uses Python's standard `logging` module. Two environment variables c
 
 1. If `LOG_LEVEL` is explicitly set, it always wins — regardless of `DEBUG`.
 2. If only `DEBUG=true` is set (no `LOG_LEVEL`), the effective level becomes `DEBUG`.
+
+Provider libraries that may log document content or credential-bearing request
+payloads remain pinned to `WARNING` even when application logging is set to
+`DEBUG`. This currently includes the OpenAI SDK and Apprise notification
+providers.
 3. If neither is set, the default level is `INFO`.
 
 ```bash
@@ -1098,12 +1138,14 @@ DocuElevate supports multiple OCR engines that can be used individually or in co
 
 | **Variable**          | **Description**                                                                                   | **Default** |
 |-----------------------|---------------------------------------------------------------------------------------------------|-------------|
-| `OCR_PROVIDERS`       | Comma-separated list of OCR engines to use, e.g. `azure`, `mistral`, `azure,tesseract`.         | `azure`     |
-| `OCR_MERGE_STRATEGY`  | Strategy for combining results from multiple providers: `ai_merge`, `longest`, or `primary`.     | `ai_merge`  |
+| `OCR_PROVIDERS`          | Comma-separated list of OCR engines to use, e.g. `tesseract`, `azure`, `azure,tesseract`.                            | `tesseract` |
+| `OCR_MERGE_STRATEGY`     | Strategy for combining results from multiple providers: `ai_merge`, `longest`, or `primary`.                        | `ai_merge`  |
+| `OCR_EMBED_TEXT_LAYER`   | Run an additional `ocrmypdf` pass when the provider returns text only, adding selectable text to the output PDF.    | `false`     |
 
 **Supported `OCR_PROVIDERS` values**: `azure`, `tesseract`, `easyocr`, `mistral`, `google_docai`, `aws_textract`
 
 When multiple providers are listed, all run in parallel and their results are merged according to `OCR_MERGE_STRATEGY`.
+The packaged image includes Tesseract, so a fresh installation can process scans without cloud credentials.
 
 #### Embedded Text Quality Check
 
@@ -1141,13 +1183,13 @@ Not all OCR providers embed a searchable text layer in the output PDF. The table
 | **Provider**      | **Embeds text layer?** | **Notes** |
 |-------------------|------------------------|-----------|
 | `azure`           | ✅ Yes                 | Azure Document Intelligence returns a PDF/A with an embedded text layer. |
-| `tesseract`       | ❌ No (text only)      | Text is extracted but the PDF is not modified. `embed_text_layer` post-processing is applied automatically. |
+| `tesseract`       | ❌ No (text only)      | Text is extracted and indexed; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
 | `easyocr`         | ❌ No (text only)      | Same as above. |
-| `mistral`         | ❌ No (text only)      | Mistral OCR API returns plain text; `embed_text_layer` post-processing is applied automatically. |
-| `google_docai`    | ❌ No (text only)      | Google Cloud Document AI returns plain text; `embed_text_layer` post-processing is applied automatically. |
-| `aws_textract`    | ❌ No (text only)      | AWS Textract returns plain text; `embed_text_layer` post-processing is applied automatically. |
+| `mistral`         | ❌ No (text only)      | Mistral OCR API returns plain text; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
+| `google_docai`    | ❌ No (text only)      | Google Cloud Document AI returns plain text; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
+| `aws_textract`    | ❌ No (text only)      | AWS Textract returns plain text; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
 
-For providers that do **not** embed a text layer, DocuElevate automatically runs `ocrmypdf --skip-text` after OCR to add an invisible Tesseract-generated text layer to the PDF. This makes the file selectable and searchable in PDF viewers. The step is silently skipped if `ocrmypdf` is not available on `PATH` (a warning is logged).
+The extracted OCR text is always indexed and searchable inside DocuElevate. Set `OCR_EMBED_TEXT_LAYER=true` if output PDFs must also contain selectable text. For providers that do **not** return a searchable PDF, this runs an additional `ocrmypdf --skip-text` pass. The second OCR pass is more CPU- and memory-intensive, so it is disabled by default. When enabled, the step is skipped gracefully if `ocrmypdf` is unavailable on `PATH`.
 
 #### Azure Document Intelligence
 
@@ -1590,6 +1632,9 @@ See the [Database Configuration Guide](DatabaseConfiguration.md#backup-procedure
 | `BACKUP_RETAIN_HOURLY`         | Number of hourly snapshots to keep (1 per hour = 96 covers 4 days).                         | `96`                |
 | `BACKUP_RETAIN_DAILY`          | Number of daily snapshots to keep (21 = 3 weeks).                                           | `21`                |
 | `BACKUP_RETAIN_WEEKLY`         | Number of weekly snapshots to keep (13 ≈ 3 months).                                         | `13`                |
+| `BACKUP_ADAPTIVE_CLEANUP_ENABLED` | Reclaim oldest redundant local snapshots before a dump when capacity is low; always preserves the newest local snapshot per tier. | `True` |
+| `BACKUP_MIN_FREE_BYTES`        | Free-space reserve on the backup filesystem. `0` automatically reserves 10%, capped at 1 GiB. | `0` |
+| `BACKUP_MAX_LOCAL_BYTES`       | Local-backup byte budget. `0` automatically limits backups to 25% of the filesystem.         | `0` |
 
 **Retention schedule:**
 
@@ -1599,7 +1644,7 @@ See the [Database Configuration Guide](DatabaseConfiguration.md#backup-procedure
 | Daily   | Daily at 02:00   | 21 snapshots      | ~3 weeks     |
 | Weekly  | Sundays at 03:00 | 13 snapshots      | ~3 months    |
 
-Archives beyond the retention window are automatically pruned after each new backup. The **Clean Up** button on the dashboard applies retention immediately. When a remote destination is configured, remote copies follow the same retention policy.
+Archives beyond the retention window are automatically pruned after each new backup. The **Clean Up** button on the dashboard applies retention immediately. Remote copies follow the same retention count when their provider supports confirmed deletion. If deletion is unsupported or fails, DocuElevate preserves the recovery record instead of silently orphaning the remote archive.
 
 > **Note:** Backup and restore is currently supported only for SQLite databases.
 
@@ -1944,7 +1989,8 @@ AUTHENTIK_CONFIG_URL=https://auth.example.com/.well-known/openid-configuration
 OAUTH_PROVIDER_NAME=Authentik SSO
 
 # Multi-user mode (requires AUTH_ENABLED=true)
-MULTI_USER_ENABLED=false
+MULTI_USER_ENABLED=true
+UNOWNED_DOCS_VISIBLE_TO_ALL=false
 DEFAULT_DAILY_UPLOAD_LIMIT=0
 
 # Storage services
@@ -2057,7 +2103,16 @@ BACKUP_REMOTE_FOLDER=backups
 BACKUP_RETAIN_HOURLY=96
 BACKUP_RETAIN_DAILY=21
 BACKUP_RETAIN_WEEKLY=13
+BACKUP_ADAPTIVE_CLEANUP_ENABLED=True
+BACKUP_MIN_FREE_BYTES=0             # automatic: 10% reserve, capped at 1 GiB
+BACKUP_MAX_LOCAL_BYTES=0            # automatic: 25% local-backup budget
 ```
+
+For production deployments, mount `BACKUP_DIR` on a dedicated volume and configure a remote destination. Keeping
+database archives on the same volume as original and processed documents is supported for small installations, but
+it couples database growth to document-ingest capacity. Before every dump DocuElevate applies count retention and the
+storage budget; if it cannot preserve both capacity and the newest recovery point in each tier, it skips the dump and
+shows an actionable failure in **Administration → Backup Management** instead of filling the volume.
 
 ## Selective Service Configuration
 

@@ -8,11 +8,13 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
     true,
 )
 
@@ -22,6 +24,66 @@ from app.database import Base
 _FILES_ID_FK = "files.id"
 _PIPELINES_ID_FK = "pipelines.id"
 _ROUTING_RULES_TABLE = "pipeline_routing_rules"
+
+DEFAULT_TENANT_ID = "default"
+QUARANTINE_TRIBE_ID = "default-quarantine"
+
+
+class Tenant(Base):
+    """Hard security boundary for independent DocuElevate customers."""
+
+    __tablename__ = "tenants"
+
+    id = Column(String(64), primary_key=True)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Tribe(Base):
+    """Collaboration boundary inside exactly one tenant."""
+
+    __tablename__ = "tribes"
+
+    id = Column(String(64), primary_key=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_tribes_tenant_name"),)
+
+
+class TribeMembership(Base):
+    """User membership and delegated role within a Tribe."""
+
+    __tablename__ = "tribe_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="member", server_default="member")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("tribe_id", "user_id", name="uq_tribe_memberships_tribe_user"),)
+
+
+class TribeInvitation(Base):
+    """Auditable, revocable invitation into exactly one Tribe."""
+
+    __tablename__ = "tribe_invitations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), nullable=False, index=True)
+    invitee_id = Column(String, nullable=False, index=True)
+    role = Column(String(32), nullable=False, default="member", server_default="member")
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    invited_by = Column(String, nullable=False, index=True)
+    accepted_by = Column(String, nullable=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class DocumentMetadata(Base):
@@ -44,6 +106,27 @@ class FileRecord(Base):
     # Stores the user's unique identifier (e.g. email or OAuth sub claim).
     # NULL means the file belongs to the shared/global space (single-user mode).
     owner_id = Column(String, nullable=True, index=True)
+
+    # Every document is bound to one Tribe inside one tenant before it can be
+    # exposed.  Server defaults keep direct/offline record creation safe by
+    # placing it in the non-member quarantine; normal ingestion assigns the
+    # owner's personal/shared Tribe explicitly.
+    tenant_id = Column(
+        String(64),
+        ForeignKey("tenants.id"),
+        nullable=False,
+        default=DEFAULT_TENANT_ID,
+        server_default=DEFAULT_TENANT_ID,
+        index=True,
+    )
+    tribe_id = Column(
+        String(64),
+        ForeignKey("tribes.id"),
+        nullable=False,
+        default=QUARANTINE_TRIBE_ID,
+        server_default=QUARANTINE_TRIBE_ID,
+        index=True,
+    )
 
     # Hash of the file content (e.g. SHA-256)
     # Note: duplicates are allowed so filehash is not unique
@@ -75,6 +158,16 @@ class FileRecord(Base):
 
     # Legal hold prevents destructive deletion while records are under review or retention.
     legal_hold = Column(Boolean, default=False, nullable=False, index=True)
+
+    # Owner-controlled privacy boundary.  False means the document may be
+    # visible to other authorised members of its tenant/tribe; True means
+    # only the document owner (or an explicit public share link) may read it.
+    is_private = Column(Boolean, default=False, server_default="0", nullable=False, index=True)
+
+    # Explicit owner choice.  NULL keeps the file under automatic privacy
+    # rules; True/False pins the corresponding private flag until the owner
+    # returns the file to automatic handling.
+    privacy_manual_override = Column(Boolean, nullable=True)
 
     # If this is a duplicate, record the ID of the original file for reference
     duplicate_of_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True)
@@ -234,6 +327,37 @@ class BulkOperation(Base):
     failed_items = Column(Integer, nullable=False, default=0)
     task_ids = Column(Text, nullable=True)
     result = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class KnowledgeResearchJob(Base):
+    """Durable owner-scoped state for exhaustive document analytics."""
+
+    __tablename__ = "knowledge_research_jobs"
+    __table_args__ = (
+        Index(
+            "uq_knowledge_research_active_owner_cache",
+            "owner_id",
+            "cache_key",
+            unique=True,
+            sqlite_where=text("state IN ('queued', 'running')"),
+            postgresql_where=text("state IN ('queued', 'running')"),
+        ),
+    )
+
+    id = Column(String(36), primary_key=True)
+    owner_id = Column(String, nullable=False, index=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    history_json = Column(Text, nullable=False, default="[]", server_default="[]")
+    accessible_file_ids_json = Column(Text, nullable=False)
+    state = Column(String(20), nullable=False, default="queued", server_default="queued", index=True)
+    total_documents = Column(Integer, nullable=False, default=0, server_default="0")
+    processed_documents = Column(Integer, nullable=False, default=0, server_default="0")
+    cancel_requested = Column(Boolean, nullable=False, default=False, server_default="0")
+    result_json = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -744,7 +868,7 @@ class BackupRecord(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Human-readable archive filename (e.g. backup_hourly_2026-03-07T12-00-00.db.gz)
+    # Human-readable archive filename (e.g. backup_hourly_2026-03-07T12-00-00-123456.db.gz)
     filename = Column(String(255), nullable=False, unique=True)
 
     # Full path on the local filesystem (may be NULL for remote-only backups)
@@ -761,6 +885,9 @@ class BackupRecord(Base):
 
     # Whether the backup was successfully created
     status = Column(String(20), nullable=False, default="ok")  # ok | failed
+
+    # User-safe diagnostic for the most recent failed attempt
+    error_detail = Column(Text, nullable=True)
 
     # Storage destination where a remote copy was uploaded (e.g. "s3", "dropbox", "email")
     remote_destination = Column(String(50), nullable=True)
@@ -1191,6 +1318,44 @@ class ClassificationRuleModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_classification_rules_owner_name"),)
+
+
+class PrivacyRuleModel(Base):
+    """Owner-scoped rule that may only set a file's ``is_private`` flag."""
+
+    __tablename__ = "privacy_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    rule_type = Column(String(50), nullable=False)
+    pattern = Column(String(1000), nullable=False)
+    priority = Column(Integer, nullable=False, default=0)
+    case_sensitive = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=True)
+    policy_version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_privacy_rules_owner_name"),)
+
+
+class PrivacyDecisionAudit(Base):
+    """Immutable reason record for an owner or rule privacy decision."""
+
+    __tablename__ = "privacy_decision_audits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK, ondelete="CASCADE"), nullable=False, index=True)
+    owner_id = Column(String, nullable=False, index=True)
+    rule_id = Column(Integer, ForeignKey("privacy_rules.id", ondelete="SET NULL"), nullable=True, index=True)
+    source = Column(String(20), nullable=False)
+    is_private = Column(Boolean, nullable=False)
+    policy_version = Column(Integer, nullable=True)
+    evidence = Column(Text, nullable=True)
+    confidence = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class MobileDevice(Base):

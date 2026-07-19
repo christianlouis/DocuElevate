@@ -150,6 +150,10 @@
       background-color: #f56565;
       color: white;
     }
+    .count-badge.skipped {
+      background-color: #d97706;
+      color: white;
+    }
     .count-badge.in-progress {
       background-color: #4299e1;
       color: white;
@@ -945,7 +949,7 @@
     // Load PDFs when page loads
     document.addEventListener('DOMContentLoaded', function() {
       const fileId = {{ file.id | tojson }};
-      {% if original_file_exists %}
+      {% if original_file_exists and (file.mime_type == 'application/pdf' or (file.original_filename and file.original_filename.lower().endswith('.pdf'))) %}
       loadPDF('original', fileId);
       {% endif %}
       {% if processed_file_exists %}
@@ -1114,51 +1118,169 @@
   </div>
   {% else %}
 
+  {% if request.query_params.get("onboarding") == "first-document" and step_summary %}
+    {% set onboarding_main_completed = step_summary.main.success + step_summary.main.skipped %}
+    {# The first-document milestone proves the core intake and processing path.
+       Optional storage destinations remain visible below, but must not turn a
+       successfully processed document into a failed onboarding experience. #}
+    {% set onboarding_failed = step_summary.main.failure > 0 %}
+    {% set onboarding_finished = step_summary.total_main_steps > 0 and onboarding_main_completed == step_summary.total_main_steps and not onboarding_failed %}
+    <section id="first-document-status"
+             data-onboarding-state="{{ 'failed' if onboarding_failed else ('finished' if onboarding_finished else 'processing') }}"
+             style="margin-bottom:1.5rem;padding:1.25rem;border-radius:0.75rem;border:1px solid {{ '#fecaca' if onboarding_failed else ('#bbf7d0' if onboarding_finished else '#bfdbfe') }};background:{{ '#fef2f2' if onboarding_failed else ('#f0fdf4' if onboarding_finished else '#eff6ff') }};"
+             role="status"
+             aria-live="polite"
+             aria-labelledby="first-document-status-heading">
+      <div style="display:flex;gap:0.9rem;align-items:flex-start;">
+        <i class="fas {{ 'fa-circle-exclamation' if onboarding_failed else ('fa-circle-check' if onboarding_finished else 'fa-circle-notch fa-spin') }}"
+           style="margin-top:0.2rem;color:{{ '#dc2626' if onboarding_failed else ('#059669' if onboarding_finished else '#2563eb') }};"
+           aria-hidden="true"></i>
+        <div style="flex:1;">
+          <h2 id="first-document-status-heading" style="font-size:1.1rem;font-weight:700;color:#1f2937;margin:0;">
+            {% if onboarding_failed %}
+              {{ _("onboarding.first_document_failed_heading") }}
+            {% elif onboarding_finished %}
+              {{ _("onboarding.first_document_ready_heading") }}
+            {% else %}
+              {{ _("onboarding.first_document_processing_heading") }}
+            {% endif %}
+          </h2>
+          <p style="font-size:0.9rem;color:#4b5563;margin-top:0.35rem;">
+            {% if onboarding_failed %}
+              {{ _("onboarding.first_document_failed_description") }}
+            {% elif onboarding_finished %}
+              {{ _("onboarding.first_document_ready_description") }}
+            {% else %}
+              {{ _("onboarding.first_document_processing_description") }}
+              <span id="first-document-processing-elapsed" class="tabular-nums"></span>
+            {% endif %}
+          </p>
+          {% if onboarding_finished %}
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.9rem;">
+            <a href="/" class="px-4 py-2 bg-green-700 text-white rounded-lg font-semibold min-h-[44px] inline-flex items-center">
+              <i class="fas fa-house mr-2" aria-hidden="true"></i>{{ _("onboarding.open_dashboard") }}
+            </a>
+            <a href="/upload" class="px-4 py-2 border border-green-700 text-green-800 rounded-lg font-semibold min-h-[44px] inline-flex items-center">
+              <i class="fas fa-file-circle-plus mr-2" aria-hidden="true"></i>{{ _("onboarding.add_another_document") }}
+            </a>
+          </div>
+          {% elif onboarding_failed %}
+          <a href="#processing-history" class="inline-flex items-center mt-3 font-semibold text-red-700 min-h-[44px]">
+            <i class="fas fa-list-check mr-2" aria-hidden="true"></i>{{ _("onboarding.review_pipeline") }}
+          </a>
+          {% else %}
+          <p style="font-size:0.8rem;color:#6b7280;margin-top:0.5rem;">{{ _("onboarding.first_document_auto_refresh") }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+    <script>
+      (() => {
+        const storageKey = "docuelevate.firstDocumentStartedAt";
+        {% if onboarding_finished or onboarding_failed %}
+        window.sessionStorage.removeItem(storageKey);
+        {% else %}
+        let startedAt = Number(window.sessionStorage.getItem(storageKey));
+        if (!Number.isFinite(startedAt) || startedAt <= 0) {
+          startedAt = Date.now();
+          window.sessionStorage.setItem(storageKey, String(startedAt));
+        }
+        const renderElapsed = () => {
+          const elapsed = document.getElementById("first-document-processing-elapsed");
+          if (!elapsed) return;
+          const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+          const minutes = Math.floor(seconds / 60);
+          elapsed.textContent = ` · ${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+        };
+        renderElapsed();
+        const elapsedTimer = window.setInterval(renderElapsed, 1000);
+        const pollStatus = async () => {
+          if (Date.now() - startedAt >= 300000) {
+            window.clearInterval(elapsedTimer);
+            return;
+          }
+          try {
+            const response = await fetch(window.location.href, {
+              headers: {"Accept": "text/html", "X-DocuElevate-Partial": "first-document-status"},
+              cache: "no-store"
+            });
+            if (response.ok) {
+              const page = new DOMParser().parseFromString(await response.text(), "text/html");
+              const nextStatus = page.getElementById("first-document-status");
+              const currentStatus = document.getElementById("first-document-status");
+              if (nextStatus && currentStatus) {
+                currentStatus.replaceWith(nextStatus);
+                const nextHistory = page.getElementById("processing-history");
+                const currentHistory = document.getElementById("processing-history");
+                if (nextHistory && currentHistory) currentHistory.replaceWith(nextHistory);
+                if (nextStatus.dataset.onboardingState !== "processing") {
+                  window.sessionStorage.removeItem(storageKey);
+                  window.clearInterval(elapsedTimer);
+                  return;
+                }
+              }
+            }
+          } catch (error) {
+            // A transient API interruption must not strand onboarding. The
+            // next poll retries while the visible elapsed timer keeps running.
+          }
+          window.setTimeout(pollStatus, 3000);
+        };
+        window.setTimeout(pollStatus, 3000);
+        {% endif %}
+      })();
+    </script>
+  {% endif %}
+
   <!-- Overall Processing Status Banner -->
   {% if step_summary %}
   <div style="margin-bottom: 1.5rem; padding: 1.5rem; background-color: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 0.5rem;">
     <div style="display: flex; align-items: center; justify-content: space-between;">
       <div>
-        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">Status</div>
+        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">{{ _("file_processing.status") }}</div>
         <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
           {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
           {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
+          {% set any_skipped = step_summary.main.skipped > 0 or step_summary.uploads.skipped > 0 %}
           {% if file.is_duplicate %}
-            <i class="fas fa-copy" aria-hidden="true" style="color: #6b7280; margin-right: 0.5rem;"></i>Duplicate
+            <i class="fas fa-copy" aria-hidden="true" style="color: #6b7280; margin-right: 0.5rem;"></i>{{ _("file_processing.duplicate") }}
           {% elif step_summary.main.failure > 0 or step_summary.uploads.failure > 0 %}
-            <i class="fas fa-times-circle" aria-hidden="true" style="color: #dc2626; margin-right: 0.5rem;"></i>Failed
+            <i class="fas fa-times-circle" aria-hidden="true" style="color: #dc2626; margin-right: 0.5rem;"></i>{{ _("file_processing.failed") }}
           {% elif step_summary.main["in_progress"] > 0 or step_summary.uploads["in_progress"] > 0 %}
-            <i class="fas fa-circle-notch" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>Processing
+            <i class="fas fa-circle-notch" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem; animation: spin 1s linear infinite;"></i>{{ _("file_processing.processing") }}
+          {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 and any_skipped %}
+            <i class="fas fa-circle-exclamation" aria-hidden="true" style="color: #d97706; margin-right: 0.5rem;"></i>{{ _("file_processing.completed_with_limitations") }}
           {% elif step_summary.total_main_steps > 0 and main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
-            <i class="fas fa-check-circle" aria-hidden="true" style="color: #059669; margin-right: 0.5rem;"></i>Completed
+            <i class="fas fa-check-circle" aria-hidden="true" style="color: #059669; margin-right: 0.5rem;"></i>{{ _("file_processing.completed") }}
           {% else %}
-            <i class="fas fa-pause-circle" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem;"></i>Pending
+            <i class="fas fa-pause-circle" aria-hidden="true" style="color: #f59e0b; margin-right: 0.5rem;"></i>{{ _("file_processing.pending") }}
           {% endif %}
         </div>
       </div>
       <div style="text-align: right;">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
           <div>
-            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">Main Steps</div>
+            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">{{ _("file_processing.main_steps") }}</div>
             <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
-              {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
-              {% if main_completed == step_summary.total_main_steps and step_summary.main.failure == 0 %}
-                <span style="color: #059669;">✓</span> {{ main_completed }}/{{ step_summary.total_main_steps }}
+              {% if step_summary.main.success == step_summary.total_main_steps and step_summary.main.failure == 0 %}
+                <span style="color: #059669;">✓</span> {{ step_summary.main.success }}/{{ step_summary.total_main_steps }}
               {% else %}
-                {{ main_completed }}/{{ step_summary.total_main_steps }}
+                {{ step_summary.main.success }}/{{ step_summary.total_main_steps }}
               {% endif %}
             </div>
+            {% if step_summary.main.skipped > 0 %}<div style="font-size:0.75rem;color:#b45309;">{{ step_summary.main.skipped }} {{ _("file_processing.skipped") }}</div>{% endif %}
           </div>
           <div>
-            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">Uploads</div>
+            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 0.5rem;">{{ _("file_processing.uploads") }}</div>
             <div style="font-size: 1.5rem; font-weight: 600; color: #1f2937;">
               {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
-              {% if uploads_completed == step_summary.total_upload_tasks and step_summary.uploads.failure == 0 and step_summary.total_upload_tasks > 0 %}
-                <span style="color: #059669;">✓</span> {{ uploads_completed }}/{{ step_summary.total_upload_tasks }}
+              {% if step_summary.uploads.success == step_summary.total_upload_tasks and step_summary.uploads.failure == 0 and step_summary.total_upload_tasks > 0 %}
+                <span style="color: #059669;">✓</span> {{ step_summary.uploads.success }}/{{ step_summary.total_upload_tasks }}
               {% else %}
-                {{ uploads_completed }}/{{ step_summary.total_upload_tasks }}
+                {{ step_summary.uploads.success }}/{{ step_summary.total_upload_tasks }}
               {% endif %}
             </div>
+            {% if step_summary.uploads.skipped > 0 %}<div style="font-size:0.75rem;color:#b45309;">{{ step_summary.uploads.skipped }} {{ _("file_processing.skipped") }}</div>{% endif %}
           </div>
         </div>
       </div>
@@ -1354,6 +1476,8 @@
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 0.5rem;">Original Document</h4>
         {% if original_file_exists %}
+        {% set original_is_pdf = file.mime_type == 'application/pdf' or (file.original_filename and file.original_filename.lower().endswith('.pdf')) %}
+        {% if original_is_pdf %}
         <div class="pdf-viewer-container" id="original-pdf-container">
           <div class="pdf-controls">
             <button class="pdf-nav-btn" onclick="changePage('original', -1)" id="original-prev-btn">← Previous</button>
@@ -1367,6 +1491,25 @@
             </div>
           </div>
         </div>
+        {% elif file.mime_type in ['image/bmp', 'image/gif', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'] %}
+        <div class="pdf-viewer-container" id="original-image-container" style="display:flex;align-items:center;justify-content:center;padding:1rem;min-height:18rem;">
+          <img src="/files/{{ file.id }}/preview/original"
+               alt="{{ file.original_filename }}"
+               style="display:block;max-width:100%;max-height:42rem;object-fit:contain;border-radius:0.375rem;">
+        </div>
+        {% elif file.mime_type and file.mime_type.startswith('text/') %}
+        <iframe src="/files/{{ file.id }}/preview/original"
+                title="{{ file.original_filename }}"
+                style="width:100%;height:34rem;border:1px solid #e2e8f0;border-radius:0.5rem;background:#fff;"></iframe>
+        {% else %}
+        <div class="pdf-viewer-container" id="original-format-container" style="display:flex;align-items:center;justify-content:center;padding:2rem;min-height:18rem;text-align:center;">
+          <div>
+            <i class="fas fa-file" aria-hidden="true" style="font-size:2.5rem;color:#64748b;margin-bottom:1rem;"></i>
+            <p style="font-weight:600;color:#334155;">{{ _("file_processing.original_format_preserved") }}</p>
+            <p style="font-size:0.875rem;color:#64748b;margin-top:0.4rem;">{{ _("file_processing.original_format_preview_help") }}</p>
+          </div>
+        </div>
+        {% endif %}
         <button
           onclick="loadAndShowText('original', {{ file.id }})"
           style="margin-top: 0.5rem; background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
@@ -1477,37 +1620,57 @@
     </div>
   </div>
 
+  {% if encrypted_pdf_password_required %}
+  <div class="detail-card" role="alert" style="border-left: 5px solid #d97706; background: #fffbeb;">
+    <div style="display: flex; gap: 0.85rem; align-items: flex-start;">
+      <i class="fas fa-lock" aria-hidden="true" style="color: #b45309; font-size: 1.4rem; margin-top: 0.15rem;"></i>
+      <div>
+        <h3 style="margin: 0 0 0.35rem; color: #92400e;">Password-protected PDF</h3>
+        <p style="margin: 0; color: #78350f;">
+          DocuElevate kept the original file and did not send it to OCR or AI services.
+          Upload an unprotected copy of the PDF and start processing that copy instead.
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Step Summary Card -->
   {% if step_summary %}
   <div class="detail-card">
-    <h3>Processing Status Summary</h3>
+    <h3>{{ _("file_processing.status_summary") }}</h3>
     <div class="step-summary">
       <div class="summary-card main-steps">
-        <div class="summary-title">Main Processing Steps</div>
+        <div class="summary-title">{{ _("file_processing.main_processing_steps") }}</div>
         <div class="summary-counts">
-          {% set main_completed = step_summary.main.success + step_summary.main.skipped %}
-          {% if main_completed > 0 %}
+          {% if step_summary.main.success > 0 %}
           <div class="summary-count">
-            <span class="count-badge success">{{ main_completed }}</span>
-            <span>Success</span>
+            <span class="count-badge success">{{ step_summary.main.success }}</span>
+            <span>{{ _("file_processing.success") }}</span>
+          </div>
+          {% endif %}
+          {% if step_summary.main.skipped > 0 %}
+          <div class="summary-count">
+            <span class="count-badge skipped">{{ step_summary.main.skipped }}</span>
+            <span>{{ _("file_processing.skipped") }}</span>
           </div>
           {% endif %}
           {% if step_summary.main.failure > 0 %}
           <div class="summary-count">
             <span class="count-badge failure">{{ step_summary.main.failure }}</span>
-            <span>Failed</span>
+            <span>{{ _("file_processing.failed") }}</span>
           </div>
           {% endif %}
           {% if step_summary.main.in_progress > 0 %}
           <div class="summary-count">
             <span class="count-badge in-progress">{{ step_summary.main.in_progress }}</span>
-            <span>In Progress</span>
+            <span>{{ _("file_processing.in_progress") }}</span>
           </div>
           {% endif %}
           {% if step_summary.main.queued > 0 %}
           <div class="summary-count">
             <span class="count-badge queued">{{ step_summary.main.queued }}</span>
-            <span>Queued</span>
+            <span>{{ _("file_processing.queued") }}</span>
           </div>
           {% endif %}
         </div>
@@ -1515,31 +1678,36 @@
 
       {% if step_summary.total_upload_tasks > 0 %}
       <div class="summary-card upload-steps">
-        <div class="summary-title">Upload Destinations</div>
+        <div class="summary-title">{{ _("file_processing.upload_destinations") }}</div>
         <div class="summary-counts">
-          {% set uploads_completed = step_summary.uploads.success + step_summary.uploads.skipped %}
-          {% if uploads_completed > 0 %}
+          {% if step_summary.uploads.success > 0 %}
           <div class="summary-count">
-            <span class="count-badge success">{{ uploads_completed }}</span>
-            <span>Success</span>
+            <span class="count-badge success">{{ step_summary.uploads.success }}</span>
+            <span>{{ _("file_processing.success") }}</span>
+          </div>
+          {% endif %}
+          {% if step_summary.uploads.skipped > 0 %}
+          <div class="summary-count">
+            <span class="count-badge skipped">{{ step_summary.uploads.skipped }}</span>
+            <span>{{ _("file_processing.skipped") }}</span>
           </div>
           {% endif %}
           {% if step_summary.uploads.failure > 0 %}
           <div class="summary-count">
             <span class="count-badge failure">{{ step_summary.uploads.failure }}</span>
-            <span>Failed</span>
+            <span>{{ _("file_processing.failed") }}</span>
           </div>
           {% endif %}
           {% if step_summary.uploads.in_progress > 0 %}
           <div class="summary-count">
             <span class="count-badge in-progress">{{ step_summary.uploads.in_progress }}</span>
-            <span>In Progress</span>
+            <span>{{ _("file_processing.in_progress") }}</span>
           </div>
           {% endif %}
           {% if step_summary.uploads.queued > 0 %}
           <div class="summary-count">
             <span class="count-badge queued">{{ step_summary.uploads.queued }}</span>
-            <span>Queued</span>
+            <span>{{ _("file_processing.queued") }}</span>
           </div>
           {% endif %}
         </div>
@@ -1550,7 +1718,7 @@
   {% endif %}
 
   <!-- Processing History Card (Collapsible) -->
-  <div class="detail-card">
+  <div id="processing-history" class="detail-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <h3 style="margin: 0;">Processing History</h3>
       {% if file_exists %}
@@ -1728,18 +1896,26 @@
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Original File</h4>
         <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
-          {% if file.mime_type and file.mime_type.startswith('image/') %}
+          {% if file.mime_type in ['image/bmp', 'image/gif', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'] %}
           <!-- Image preview -->
           <img src="/api/files/{{ file.id }}/preview?version=original" alt="{{ file.original_filename }}" style="width: 100%; height: auto; display: block;">
           {% elif file.mime_type and file.mime_type.startswith('text/') %}
           <!-- Text file preview -->
           <iframe src="/api/files/{{ file.id }}/preview?version=original" title="Original text file preview" style="width: 100%; height: 600px; border: none;"></iframe>
-          {% else %}
+          {% elif file.mime_type == 'application/pdf' or (file.original_filename and file.original_filename.lower().endswith('.pdf')) %}
           <!-- PDF via pdf.js (rendered by loadPDF above) — fallback canvas container -->
           <div id="detail-original-canvas" class="pdf-canvas-wrapper" style="min-height: 400px; display: flex; justify-content: center; align-items: center; padding: 0.5rem;">
             <div class="pdf-loading">
               <i class="fas fa-file-pdf" aria-hidden="true" style="font-size: 2rem; margin-bottom: 1rem; color: #94a3b8;"></i>
               <p>This PDF is displayed in the Document Previews section at the top of the page.</p>
+            </div>
+          </div>
+          {% else %}
+          <div style="min-height:400px;display:flex;justify-content:center;align-items:center;padding:2rem;text-align:center;">
+            <div>
+              <i class="fas fa-file" aria-hidden="true" style="font-size:2rem;margin-bottom:1rem;color:#94a3b8;"></i>
+              <p style="font-weight:600;color:#475569;">{{ _("file_processing.original_format_preserved") }}</p>
+              <p style="font-size:0.875rem;color:#64748b;margin-top:0.4rem;">{{ _("file_processing.original_format_preview_help") }}</p>
             </div>
           </div>
           {% endif %}

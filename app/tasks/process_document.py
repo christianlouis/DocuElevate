@@ -10,17 +10,22 @@ import shutil
 import uuid
 from typing import TYPE_CHECKING
 
-import pypdf
-from pypdf.errors import PdfReadError
+from pypdf.errors import FileNotDecryptedError, PdfReadError
 
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import FileRecord, Pipeline, PipelineStep
+from app.models import DocumentIntake, DropboxImportObject, FileRecord, Pipeline, PipelineStep
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
+from app.utils.pdf_security import (
+    ENCRYPTED_PDF_ERROR_CODE,
+    ENCRYPTED_PDF_MESSAGE,
+    EncryptedPdfPasswordRequiredError,
+    open_pdf_reader,
+)
 from app.utils.routing_engine import evaluate_pre_processing_routing_rules
 from app.utils.step_manager import initialize_file_steps
 from app.utils.text_quality import check_text_quality, detect_pdf_text_source
@@ -30,6 +35,159 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+def _mark_encrypted_pdf_password_required(task_id: str, file_id: int) -> dict[str, object]:
+    """Stop processing safely and persist an actionable encrypted-PDF state."""
+    with SessionLocal() as db:
+        _set_index_first_source_state(db, task_id, "failed", ENCRYPTED_PDF_MESSAGE)
+        db.commit()
+
+    log_task_progress(
+        task_id,
+        "check_text",
+        "failure",
+        ENCRYPTED_PDF_MESSAGE,
+        file_id=file_id,
+        detail=ENCRYPTED_PDF_ERROR_CODE,
+    )
+    for step_name in ("extract_text", "process_with_ocr"):
+        log_task_progress(
+            task_id,
+            step_name,
+            "skipped",
+            "Skipped because the PDF requires a password",
+            file_id=file_id,
+            detail=ENCRYPTED_PDF_ERROR_CODE,
+        )
+    log_task_progress(
+        task_id,
+        "process_document",
+        "failure",
+        ENCRYPTED_PDF_MESSAGE,
+        file_id=file_id,
+        detail=ENCRYPTED_PDF_ERROR_CODE,
+    )
+    return {
+        "status": "Password required",
+        "error": ENCRYPTED_PDF_MESSAGE,
+        "error_code": ENCRYPTED_PDF_ERROR_CODE,
+        "file_id": file_id,
+    }
+
+
+def _set_index_first_source_state(db: "Session", task_id: str, state: str, error: str | None = None) -> None:
+    """Keep the durable Dropbox/intake ledgers aligned with index-first work."""
+    intake = db.query(DocumentIntake).filter(DocumentIntake.task_id == task_id).first()
+    if intake:
+        intake.state = state
+        intake.error = error
+    imported = db.query(DropboxImportObject).filter(DropboxImportObject.task_id == task_id).first()
+    if imported:
+        imported.state = state
+
+
+def _complete_index_first_document(
+    *,
+    task_id: str,
+    file_id: int,
+    extracted_text: str,
+    original_filename: str,
+    original_input_path: str,
+    working_path: str,
+) -> dict[str, object]:
+    """Persist searchable text and hand the historical document to Qdrant."""
+    cleaned_text = extracted_text.strip()
+    if not cleaned_text:
+        return _mark_index_first_pending(
+            task_id,
+            file_id,
+            "No usable embedded text",
+            original_input_path=original_input_path,
+            working_path=working_path,
+        )
+
+    with SessionLocal() as db:
+        record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        if record is None:
+            raise RuntimeError(f"Index-first FileRecord {file_id} disappeared")
+        record.ocr_text = cleaned_text
+        if not record.document_title:
+            record.document_title = os.path.splitext(original_filename)[0]
+        immutable_path = record.original_file_path or original_input_path
+        record.local_filename = immutable_path
+        _set_index_first_source_state(db, task_id, "indexing")
+        db.commit()
+
+    for step in ("extract_metadata_with_gpt", "embed_metadata_into_pdf", "finalize_document_storage"):
+        log_task_progress(
+            task_id,
+            step,
+            "skipped",
+            "Index-first corpus backfill: document text goes directly to Qdrant",
+            file_id=file_id,
+        )
+
+    from app.tasks.vector_index import index_document_vectors
+
+    index_document_vectors.delay(file_id, source_task_id=task_id)
+    log_task_progress(
+        task_id,
+        "process_document",
+        "success",
+        "Embedded text persisted; queued for vector indexing",
+        file_id=file_id,
+    )
+
+    for path in {original_input_path, working_path}:
+        if path and path != immutable_path and os.path.exists(path):
+            os.remove(path)
+    return {"status": "Queued for vector indexing", "file_id": file_id, "text_chars": len(cleaned_text)}
+
+
+def _mark_index_first_pending(
+    task_id: str,
+    file_id: int,
+    reason: str,
+    *,
+    original_input_path: str | None = None,
+    working_path: str | None = None,
+    embedded_text_checked: bool = False,
+) -> dict[str, object]:
+    """Retain a corpus item for a later OCR/conversion pass without LLM work."""
+    with SessionLocal() as db:
+        record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        immutable_path = (record.original_file_path if record else None) or original_input_path
+        if record and immutable_path:
+            record.local_filename = immutable_path
+        _set_index_first_source_state(db, task_id, "needs_ocr", reason)
+        db.commit()
+    if embedded_text_checked:
+        log_task_progress(
+            task_id,
+            "check_text",
+            "success",
+            "No embedded text found; deferred to the corpus OCR pass",
+            file_id=file_id,
+        )
+        log_task_progress(
+            task_id,
+            "extract_text",
+            "skipped",
+            "No embedded text available; deferred to the corpus OCR pass",
+            file_id=file_id,
+        )
+    log_task_progress(
+        task_id,
+        "process_document",
+        "skipped",
+        f"Index-first corpus backfill deferred: {reason}",
+        file_id=file_id,
+    )
+    for path in {original_input_path, working_path}:
+        if path and path != immutable_path and os.path.exists(path):
+            os.remove(path)
+    return {"status": "Index-first pending OCR", "file_id": file_id, "detail": reason}
 
 
 def _get_pipeline_ocr_config(db: "Session", file_record: FileRecord, owner_id: str | None) -> dict[str, object]:
@@ -187,6 +345,7 @@ def process_document(
     file_id: int = None,
     force_cloud_ocr: bool = False,
     owner_id: str = None,
+    index_only: bool = False,
 ):
     """
     Process a document file and trigger appropriate text extraction.
@@ -200,6 +359,8 @@ def process_document(
                          text quality. Used for re-processing and profile configuration.
         owner_id: Optional user identifier for multi-user mode. When provided, the
                   created FileRecord is associated with this user.
+        index_only: Persist embedded text and queue Qdrant indexing without LLM
+                    metadata or distribution. Intended for explicit corpus true-up.
 
     Steps:
       1. Check if we have a FileRecord entry (via SHA-256 hash). If found, skip re-processing.
@@ -215,6 +376,10 @@ def process_document(
     default_owner_id = settings.default_owner_id
     if owner_id is None and isinstance(default_owner_id, str) and default_owner_id.strip():
         owner_id = default_owner_id
+
+    if index_only and not settings.vector_index_enabled:
+        logger.warning("Index-first processing requested while vector indexing is disabled; using full pipeline")
+        index_only = False
 
     task_id = self.request.id
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
@@ -288,21 +453,26 @@ def process_document(
         else:
             # Check for duplicate only if this is a new file (not reprocessing)
             # IMPORTANT: Only consider it a duplicate if it matches a DIFFERENT file
-            existing = (
-                db.query(FileRecord)
-                .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
-                .order_by(FileRecord.created_at.asc())
-                .first()
+            existing_query = db.query(FileRecord).filter(
+                FileRecord.filehash == filehash,
+                FileRecord.is_duplicate.is_(False),
             )
+            if settings.multi_user_enabled:
+                existing_query = existing_query.filter(FileRecord.owner_id == owner_id)
+            existing = existing_query.order_by(FileRecord.created_at.asc()).first()
             if existing is None:
-                existing = (
-                    db.query(FileRecord).filter(FileRecord.filehash == filehash).order_by(FileRecord.id.asc()).first()
-                )
+                fallback_query = db.query(FileRecord).filter(FileRecord.filehash == filehash)
+                if settings.multi_user_enabled:
+                    fallback_query = fallback_query.filter(FileRecord.owner_id == owner_id)
+                existing = fallback_query.order_by(FileRecord.id.asc()).first()
 
             # A file is only a duplicate if it matches a different file's hash
             # (not its own hash when reprocessing)
             if existing and existing.id != file_id and settings.enable_deduplication:
                 logger.info(f"[{task_id}] Duplicate file detected (hash={filehash[:10]}...) Skipping processing.")
+                from app.utils.tribe_scope import ensure_document_scope
+
+                tenant_id, tribe_id = ensure_document_scope(db, owner_id)
                 duplicate_record = FileRecord(
                     filehash=filehash,
                     original_filename=original_filename,
@@ -312,10 +482,15 @@ def process_document(
                     is_duplicate=True,
                     duplicate_of_id=existing.id,
                     owner_id=owner_id,
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
                 )
                 db.add(duplicate_record)
                 db.commit()
                 db.refresh(duplicate_record)
+                if index_only:
+                    _set_index_first_source_state(db, task_id, "duplicate")
+                    db.commit()
 
                 if settings.enable_deduplication and settings.show_deduplication_step:
                     log_task_progress(
@@ -345,6 +520,8 @@ def process_document(
                         f"Original filename: {original_filename}"
                     ),
                 )
+                if index_only and os.path.exists(original_local_file):
+                    os.remove(original_local_file)
                 return {
                     "status": "duplicate_file",
                     "file_id": duplicate_record.id,
@@ -355,6 +532,9 @@ def process_document(
             # Not a duplicate (or deduplication disabled) -> insert a new record
             logger.info(f"[{task_id}] Creating new file record in database")
             log_task_progress(task_id, "create_file_record", "in_progress", "Creating file record")
+            from app.utils.tribe_scope import ensure_document_scope
+
+            tenant_id, tribe_id = ensure_document_scope(db, owner_id)
             new_record = FileRecord(
                 filehash=filehash,
                 original_filename=original_filename,
@@ -363,6 +543,8 @@ def process_document(
                 mime_type=mime_type,
                 is_duplicate=False,
                 owner_id=owner_id,
+                tenant_id=tenant_id,
+                tribe_id=tribe_id,
             )
             db.add(new_record)
             db.commit()
@@ -498,9 +680,26 @@ def process_document(
         # Store file_id before session closes to avoid DetachedInstanceError
         file_id = new_record.id
 
+    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
+
     # 2. Check for embedded text (outside the DB session to avoid long open transactions)
     # Skip local text extraction if force_cloud_ocr is True
     if force_cloud_ocr:
+        if is_pdf:
+            try:
+                with open(new_local_path, "rb") as file:
+                    open_pdf_reader(file)
+            except (EncryptedPdfPasswordRequiredError, FileNotDecryptedError):
+                logger.info("[%s] Stopped forced OCR for a password-protected PDF", task_id)
+                return _mark_encrypted_pdf_password_required(task_id, file_id)
+        if index_only:
+            return _mark_index_first_pending(
+                task_id,
+                file_id,
+                "Force OCR is required",
+                original_input_path=original_local_file,
+                working_path=new_local_path,
+            )
         logger.info(f"[{task_id}] Force Cloud OCR requested, skipping embedded text check")
         log_task_progress(
             task_id,
@@ -528,8 +727,15 @@ def process_document(
         return {"file": new_local_path, "status": "Queued for forced OCR", "file_id": file_id}
 
     # If the file is not a PDF, skip embedded text check and convert to PDF first
-    is_pdf = mime_type == "application/pdf" or os.path.splitext(new_local_path)[1].lower() == ".pdf"
     if not is_pdf:
+        if index_only:
+            return _mark_index_first_pending(
+                task_id,
+                file_id,
+                "PDF conversion is required",
+                original_input_path=original_local_file,
+                working_path=new_local_path,
+            )
         logger.info(f"[{task_id}] Non-PDF file detected, queuing PDF conversion before OCR")
         log_task_progress(
             task_id,
@@ -556,6 +762,7 @@ def process_document(
         celery.send_task(
             "app.tasks.convert_to_pdf.convert_to_pdf",
             args=[new_local_path, original_filename],
+            kwargs={"owner_id": owner_id, "file_id": file_id},
         )
         return {"file": new_local_path, "status": "Queued for PDF conversion", "file_id": file_id}
 
@@ -569,12 +776,15 @@ def process_document(
     )
     try:
         with open(new_local_path, "rb") as file:
-            pdf_reader = pypdf.PdfReader(file)
+            pdf_reader = open_pdf_reader(file)
             has_text = False
             for page in pdf_reader.pages:
                 if page.extract_text().strip():
                     has_text = True
                     break
+    except (EncryptedPdfPasswordRequiredError, FileNotDecryptedError):
+        logger.info("[%s] Stopped processing a password-protected PDF", task_id)
+        return _mark_encrypted_pdf_password_required(task_id, file_id)
     except PdfReadError as exc:
         logger.warning(f"[{task_id}] PDF read error during embedded text check: {exc}")
         log_task_progress(
@@ -593,6 +803,7 @@ def process_document(
                 "original_filename": original_filename,
                 "file_id": file_id,
                 "force_cloud_ocr": force_cloud_ocr,
+                "index_only": index_only,
             },
         )
 
@@ -617,7 +828,7 @@ def process_document(
         )
         extracted_text = ""
         with open(new_local_path, "rb") as file:
-            pdf_reader = pypdf.PdfReader(file)
+            pdf_reader = open_pdf_reader(file)
             for page in pdf_reader.pages:
                 extracted_text += page.extract_text() + "\n"
 
@@ -629,6 +840,16 @@ def process_document(
             f"Extracted {len(extracted_text)} characters",
             file_id=file_id,
         )
+
+        if index_only:
+            return _complete_index_first_document(
+                task_id=task_id,
+                file_id=file_id,
+                extracted_text=extracted_text,
+                original_filename=original_filename,
+                original_input_path=original_local_file,
+                working_path=new_local_path,
+            )
 
         # ----------------------------------------------------------------
         # AI-based text quality check
@@ -729,6 +950,15 @@ def process_document(
         }
 
     # 3. If no embedded text, queue OCR processing
+    if index_only:
+        return _mark_index_first_pending(
+            task_id,
+            file_id,
+            "No usable embedded text",
+            original_input_path=original_local_file,
+            working_path=new_local_path,
+            embedded_text_checked=True,
+        )
     logger.info(f"[{task_id}] No embedded text found. Queueing OCR processing")
     log_task_progress(
         task_id,

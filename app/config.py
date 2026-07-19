@@ -13,6 +13,24 @@ class Settings(BaseSettings):
 
     database_url: str
     redis_url: str = "redis://redis:6379/0"
+    celery_broker_url: Optional[str] = Field(
+        default=None,
+        description="Optional Celery broker URL; falls back to REDIS_URL.",
+    )
+    celery_result_backend: Optional[str] = Field(
+        default=None,
+        description="Optional Celery result-backend URL; falls back to REDIS_URL.",
+    )
+
+    @property
+    def effective_celery_broker_url(self) -> str:
+        """Resolve the broker independently while preserving REDIS_URL compatibility."""
+        return self.celery_broker_url or self.redis_url
+
+    @property
+    def effective_celery_result_backend(self) -> str:
+        """Resolve the result backend independently from the broker."""
+        return self.celery_result_backend or self.redis_url
 
     # Database connection-pool tuning (ignored for SQLite, which uses NullPool).
     db_pool_size: int = Field(
@@ -40,6 +58,38 @@ class Settings(BaseSettings):
     ai_provider: str = "openai"
     # Override model for any provider; falls back to openai_model when not set
     ai_model: Optional[str] = None
+    # Independent model for document-grounded RAG answers. This remains
+    # separate from metadata/OCR model selection and is live-reloadable from
+    # the database-backed settings service.
+    rag_chat_model: str = "gpt-5-nano"
+    # Optional model override for the short retrieval-planning request. When
+    # unset, the RAG chat model is reused; this is a small request, not
+    # necessarily a smaller model.
+    rag_query_planner_model: Optional[str] = None
+    rag_research_target_seconds: int = Field(
+        default=60,
+        ge=15,
+        le=300,
+        description="Target response time used for adaptive research completion (p90 SLO, not a hard timeout).",
+    )
+    rag_research_lexical_min_score: float = Field(
+        default=0.65,
+        ge=0.0,
+        le=1.0,
+        description="Minimum Meilisearch ranking score for planned research candidates.",
+    )
+    rag_research_semantic_min_score: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description="Minimum Qdrant similarity score for semantic research expansion.",
+    )
+    knowledge_research_retention_days: int = Field(
+        default=30,
+        ge=1,
+        le=365,
+        description="Days to retain completed, failed, or cancelled document research jobs.",
+    )
 
     # Anthropic Claude settings (used when ai_provider="anthropic")
     anthropic_api_key: Optional[str] = None
@@ -176,8 +226,17 @@ class Settings(BaseSettings):
     # Comma-separated list of OCR engines to use.
     # Supported values: azure, tesseract, easyocr, mistral, google_docai, aws_textract
     # When multiple engines are listed all are run and results are merged.
+    # The packaged image includes Tesseract, so a fresh installation can OCR
+    # scans without requiring a paid cloud credential.  Operators may opt into
+    # Azure or combine providers explicitly.
     # Example: OCR_PROVIDERS=azure,tesseract
-    ocr_providers: str = "azure"
+    ocr_providers: str = "tesseract"
+
+    # Optionally run the resource-intensive ocrmypdf post-processing step when
+    # the selected OCR provider returns text but no searchable PDF. Extracted
+    # OCR text is indexed by DocuElevate regardless, so fresh installations
+    # keep this disabled to work reliably on modest hardware.
+    ocr_embed_text_layer: bool = False
 
     # Strategy for merging results from multiple OCR providers.
     # - ai_merge  : Ask the AI model to produce the best merged text (default).
@@ -214,6 +273,20 @@ class Settings(BaseSettings):
             "not forward X-Forwarded-Proto headers correctly."
         ),
     )
+    deployment_label: str = Field(
+        default="",
+        description=(
+            "Optional human-readable deployment suffix, for example 'Preprod' or 'Canary'. "
+            "It is displayed during onboarding so users can distinguish installations."
+        ),
+    )
+    default_storage_path: str = Field(
+        default="/DocuElevate",
+        description=(
+            "Default folder suggested for newly configured source and destination integrations. "
+            "Set this per deployment, for example to '/DocuElevate Preprod'."
+        ),
+    )
 
     # ---------------------------------------------------------------------------
     # Document Translation Settings
@@ -239,6 +312,14 @@ class Settings(BaseSettings):
     admin_username: Optional[str] = None
     admin_password: Optional[str] = None
     session_secret: Optional[str] = None
+    session_secret_previous: Optional[str] = Field(
+        default=None,
+        description=(
+            "Temporary previous SESSION_SECRET used only during an operator-managed "
+            "database encryption-key rotation. Remove it after all encrypted rows have "
+            "been re-encrypted and verified with the current SESSION_SECRET."
+        ),
+    )
     session_lifetime_days: int = Field(
         default=30,
         description=(
@@ -272,7 +353,7 @@ class Settings(BaseSettings):
             "Enable multi-user mode with individual document spaces per user. "
             "When enabled, each authenticated user sees only their own documents, "
             "uploads, and search results. Shared settings (AI, OCR) remain global. "
-            "Requires auth_enabled=True. Default: False (single-user/shared mode)."
+            "Requires auth_enabled=True. Default: False (auth-free compatibility fallback)."
         ),
     )
     default_daily_upload_limit: int = Field(
@@ -289,7 +370,7 @@ class Settings(BaseSettings):
             "In multi-user mode, controls whether documents without an owner (owner_id is NULL) "
             "are visible to all authenticated users. When True, unowned documents appear in every "
             "user's file list alongside their own files. When False, only admins can see unowned "
-            "documents. Default: True."
+            "documents. Default: True for compatibility; bundled deployments override this to False."
         ),
     )
     default_owner_id: Optional[str] = Field(
@@ -907,6 +988,47 @@ class Settings(BaseSettings):
         le=2000,
         description="Maximum provider entries requested per corpus backfill page. Default: 10.",
     )
+    corpus_backfill_download_concurrency: int = Field(
+        default=1,
+        ge=1,
+        le=8,
+        description=(
+            "Parallel Dropbox downloads per index-first corpus page. "
+            "Only opt-in initial backfills use values above 1. Default: 1."
+        ),
+    )
+    corpus_backfill_deferred_ocr_enabled: bool = Field(
+        default=False,
+        description=(
+            "Run a bounded OCR-only second pass for index-first corpus documents "
+            "without embedded text. Metadata LLM and destination distribution remain skipped. Default: False."
+        ),
+    )
+    corpus_backfill_ocr_batch_size: int = Field(
+        default=2,
+        ge=1,
+        le=100,
+        description="Maximum deferred corpus OCR tasks queued per coordinator pass. Default: 2.",
+    )
+    corpus_backfill_ocr_recheck_seconds: int = Field(
+        default=30,
+        ge=1,
+        description="Delay between deferred corpus OCR backlog capacity checks. Default: 30 seconds.",
+    )
+    corpus_backfill_reconcile_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Maximum stale corpus ledger items reconciled per coordinator pass. Default: 10.",
+    )
+    corpus_backfill_stale_queue_seconds: int = Field(
+        default=900,
+        ge=60,
+        description=(
+            "Minimum age before a queued corpus item can be recovered after a worker or broker interruption. "
+            "Default: 900 seconds."
+        ),
+    )
     corpus_backfill_queue_high_watermark: int = Field(
         default=50,
         ge=1,
@@ -1037,15 +1159,41 @@ class Settings(BaseSettings):
     # Retention counts (number of snapshots to keep per tier)
     backup_retain_hourly: int = Field(
         default=96,
+        ge=1,
         description="Number of hourly backups to retain (default 96 = 4 days × 24 h).",
     )
     backup_retain_daily: int = Field(
         default=21,
+        ge=1,
         description="Number of daily backups to retain (default 21 = 3 weeks).",
     )
     backup_retain_weekly: int = Field(
         default=13,
+        ge=1,
         description="Number of weekly backups to retain (default 13 ≈ 3 months / 91 days).",
+    )
+    backup_adaptive_cleanup_enabled: bool = Field(
+        default=True,
+        description=(
+            "Allow local backup retention to remove the oldest redundant snapshots before a dump when the backup "
+            "filesystem is low on space. The newest local snapshot in every tier is always preserved."
+        ),
+    )
+    backup_min_free_bytes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Minimum free space to preserve on the backup filesystem. Zero automatically preserves 10% of the "
+            "filesystem, capped at 1 GiB."
+        ),
+    )
+    backup_max_local_bytes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Maximum bytes used by local backup archives. Zero selects a safe automatic budget of 25% of the "
+            "backup filesystem."
+        ),
     )
 
     # File upload size limits (for security - see SECURITY_AUDIT.md)
@@ -1640,6 +1788,18 @@ class Settings(BaseSettings):
             raise ValueError("SESSION_SECRET must be set when AUTH_ENABLED=True")
         if info.data.get("auth_enabled") and v and len(v) < 32:
             raise ValueError("SESSION_SECRET must be at least 32 characters long")
+        return v
+
+    @field_validator("session_secret_previous")
+    @classmethod
+    def validate_previous_session_secret(cls, v: str | None, info: object) -> str | None:
+        """Keep the temporary fallback key strong and prevent a no-op rotation."""
+        if not v:
+            return None
+        if len(v) < 32:
+            raise ValueError("SESSION_SECRET_PREVIOUS must be at least 32 characters long")
+        if v == info.data.get("session_secret"):
+            raise ValueError("SESSION_SECRET_PREVIOUS must differ from SESSION_SECRET")
         return v
 
     # Get build date from environment or file

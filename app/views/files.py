@@ -20,6 +20,7 @@ from app.utils.pipeline_stages import (
     normalize_stage_name,
     stage_keys_for_pipeline_steps,
 )
+from app.utils.user_scope import apply_owner_filter
 from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
@@ -43,13 +44,7 @@ def _resolve_owner_context(request: Request, file_record, db: Session) -> dict:
     multi_user_enabled = settings.multi_user_enabled
 
     current_owner_id = get_current_owner_id(request)
-    user_session = request.session.get("user")
-    is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
-
-    if is_admin:
-        current_user_role: str | None = "owner"
-    else:
-        current_user_role = get_file_role(file_record, current_owner_id, db)
+    current_user_role = get_file_role(file_record, current_owner_id, db)
 
     # Build a human-readable owner label
     if file_record.owner_id:
@@ -95,7 +90,7 @@ def files_page(
         from app.models import FileProcessingStep, FileRecord
 
         # Start with base query
-        query = db.query(FileRecord)
+        query = apply_owner_filter(db.query(FileRecord), request)
 
         # Apply search filter
         if search:
@@ -262,7 +257,7 @@ def file_summary_page(request: Request, file_id: int, db: Session = Depends(get_
 
         from app.models import FileRecord
 
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -346,7 +341,7 @@ def file_view_page(request: Request, file_id: int, db: Session = Depends(get_db)
 
         from app.models import FileRecord
 
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -437,7 +432,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         from app.models import FileRecord, ProcessingLog
 
         # Find the file record
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -481,6 +476,10 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         # Compute processing flow for visualization — filter to pipeline steps when available
         flow_data = _compute_processing_flow(logs, pipeline_steps=pipeline_info["steps"] if pipeline_info else None)
 
+        from app.utils.pdf_security import ENCRYPTED_PDF_ERROR_CODE
+
+        encrypted_pdf_password_required = any(log.detail == ENCRYPTED_PDF_ERROR_CODE for log in logs)
+
         # Compute step-aligned summary from status table (preferred) or fallback to logs
         try:
             from app.utils.step_manager import get_step_summary as get_step_summary_from_table
@@ -504,6 +503,7 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
                 "flow_data": flow_data,
                 "step_summary": step_summary,
                 "pipeline_info": pipeline_info,
+                "encrypted_pdf_password_required": encrypted_pdf_password_required,
             },
         )
     except Exception as e:
@@ -522,7 +522,7 @@ def file_annotations_page(request: Request, file_id: int, db: Session = Depends(
 
         from app.models import FileRecord
 
-        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+        file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
 
         if not file_record:
             return templates.TemplateResponse(
@@ -707,6 +707,8 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             correspond to the pipeline's enabled steps (plus bookkeeping stages like
             ``create_file_record`` and any stage that actually ran in the logs).
     """
+    from app.utils.pdf_security import ENCRYPTED_PDF_ERROR_CODE
+
     # Define the full catalogue of main processing stages
     stages = {
         "convert_to_pdf": {"label": "Convert to PDF", "next": ["check_for_duplicates", "create_file_record"]},
@@ -801,7 +803,13 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             if step_name not in step_map:
                 step_map[step_name] = []
             step_map[step_name].append(
-                {"status": log.status, "message": log.message, "timestamp": log.timestamp, "task_id": log.task_id}
+                {
+                    "status": log.status,
+                    "message": log.message,
+                    "timestamp": log.timestamp,
+                    "task_id": log.task_id,
+                    "detail": getattr(log, "detail", None),
+                }
             )
 
     # Build the flow structure
@@ -816,11 +824,15 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             message = latest_log["message"]
             timestamp = latest_log["timestamp"]
             task_id = latest_log["task_id"]
+            detail = latest_log["detail"]
         else:
             status = "not_run"
             message = None
             timestamp = None
             task_id = None
+            detail = None
+
+        requires_source_replacement = detail == ENCRYPTED_PDF_ERROR_CODE
 
         stage_data = {
             "key": stage_key,
@@ -829,7 +841,8 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             "message": message,
             "timestamp": timestamp,
             "task_id": task_id,
-            "can_retry": status == "failure",
+            "can_retry": status == "failure" and not requires_source_replacement,
+            "requires_source_replacement": requires_source_replacement,
             "is_branch_parent": stage_info.get("has_branches", False),
         }
 
@@ -891,8 +904,8 @@ def _compute_step_summary(logs, pipeline_steps=None):
 
     upload_prefixes = ["upload_to_", "queue_"]
 
-    main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
-    upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0}
+    main_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0, "skipped": 0}
+    upload_counts = {"queued": 0, "in_progress": 0, "success": 0, "failure": 0, "skipped": 0}
 
     # Track latest status for each step by comparing timestamps (order-independent)
     main_steps_seen = {}  # {step_name: (timestamp, status)}
@@ -947,7 +960,7 @@ def _compute_step_summary(logs, pipeline_steps=None):
 @require_login
 def preview_original_file(request: Request, file_id: int, db: Session = Depends(get_db)):
     """
-    Serve the original (pre-processing) PDF file for preview
+    Serve the original pre-processing file with its actual media type.
     """
     import os
 
@@ -955,18 +968,24 @@ def preview_original_file(request: Request, file_id: int, db: Session = Depends(
     from fastapi.responses import FileResponse
 
     from app.models import FileRecord
+    from app.utils.preview_media import safe_preview_media_type
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
     if not file_record.original_file_path or not os.path.exists(file_record.original_file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
 
+    media_type = safe_preview_media_type(file_record.mime_type, file_record.original_file_path)
+
     return FileResponse(
         path=file_record.original_file_path,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "inline"},
+        media_type=media_type,
+        headers={
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -983,7 +1002,7 @@ def preview_processed_file(request: Request, file_id: int, db: Session = Depends
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1010,7 +1029,7 @@ def get_original_text(request: Request, file_id: int, db: Session = Depends(get_
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1050,7 +1069,7 @@ def get_processed_text(request: Request, file_id: int, db: Session = Depends(get
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1086,7 +1105,7 @@ def get_default_language_text(request: Request, file_id: int, db: Session = Depe
 
     from app.models import FileRecord
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_FILE_NOT_FOUND)
 
@@ -1123,7 +1142,9 @@ def duplicates_page(
 
     try:
         # Find hashes that have at least one is_duplicate=True record
-        dup_hashes_query = db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)).distinct()
+        dup_hashes_query = apply_owner_filter(
+            db.query(FileRecord.filehash).filter(FileRecord.is_duplicate.is_(True)), request
+        ).distinct()
         total_groups = dup_hashes_query.count()
 
         offset = (page - 1) * per_page
@@ -1134,13 +1155,13 @@ def duplicates_page(
 
         for filehash in dup_hashes:
             original = (
-                db.query(FileRecord)
+                apply_owner_filter(db.query(FileRecord), request)
                 .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(False))
                 .order_by(FileRecord.id.asc())
                 .first()
             )
             duplicates = (
-                db.query(FileRecord)
+                apply_owner_filter(db.query(FileRecord), request)
                 .filter(FileRecord.filehash == filehash, FileRecord.is_duplicate.is_(True))
                 .order_by(FileRecord.id.asc())
                 .all()
@@ -1218,11 +1239,12 @@ def similarity_dashboard_page(
     from app.models import FileRecord
 
     try:
-        total_files = db.query(FileRecord).count()
-        files_with_embedding = (
-            db.query(FileRecord).filter(FileRecord.embedding.isnot(None), FileRecord.embedding != "").count()
-        )
-        files_with_ocr = db.query(FileRecord).filter(FileRecord.ocr_text.isnot(None), FileRecord.ocr_text != "").count()
+        accessible_files = apply_owner_filter(db.query(FileRecord), request)
+        total_files = accessible_files.count()
+        files_with_embedding = accessible_files.filter(
+            FileRecord.embedding.isnot(None), FileRecord.embedding != ""
+        ).count()
+        files_with_ocr = accessible_files.filter(FileRecord.ocr_text.isnot(None), FileRecord.ocr_text != "").count()
 
         return templates.TemplateResponse(
             "similarity_dashboard.html",

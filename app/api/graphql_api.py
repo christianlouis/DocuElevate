@@ -23,6 +23,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import ApplicationSettings, FileRecord, Pipeline, PipelineStep, UserProfile
+from app.utils.user_scope import apply_owner_filter, tribe_peer_user_ids
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,8 @@ _SENSITIVE_SETTING_KEYS: frozenset[str] = frozenset(
         "session_secret",
         "database_url",
         "redis_url",
+        "celery_broker_url",
+        "celery_result_backend",
         "dropbox_app_secret",
         "dropbox_refresh_token",
         "google_drive_credentials_json",
@@ -209,7 +212,7 @@ def _get_current_user_id(user: dict[str, Any] | None) -> str | None:
     """Extract the stable user identifier from the user dict."""
     if not user:
         return None
-    return user.get("preferred_username") or user.get("email") or user.get("id") or None
+    return user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id") or None
 
 
 def _get_db_and_user(info: strawberry.types.Info) -> tuple[Session, dict[str, Any] | None]:
@@ -258,8 +261,10 @@ class Query:
     ) -> list[DocumentType]:
         """Return a paginated list of documents.
 
-        When *auth_enabled* the caller must be authenticated.  Non-admin users
-        receive only their own documents; admins may query any *owner_id*.
+        When *auth_enabled* the caller must be authenticated.  In multi-user
+        mode every caller, including platform and Tribe administrators, is
+        restricted to the exact tenant/Tribe scopes and owner privacy rules
+        enforced by :func:`apply_owner_filter`.
         """
         db, user = _get_db_and_user(info)
         _require_auth(user)
@@ -269,15 +274,8 @@ class Query:
 
         query = db.query(FileRecord)
 
-        if settings.auth_enabled and user:
-            is_admin = user.get("is_admin", False)
-            current_user_id = _get_current_user_id(user)
-            if not is_admin:
-                # Non-admins can only see their own documents
-                query = query.filter(FileRecord.owner_id == current_user_id)
-            elif owner_id:
-                query = query.filter(FileRecord.owner_id == owner_id)
-        elif owner_id:
+        query = apply_owner_filter(query, info.context["request"])
+        if owner_id:
             query = query.filter(FileRecord.owner_id == owner_id)
 
         records = query.order_by(FileRecord.created_at.desc()).offset(offset).limit(limit).all()
@@ -289,15 +287,12 @@ class Query:
         db, user = _get_db_and_user(info)
         _require_auth(user)
 
-        rec = db.query(FileRecord).filter(FileRecord.id == id).first()
+        rec = apply_owner_filter(
+            db.query(FileRecord).filter(FileRecord.id == id),
+            info.context["request"],
+        ).first()
         if rec is None:
             return None
-
-        if settings.auth_enabled and user:
-            is_admin = user.get("is_admin", False)
-            current_user_id = _get_current_user_id(user)
-            if not is_admin and rec.owner_id != current_user_id:
-                return None
 
         return _document_from_record(rec)
 
@@ -318,7 +313,15 @@ class Query:
 
         query = db.query(Pipeline)
 
-        if settings.auth_enabled and user:
+        if settings.multi_user_enabled:
+            current_user_id = _get_current_user_id(user)
+            if current_user_id is None:
+                query = query.filter(Pipeline.id == -1)
+            else:
+                query = query.filter((Pipeline.owner_id == current_user_id) | (Pipeline.owner_id.is_(None)))
+            if owner_id:
+                query = query.filter(Pipeline.owner_id == owner_id)
+        elif settings.auth_enabled and user:
             is_admin = user.get("is_admin", False)
             current_user_id = _get_current_user_id(user)
             if not is_admin:
@@ -341,7 +344,11 @@ class Query:
         if row is None:
             return None
 
-        if settings.auth_enabled and user:
+        if settings.multi_user_enabled:
+            current_user_id = _get_current_user_id(user)
+            if current_user_id is None or (row.owner_id is not None and row.owner_id != current_user_id):
+                return None
+        elif settings.auth_enabled and user:
             is_admin = user.get("is_admin", False)
             current_user_id = _get_current_user_id(user)
             if not is_admin and row.owner_id is not None and row.owner_id != current_user_id:
@@ -391,7 +398,14 @@ class Query:
         limit = max(1, min(limit, 100))
         offset = max(0, offset)
 
-        rows = db.query(UserProfile).order_by(UserProfile.user_id).offset(offset).limit(limit).all()
+        query = db.query(UserProfile)
+        if settings.multi_user_enabled:
+            current_user_id = _get_current_user_id(user)
+            if current_user_id is None:
+                query = query.filter(UserProfile.id == -1)
+            else:
+                query = query.filter(UserProfile.user_id.in_(tribe_peer_user_ids(current_user_id)))
+        rows = query.order_by(UserProfile.user_id).offset(offset).limit(limit).all()
         return [_user_from_profile(r) for r in rows]
 
     @strawberry.field(description="Fetch a user profile by user_id (admin only).")
@@ -400,7 +414,13 @@ class Query:
         db, user = _get_db_and_user(info)
         _require_admin(user)
 
-        row = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+        query = db.query(UserProfile).filter(UserProfile.user_id == user_id)
+        if settings.multi_user_enabled:
+            current_user_id = _get_current_user_id(user)
+            if current_user_id is None:
+                return None
+            query = query.filter(UserProfile.user_id.in_(tribe_peer_user_ids(current_user_id)))
+        row = query.first()
         return _user_from_profile(row) if row else None
 
 
@@ -421,6 +441,12 @@ async def get_graphql_context(
     except Exception:
         logger.debug("Could not resolve current user for GraphQL context", exc_info=True)
         user = None
+    if user:
+        # The shared scoping utilities intentionally resolve identity from the
+        # request rather than trusting resolver arguments.  Cache the already
+        # authenticated GraphQL principal so session, OAuth, and bearer flows
+        # all reach exactly the same tenant/Tribe policy.
+        request.state.api_token_user = user
     return {"request": request, "db": db, "user": user}
 
 

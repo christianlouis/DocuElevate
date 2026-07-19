@@ -3,22 +3,46 @@
 import logging
 import os
 
-from celery import Celery
-from celery.signals import task_failure, worker_ready
+from celery import Celery, bootsteps
+from celery.signals import (
+    after_setup_logger,
+    after_setup_task_logger,
+    task_failure,
+    worker_process_init,
+    worker_ready,
+)
 
 from app.config import settings
+from app.utils.celery_redis_backend import assert_redis_backend_writable, is_redis_backend
+from app.utils.log_safety import restrict_sensitive_provider_logging
 
 logger = logging.getLogger(__name__)
 
+# Celery replaces/configures loggers during worker startup, so apply the
+# safeguard both now and after Celery has installed its handlers.
+restrict_sensitive_provider_logging()
+after_setup_logger.connect(restrict_sensitive_provider_logging)
+after_setup_task_logger.connect(restrict_sensitive_provider_logging)
+
 celery = Celery(
     "document_processor",
-    broker=settings.redis_url,
-    backend=settings.redis_url,
+    broker=settings.effective_celery_broker_url,
+    backend=settings.effective_celery_result_backend,
 )
+
+# Celery's stock Redis backend does not retry ReadOnlyError after a Redis
+# primary is demoted.  Our backend resets its cached pool before retrying so
+# HAProxy can route the next connection to the new writable primary.
+if is_redis_backend(settings.effective_celery_result_backend):
+    celery.backend_cls = "app.utils.celery_redis_backend:FailoverAwareRedisBackend"
 
 
 # Optionally add this line to retain connection retry behavior at startup:
 celery.conf.broker_connection_retry_on_startup = True
+celery.conf.result_backend_always_retry = True
+celery.conf.result_backend_max_retries = 20
+celery.conf.result_backend_base_sleep_between_retries_ms = 100
+celery.conf.result_backend_max_sleep_between_retries_ms = 2000
 
 # Redis emulates priorities with separate lists.  Explicitly enable priority
 # ordering so normal priority-0 uploads are consumed before priority-9 corpus
@@ -31,8 +55,50 @@ celery.conf.broker_transport_options = {
 # Set the default queue and routing so that tasks are enqueued on "document_processor"
 celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {
+    "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
+    "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     "app.tasks.*": {"queue": "document_processor"},
 }
+
+
+class ResultBackendWriteabilityCheck(bootsteps.StartStopStep):
+    """Refuse to consume tasks when the Redis result backend is read-only."""
+
+    label = "Redis result-backend writeability check"
+
+    def start(self, worker) -> None:
+        backend_url = settings.effective_celery_result_backend
+        if not is_redis_backend(backend_url):
+            logger.info("Skipping Redis writeability check for non-Redis result backend")
+            return
+
+        try:
+            assert_redis_backend_writable(backend_url)
+        except RuntimeError as exc:
+            logger.critical("Worker startup aborted: %s", exc)
+            raise
+        logger.info("Redis result backend is writable")
+
+
+celery.steps["worker"].add(ResultBackendWriteabilityCheck)
+
+
+@worker_process_init.connect
+def reset_database_pool_after_fork(**kwargs):
+    """Discard database connections inherited by a prefork worker child.
+
+    ``celery_worker`` reads database-backed schedules while the worker parent is
+    starting.  A prefork child must never reuse a DBAPI connection opened by
+    that parent (or by a sibling), because concurrent use corrupts the wire
+    protocol and can make an otherwise empty fresh installation hang.
+
+    ``close=False`` replaces the child's pool without closing descriptors that
+    still belong to the parent process.
+    """
+    from app.database import engine
+
+    engine.dispose(close=False)
+
 
 # Mapping of document pipeline task names to the positional index of ``file_id``
 # in their ``args`` tuple.  These indices correspond to the task signatures:

@@ -23,7 +23,7 @@ from app.models import (
     FileShare,
     UserProfile,
 )
-from app.utils.user_scope import get_current_owner_id, has_file_role
+from app.utils.user_scope import get_current_owner_id, has_file_role, tribe_peer_user_ids
 
 logger = logging.getLogger(__name__)
 
@@ -158,14 +158,12 @@ def list_comments(request: Request, file_id: int, db: DbSession):
         A dict with ``file_id``, ``comments`` (threaded), and ``total``.
     """
     user_id = get_current_owner_id(request)
-    user = request.session.get("user")
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     comments = (
@@ -208,14 +206,12 @@ def create_comment(
     """
     user_id = get_current_user_id(request)
     owner_id = get_current_owner_id(request)
-    user = request.session.get("user")
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     if not isinstance(body, str) or not body.strip():
@@ -256,10 +252,15 @@ def create_comment(
         db.add(comment)
         db.flush()  # write comment so we can get its id before committing
 
-        # Auto-share the file with mentioned users that don't have access yet.
-        # Only do this in multi-user mode and only when the file has an owner
-        # (unowned files are already visible to all authenticated users).
-        if mentions and file_record.owner_id is not None:
+        # A mention may grant access only when it is an explicit action by the
+        # document owner. A Tribe member or administrator must never be able to
+        # exfiltrate another owner's document merely by mentioning an outsider.
+        if (
+            mentions
+            and file_record.owner_id is not None
+            and file_record.owner_id == owner_id
+            and not file_record.is_private
+        ):
             from app.config import settings as _settings
 
             if _settings.multi_user_enabled:
@@ -275,6 +276,13 @@ def create_comment(
                             FileShare.shared_with_user_id == mentioned_user,
                         )
                         .first()
+                    )
+                    from app.utils.tribe_scope import ensure_personal_scope
+
+                    ensure_personal_scope(
+                        db,
+                        tenant_id=file_record.tenant_id,
+                        user_id=mentioned_user,
                     )
                     if not existing_share:
                         auto_share = FileShare(
@@ -473,14 +481,12 @@ def list_annotations(request: Request, file_id: int, db: DbSession):
         A dict with ``file_id``, ``annotations``, and ``total``.
     """
     user_id = get_current_owner_id(request)
-    user = request.session.get("user")
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not has_file_role(file_record, user_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     annotations = (
@@ -533,14 +539,12 @@ def create_annotation(
     """
     user_id = get_current_user_id(request)
     owner_id = get_current_owner_id(request)
-    user = request.session.get("user")
-    is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
 
     file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
-    if not is_admin and not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
+    if not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_VIEWER):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     if not isinstance(content, str) or not content.strip():
@@ -734,13 +738,21 @@ def delete_annotation(request: Request, file_id: int, annotation_id: int, db: Db
 def list_mentionable_users(request: Request, db: DbSession):
     """List users that can be @mentioned in comments.
 
-    Returns all user profiles that are not blocked, sorted by
-    ``display_name``.
+    In multi-user mode, returns only active profiles that share at least one
+    exact tenant/Tribe scope with the caller.
 
     Returns:
         A list of ``{user_id, display_name}`` objects.
     """
-    profiles = db.query(UserProfile).filter(UserProfile.is_blocked.is_(False)).order_by(UserProfile.display_name).all()
+    query = db.query(UserProfile).filter(UserProfile.is_blocked.is_(False))
+    from app.config import settings as _settings
+
+    if _settings.multi_user_enabled:
+        owner_id = get_current_owner_id(request)
+        if owner_id is None:
+            return []
+        query = query.filter(UserProfile.user_id.in_(tribe_peer_user_ids(owner_id)))
+    profiles = query.order_by(UserProfile.display_name).all()
 
     return [
         {

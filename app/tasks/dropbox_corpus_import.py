@@ -3,8 +3,12 @@
 import json
 import logging
 import os
+import shutil
 import uuid
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
+from threading import Event, Thread, local
 
 import redis
 from celery.result import AsyncResult
@@ -14,7 +18,15 @@ from sqlalchemy.exc import IntegrityError
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import CorpusLlmDailyUsage, DocumentIntake, DropboxImportJob, DropboxImportObject, UserIntegration
+from app.models import (
+    CorpusLlmDailyUsage,
+    DocumentIntake,
+    DropboxImportJob,
+    DropboxImportObject,
+    FileRecord,
+    ProcessingLog,
+    UserIntegration,
+)
 from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils.allowed_types import ALLOWED_EXTENSIONS
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
@@ -23,11 +35,31 @@ from app.utils.filename_utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+_OCR_CAPABLE_EXTENSIONS = frozenset(
+    {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp", ".heic", ".heif"}
+)
+
 _CELERY_QUEUES = ("document_processor", "default", "celery")
 _REDIS_PRIORITY_SEPARATOR = "\x06\x16"
 _REDIS_PRIORITY_STEPS = range(10)
 _METADATA_PROMPT_OUTPUT_HEADROOM = 1500
 _MAX_BUDGET_RECHECK_SECONDS = 15 * 60
+_PREFETCH_THREAD_STATE = local()
+_IMPORT_COORDINATOR_LOCK_TTL_SECONDS = 15 * 60
+_IMPORT_COORDINATOR_LOCK_RENEWAL_SECONDS = 60
+_IMPORT_COORDINATOR_RECOVERY_DELAY_SECONDS = 60
+_RELEASE_IMPORT_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+end
+return 0
+"""
+_RENEW_IMPORT_LOCK_SCRIPT = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("expire", KEYS[1], ARGV[2])
+end
+return 0
+"""
 
 
 class CorpusDailyBudgetReached(RuntimeError):
@@ -42,6 +74,10 @@ class CorpusDailyBudgetReached(RuntimeError):
 
 class CorpusDailyBudgetUnavailable(RuntimeError):
     """Raised when an enabled cost guard cannot reserve tokens safely."""
+
+
+class CorpusCoordinatorLockLost(RuntimeError):
+    """Raised when a corpus page can no longer prove coordinator ownership."""
 
 
 def _next_utc_reset(now: datetime) -> datetime:
@@ -152,7 +188,7 @@ def _release_corpus_llm_tokens(reservation: tuple[date | None, int]) -> None:
         logger.warning("Could not release unused corpus LLM token reservation", exc_info=True)
 
 
-def _pending_queue_depth() -> int | None:
+def _pending_queue_depth(*, exclude_current_delivery: bool = False) -> int | None:
     """Return queued plus worker-reserved pipeline work, failing open on Redis errors."""
     try:
         client = redis.Redis.from_url(
@@ -170,15 +206,96 @@ def _pending_queue_depth() -> int | None:
         # reserves them. Counting it closes the prefetch gap where the visible
         # lists are empty while dozens of tasks are active or reserved.
         in_flight = int(client.hlen("unacked"))
+        if exclude_current_delivery:
+            # The coordinator uses late ACKs for crash recovery, so its own
+            # delivery remains in ``unacked`` for the whole page run. It is
+            # control-plane work, not pipeline pressure.
+            in_flight = max(in_flight - 1, 0)
         return queued + in_flight
     except Exception:  # noqa: BLE001
         logger.warning("Could not inspect queue depth before corpus backfill", exc_info=True)
         return None
 
 
+@lru_cache(maxsize=1)
+def _get_import_coordinator_redis_client() -> redis.Redis:
+    """Reuse one Redis connection pool per worker process."""
+    return redis.Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
+
+
+def _acquire_import_coordinator_lock(job_id: str) -> tuple[redis.Redis, str, str] | None:
+    """Acquire one expiring, owner-scoped coordinator lock per durable import job."""
+    client = _get_import_coordinator_redis_client()
+    lock_key = f"docuelevate:dropbox-corpus-import:{job_id}:coordinator"
+    lock_token = str(uuid.uuid4())
+    acquired = client.set(
+        lock_key,
+        lock_token,
+        ex=_IMPORT_COORDINATOR_LOCK_TTL_SECONDS,
+        nx=True,
+    )
+    if not acquired:
+        return None
+    return client, lock_key, lock_token
+
+
+def _release_import_coordinator_lock(client: redis.Redis, lock_key: str, lock_token: str) -> None:
+    """Release the coordinator lock only while this task still owns it."""
+    released = client.eval(_RELEASE_IMPORT_LOCK_SCRIPT, 1, lock_key, lock_token)
+    if not released:
+        logger.warning("Dropbox corpus coordinator lock owner changed before release: %s", lock_key)
+
+
+def _maintain_import_coordinator_lock(
+    client: redis.Redis,
+    lock_key: str,
+    lock_token: str,
+    stop_event: Event,
+    lock_lost_event: Event,
+) -> None:
+    """Renew an owned coordinator lock until the page run finishes."""
+    while not stop_event.wait(_IMPORT_COORDINATOR_LOCK_RENEWAL_SECONDS):
+        try:
+            renewed = client.eval(
+                _RENEW_IMPORT_LOCK_SCRIPT,
+                1,
+                lock_key,
+                lock_token,
+                _IMPORT_COORDINATOR_LOCK_TTL_SECONDS,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not renew Dropbox corpus coordinator lock: %s", lock_key, exc_info=True)
+            lock_lost_event.set()
+            return
+        if not renewed:
+            logger.warning("Dropbox corpus coordinator lock owner changed during renewal: %s", lock_key)
+            lock_lost_event.set()
+            return
+
+
+def _ensure_import_coordinator_lock(lock_lost_event: Event | None) -> None:
+    """Stop page processing as soon as the lock heartbeat loses ownership."""
+    if lock_lost_event is not None and lock_lost_event.is_set():
+        raise CorpusCoordinatorLockLost("Dropbox corpus coordinator lock was lost")
+
+
 def schedule_dropbox_corpus_import(job_id: str, *, countdown: int = 0) -> AsyncResult:
     """Schedule low-priority corpus coordination without blocking interactive uploads."""
     return run_dropbox_corpus_import.apply_async(
+        args=[job_id],
+        countdown=countdown,
+        priority=settings.corpus_backfill_task_priority,
+    )
+
+
+def schedule_dropbox_corpus_ocr_backlog(job_id: str, *, countdown: int = 0) -> AsyncResult:
+    """Schedule low-priority OCR-only work after an index-first true-up."""
+    return run_dropbox_corpus_ocr_backlog.apply_async(
         args=[job_id],
         countdown=countdown,
         priority=settings.corpus_backfill_task_priority,
@@ -250,6 +367,12 @@ def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
             .order_by(DropboxImportJob.created_at.desc())
             .first()
         )
+        if previous and _deferred_ocr_enabled(
+            config, index_only=previous.is_backfill and _index_first_enabled(integration)
+        ):
+            # The regular watch poll is the durable recovery trigger if the
+            # completion-to-coordinator broker publication was interrupted.
+            schedule_dropbox_corpus_ocr_backlog(previous.id)
         job = DropboxImportJob(
             id=str(uuid.uuid4()),
             integration_id=integration.id,
@@ -283,10 +406,10 @@ def _decode(stored: str | None) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _dropbox_client(integration: UserIntegration):
+def _dropbox_client_from_stored_credentials(stored_credentials: str | None):
     import dropbox
 
-    credentials = _decode(integration.credentials)
+    credentials = _decode(stored_credentials)
     try:
         app_key, app_secret, refresh_token = resolve_dropbox_oauth_credentials(credentials)
     except ValueError as exc:
@@ -296,6 +419,10 @@ def _dropbox_client(integration: UserIntegration):
         app_key=app_key,
         app_secret=app_secret,
     )
+
+
+def _dropbox_client(integration: UserIntegration):
+    return _dropbox_client_from_stored_credentials(integration.credentials)
 
 
 def _load_page_entry_keys(job: DropboxImportJob) -> set[str]:
@@ -351,6 +478,83 @@ def _configured_backfill_token_budget(integration: UserIntegration) -> int:
     return budget
 
 
+def _index_first_enabled(integration: UserIntegration) -> bool:
+    """Return whether this source explicitly opts into RAG-only true-up."""
+    if not settings.vector_index_enabled:
+        return False
+    try:
+        config = json.loads(integration.config or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(config, dict):
+        return False
+    value = config.get("backfill_index_first_enabled", False)
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _index_first_download_concurrency(config: dict, *, index_only: bool) -> int:
+    """Return bounded Dropbox prefetch concurrency for an opt-in initial backfill."""
+    if not index_only:
+        return 1
+    return _bounded_config_int(
+        config,
+        "backfill_download_concurrency",
+        settings.corpus_backfill_download_concurrency,
+        minimum=1,
+        maximum=8,
+    )
+
+
+def _deferred_ocr_enabled(config: dict, *, index_only: bool) -> bool:
+    """Return whether an index-first source opts into the OCR-only second pass."""
+    if not index_only:
+        return False
+    value = config.get(
+        "backfill_deferred_ocr_enabled",
+        settings.corpus_backfill_deferred_ocr_enabled,
+    )
+    return value is True or str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _entry_can_be_prefetched(entry) -> bool:
+    """Reject entries that the durable importer would skip before downloading."""
+    filename = sanitize_filename(entry.name) or "document"
+    extension = os.path.splitext(filename)[1].lower()
+    return extension in ALLOWED_EXTENSIONS and getattr(entry, "size", 0) <= settings.max_upload_size
+
+
+def _prefetch_dropbox_entry(integration_id: int, stored_credentials: str | None, entry) -> str:
+    """Download one Dropbox object into an isolated temporary file.
+
+    Each thread creates its own Dropbox client because requests sessions are
+    not guaranteed to be thread-safe. The caller owns cleanup of the returned
+    path, including when the durable import later discovers a duplicate.
+    """
+    filename = sanitize_filename(entry.name) or "document"
+    extension = os.path.splitext(filename)[1].lower()
+    target_path = os.path.join(settings.workdir, f"dropbox_prefetch_{integration_id}_{uuid.uuid4().hex}{extension}")
+    temporary_path = f"{target_path}.part"
+    try:
+        if (
+            not hasattr(_PREFETCH_THREAD_STATE, "client")
+            or getattr(_PREFETCH_THREAD_STATE, "stored_credentials", None) != stored_credentials
+        ):
+            _PREFETCH_THREAD_STATE.client = _dropbox_client_from_stored_credentials(stored_credentials)
+            _PREFETCH_THREAD_STATE.stored_credentials = stored_credentials
+        client = _PREFETCH_THREAD_STATE.client
+        _metadata, response = client.files_download(entry.path_lower)
+        content = response.content
+        if len(content) > settings.max_upload_size:
+            raise ValueError("Dropbox object exceeds the configured upload limit")
+        with open(temporary_path, "wb") as output:
+            output.write(content)
+        os.replace(temporary_path, target_path)
+        return target_path
+    finally:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
+
+
 def _reserve_job_llm_tokens(job: DropboxImportJob, integration: UserIntegration) -> tuple[date | None, int]:
     """Apply the daily cost guard only to an initial corpus backfill."""
     if not job.is_backfill:
@@ -361,7 +565,15 @@ def _reserve_job_llm_tokens(job: DropboxImportJob, integration: UserIntegration)
     return _reserve_corpus_llm_tokens(budget=budget)
 
 
-def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client, entry) -> str:
+def _import_file(
+    db,
+    job: DropboxImportJob,
+    integration: UserIntegration,
+    client,
+    entry,
+    *,
+    prefetched_path: str | None = None,
+) -> str:
     """Import one Dropbox FileMetadata and return queued/skipped/failed."""
     filename = sanitize_filename(entry.name) or "document"
     extension = os.path.splitext(filename)[1].lower()
@@ -379,7 +591,7 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
         )
         .first()
     )
-    if imported and imported.revision == entry.rev:
+    if imported and imported.revision == entry.rev and imported.state != "failed":
         return "skipped"
 
     idempotency_key = f"dropbox:{integration.id}:{entry.id}:{entry.rev}"
@@ -404,18 +616,24 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(imported)
         return "skipped"
 
-    reservation = _reserve_job_llm_tokens(job, integration)
+    index_only = job.is_backfill and _index_first_enabled(integration)
+    reservation = (None, 0) if index_only else _reserve_job_llm_tokens(job, integration)
     target_path = os.path.join(settings.workdir, f"dropbox_{integration.id}_{uuid.uuid4().hex}{extension}")
     temporary_path = f"{target_path}.part"
     queued = False
     try:
-        _metadata, response = client.files_download(entry.path_lower)
-        content = response.content
-        if len(content) > settings.max_upload_size:
-            return "failed"
-        with open(temporary_path, "wb") as output:
-            output.write(content)
-        os.replace(temporary_path, target_path)
+        if prefetched_path:
+            if os.path.getsize(prefetched_path) > settings.max_upload_size:
+                return "failed"
+            os.replace(prefetched_path, target_path)
+        else:
+            _metadata, response = client.files_download(entry.path_lower)
+            content = response.content
+            if len(content) > settings.max_upload_size:
+                return "failed"
+            with open(temporary_path, "wb") as output:
+                output.write(content)
+            os.replace(temporary_path, target_path)
 
         if intake is None:
             intake = DocumentIntake(
@@ -435,12 +653,11 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             db.add(intake)
             db.flush()
 
-        from app.api.intake import _queue_document
-
-        task = _queue_document(target_path, filename, None, job.owner_id if settings.multi_user_enabled else None)
+        source_task_id = str(uuid.uuid4()) if index_only else None
         intake.local_path = target_path
-        intake.task_id = task.id
+        intake.task_id = source_task_id
         intake.state = "queued"
+        intake.error = None
         if imported is None:
             imported = DropboxImportObject(
                 integration_id=integration.id,
@@ -452,9 +669,37 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
         imported.revision = entry.rev
         imported.remote_path = entry.path_display or entry.path_lower
         imported.intake_id = intake.id
-        imported.task_id = task.id
+        imported.task_id = source_task_id
         imported.state = "queued"
-        db.flush()
+        if index_only:
+            # A fast worker must be able to see the correlation id before it
+            # reports needs_ocr/indexed/failed against the durable ledgers.
+            db.commit()
+        else:
+            db.flush()
+
+        from app.api.intake import _queue_document
+
+        try:
+            task = _queue_document(
+                target_path,
+                filename,
+                None,
+                job.owner_id if settings.multi_user_enabled else None,
+                index_only=index_only,
+                task_id=source_task_id,
+            )
+        except Exception as exc:
+            if index_only:
+                intake.state = "failed"
+                intake.error = type(exc).__name__
+                imported.state = "failed"
+                db.commit()
+            raise
+        if not index_only:
+            intake.task_id = task.id
+            imported.task_id = task.id
+            db.flush()
         queued = True
         return "queued"
     finally:
@@ -466,11 +711,16 @@ def _import_file(db, job: DropboxImportJob, integration: UserIntegration, client
             _release_corpus_llm_tokens(reservation)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_import")
-def run_dropbox_corpus_import(self, job_id: str) -> dict:
+def _run_dropbox_corpus_import(
+    self,
+    job_id: str,
+    *,
+    lock_lost_event: Event | None = None,
+) -> dict:
     """Process one Dropbox result page and schedule the next page if needed."""
     import dropbox
 
+    _ensure_import_coordinator_lock(lock_lost_event)
     with SessionLocal() as db:
         job = db.query(DropboxImportJob).filter(DropboxImportJob.id == job_id).first()
         if not job:
@@ -493,10 +743,11 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             settings.corpus_backfill_queue_high_watermark,
             minimum=1,
         )
-        queue_depth = _pending_queue_depth()
+        queue_depth = _pending_queue_depth(exclude_current_delivery=True)
         if queue_depth is not None and queue_depth >= high_watermark:
             job.state = "queued"
             job.error = f"Paused for queue backpressure at depth {queue_depth}"
+            _ensure_import_coordinator_lock(lock_lost_event)
             db.commit()
             delay = _bounded_config_int(
                 config,
@@ -504,18 +755,20 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 settings.corpus_backfill_resume_delay_seconds,
                 minimum=1,
             )
-            schedule_dropbox_corpus_import(job.id, countdown=delay)
             return {
                 "status": "paused",
                 "job_id": job.id,
                 "queue_depth": queue_depth,
                 "resume_in_seconds": delay,
+                "_schedule_resume_in_seconds": delay,
             }
 
         job.state = "running"
         job.error = None
+        _ensure_import_coordinator_lock(lock_lost_event)
         db.commit()
         client = _dropbox_client(integration)
+        _ensure_import_coordinator_lock(lock_lost_event)
         if job.cursor:
             page = client.files_list_folder_continue(job.cursor)
         else:
@@ -528,6 +781,7 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
                 maximum=2000,
             )
             page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=batch_size)
+        _ensure_import_coordinator_lock(lock_lost_event)
 
         try:
             committed_entry_keys = _load_page_entry_keys(job)
@@ -535,74 +789,157 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             _fail_import_job(db, job, str(exc))
             raise
 
-        for entry in page.entries:
-            if not isinstance(entry, dropbox.files.FileMetadata):
-                continue
-            try:
-                entry_key = _dropbox_file_key(entry)
-            except RuntimeError as exc:
-                _fail_import_job(db, job, str(exc))
-                raise
-            if entry_key in committed_entry_keys:
-                continue
-            job.discovered += 1
-            try:
-                outcome = _import_file(db, job, integration, client, entry)
-            except CorpusDailyBudgetReached as exc:
-                job.discovered -= 1
-                job.state = "queued"
-                job.error = str(exc)
-                db.commit()
-                # Redis' default Celery visibility timeout is shorter than a
-                # possible wait to the next UTC day. Short rechecks avoid a
-                # long-lived ETA task being restored and delivered twice.
-                recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
-                schedule_dropbox_corpus_import(job.id, countdown=recheck_in)
-                return {
-                    "status": "paused",
-                    "reason": "daily_llm_token_budget",
-                    "job_id": job.id,
-                    "tokens_reserved": exc.used,
-                    "token_budget": exc.budget,
-                    "resume_in_seconds": recheck_in,
-                    "budget_resets_in_seconds": exc.retry_after_seconds,
-                }
-            except CorpusDailyBudgetUnavailable as exc:
-                job.discovered -= 1
-                job.state = "queued"
-                job.error = str(exc)
-                db.commit()
-                delay = _bounded_config_int(
-                    config,
-                    "backfill_resume_delay_seconds",
-                    settings.corpus_backfill_resume_delay_seconds,
-                    minimum=1,
-                )
-                schedule_dropbox_corpus_import(job.id, countdown=delay)
-                return {
-                    "status": "paused",
-                    "reason": "daily_llm_token_budget_unavailable",
-                    "job_id": job.id,
-                    "resume_in_seconds": delay,
-                }
-            except Exception as exc:
-                logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
-                outcome = "failed"
-            if outcome == "queued":
-                job.downloaded += 1
-                job.queued += 1
-            elif outcome == "skipped":
-                job.skipped += 1
-            else:
-                job.failed += 1
-            committed_entry_keys.add(entry_key)
-            job.page_entry_keys = json.dumps(sorted(committed_entry_keys))
-            # Persist each enqueued document before moving on. If the worker is
-            # interrupted, stable file-revision identities prevent recounting
-            # committed entries. Unlike a numeric offset, this remains safe if
-            # the Dropbox page changes between budget rechecks.
-            db.commit()
+        index_only = job.is_backfill and _index_first_enabled(integration)
+        download_concurrency = _index_first_download_concurrency(config, index_only=index_only)
+        integration_id = integration.id
+        stored_credentials = integration.credentials
+        prefetch_executor: ThreadPoolExecutor | None = None
+        prefetch_futures: dict[str, Future[str]] = {}
+        prefetch_entries: list[tuple[str, object]] = []
+        prefetch_position = 0
 
+        def fill_prefetch_window() -> None:
+            """Keep at most one bounded window of downloads on disk or in flight."""
+            nonlocal prefetch_position
+            if prefetch_executor is None:
+                return
+            while len(prefetch_futures) < download_concurrency and prefetch_position < len(prefetch_entries):
+                _ensure_import_coordinator_lock(lock_lost_event)
+                entry_key, entry = prefetch_entries[prefetch_position]
+                prefetch_position += 1
+                prefetch_futures[entry_key] = prefetch_executor.submit(
+                    _prefetch_dropbox_entry,
+                    integration_id,
+                    stored_credentials,
+                    entry,
+                )
+
+        try:
+            if download_concurrency > 1:
+                prefetch_executor = ThreadPoolExecutor(
+                    max_workers=download_concurrency,
+                    thread_name_prefix="dropbox-corpus",
+                )
+                for entry in page.entries:
+                    if not isinstance(entry, dropbox.files.FileMetadata) or not _entry_can_be_prefetched(entry):
+                        continue
+                    try:
+                        entry_key = _dropbox_file_key(entry)
+                    except RuntimeError:
+                        continue
+                    if entry_key not in committed_entry_keys:
+                        prefetch_entries.append((entry_key, entry))
+                fill_prefetch_window()
+
+            for entry in page.entries:
+                _ensure_import_coordinator_lock(lock_lost_event)
+                if not isinstance(entry, dropbox.files.FileMetadata):
+                    continue
+                try:
+                    entry_key = _dropbox_file_key(entry)
+                except RuntimeError as exc:
+                    _fail_import_job(db, job, str(exc))
+                    raise
+                if entry_key in committed_entry_keys:
+                    continue
+                job.discovered += 1
+                prefetched_path = None
+                try:
+                    future = prefetch_futures.pop(entry_key, None)
+                    if future:
+                        try:
+                            prefetched_path = future.result()
+                        finally:
+                            fill_prefetch_window()
+                    _ensure_import_coordinator_lock(lock_lost_event)
+                    outcome = _import_file(
+                        db,
+                        job,
+                        integration,
+                        client,
+                        entry,
+                        prefetched_path=prefetched_path,
+                    )
+                    if prefetched_path and not os.path.exists(prefetched_path):
+                        prefetched_path = None  # ownership moved into the durable pipeline
+                except CorpusCoordinatorLockLost:
+                    # Do not mark this revision failed or committed. Celery's
+                    # retry must see it again after coordinator ownership is restored.
+                    raise
+                except CorpusDailyBudgetReached as exc:
+                    job.discovered -= 1
+                    job.state = "queued"
+                    job.error = str(exc)
+                    _ensure_import_coordinator_lock(lock_lost_event)
+                    db.commit()
+                    # Redis' default Celery visibility timeout is shorter than a
+                    # possible wait to the next UTC day. Short rechecks avoid a
+                    # long-lived ETA task being restored and delivered twice.
+                    recheck_in = min(exc.retry_after_seconds, _MAX_BUDGET_RECHECK_SECONDS)
+                    return {
+                        "status": "paused",
+                        "reason": "daily_llm_token_budget",
+                        "job_id": job.id,
+                        "tokens_reserved": exc.used,
+                        "token_budget": exc.budget,
+                        "resume_in_seconds": recheck_in,
+                        "budget_resets_in_seconds": exc.retry_after_seconds,
+                        "_schedule_resume_in_seconds": recheck_in,
+                    }
+                except CorpusDailyBudgetUnavailable as exc:
+                    job.discovered -= 1
+                    job.state = "queued"
+                    job.error = str(exc)
+                    _ensure_import_coordinator_lock(lock_lost_event)
+                    db.commit()
+                    delay = _bounded_config_int(
+                        config,
+                        "backfill_resume_delay_seconds",
+                        settings.corpus_backfill_resume_delay_seconds,
+                        minimum=1,
+                    )
+                    return {
+                        "status": "paused",
+                        "reason": "daily_llm_token_budget_unavailable",
+                        "job_id": job.id,
+                        "resume_in_seconds": delay,
+                        "_schedule_resume_in_seconds": delay,
+                    }
+                except Exception as exc:
+                    logger.exception("Dropbox import failed for %s: %s", entry.path_display, exc)
+                    outcome = "failed"
+                finally:
+                    if prefetched_path and os.path.exists(prefetched_path):
+                        os.remove(prefetched_path)
+                if outcome == "queued":
+                    job.downloaded += 1
+                    job.queued += 1
+                elif outcome == "skipped":
+                    job.skipped += 1
+                else:
+                    job.failed += 1
+                committed_entry_keys.add(entry_key)
+                job.page_entry_keys = json.dumps(sorted(committed_entry_keys))
+                # Persist each enqueued document before moving on. If the worker is
+                # interrupted, stable file-revision identities prevent recounting
+                # committed entries. Unlike a numeric offset, this remains safe if
+                # the Dropbox page changes between budget rechecks.
+                # If ownership was lost during _import_file, the child task may
+                # already be queued. Commit its durable ledger atomically before
+                # aborting so a retry cannot orphan or enqueue this revision twice.
+                db.commit()
+                _ensure_import_coordinator_lock(lock_lost_event)
+        finally:
+            if prefetch_executor is not None:
+                prefetch_executor.shutdown(wait=True, cancel_futures=True)
+            for future in prefetch_futures.values():
+                if not future.done() or future.cancelled() or future.exception() is not None:
+                    continue
+                prefetched_path = future.result()
+                if os.path.exists(prefetched_path):
+                    os.remove(prefetched_path)
+
+        _ensure_import_coordinator_lock(lock_lost_event)
         job.cursor = page.cursor
         job.page_entry_keys = "[]"
         job.state = "running" if page.has_more else "completed"
@@ -616,6 +953,456 @@ def run_dropbox_corpus_import(self, job_id: str) -> dict:
             "failed": job.failed,
         }
 
-    if page.has_more:
+    result["_schedule_next_page"] = page.has_more
+    result["_schedule_ocr_backlog"] = not page.has_more and index_only
+    return result
+
+
+@celery.task(
+    base=BaseTaskWithRetry,
+    bind=True,
+    name="run_dropbox_corpus_import",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def run_dropbox_corpus_import(self, job_id: str, recover_lock: bool = False) -> dict:
+    """Run one corpus page while rejecting duplicate coordinator delivery."""
+    lock = _acquire_import_coordinator_lock(job_id)
+    if lock is None:
+        delivery_info = getattr(self.request, "delivery_info", {}) or {}
+        is_recovery_delivery = recover_lock or bool(delivery_info.get("redelivered")) or self.request.retries > 0
+        if is_recovery_delivery:
+            run_dropbox_corpus_import.apply_async(
+                args=[job_id],
+                kwargs={"recover_lock": True},
+                countdown=_IMPORT_COORDINATOR_RECOVERY_DELAY_SECONDS,
+                priority=settings.corpus_backfill_task_priority,
+            )
+            logger.warning(
+                "Dropbox corpus import %s recovery is waiting for a coordinator lock",
+                job_id,
+            )
+            return {"status": "waiting_for_lock", "job_id": job_id}
+        logger.info("Dropbox corpus import %s already has an active coordinator", job_id)
+        return {"status": "already_running", "job_id": job_id}
+
+    client, lock_key, lock_token = lock
+    renewal_stop = Event()
+    lock_lost = Event()
+    renewal_thread = Thread(
+        target=_maintain_import_coordinator_lock,
+        args=(client, lock_key, lock_token, renewal_stop, lock_lost),
+        daemon=True,
+        name=f"dropbox-corpus-lock-{job_id}",
+    )
+    renewal_thread.start()
+    try:
+        result = _run_dropbox_corpus_import(self, job_id, lock_lost_event=lock_lost)
+    finally:
+        renewal_stop.set()
+        renewal_thread.join(timeout=5)
+        _release_import_coordinator_lock(client, lock_key, lock_token)
+
+    schedule_next_page = result.pop("_schedule_next_page", False)
+    schedule_ocr_backlog = result.pop("_schedule_ocr_backlog", False)
+    schedule_resume_in_seconds = result.pop("_schedule_resume_in_seconds", None)
+    if schedule_resume_in_seconds is not None:
+        schedule_dropbox_corpus_import(job_id, countdown=schedule_resume_in_seconds)
+    elif schedule_next_page:
         schedule_dropbox_corpus_import(job_id)
+    elif schedule_ocr_backlog:
+        schedule_dropbox_corpus_ocr_backlog(job_id)
+    return result
+
+
+def _set_deferred_ocr_state(
+    db,
+    imported: DropboxImportObject,
+    state: str,
+    error: str | None = None,
+) -> None:
+    """Keep the import object and its intake ledger aligned."""
+    imported.state = state
+    if imported.intake_id:
+        intake = db.query(DocumentIntake).filter(DocumentIntake.id == imported.intake_id).first()
+        if intake:
+            intake.state = state
+            intake.error = error
+
+
+def _deferred_ocr_file_id(db, imported: DropboxImportObject) -> int | None:
+    """Resolve the FileRecord created by the original index-first task."""
+    if not imported.task_id:
+        return None
+    row = (
+        db.query(ProcessingLog.file_id)
+        .filter(
+            ProcessingLog.task_id == imported.task_id,
+            ProcessingLog.file_id.isnot(None),
+        )
+        .order_by(ProcessingLog.timestamp.desc(), ProcessingLog.id.desc())
+        .first()
+    )
+    return int(row[0]) if row and row[0] is not None else None
+
+
+def _claim_deferred_state(db, imported: DropboxImportObject, expected: str, claimed: str) -> bool:
+    """Atomically claim one import row and align its intake ledger."""
+    updated = (
+        db.query(DropboxImportObject)
+        .filter(DropboxImportObject.id == imported.id, DropboxImportObject.state == expected)
+        .update({DropboxImportObject.state: claimed}, synchronize_session=False)
+    )
+    if not updated:
+        db.rollback()
+        return False
+    if imported.intake_id:
+        db.query(DocumentIntake).filter(DocumentIntake.id == imported.intake_id).update(
+            {DocumentIntake.state: claimed, DocumentIntake.error: None},
+            synchronize_session=False,
+        )
+    db.commit()
+    db.refresh(imported)
+    return True
+
+
+def _recover_stale_deferred_claims(db, integration_id: int, *, stale_before: datetime) -> int:
+    """Return abandoned coordinator claims to a recoverable durable state."""
+    mappings = {
+        "ocr_claimed": "needs_ocr",
+        "indexing": "ocr_complete",
+        "requeue_claimed": "queued",
+    }
+    recovered = 0
+    for claimed, ready in mappings.items():
+        rows = (
+            db.query(DropboxImportObject)
+            .join(DocumentIntake, DocumentIntake.id == DropboxImportObject.intake_id)
+            .filter(
+                DropboxImportObject.integration_id == integration_id,
+                DropboxImportObject.state == claimed,
+                DocumentIntake.updated_at < stale_before,
+            )
+            .all()
+        )
+        for imported in rows:
+            _set_deferred_ocr_state(db, imported, ready, "Recovered stale deferred claim")
+            recovered += 1
+    if recovered:
+        db.commit()
+    return recovered
+
+
+def _reconcile_stale_queued(
+    db,
+    integration: UserIntegration,
+    *,
+    stale_before: datetime,
+    limit: int,
+) -> tuple[int, int]:
+    """Recover bounded index-first work abandoned before its ledger advanced.
+
+    Existing FileRecords are never sent through document ingestion again:
+    text-backed records go straight to the idempotent vector task, while
+    textless records enter the deferred OCR pass. Only rows without any
+    FileRecord are requeued from their still-durable staging file.
+    """
+    if limit <= 0:
+        return 0, 0
+
+    candidates = (
+        db.query(DropboxImportObject, DocumentIntake)
+        .join(DocumentIntake, DocumentIntake.id == DropboxImportObject.intake_id)
+        .filter(
+            DropboxImportObject.integration_id == integration.id,
+            DropboxImportObject.state == "queued",
+            DocumentIntake.state == "queued",
+            DocumentIntake.updated_at < stale_before,
+        )
+        .order_by(DocumentIntake.updated_at, DropboxImportObject.id)
+        .limit(limit)
+        .all()
+    )
+    queued = 0
+    gaps = 0
+
+    from app.api.intake import _queue_document
+    from app.tasks.vector_index import index_document_vectors
+
+    for imported, intake in candidates:
+        if not imported.task_id:
+            _set_deferred_ocr_state(db, imported, "requeue_missing", "Corpus task correlation is unavailable")
+            db.commit()
+            gaps += 1
+            continue
+
+        file_id = _deferred_ocr_file_id(db, imported)
+        record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+        if record is not None:
+            if not record.ocr_text or not record.ocr_text.strip():
+                _set_deferred_ocr_state(db, imported, "needs_ocr", "Recovered stale queued document without text")
+                db.commit()
+                continue
+            if not _claim_deferred_state(db, imported, "queued", "indexing"):
+                continue
+            try:
+                index_document_vectors.apply_async(
+                    args=[record.id],
+                    kwargs={"source_task_id": imported.task_id},
+                    priority=settings.corpus_backfill_task_priority,
+                )
+            except Exception as exc:
+                _set_deferred_ocr_state(db, imported, "queued", type(exc).__name__)
+                db.commit()
+                continue
+            queued += 1
+            continue
+
+        staged_path = intake.local_path
+        if not staged_path or not os.path.exists(staged_path):
+            _set_deferred_ocr_state(db, imported, "requeue_missing", "Staged corpus file is unavailable")
+            db.commit()
+            gaps += 1
+            continue
+        if not _claim_deferred_state(db, imported, "queued", "requeue_claimed"):
+            continue
+        try:
+            _queue_document(
+                staged_path,
+                intake.original_filename or os.path.basename(staged_path),
+                None,
+                integration.owner_id if settings.multi_user_enabled else None,
+                index_only=True,
+                task_id=imported.task_id,
+            )
+        except Exception as exc:
+            _set_deferred_ocr_state(db, imported, "queued", type(exc).__name__)
+            db.commit()
+            continue
+        queued += 1
+
+    return queued, gaps
+
+
+@celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_ocr_backlog")
+def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
+    """Queue bounded OCR-only work for scanned index-first corpus documents."""
+    should_recheck = False
+    recheck_delay = settings.corpus_backfill_ocr_recheck_seconds
+    queued = 0
+    failed = 0
+    gaps = 0
+
+    with SessionLocal() as db:
+        job = db.query(DropboxImportJob).filter(DropboxImportJob.id == job_id).first()
+        if not job:
+            return {"status": "skipped", "detail": "Import job not found"}
+        integration = db.query(UserIntegration).filter(UserIntegration.id == job.integration_id).first()
+        if not integration or not integration.is_active:
+            return {"status": "skipped", "detail": "Dropbox source integration is inactive"}
+        try:
+            config = json.loads(integration.config or "{}")
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+        if not isinstance(config, dict):
+            config = {}
+        if job.state != "completed":
+            return {"status": "waiting", "job_id": job.id, "detail": "Initial corpus import is not complete"}
+        index_only = job.is_backfill and _index_first_enabled(integration)
+        if not index_only:
+            return {"status": "disabled", "job_id": job.id}
+        deferred_ocr = _deferred_ocr_enabled(config, index_only=index_only)
+
+        recheck_delay = _bounded_config_int(
+            config,
+            "backfill_ocr_recheck_seconds",
+            settings.corpus_backfill_ocr_recheck_seconds,
+            minimum=1,
+        )
+        now = datetime.now(timezone.utc)
+        stale_claim_before = now - timedelta(seconds=max(300, recheck_delay * 10))
+        _recover_stale_deferred_claims(db, integration.id, stale_before=stale_claim_before)
+        stale_queue_seconds = _bounded_config_int(
+            config,
+            "backfill_stale_queue_seconds",
+            settings.corpus_backfill_stale_queue_seconds,
+            minimum=60,
+        )
+        stale_queue_before = now - timedelta(seconds=stale_queue_seconds)
+        high_watermark = _bounded_config_int(
+            config,
+            "backfill_queue_high_watermark",
+            settings.corpus_backfill_queue_high_watermark,
+            minimum=1,
+        )
+        queue_depth = _pending_queue_depth()
+        if queue_depth is not None and queue_depth >= high_watermark:
+            should_recheck = True
+            result: dict[str, object] = {
+                "status": "paused",
+                "job_id": job.id,
+                "queue_depth": queue_depth,
+                "resume_in_seconds": recheck_delay,
+            }
+        else:
+            available_slots = high_watermark if queue_depth is None else max(0, high_watermark - queue_depth)
+            reconcile_batch_size = _bounded_config_int(
+                config,
+                "backfill_reconcile_batch_size",
+                settings.corpus_backfill_reconcile_batch_size,
+                minimum=1,
+                maximum=100,
+            )
+            reconciled_queued, reconciled_gaps = _reconcile_stale_queued(
+                db,
+                integration,
+                stale_before=stale_queue_before,
+                limit=min(reconcile_batch_size, available_slots),
+            )
+            queued += reconciled_queued
+            gaps += reconciled_gaps
+            available_slots = max(0, available_slots - reconciled_queued)
+            batch_size = _bounded_config_int(
+                config,
+                "backfill_ocr_batch_size",
+                settings.corpus_backfill_ocr_batch_size,
+                minimum=1,
+                maximum=100,
+            )
+            batch_size = min(batch_size, available_slots)
+            remaining_slots = batch_size
+
+            from app.tasks.vector_index import index_document_vectors
+
+            index_candidates = (
+                db.query(DropboxImportObject)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state == "ocr_complete",
+                )
+                .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
+                .limit(remaining_slots)
+                .all()
+            )
+            for imported in index_candidates:
+                if not _claim_deferred_state(db, imported, "ocr_complete", "indexing"):
+                    continue
+                file_id = _deferred_ocr_file_id(db, imported)
+                record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+                if not record or not record.ocr_text or not imported.task_id:
+                    _set_deferred_ocr_state(db, imported, "failed", "OCR text is unavailable for indexing")
+                    db.commit()
+                    failed += 1
+                    continue
+                try:
+                    index_document_vectors.apply_async(
+                        args=[record.id],
+                        kwargs={"source_task_id": imported.task_id},
+                        priority=settings.corpus_backfill_task_priority,
+                    )
+                except Exception as exc:
+                    _set_deferred_ocr_state(db, imported, "ocr_complete", type(exc).__name__)
+                    db.commit()
+                    continue
+                queued += 1
+                remaining_slots -= 1
+
+            candidates: list[DropboxImportObject] = []
+            if deferred_ocr:
+                candidates = (
+                    db.query(DropboxImportObject)
+                    .filter(
+                        DropboxImportObject.integration_id == integration.id,
+                        DropboxImportObject.state == "needs_ocr",
+                    )
+                    .order_by(DropboxImportObject.imported_at, DropboxImportObject.id)
+                    .limit(remaining_slots)
+                    .all()
+                )
+
+            from app.tasks.process_with_ocr import process_with_ocr
+
+            for imported in candidates:
+                if not _claim_deferred_state(db, imported, "needs_ocr", "ocr_claimed"):
+                    continue
+                file_id = _deferred_ocr_file_id(db, imported)
+                record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+                source_path = record.original_file_path if record else None
+                if not record or not source_path or not os.path.exists(source_path) or not imported.task_id:
+                    _set_deferred_ocr_state(db, imported, "failed", "Original corpus file is unavailable")
+                    db.commit()
+                    failed += 1
+                    continue
+
+                extension = os.path.splitext(record.original_filename or imported.remote_path)[1].lower()
+                if extension not in _OCR_CAPABLE_EXTENSIONS:
+                    _set_deferred_ocr_state(db, imported, "needs_conversion", "PDF conversion is required")
+                    db.commit()
+                    continue
+                staged_name = f"corpus_ocr_{imported.id}_{uuid.uuid4().hex}{extension or '.pdf'}"
+                tmp_dir = os.path.join(settings.workdir, "tmp")
+                os.makedirs(tmp_dir, exist_ok=True)
+                staged_path = os.path.join(tmp_dir, staged_name)
+                try:
+                    shutil.copy2(source_path, staged_path)
+                    process_with_ocr.apply_async(
+                        args=[staged_name, record.id],
+                        kwargs={"index_only": True, "source_task_id": imported.task_id},
+                        priority=settings.corpus_backfill_task_priority,
+                    )
+                    _set_deferred_ocr_state(db, imported, "ocr_queued")
+                    db.commit()
+                    queued += 1
+                except Exception as exc:
+                    if os.path.exists(staged_path):
+                        os.remove(staged_path)
+                    _set_deferred_ocr_state(db, imported, "needs_ocr", type(exc).__name__)
+                    db.commit()
+
+            pending_states = [
+                "ocr_claimed",
+                "ocr_queued",
+                "ocr_retrying",
+                "ocr_complete",
+                "indexing",
+                "index_retrying",
+                "queued",
+                "requeue_claimed",
+            ]
+            if deferred_ocr:
+                pending_states.append("needs_ocr")
+            pending = (
+                db.query(DropboxImportObject.id)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state.in_(pending_states),
+                )
+                .first()
+                is not None
+            )
+            should_recheck = pending
+            gap_states = ["failed", "needs_conversion", "requeue_missing"]
+            if not deferred_ocr:
+                gap_states.append("needs_ocr")
+            gap_count = (
+                db.query(DropboxImportObject.id)
+                .filter(
+                    DropboxImportObject.integration_id == integration.id,
+                    DropboxImportObject.state.in_(gap_states),
+                )
+                .count()
+            )
+            gaps = max(gaps, gap_count)
+            result = {
+                "status": "running" if pending else ("completed_with_gaps" if gaps else "completed"),
+                "job_id": job.id,
+                "queued": queued,
+                "failed": failed,
+                "resume_in_seconds": recheck_delay if pending else None,
+            }
+            if gaps:
+                result["gaps"] = gaps
+
+    if should_recheck:
+        schedule_dropbox_corpus_ocr_backlog(job_id, countdown=recheck_delay)
     return result

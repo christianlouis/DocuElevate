@@ -8,7 +8,8 @@ FROM python:3.13.11-slim AS builder
 
 WORKDIR /build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update --error-on=any \
+    && apt-get install -y --no-install-recommends \
         build-essential \
         libffi-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -36,10 +37,17 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # is available; using --omit=dev would cause 'tailwindcss: not found'.
 FROM node:20-slim AS frontend-builder
 
+# A clean installation must tolerate short registry/network interruptions.
+# Limiting sockets also avoids overwhelming small self-hosted Docker hosts.
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_MAXSOCKETS=5
+
 WORKDIR /frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --no-audit --no-fund
 
 COPY frontend/ ./
 RUN npm run build
@@ -74,10 +82,12 @@ COPY --from=builder /opt/venv /opt/venv
 #   poppler-utils   – provides pdfinfo/pdftoppm used by pdf2image
 #   unpaper         – optional deskewing pre-processor used by ocrmypdf
 #   wget            – used by ocr_language_manager to download tessdata files
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update --error-on=any \
+    && apt-get install -y --no-install-recommends \
         tesseract-ocr \
         ghostscript \
         poppler-utils \
+        postgresql-client \
         unpaper \
         wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -88,6 +98,7 @@ COPY ./frontend /app/frontend
 COPY ./migrations /app/migrations
 COPY ./alembic.ini /app/alembic.ini
 COPY ./LICENSE /app/LICENSE
+COPY ./docker/compose-entrypoint.sh /usr/local/bin/docuelevate-compose-entrypoint
 
 # Copy build metadata files (generated at build time)
 COPY ./VERSION /app/VERSION
@@ -102,7 +113,8 @@ COPY --from=docs-builder /docs/docs_build /app/docs_build
 COPY --from=frontend-builder /frontend/static/styles.css /app/frontend/static/styles.css
 
 # Create necessary runtime directories in a single layer
-RUN mkdir -p /app/runtime_info /workdir
+RUN mkdir -p /app/runtime_info /workdir \
+    && chmod 0755 /usr/local/bin/docuelevate-compose-entrypoint
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \

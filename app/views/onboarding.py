@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.config import settings as _settings
 from app.models import UserIntegration, UserProfile
-from app.utils.subscription import get_all_tiers
+from app.utils.config_validator.providers import get_provider_status
+from app.utils.subscription import TIER_DEFAULTS, get_all_tiers
 from app.views.base import APIRouter, get_db, require_login, templates
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,18 @@ _DESTINATION_META: list[dict] = [
     {"id": "ftp", "name": "FTP", "icon": "fas fa-server"},
     {"id": "icloud", "name": "iCloud Drive", "icon": "fab fa-apple"},
 ]
+
+
+def _prepare_onboarding_tiers(tiers: list[dict]) -> list[dict]:
+    """Mark stock plan copy as localizable without hiding DB customizations."""
+    prepared: list[dict] = []
+    for tier in tiers:
+        item = dict(tier)
+        default = TIER_DEFAULTS.get(str(item.get("id")), {})
+        item["localize_name"] = item.get("name") == default.get("name")
+        item["localize_tagline"] = item.get("tagline", "") == default.get("tagline", "")
+        prepared.append(item)
+    return prepared
 
 
 def _get_configured_destinations(cfg: Settings) -> list[dict]:
@@ -71,6 +84,7 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
     """
     user = request.session.get("user") or {}
     user_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    profile = None
 
     if user_id:
         profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
@@ -99,8 +113,12 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
         if integration.direction == "DESTINATION"
     ]
     legacy_destinations = _get_configured_destinations(_settings)
-    tiers = get_all_tiers(db)
-    is_preprod = "preprod" in request.url.hostname.lower() if request.url.hostname else False
+    tiers = _prepare_onboarding_tiers(get_all_tiers(db))
+    ai_configured = bool(get_provider_status()["AI Provider"]["configured"])
+    deployment_label = _settings.deployment_label.strip()
+    instance_label = "DocuElevate"
+    if deployment_label:
+        instance_label = f"{instance_label} {deployment_label}"
 
     return templates.TemplateResponse(
         "onboarding.html",
@@ -108,11 +126,17 @@ async def onboarding_page(request: Request, db: Session = Depends(get_db)):
             "request": request,
             "user": user,
             "configured_destinations": configured_destinations,
+            "configured_destination_ids": [destination["id"] for destination in configured_destinations],
+            "configured_destination_labels": {
+                destination["id"]: destination["name"] for destination in configured_destinations
+            },
             "legacy_destinations": legacy_destinations,
             "integration_sources": [i for i in user_integrations if i.direction == "SOURCE"],
             "integration_destinations": [i for i in user_integrations if i.direction == "DESTINATION"],
-            "instance_label": "DocuElevate Preprod" if is_preprod else "DocuElevate",
-            "suggested_storage_path": "/DocuElevate Preprod" if is_preprod else "/DocuElevate",
+            "instance_label": instance_label,
+            "suggested_storage_path": _settings.default_storage_path,
             "tiers": tiers,
+            "is_complimentary": bool(profile and profile.is_complimentary),
+            "ai_configured": ai_configured,
         },
     )

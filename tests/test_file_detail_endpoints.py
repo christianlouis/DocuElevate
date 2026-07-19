@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models import FileRecord, ProcessingLog
+from app.models import FileProcessingStep, FileRecord, ProcessingLog
 
 
 @pytest.mark.integration
@@ -511,6 +511,58 @@ class TestFileDetailView:
         assert b"Processing Status Summary" in response.content
         # Should have upload branches
         assert b"Dropbox" in response.content or b"dropbox" in response.content
+
+    def test_file_detail_distinguishes_skipped_steps_from_success(
+        self, client: TestClient, db_session, sample_pdf_path
+    ):
+        """A keyless install reports limitations instead of claiming every step succeeded."""
+        file_record = FileRecord(
+            filehash="skipped-summary",
+            original_filename="keyless.pdf",
+            local_filename=sample_pdf_path,
+            file_size=1024,
+            mime_type="application/pdf",
+        )
+        db_session.add(file_record)
+        db_session.commit()
+        db_session.refresh(file_record)
+        db_session.add_all(
+            [
+                ProcessingLog(
+                    file_id=file_record.id,
+                    task_id="task-keyless",
+                    step_name="create_file_record",
+                    status="success",
+                    message="Created",
+                ),
+                ProcessingLog(
+                    file_id=file_record.id,
+                    task_id="task-keyless",
+                    step_name="extract_metadata_with_gpt",
+                    status="skipped",
+                    message="AI provider not configured",
+                ),
+            ]
+        )
+        db_session.add_all(
+            [
+                FileProcessingStep(file_id=file_record.id, step_name="create_file_record", status="success"),
+                FileProcessingStep(
+                    file_id=file_record.id,
+                    step_name="extract_metadata_with_gpt",
+                    status="skipped",
+                ),
+                FileProcessingStep(file_id=file_record.id, step_name="send_to_all_destinations", status="success"),
+            ]
+        )
+        db_session.commit()
+
+        response = client.get(f"/files/{file_record.id}/process")
+
+        assert response.status_code == 200
+        assert b"Completed with limitations" in response.content
+        assert b'<span class="count-badge success">2</span>' in response.content
+        assert b'<span class="count-badge skipped">1</span>' in response.content
 
     def test_file_detail_view_nonexistent(self, client: TestClient):
         """Test file detail view for nonexistent file."""

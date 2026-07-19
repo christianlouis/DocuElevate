@@ -76,3 +76,27 @@ def test_intake_rejects_invalid_metadata_before_writing(client, tmp_path):
         )
     assert response.status_code == 422
     assert not list(tmp_path.iterdir())
+
+
+def test_index_only_non_pdf_bypasses_conversion_pipeline():
+    with (
+        patch("app.api.intake.process_document.apply_async") as process_async,
+        patch("app.api.intake.convert_to_pdf.delay") as convert_delay,
+    ):
+        from app.api.intake import _queue_document
+
+        _queue_document(
+            "/workdir/notes.docx",
+            "notes.docx",
+            None,
+            "owner",
+            index_only=True,
+            task_id="source-task",
+        )
+
+    process_async.assert_called_once_with(
+        args=["/workdir/notes.docx"],
+        kwargs={"original_filename": "notes.docx", "owner_id": "owner", "index_only": True},
+        task_id="source-task",
+    )
+    convert_delay.assert_not_called()

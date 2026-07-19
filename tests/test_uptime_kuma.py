@@ -28,7 +28,7 @@ class TestUptimeKumaTasks:
 
     @patch("app.tasks.uptime_kuma_tasks.requests.get")
     @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_success(self, mock_settings, mock_get):
+    def test_ping_uptime_kuma_success(self, mock_settings, mock_get, caplog):
         """Test successful ping to Uptime Kuma"""
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
@@ -40,12 +40,14 @@ class TestUptimeKumaTasks:
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
 
-        result = ping_uptime_kuma()
+        with caplog.at_level("INFO", logger="app.tasks.uptime_kuma_tasks"):
+            result = ping_uptime_kuma()
 
         # Should return True on success
         assert result is True
         mock_get.assert_called_once_with("https://uptime.example.com/ping/123", timeout=10)
         mock_response.raise_for_status.assert_called_once()
+        assert "https://uptime.example.com/ping/123" not in caplog.text
 
     @patch("app.tasks.uptime_kuma_tasks.requests.get")
     @patch("app.tasks.uptime_kuma_tasks.settings")
@@ -117,6 +119,24 @@ class TestUptimeKumaTasks:
         # Should return False on any request exception
         assert result is False
         mock_get.assert_called_once()
+
+    @patch("app.tasks.uptime_kuma_tasks.requests.get")
+    @patch("app.tasks.uptime_kuma_tasks.settings")
+    def test_ping_failure_never_logs_push_url(self, mock_settings, mock_get, caplog):
+        """Request exceptions can include the secret-bearing URL."""
+        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+
+        push_url = "https://uptime.example.com/api/push/private-token"
+        mock_settings.uptime_kuma_url = push_url
+        mock_get.side_effect = requests.exceptions.HTTPError(f"500 Server Error for url: {push_url}")
+
+        with caplog.at_level("ERROR", logger="app.tasks.uptime_kuma_tasks"):
+            result = ping_uptime_kuma()
+
+        assert result is False
+        assert push_url not in caplog.text
+        assert "private-token" not in caplog.text
+        assert "HTTPError" in caplog.text
 
     @patch("app.tasks.uptime_kuma_tasks.requests.get")
     @patch("app.tasks.uptime_kuma_tasks.settings")

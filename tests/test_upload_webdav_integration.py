@@ -22,6 +22,18 @@ _TEST_CREDENTIAL = "testpass"  # noqa: S105
 _TEST_WRONG_CREDENTIAL = "wrongpass"  # noqa: S105
 
 
+def _start_container_or_skip(container: DockerContainer) -> None:
+    """Skip Docker-only integration tests when no daemon is available."""
+    try:
+        container.start()
+    except Exception as exc:  # noqa: BLE001 - testcontainers raises backend-specific exceptions
+        try:
+            container.stop()
+        except Exception:  # noqa: BLE001, S110 - best-effort cleanup after failed startup
+            pass
+        pytest.skip(f"Docker is unavailable for WebDAV integration tests ({type(exc).__name__})")
+
+
 @pytest.mark.integration
 @pytest.mark.requires_docker
 class TestWebDAVIntegration:
@@ -42,7 +54,7 @@ class TestWebDAVIntegration:
         container.with_env("PASSWORD", _TEST_CREDENTIAL)
 
         # Start the container
-        container.start()
+        _start_container_or_skip(container)
 
         # Wait for server to be ready
         time.sleep(2)
@@ -324,7 +336,7 @@ class TestWebDAVServerVerification:
         container.with_env("USERNAME", "admin")
         container.with_env("PASSWORD", "admin123")
 
-        container.start()
+        _start_container_or_skip(container)
         time.sleep(2)
 
         host = container.get_container_host_ip()

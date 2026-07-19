@@ -1,9 +1,12 @@
 """Qdrant behaves like a first-class per-user destination."""
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from app.models import IntegrationType
+import pytest
+
+from app.models import DocumentIntake, FileRecord, IntegrationType
 
 
 def test_vector_database_is_supported_integration_type():
@@ -13,19 +16,63 @@ def test_vector_database_is_supported_integration_type():
 def test_vector_connection_uses_operator_qdrant(monkeypatch):
     monkeypatch.setattr("app.config.settings.vector_index_enabled", True)
     monkeypatch.setattr("app.config.settings.vector_index_collection", "DocuElevate Preprod")
+    monkeypatch.setattr("app.config.settings.openai_api_key", "test-key")
 
-    with patch("app.utils.vector_index.QdrantVectorIndex.status", return_value={"collection": "DocuElevate Preprod"}):
+    with (
+        patch("app.utils.vector_index.QdrantVectorIndex.status", return_value={"collection": "DocuElevate Preprod"}),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection") as ensure_collection,
+        patch("app.utils.similarity.generate_embedding", return_value=[0.1, 0.2, 0.3]),
+    ):
         from app.api.integrations import _test_vector_database_connection
 
         result = _test_vector_database_connection({"provider": "qdrant"}, None)
 
-    assert result == {"success": True, "message": "Qdrant collection 'DocuElevate Preprod' is ready"}
+    assert result == {
+        "success": True,
+        "message": "Qdrant collection 'DocuElevate Preprod' and embeddings are ready",
+    }
+    ensure_collection.assert_called_once_with(3)
+
+
+def test_vector_connection_rejects_missing_embedding_provider(monkeypatch):
+    monkeypatch.setattr("app.config.settings.vector_index_enabled", True)
+    monkeypatch.setattr("app.config.settings.openai_api_key", None)
+    monkeypatch.setattr("app.config.settings.openai_base_url", "https://api.openai.com/v1")
+
+    with patch("app.utils.vector_index.QdrantVectorIndex.status") as qdrant_status:
+        from app.api.integrations import _test_vector_database_connection
+
+        result = _test_vector_database_connection({"provider": "qdrant"}, None)
+
+    assert result["success"] is False
+    assert result["code"] == "embedding_provider_not_configured"
+    qdrant_status.assert_not_called()
+
+
+def test_vector_connection_probes_keyless_openai_compatible_endpoint(monkeypatch):
+    monkeypatch.setattr("app.config.settings.vector_index_enabled", True)
+    monkeypatch.setattr("app.config.settings.vector_index_collection", "DocuElevate Preprod")
+    monkeypatch.setattr("app.config.settings.openai_api_key", None)
+    monkeypatch.setattr("app.config.settings.openai_base_url", "http://embeddings.internal/v1/")
+
+    with (
+        patch("app.utils.vector_index.QdrantVectorIndex.status", return_value={"collection": "DocuElevate Preprod"}),
+        patch("app.utils.vector_index.QdrantVectorIndex.ensure_collection") as ensure_collection,
+        patch("app.utils.similarity.generate_embedding", return_value=[0.1, 0.2, 0.3]) as generate_embedding,
+    ):
+        from app.api.integrations import _test_vector_database_connection
+
+        result = _test_vector_database_connection({"provider": "qdrant"}, None)
+
+    assert result["success"] is True
+    generate_embedding.assert_called_once()
+    ensure_collection.assert_called_once_with(3)
 
 
 def test_vector_upload_indexes_file_record(monkeypatch, tmp_path):
     monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.vector_index_enabled", True)
     monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.vector_index_collection", "DocuElevate Preprod")
-    record = SimpleNamespace(id=42, ocr_text="project plan")
+    record = SimpleNamespace(id=42, owner_id="owner-1", ocr_text="project plan")
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = record
     db_context = MagicMock()
@@ -39,12 +86,49 @@ def test_vector_upload_indexes_file_record(monkeypatch, tmp_path):
     ):
         from app.tasks.upload_to_user_integration import _upload_vector_database
 
-        result = _upload_vector_database(str(file_path), {"provider": "qdrant"}, {}, "task-1", file_id=42)
+        result = _upload_vector_database(
+            str(file_path),
+            {"provider": "qdrant"},
+            {},
+            "task-1",
+            file_id=42,
+            integration_owner_id="owner-1",
+        )
 
     index_document.assert_called_once_with(record)
     assert result["status"] == "Completed"
     assert result["chunks_indexed"] == 3
     assert result["collection"] == "DocuElevate Preprod"
+
+
+def test_vector_upload_rejects_cross_tenant_destination(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.vector_index_enabled", True)
+    monkeypatch.setattr("app.tasks.upload_to_user_integration.settings.multi_user_enabled", True)
+    record = SimpleNamespace(id=42, owner_id="julia", ocr_text="private")
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = record
+    db_context = MagicMock()
+    db_context.__enter__.return_value = db
+    file_path = tmp_path / "document.pdf"
+    file_path.write_bytes(b"%PDF")
+
+    with (
+        patch("app.tasks.upload_to_user_integration.SessionLocal", return_value=db_context),
+        patch("app.utils.vector_index.QdrantVectorIndex.index_document") as index_document,
+    ):
+        from app.tasks.upload_to_user_integration import _upload_vector_database
+
+        with pytest.raises(ValueError, match="owner does not match"):
+            _upload_vector_database(
+                str(file_path),
+                {"provider": "qdrant"},
+                {},
+                "task-1",
+                file_id=42,
+                integration_owner_id="christian",
+            )
+
+    index_document.assert_not_called()
 
 
 def test_automatic_index_defers_to_vector_destination(monkeypatch):
@@ -64,3 +148,118 @@ def test_automatic_index_defers_to_vector_destination(monkeypatch):
         _queue_vector_index(record.id)
 
     delay.assert_not_called()
+
+
+def test_index_first_vector_task_completes_source_ledger(db_session):
+    record = FileRecord(
+        filehash="vector-ledger",
+        original_filename="plan.pdf",
+        local_filename="/workdir/original/plan.pdf",
+        file_size=10,
+        mime_type="application/pdf",
+        ocr_text="The project milestone is next Friday.",
+    )
+    intake = DocumentIntake(
+        principal_id="owner",
+        idempotency_key="dropbox:plan",
+        source="dropbox",
+        original_filename="plan.pdf",
+        task_id="source-task",
+        state="indexing",
+    )
+    db_session.add_all([record, intake])
+    db_session.commit()
+
+    with (
+        patch("app.tasks.vector_index.settings.vector_index_enabled", True),
+        patch("app.tasks.vector_index.SessionLocal", return_value=nullcontext(db_session)),
+        patch("app.utils.vector_index.QdrantVectorIndex.index_document", return_value=2),
+    ):
+        from app.tasks.vector_index import index_document_vectors
+
+        result = index_document_vectors.run(record.id, source_task_id="source-task")
+
+    db_session.refresh(intake)
+    assert result == {"status": "success", "file_id": record.id, "chunks_indexed": 2}
+    assert intake.state == "indexed"
+    assert intake.error is None
+
+
+def test_index_first_vector_task_keeps_intermediate_failure_retryable(db_session):
+    record = FileRecord(
+        filehash="vector-retry",
+        original_filename="retry.pdf",
+        local_filename="/workdir/original/retry.pdf",
+        file_size=10,
+        mime_type="application/pdf",
+        ocr_text="Retry this document after a transient Qdrant timeout.",
+    )
+    intake = DocumentIntake(
+        principal_id="owner",
+        idempotency_key="dropbox:retry",
+        source="dropbox",
+        original_filename="retry.pdf",
+        task_id="retry-task",
+        state="indexing",
+    )
+    db_session.add_all([record, intake])
+    db_session.commit()
+
+    with (
+        patch("app.tasks.vector_index.settings.vector_index_enabled", True),
+        patch("app.tasks.vector_index.SessionLocal", return_value=nullcontext(db_session)),
+        patch(
+            "app.utils.vector_index.QdrantVectorIndex.index_document",
+            side_effect=TimeoutError("Qdrant timed out"),
+        ),
+    ):
+        from app.tasks.vector_index import index_document_vectors
+
+        with pytest.raises(TimeoutError, match="Qdrant timed out"):
+            index_document_vectors.run(record.id, source_task_id="retry-task")
+
+    db_session.refresh(intake)
+    assert intake.state == "index_retrying"
+    assert intake.error == "TimeoutError"
+
+
+def test_index_first_vector_task_marks_exhausted_failure_terminal(db_session):
+    record = FileRecord(
+        filehash="vector-exhausted",
+        original_filename="exhausted.pdf",
+        local_filename="/workdir/original/exhausted.pdf",
+        file_size=10,
+        mime_type="application/pdf",
+        ocr_text="This document exhausted its Qdrant retry budget.",
+    )
+    intake = DocumentIntake(
+        principal_id="owner",
+        idempotency_key="dropbox:exhausted",
+        source="dropbox",
+        original_filename="exhausted.pdf",
+        task_id="exhausted-task",
+        state="indexing",
+    )
+    db_session.add_all([record, intake])
+    db_session.commit()
+
+    with (
+        patch("app.tasks.vector_index.settings.vector_index_enabled", True),
+        patch("app.tasks.vector_index.SessionLocal", return_value=nullcontext(db_session)),
+        patch(
+            "app.utils.vector_index.QdrantVectorIndex.index_document",
+            side_effect=TimeoutError("Qdrant timed out"),
+        ),
+    ):
+        from app.tasks.vector_index import index_document_vectors
+
+        index_document_vectors.push_request(retries=index_document_vectors.max_retries)
+        try:
+            with pytest.raises(TimeoutError, match="Qdrant timed out"):
+                index_document_vectors.run(record.id, source_task_id="exhausted-task")
+        finally:
+            index_document_vectors.pop_request()
+
+    db_session.refresh(intake)
+    assert intake.state == "failed"
+    assert intake.error == "TimeoutError"

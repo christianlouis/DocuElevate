@@ -133,8 +133,8 @@ class TestBackupDashboard:
         assert context["counts"] == {"hourly": 0, "daily": 0, "weekly": 0}
 
     @pytest.mark.asyncio
-    async def test_total_size_includes_existing_local_files(self):
-        """backup_dashboard sums size_bytes only for records with an existing local_path."""
+    async def test_total_size_uses_filesystem_storage_snapshot(self):
+        """backup_dashboard reports the same real disk usage as backup safety checks."""
         from app.views.backup import backup_dashboard
 
         r_exists = MagicMock()
@@ -156,23 +156,28 @@ class TestBackupDashboard:
         mock_request = self._make_admin_request()
         mock_db = self._make_mock_db(records=records)
 
-        def _fake_exists(path):
-            return path == "/tmp/backup_exists.db.gz"
-
         with (
             patch("app.views.backup.templates") as mock_templates,
-            patch("app.views.backup.os.path.exists", side_effect=_fake_exists),
+            patch(
+                "app.tasks.backup_tasks.backup_storage_status",
+                return_value={
+                    "backup_bytes": 4096,
+                    "free_bytes": 8192,
+                    "max_local_bytes": 16384,
+                    "min_free_bytes": 1024,
+                },
+            ),
         ):
             mock_templates.TemplateResponse.return_value = MagicMock()
             await backup_dashboard(mock_request, db=mock_db)
 
         _tpl_name, context = mock_templates.TemplateResponse.call_args[0]
-        # Only r_exists (512) should be counted; r_missing path doesn't exist; r_no_path has no path
-        assert context["total_size"] == 512
+        # Record metadata deliberately disagrees; the filesystem snapshot wins.
+        assert context["total_size"] == 4096
 
     @pytest.mark.asyncio
-    async def test_total_size_zero_when_no_local_files_exist(self):
-        """backup_dashboard total_size is 0 when no local files are present."""
+    async def test_total_size_zero_when_storage_snapshot_is_empty(self):
+        """backup_dashboard total_size is zero when no backup archives exist."""
         from app.views.backup import backup_dashboard
 
         r = MagicMock()
@@ -185,7 +190,15 @@ class TestBackupDashboard:
 
         with (
             patch("app.views.backup.templates") as mock_templates,
-            patch("app.views.backup.os.path.exists", return_value=False),
+            patch(
+                "app.tasks.backup_tasks.backup_storage_status",
+                return_value={
+                    "backup_bytes": 0,
+                    "free_bytes": 8192,
+                    "max_local_bytes": 16384,
+                    "min_free_bytes": 1024,
+                },
+            ),
         ):
             mock_templates.TemplateResponse.return_value = MagicMock()
             await backup_dashboard(mock_request, db=mock_db)
