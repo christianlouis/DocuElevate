@@ -193,7 +193,16 @@ def get_onboarding_status(request: Request, db: DbSession) -> dict[str, Any]:
     if profile.onboarding_completed:
         step = 8
 
-    integrations = db.query(UserIntegration.direction).filter(UserIntegration.owner_id == user_id).all()
+    # A paused integration is deliberately unavailable and must not make the
+    # review screen claim that automated intake or delivery is ready.
+    integrations = (
+        db.query(UserIntegration.direction)
+        .filter(
+            UserIntegration.owner_id == user_id,
+            UserIntegration.is_active.is_(True),
+        )
+        .all()
+    )
 
     return {
         "completed": bool(profile.onboarding_completed),

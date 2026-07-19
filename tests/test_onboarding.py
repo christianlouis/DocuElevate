@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
-from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserProfile
+from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserIntegration, UserProfile
 from app.utils.tribe_scope import personal_tribe_id, shared_tribe_id
 
 # ---------------------------------------------------------------------------
@@ -152,6 +152,47 @@ class TestOnboardingAPI:
         data = resp.json()
         assert data["completed"] is True
         assert data["step"] == 8
+
+    def test_status_counts_only_active_integrations(self, ob_client_authed, ob_session):
+        """Paused integrations must not make onboarding look operationally ready."""
+        _make_profile(ob_session, _TEST_USER["sub"])
+        ob_session.add_all(
+            [
+                UserIntegration(
+                    owner_id=_TEST_USER["sub"],
+                    direction="SOURCE",
+                    integration_type="WATCH_FOLDER",
+                    name="Active source",
+                    is_active=True,
+                ),
+                UserIntegration(
+                    owner_id=_TEST_USER["sub"],
+                    direction="SOURCE",
+                    integration_type="IMAP",
+                    name="Paused source",
+                    is_active=False,
+                ),
+                UserIntegration(
+                    owner_id=_TEST_USER["sub"],
+                    direction="DESTINATION",
+                    integration_type="VECTOR_DATABASE",
+                    name="Active destination",
+                    is_active=True,
+                ),
+                UserIntegration(
+                    owner_id=_TEST_USER["sub"],
+                    direction="DESTINATION",
+                    integration_type="DROPBOX",
+                    name="Paused destination",
+                    is_active=False,
+                ),
+            ]
+        )
+        ob_session.commit()
+
+        data = ob_client_authed.get("/api/onboarding/status").json()
+
+        assert data["integrations"] == {"sources": 1, "destinations": 1}
 
     def test_progress_persists_resume_and_skipped_topic(self, ob_client_authed, ob_session):
         resp = ob_client_authed.post(
