@@ -65,7 +65,7 @@ stripe>=7.0.0,<16.0.0  # Stripe billing SDK (MIT license)
 sentry-sdk[fastapi,celery,sqlalchemy]>=2.63.0,<3.0.0
 
 # GraphQL API
-strawberry-graphql[fastapi]>=0.320.4,<1.0.0
+strawberry-graphql[fastapi]>=0.322.0,<1.0.0
 
 aiofiles>=25.1.0  # Asynchronous file I/O support
 segno>=1.6.0  # Pure-Python QR code generator (server-side rendering, no Pillow dependency)
