@@ -14,6 +14,19 @@ logger = logging.getLogger(__name__)
 
 # Lazy-load cryptography to avoid import errors if not installed
 _cipher_suite = None
+_primary_cipher = None
+
+
+class EncryptionRotationError(RuntimeError):
+    """Raised when encrypted data cannot be safely rotated to the primary key."""
+
+
+def _derive_fernet(secret: str) -> object:
+    """Derive a Fernet instance from a DocuElevate session secret."""
+    from cryptography.fernet import Fernet
+
+    key_bytes = hashlib.sha256(secret.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(key_bytes))
 
 
 def _get_cipher_suite() -> object | None:
@@ -28,24 +41,23 @@ def _get_cipher_suite() -> object | None:
     Returns:
         Fernet cipher suite instance
     """
-    global _cipher_suite
+    global _cipher_suite, _primary_cipher
 
     if _cipher_suite is None:
         try:
-            from cryptography.fernet import Fernet
+            from cryptography.fernet import MultiFernet
 
             from app.config import settings
 
-            # Derive a Fernet-compatible key from SESSION_SECRET
-            # Fernet requires a 32-byte base64-encoded key
-            secret = settings.session_secret.encode("utf-8")
+            if not settings.session_secret:
+                raise ValueError("SESSION_SECRET is not configured")
 
-            # Use SHA256 to get exactly 32 bytes, then base64 encode
-            key_bytes = hashlib.sha256(secret).digest()
-            fernet_key = base64.urlsafe_b64encode(key_bytes)
-
-            _cipher_suite = Fernet(fernet_key)
-            logger.debug("Encryption cipher suite initialized")
+            _primary_cipher = _derive_fernet(settings.session_secret)
+            ciphers = [_primary_cipher]
+            if settings.session_secret_previous:
+                ciphers.append(_derive_fernet(settings.session_secret_previous))
+            _cipher_suite = MultiFernet(ciphers)
+            logger.debug("Encryption cipher suite initialized with %d key(s)", len(ciphers))
 
         except ImportError:
             logger.warning(
@@ -59,6 +71,13 @@ def _get_cipher_suite() -> object | None:
             _cipher_suite = None
 
     return _cipher_suite
+
+
+def reset_cipher_cache() -> None:
+    """Clear cached ciphers after settings changes and in isolated tests."""
+    global _cipher_suite, _primary_cipher
+    _cipher_suite = None
+    _primary_cipher = None
 
 
 def encrypt_value(plaintext: Optional[str]) -> Optional[str]:
@@ -123,6 +142,61 @@ def decrypt_value(ciphertext: Optional[str]) -> Optional[str]:
     except Exception as e:
         logger.error(f"Decryption failed: {e}")
         return "[DECRYPTION FAILED]"
+
+
+def rotate_encrypted_value(value: Optional[str]) -> tuple[Optional[str], bool]:
+    """Re-encrypt *value* with the current ``SESSION_SECRET`` when needed.
+
+    Plaintext legacy values are encrypted as part of the same operation. Values
+    already decryptable by the primary key are left byte-for-byte unchanged so
+    the database rotation command is idempotent.
+    """
+    if value is None or value == "":
+        return value, False
+
+    cipher = _get_cipher_suite()
+    if cipher is None or _primary_cipher is None:
+        raise EncryptionRotationError("Encryption is unavailable")
+
+    if not value.startswith("enc:"):
+        encrypted = encrypt_value(value)
+        if not encrypted or not encrypted.startswith("enc:"):
+            raise EncryptionRotationError("Could not encrypt a legacy plaintext value")
+        return encrypted, True
+
+    token = value[4:].encode("utf-8")
+    from cryptography.fernet import InvalidToken
+
+    try:
+        _primary_cipher.decrypt(token)
+        return value, False
+    except InvalidToken:
+        logger.debug("Encrypted value requires rotation to the primary key")
+
+    try:
+        plaintext = cipher.decrypt(token)
+        rotated = _primary_cipher.encrypt(plaintext)
+        return "enc:" + rotated.decode("utf-8"), True
+    except InvalidToken as exc:
+        raise EncryptionRotationError("Value is not decryptable by the configured keyring") from exc
+
+
+def value_uses_primary_key(value: Optional[str]) -> bool:
+    """Return whether an encrypted value is protected by the primary key."""
+    if value is None or value == "":
+        return True
+    if not value.startswith("enc:"):
+        return False
+    _get_cipher_suite()
+    if _primary_cipher is None:
+        return False
+    from cryptography.fernet import InvalidToken
+
+    try:
+        _primary_cipher.decrypt(value[4:].encode("utf-8"))
+        return True
+    except InvalidToken:
+        return False
 
 
 def is_encrypted(value: Optional[str]) -> bool:

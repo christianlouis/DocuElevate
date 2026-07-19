@@ -223,6 +223,18 @@ SETTING_METADATA = {
         "required": True,  # Required when auth_enabled=True (validated in config.py)
         "restart_required": True,
     },
+    "session_secret_previous": {
+        "category": "Authentication",
+        "description": (
+            "Temporary previous session-encryption key used only while running the documented "
+            "database key-rotation command. Remove immediately after verification."
+        ),
+        "type": "string",
+        "sensitive": True,
+        "required": False,
+        "restart_required": True,
+        "environment_only": True,
+    },
     "session_lifetime_days": {
         "category": "Authentication",
         "description": "Session lifetime in days (default 30). Determines how long a user stays logged in.",
@@ -3768,6 +3780,10 @@ def save_setting_to_db(db: Session, key: str, value: Optional[str], changed_by: 
     try:
         # Check if this setting is sensitive and should be encrypted
         metadata = get_setting_metadata(key)
+        if metadata.get("environment_only", False):
+            logger.error("Refusing to persist environment-only setting %s", key)
+            db.rollback()
+            return False
         storage_value = value
 
         is_sensitive = bool(metadata.get("sensitive", False))
@@ -3918,6 +3934,8 @@ def get_settings_by_category() -> Dict[str, List[str]]:
     """
     categories = {}
     for key, metadata in SETTING_METADATA.items():
+        if metadata.get("environment_only", False):
+            continue
         category = metadata.get("category", "Other")
         if category not in categories:
             categories[category] = []
@@ -3937,6 +3955,8 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
         Tuple of (is_valid, error_message)
     """
     metadata = get_setting_metadata(key)
+    if metadata.get("environment_only", False):
+        return False, f"{key} must be configured through the deployment secret"
     setting_type = metadata.get("type", "string")
 
     # Check required fields
@@ -3990,7 +4010,7 @@ def validate_setting_value(key: str, value: str) -> Tuple[bool, Optional[str]]:
 
     # Special validation for specific keys
     if key == "session_secret" and value and len(value) < 32:
-        return False, "session_secret must be at least 32 characters"
+        return False, f"{key} must be at least 32 characters"
 
     return True, None
 
