@@ -37,6 +37,18 @@ class TestHealthEndpoints:
         assert response.status_code == 303
         assert response.headers["location"] == "/setup?step=1"
 
+    @patch("app.utils.setup_wizard.is_setup_required", return_value=True)
+    @patch("app.utils.settings_service.get_setting_from_db")
+    def test_agentic_setup_completion_marker_bypasses_legacy_fallback_check(
+        self, get_setting, _setup_required, client: TestClient
+    ):
+        """A server-owned completion marker wins over absent fallback admin envs."""
+        get_setting.side_effect = lambda _db, key: "true" if key == "_setup_wizard_completed" else None
+
+        response = client.get("/", follow_redirects=False)
+
+        assert response.status_code != 303 or response.headers.get("location") != "/setup?step=1"
+
     def test_setup_wizard_page_accessible(self, client: TestClient):
         """Test that GET /setup?step=1 returns 200."""
         response = client.get("/setup?step=1")

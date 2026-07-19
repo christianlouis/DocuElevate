@@ -403,6 +403,15 @@ def apply_setup_manifest(db: Session, resolved: dict[str, Any]) -> dict[str, Any
 
     notify_settings_updated()
     missing = get_missing_required_settings()
+    # A database-backed local administrator supersedes the legacy global
+    # ADMIN_USERNAME/ADMIN_PASSWORD pair.  Requiring both would make the
+    # declarative multi-user setup write a second application-wide credential
+    # even though the created administrator is already able to authenticate.
+    has_local_admin = (
+        db.query(LocalUser).filter(LocalUser.is_admin.is_(True), LocalUser.is_active.is_(True)).first() is not None
+    )
+    if has_local_admin:
+        missing = [key for key in missing if key not in {"admin_username", "admin_password"}]
     setup_completed = False
     if resolved["complete_setup"] and not missing:
         if not save_setting_to_db(db, "_setup_wizard_completed", "true", changed_by="agentic_setup"):

@@ -105,7 +105,7 @@ bypass an incomplete installation.
 
 **Recommended next steps:**
 
-1. **Configure a storage destination** — Set up at least one output destination where processed documents will be sent:
+1. **Choose optional destinations** — Every processed document is retained in DocuElevate's built-in archive. Add external destinations only when you want another copy or an automated hand-off:
    - [Dropbox Setup](DropboxSetup.md)
    - [Google Drive Setup](GoogleDriveSetup.md)
    - [OneDrive Setup](OneDriveSetup.md)

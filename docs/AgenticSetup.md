@@ -8,7 +8,8 @@ the browser wizard.
 
 The intended prompt is therefore practical: “Install DocuElevate as a Preprod
 Canary, create Christian and Julia, place both in the family Tribe, configure
-the AI provider and leave only interactive OAuth approvals for me.”
+the AI provider if credentials are available, and leave only interactive OAuth
+approvals for me.”
 
 ## Safety contract
 
@@ -34,6 +35,10 @@ the AI provider and leave only interactive OAuth approvals for me.”
 
 Start from
 [`examples/agentic-setup.preprod.json`](https://github.com/christianlouis/DocuElevate/blob/main/examples/agentic-setup.preprod.json).
+For a genuinely bare installation without AI or cloud-provider credentials, use
+[`examples/agentic-setup.keyless-preprod.json`](https://github.com/christianlouis/DocuElevate/blob/main/examples/agentic-setup.keyless-preprod.json).
+It creates two isolated users and their shared Preprod Tribe while keeping every
+optional integration skipped and resumable in the browser.
 The current schema is `docuelevate.org/v1alpha1` with kind
 `DocuElevateSetup`. Unknown fields and unsupported resources fail validation;
 they are never silently ignored.

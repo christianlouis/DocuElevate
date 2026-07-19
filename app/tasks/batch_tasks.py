@@ -614,6 +614,18 @@ def _get_all_search_index_ids(index: object) -> set[int]:
     return existing_ids
 
 
+def _is_missing_search_index_error(exc: Exception) -> bool:
+    """Return whether Meilisearch reports an index that does not exist yet.
+
+    A pristine installation has no search index until its first document is
+    committed.  The Python client represents that expected state with an API
+    error whose stable machine-readable code is ``index_not_found``.  Keep
+    this deliberately narrow so connectivity, authentication, and malformed
+    request failures still fail the reconciliation job visibly.
+    """
+    return getattr(exc, "code", None) == "index_not_found"
+
+
 @celery.task(name="app.tasks.batch_tasks.sync_search_index")
 def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_complete: bool = False) -> dict:
     """
@@ -658,10 +670,21 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_
         index = client.get_index(settings.meilisearch_index_name)
         existing_ids = _get_all_search_index_ids(index)
     except Exception as exc:
-        detail = f"Error fetching existing Meilisearch IDs: {exc}"
-        logger.error("[batch] sync_search_index: %s", detail)
-        _update_job_status(job_name, "failed", detail)
-        return {"indexed": 0, "skipped": 0, "error": str(exc)}
+        if _is_missing_search_index_error(exc):
+            # A fresh Meilisearch instance has no index.  Treat it as an empty
+            # corpus; index_documents() creates and configures the index when
+            # the first document is committed.  With no documents, the clean
+            # zero-result below is truthful and avoids creating empty state.
+            existing_ids = set()
+            logger.info(
+                "[batch] Meilisearch index %s does not exist yet; starting with an empty index",
+                settings.meilisearch_index_name,
+            )
+        else:
+            detail = f"Error fetching existing Meilisearch IDs: {exc}"
+            logger.error("[batch] sync_search_index: %s", detail)
+            _update_job_status(job_name, "failed", detail)
+            return {"indexed": 0, "skipped": 0, "error": str(exc)}
 
     try:
         with SessionLocal() as db:

@@ -30,12 +30,14 @@ async def serve_index(request: Request, db: Session = Depends(get_db)):
     from app.utils.settings_service import get_setting_from_db
     from app.utils.setup_wizard import is_setup_required
 
-    # Check if setup was explicitly skipped
+    # Setup may be completed by either the browser wizard or the declarative
+    # agentic flow.  Both are server-owned DB markers.
     setup_skipped = get_setting_from_db(db, "_setup_wizard_skipped")
+    setup_completed = get_setting_from_db(db, "_setup_wizard_completed")
 
     # Setup state is server-owned. A query parameter must never be able to
     # bypass an incomplete first-run configuration.
-    if not setup_skipped and is_setup_required():
+    if not setup_skipped and not setup_completed and is_setup_required():
         logger.info("System requires initial setup, redirecting to wizard")
         return RedirectResponse(url="/setup?step=1", status_code=303)
 

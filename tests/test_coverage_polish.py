@@ -363,16 +363,14 @@ class TestConvertToPdfDetection:
             mock_settings.gotenberg_url = "http://localhost:3000"
             mock_settings.http_request_timeout = 30
 
-            mock_self = MagicMock()
-            mock_self.request.id = "task-notype"
-
             with (
                 patch("app.tasks.convert_to_pdf._detect_mime_type", return_value=(None, None)),
                 patch("app.tasks.convert_to_pdf._detect_extension", return_value=""),
             ):
                 from app.tasks.convert_to_pdf import convert_to_pdf
 
-                result = convert_to_pdf.__wrapped__(mock_self, str(test_file))
+                convert_to_pdf.request.id = "task-notype"
+                result = convert_to_pdf.__wrapped__(str(test_file))
                 assert result is None
 
     def test_detect_mime_type_from_magic_filetype_fallback(self, tmp_path):
@@ -584,7 +582,8 @@ class TestURLUploadAdditionalCoverage:
         mock_task.id = "task-empty-path"
         mock_process.delay.return_value = mock_task
 
-        response = client.post("/api/process-url", json={"url": "https://example.com/"})
+        with patch("app.api.url_upload.is_private_ip", return_value=False):
+            response = client.post("/api/process-url", json={"url": "https://example.com/"})
         assert response.status_code == 200
 
     def test_validate_url_safety_blocks_aws_link_local(self):
