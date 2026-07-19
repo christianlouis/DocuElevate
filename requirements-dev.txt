@@ -28,7 +28,7 @@ types-requests>=2.33.0.20260712
 types-paramiko>=5.0.0.20260617
 
 # Security scanning (Ruff includes most security checks from bandit)
-pip-audit>=2.10.0  # Dependency vulnerability scanning against OSV/PyPA advisory databases
+pip-audit>=2.10.1  # Dependency vulnerability scanning against OSV/PyPA advisory databases
 
 # Pre-commit hooks
 pre-commit>=3.6.0
