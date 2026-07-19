@@ -2696,6 +2696,37 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "backup_adaptive_cleanup_enabled": {
+        "category": "Backup",
+        "description": (
+            "Remove the oldest redundant local snapshots before a dump when storage is low. "
+            "The newest local snapshot in every tier is always preserved."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_min_free_bytes": {
+        "category": "Backup",
+        "description": (
+            "Free bytes to preserve on the backup filesystem. Zero automatically reserves 10%, capped at 1 GiB."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
+    "backup_max_local_bytes": {
+        "category": "Backup",
+        "description": (
+            "Maximum bytes for local backup archives. Zero automatically uses 25% of the backup filesystem."
+        ),
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     # UI / Appearance
     "ui_default_color_scheme": {
         "category": "UI",

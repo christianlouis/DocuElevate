@@ -176,11 +176,12 @@ celery.conf.beat_schedule = {
         if settings.backup_enabled
         else None
     ),
-    # Weekly backup (kept for 13 weeks) – runs every Sunday at 03:00 UTC
+    # Weekly backup (kept for 13 weeks) – runs every Sunday at 03:10 UTC.
+    # The offset avoids competing with the hourly snapshot at 03:00.
     "backup-weekly": (
         {
             "task": "app.tasks.backup_tasks.create_backup",
-            "schedule": crontab(hour="3", minute="0", day_of_week="0"),
+            "schedule": crontab(hour="3", minute="10", day_of_week="0"),
             "kwargs": {"backup_type": "weekly"},
             "options": {"expires": 3600},
         }

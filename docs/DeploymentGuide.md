@@ -485,6 +485,12 @@ Regularly back up:
 3. The Meilisearch data directory (`/meili_data`)
 4. Your `.env` / Helm values file (store securely, it contains secrets)
 
+Mount `BACKUP_DIR` on a dedicated volume when possible and configure a remote backup destination. DocuElevate's
+adaptive local policy reserves free space, limits backup archives to a safe share of their filesystem, and preserves
+the newest local hourly, daily, and weekly recovery point while reclaiming older redundant copies. The effective
+capacity and any failed attempt are visible under **Administration → Backup Management**. A backup archive is written
+as a hidden partial file and only becomes downloadable after the dump and checksum complete.
+
 ---
 
 ## Updates

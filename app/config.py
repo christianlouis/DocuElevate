@@ -1151,15 +1151,41 @@ class Settings(BaseSettings):
     # Retention counts (number of snapshots to keep per tier)
     backup_retain_hourly: int = Field(
         default=96,
+        ge=1,
         description="Number of hourly backups to retain (default 96 = 4 days × 24 h).",
     )
     backup_retain_daily: int = Field(
         default=21,
+        ge=1,
         description="Number of daily backups to retain (default 21 = 3 weeks).",
     )
     backup_retain_weekly: int = Field(
         default=13,
+        ge=1,
         description="Number of weekly backups to retain (default 13 ≈ 3 months / 91 days).",
+    )
+    backup_adaptive_cleanup_enabled: bool = Field(
+        default=True,
+        description=(
+            "Allow local backup retention to remove the oldest redundant snapshots before a dump when the backup "
+            "filesystem is low on space. The newest local snapshot in every tier is always preserved."
+        ),
+    )
+    backup_min_free_bytes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Minimum free space to preserve on the backup filesystem. Zero automatically preserves 10% of the "
+            "filesystem, capped at 1 GiB."
+        ),
+    )
+    backup_max_local_bytes: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Maximum bytes used by local backup archives. Zero selects a safe automatic budget of 25% of the "
+            "backup filesystem."
+        ),
     )
 
     # File upload size limits (for security - see SECURITY_AUDIT.md)
