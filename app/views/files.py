@@ -44,12 +44,7 @@ def _resolve_owner_context(request: Request, file_record, db: Session) -> dict:
     multi_user_enabled = settings.multi_user_enabled
 
     current_owner_id = get_current_owner_id(request)
-    user_session = request.session.get("user")
-    is_admin = isinstance(user_session, dict) and bool(user_session.get("is_admin"))
-
     current_user_role = get_file_role(file_record, current_owner_id, db)
-    if is_admin and current_user_role is None and not file_record.is_private:
-        current_user_role = "admin"
 
     # Build a human-readable owner label
     if file_record.owner_id:

@@ -19,6 +19,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.database import Base
 from app.models import ApiToken, FileRecord, Tenant, Tribe, TribeMembership
+from app.utils.tribe_scope import ensure_personal_scope, ensure_tribe_membership
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -793,6 +794,81 @@ class TestAssignOwnerEndpoint:
             response = client.post("/api/files/assign-owner?owner_id=alice")
         # 403 (non-admin) or 401 (no auth)
         assert response.status_code in [401, 403]
+
+    @pytest.mark.integration
+    def test_platform_admin_cannot_assign_owner_outside_delegated_tribe(self, client, db_session):
+        """A global admin claim cannot cross an explicit Tribe boundary."""
+        tenant_id, victim_tribe = ensure_personal_scope(db_session, "victim")
+        ensure_personal_scope(db_session, "platform-admin", tenant_id)
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=victim_tribe,
+            user_id="target",
+            role="member",
+        )
+        record = FileRecord(
+            owner_id=None,
+            tenant_id=tenant_id,
+            tribe_id=victim_tribe,
+            filehash="cross-tribe-owner-assignment",
+            original_filename="victim.pdf",
+            local_filename="/tmp/victim.pdf",
+            file_size=1,
+            is_private=False,
+        )
+        db_session.add(record)
+        db_session.commit()
+
+        with (
+            _patch_multi_user(True),
+            patch(
+                "starlette.requests.Request.session",
+                new_callable=lambda: property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+            ),
+        ):
+            response = client.post(f"/api/files/assign-owner?owner_id=target&file_ids={record.id}")
+
+        assert response.status_code == 404
+        db_session.refresh(record)
+        assert record.owner_id is None
+
+    @pytest.mark.integration
+    def test_delegated_tribe_admin_can_assign_unowned_document_to_member(self, client, db_session):
+        tenant_id, tribe_id = ensure_personal_scope(db_session, "tribe-admin")
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
+            user_id="target",
+            role="member",
+        )
+        record = FileRecord(
+            owner_id=None,
+            tenant_id=tenant_id,
+            tribe_id=tribe_id,
+            filehash="delegated-owner-assignment",
+            original_filename="intake.pdf",
+            local_filename="/tmp/intake.pdf",
+            file_size=1,
+            is_private=False,
+        )
+        db_session.add(record)
+        db_session.commit()
+
+        with (
+            _patch_multi_user(True),
+            patch(
+                "starlette.requests.Request.session",
+                new_callable=lambda: property(lambda self: {"user": {"id": "tribe-admin", "is_admin": False}}),
+            ),
+        ):
+            response = client.post(f"/api/files/assign-owner?owner_id=target&file_ids={record.id}")
+
+        assert response.status_code == 200
+        assert response.json()["updated_count"] == 1
+        db_session.refresh(record)
+        assert record.owner_id == "target"
 
 
 class TestAssignOwnerUnit:

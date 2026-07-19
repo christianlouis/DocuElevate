@@ -23,7 +23,7 @@ from app.auth import require_login
 from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
-from app.models import BulkOperation, FileProcessingStep, FileRecord, PrivacyRuleModel, ProcessingLog
+from app.models import BulkOperation, FileProcessingStep, FileRecord, PrivacyRuleModel, ProcessingLog, TribeMembership
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES, IMAGE_MIME_TYPES
@@ -571,7 +571,8 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
     """
     Delete a file record from the database.
     This only removes the database entry, not the actual file.
-    Only the file owner (or an admin) may delete a document.
+    Only the file owner may delete a document. Administrative status never
+    overrides owner control.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -588,17 +589,13 @@ def delete_file_record(request: Request, file_id: int, db: DbSession):
         if file_record.legal_hold:
             raise HTTPException(status_code=409, detail="File is under legal hold and cannot be deleted")
 
-        # Enforce owner-only deletion in multi-user mode
-        user = request.session.get("user")
-        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-        if not is_admin:
-            owner_id = get_current_owner_id(request)
-            role = get_file_role(file_record, owner_id, db)
-            if role != "owner":
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only the file owner can delete this document",
-                )
+        owner_id = get_current_owner_id(request)
+        role = get_file_role(file_record, owner_id, db)
+        if role != "owner":
+            raise HTTPException(
+                status_code=403,
+                detail="Only the file owner can delete this document",
+            )
 
         # Log the deletion
         logger.info(f"Deleting file record: ID={file_id}, Filename={file_record.original_filename}")
@@ -631,7 +628,7 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
     """
     Delete multiple file records from the database.
     This only removes the database entries, not the actual files.
-    Only the file owner (or an admin) may delete each document.
+    Only the file owner may delete each document.
     """
     # Check if file deletion is allowed
     if not settings.allow_file_delete:
@@ -652,17 +649,13 @@ def bulk_delete_files(request: Request, file_ids: List[int], db: DbSession):
                 detail=f"Files under legal hold cannot be deleted. File IDs: {held_ids}",
             )
 
-        # Enforce owner-only deletion in multi-user mode
-        user = request.session.get("user")
-        is_admin = isinstance(user, dict) and bool(user.get("is_admin"))
-        if not is_admin:
-            owner_id = get_current_owner_id(request)
-            non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
-            if non_owner_ids:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"You can only delete files you own. Not owner of file IDs: {non_owner_ids}",
-                )
+        owner_id = get_current_owner_id(request)
+        non_owner_ids = [f.id for f in file_records if get_file_role(f, owner_id, db) != "owner"]
+        if non_owner_ids:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You can only delete files you own. Not owner of file IDs: {non_owner_ids}",
+            )
 
         deleted_count = len(file_records)
         deleted_ids = [f.id for f in file_records]
@@ -2109,9 +2102,14 @@ def bulk_claim_files(request: Request, file_ids: list[int], db: DbSession):
 
 @router.post("/files/assign-owner")
 @require_login
-def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), file_ids: list[int] | None = None):
+def assign_owner(
+    request: Request,
+    db: DbSession,
+    owner_id: str = Query(...),
+    file_ids: list[int] | None = Query(None),
+):
     """
-    Admin-only: assign an owner to documents.
+    Tribe-admin-only: assign an owner to unclaimed documents.
 
     If ``file_ids`` is provided, only those files are updated.  If omitted,
     **all** currently unowned documents (``owner_id IS NULL``) are assigned
@@ -2120,28 +2118,54 @@ def assign_owner(request: Request, db: DbSession, owner_id: str = Query(...), fi
     if not settings.multi_user_enabled:
         raise HTTPException(status_code=400, detail="Multi-user mode is not enabled")
 
-    user = request.session.get("user")
-    if not isinstance(user, dict) or not user.get("is_admin"):
-        raise HTTPException(status_code=403, detail="Only admins can assign document owners")
+    actor_id = get_current_owner_id(request)
+    if not actor_id:
+        raise HTTPException(status_code=403, detail="A stable Tribe administrator identity is required")
 
     if not owner_id or not owner_id.strip():
         raise HTTPException(status_code=422, detail="owner_id must be a non-empty string")
     owner_id = owner_id.strip()
 
+    requested_ids = set(file_ids or [])
+    query = apply_owner_filter(db.query(FileRecord), request).filter(
+        FileRecord.owner_id.is_(None),
+        FileRecord.is_private.is_(False),
+    )
     if file_ids is not None:
-        # Assign to specific files
-        updated = (
-            db.query(FileRecord)
-            .filter(FileRecord.id.in_(file_ids), FileRecord.is_private.is_(False))
-            .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
-        )
-    else:
-        # Assign to all currently unowned documents
-        updated = (
-            db.query(FileRecord)
-            .filter(FileRecord.owner_id.is_(None), FileRecord.is_private.is_(False))
-            .update({FileRecord.owner_id: owner_id}, synchronize_session="fetch")
-        )
+        query = query.filter(FileRecord.id.in_(requested_ids))
+    candidates = query.all()
+
+    # A platform-admin bit is not a document authorization grant. Ownership
+    # assignment is accepted only inside Tribes where the actor is explicitly
+    # delegated as an administrator and the new owner is already a member.
+    actor_scopes = {
+        (tenant_id, tribe_id)
+        for tenant_id, tribe_id in db.query(TribeMembership.tenant_id, TribeMembership.tribe_id)
+        .filter(TribeMembership.user_id == actor_id, TribeMembership.role == "admin")
+        .all()
+    }
+    if not actor_scopes:
+        raise HTTPException(status_code=403, detail="Tribe administrator access is required")
+    target_scopes = {
+        (tenant_id, tribe_id)
+        for tenant_id, tribe_id in db.query(TribeMembership.tenant_id, TribeMembership.tribe_id)
+        .filter(TribeMembership.user_id == owner_id)
+        .all()
+    }
+    assignable = [
+        record
+        for record in candidates
+        if (record.tenant_id, record.tribe_id) in actor_scopes and (record.tenant_id, record.tribe_id) in target_scopes
+    ]
+
+    if file_ids is not None and {record.id for record in assignable} != requested_ids:
+        # Keep cross-tenant/Tribe existence opaque and avoid surprising partial
+        # reassignment when one selected document is outside the delegated scope.
+        raise HTTPException(status_code=404, detail="One or more assignable files were not found")
+
+    for file_record in assignable:
+        file_record.owner_id = owner_id
+    updated = len(assignable)
 
     try:
         db.commit()

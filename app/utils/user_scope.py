@@ -183,6 +183,22 @@ def apply_owner_filter(query: Query, request: Request) -> Query:
     return query.filter(or_(*conditions))
 
 
+def tribe_peer_user_ids(user_id: str):
+    """Return a SQL subquery of users sharing an exact tenant/Tribe scope.
+
+    Tenant membership by itself is intentionally insufficient: two Tribes in
+    one SaaS tenant must not disclose their member directory to each other.
+    """
+    member_scopes = select(TribeMembership.tenant_id, TribeMembership.tribe_id).where(
+        TribeMembership.user_id == user_id
+    )
+    return (
+        select(TribeMembership.user_id)
+        .where(tuple_(TribeMembership.tenant_id, TribeMembership.tribe_id).in_(member_scopes))
+        .distinct()
+    )
+
+
 def get_file_role(file_record: FileRecord, user_id: str | None, db: Session) -> str | None:
     """Return the effective role a user has on a ``FileRecord``.
 

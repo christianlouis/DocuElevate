@@ -3,6 +3,7 @@
 import pytest
 
 from app.models import DocumentAnnotation, DocumentComment, FileRecord, UserProfile
+from app.utils.tribe_scope import ensure_personal_scope, ensure_tribe_membership
 
 
 def _create_file(db_session, owner_id="testuser") -> FileRecord:
@@ -486,6 +487,35 @@ class TestListMentionableUsers:
         data = resp.json()
         assert len(data) == 1
         assert data[0]["user_id"] == "alice"
+
+    def test_multi_user_directory_is_limited_to_exact_tribe_peers(self, client, db_session, monkeypatch):
+        import app.api.comments as comments_mod
+        from app.config import settings as real_settings
+
+        tenant_id, alice_tribe = ensure_personal_scope(db_session, "alice")
+        ensure_tribe_membership(
+            db_session,
+            tenant_id=tenant_id,
+            tribe_id=alice_tribe,
+            user_id="bob",
+            role="member",
+        )
+        ensure_personal_scope(db_session, "mallory", tenant_id)
+        db_session.add_all(
+            [
+                UserProfile(user_id="alice", display_name="Alice"),
+                UserProfile(user_id="bob", display_name="Bob"),
+                UserProfile(user_id="mallory", display_name="Mallory"),
+            ]
+        )
+        db_session.commit()
+        monkeypatch.setattr(real_settings, "multi_user_enabled", True)
+        monkeypatch.setattr(comments_mod, "get_current_owner_id", lambda request: "alice")
+
+        response = client.get("/api/users/mentionable")
+
+        assert response.status_code == 200
+        assert {item["user_id"] for item in response.json()} == {"alice", "bob"}
 
 
 # ---------------------------------------------------------------------------

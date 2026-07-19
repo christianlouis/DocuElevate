@@ -20,7 +20,7 @@ from app.database import get_db
 from app.models import FileRecord, Pipeline, WebhookConfig, WebhookDeliveryAttempt
 from app.tasks.process_document import process_document
 from app.tasks.webhook_tasks import deliver_webhook_task
-from app.utils.user_scope import get_current_owner_id
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id
 from app.utils.webhook import VALID_EVENTS, WEBHOOK_PAYLOAD_VERSION
 
 logger = logging.getLogger(__name__)
@@ -199,10 +199,13 @@ def trigger_pipeline_from_webhook(
     owner_id = get_current_owner_id(request)
     is_admin = bool(user and user.get("is_admin"))
 
-    file_record = db.query(FileRecord).filter(FileRecord.id == body.file_id).first()
+    file_record = apply_owner_filter(
+        db.query(FileRecord).filter(FileRecord.id == body.file_id),
+        request,
+    ).first()
     if not file_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
-    if file_record.owner_id != owner_id and (not is_admin or file_record.is_private):
+    if file_record.owner_id != owner_id and not is_admin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
 
     pipeline = db.query(Pipeline).filter(Pipeline.id == pipeline_id).first()
