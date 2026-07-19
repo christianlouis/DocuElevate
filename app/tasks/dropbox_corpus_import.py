@@ -12,6 +12,7 @@ from threading import Event, Thread, local
 
 import redis
 from celery.result import AsyncResult
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from app.celery_app import celery
@@ -93,7 +94,11 @@ def _reserve_corpus_llm_tokens(*, budget: int | None = None) -> tuple[date | Non
     accounting is unavailable. Interactive uploads do not use this path.
     """
     budget = int(settings.corpus_backfill_daily_llm_token_budget if budget is None else budget)
-    if budget <= 0:
+    if budget < 0:
+        raise CorpusDailyBudgetUnavailable(
+            "Negative corpus backfill token budgets are invalid; use 0 or disable the budget explicitly"
+        )
+    if budget == 0:
         return None, 0
 
     reservation = max(
@@ -116,7 +121,10 @@ def _reserve_corpus_llm_tokens(*, budget: int | None = None) -> tuple[date | Non
                         CorpusLlmDailyUsage.reserved_tokens <= budget - reservation,
                     )
                     .update(
-                        {CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens + reservation},
+                        {
+                            CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens + reservation,
+                            CorpusLlmDailyUsage.updated_at: func.now(),
+                        },
                         synchronize_session=False,
                     )
                 )
@@ -167,7 +175,10 @@ def _release_corpus_llm_tokens(reservation: tuple[date | None, int]) -> None:
                 CorpusLlmDailyUsage.usage_date == usage_date,
                 CorpusLlmDailyUsage.reserved_tokens >= amount,
             ).update(
-                {CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens - amount},
+                {
+                    CorpusLlmDailyUsage.reserved_tokens: CorpusLlmDailyUsage.reserved_tokens - amount,
+                    CorpusLlmDailyUsage.updated_at: func.now(),
+                },
                 synchronize_session=False,
             )
             budget_db.commit()
@@ -452,12 +463,19 @@ def _configured_backfill_token_budget(integration: UserIntegration) -> int:
     enabled = config.get("backfill_token_budget_enabled", True)
     if enabled is False or str(enabled).strip().lower() in {"0", "false", "no", "off"}:
         return 0
-    return _bounded_config_int(
-        config,
-        "backfill_daily_llm_token_budget",
-        settings.corpus_backfill_daily_llm_token_budget,
-        minimum=0,
-    )
+    raw_budget = config.get("backfill_daily_llm_token_budget")
+    if isinstance(raw_budget, (int, float)) and raw_budget < 0:
+        raise CorpusDailyBudgetUnavailable(
+            "Negative corpus backfill token budgets are invalid; use 0 or disable the budget explicitly"
+        )
+    try:
+        budget = (
+            int(raw_budget) if raw_budget not in (None, "") else int(settings.corpus_backfill_daily_llm_token_budget)
+        )
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid backfill_daily_llm_token_budget integration override: %r", raw_budget)
+        budget = int(settings.corpus_backfill_daily_llm_token_budget)
+    return budget
 
 
 def _index_first_enabled(integration: UserIntegration) -> bool:
