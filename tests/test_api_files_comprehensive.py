@@ -197,12 +197,18 @@ class TestListFilesAPI:
 class TestGetFileDetails:
     """Tests for GET /api/files/{file_id} endpoint."""
 
-    def test_get_file_details_success(self, client: TestClient, db_session):
-        """Test getting file details for existing file."""
+    def test_get_file_details_success(self, client: TestClient, db_session, tmp_path):
+        """File details reflect the durable original and processed copies."""
+        original_path = tmp_path / "original.pdf"
+        processed_path = tmp_path / "processed.pdf"
+        original_path.write_bytes(b"original")
+        processed_path.write_bytes(b"processed")
         file = FileRecord(
             filehash="hash1",
             original_filename="test.pdf",
-            local_filename="/tmp/test.pdf",
+            local_filename=str(tmp_path / "removed-working-copy.pdf"),
+            original_file_path=str(original_path),
+            processed_file_path=str(processed_path),
             file_size=1024,
             mime_type="application/pdf",
         )
@@ -217,6 +223,7 @@ class TestGetFileDetails:
         assert "logs" in data
         assert data["file"]["id"] == file.id
         assert data["file"]["original_filename"] == "test.pdf"
+        assert data["files_on_disk"] == {"original": True, "processed": True}
 
     def test_get_file_details_not_found(self, client: TestClient, db_session):
         """Test getting details for non-existent file."""

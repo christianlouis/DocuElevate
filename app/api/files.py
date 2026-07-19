@@ -504,8 +504,15 @@ def get_file_details(request: Request, file_id: int, db: DbSession):
     # Get processing status
     processing_status = _get_file_processing_status(db, file_id)
 
-    # Check if files exist on disk
-    files_on_disk = {"original": (os.path.exists(file_record.local_filename) if file_record.local_filename else False)}
+    # ``local_filename`` is the temporary working copy and is intentionally
+    # removed after finalization.  Report the immutable archive copy as the
+    # original once it exists, while retaining the working-copy fallback for
+    # documents that are still processing or predate ``original_file_path``.
+    original_path = file_record.original_file_path or file_record.local_filename
+    files_on_disk = {
+        "original": bool(original_path and os.path.exists(original_path)),
+        "processed": bool(file_record.processed_file_path and os.path.exists(file_record.processed_file_path)),
+    }
 
     return {
         "file": {
