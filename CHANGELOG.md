@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
 
 - **changelog**: Update changelog [skip ci]
+  ([`ff2dcb9`](https://github.com/christianlouis/DocuElevate/commit/ff2dcb9f5e8447cdc9fe56a674cb061d3a885f8d))
+
+- **changelog**: Update changelog [skip ci]
+  ([`4141dec`](https://github.com/christianlouis/DocuElevate/commit/4141dec8d31a812127034b11d4d10018b01277de))
+
+
+## Unreleased
+
+### Documentation
+
+- Align roadmap priorities and cover onboarding conflicts
+  ([#1175](https://github.com/christianlouis/DocuElevate/pull/1175),
+  [`ddc8b8b`](https://github.com/christianlouis/DocuElevate/commit/ddc8b8bc055048223ec26cc7d63d813ef1a0f4cb))
+
+- **changelog**: Update changelog [skip ci]
   ([`4141dec`](https://github.com/christianlouis/DocuElevate/commit/4141dec8d31a812127034b11d4d10018b01277de))
 
 
