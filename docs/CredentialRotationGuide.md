@@ -210,9 +210,11 @@ without asking users to reconnect every integration.
    counts in the incident log. Never retain the previous key as a permanent
    fallback.
 
-The migration covers sensitive application settings, per-user integration
-credentials, and per-user IMAP passwords. It is idempotent and encrypts legacy
-plaintext rows encountered during the same transaction.
+The migration covers sensitive application settings, their encrypted settings
+audit history, per-user integration credentials, and per-user IMAP passwords.
+Redacted legacy audit entries and non-sensitive audit values are ignored. The
+migration is idempotent and encrypts legacy plaintext rows encountered during
+the same transaction.
 
 ---
 

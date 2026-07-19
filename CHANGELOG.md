@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.4 (2026-07-19)
+
+### Bug Fixes
+
+- **security**: Rotate encrypted settings audit history
+  ([`49326bb`](https://github.com/christianlouis/DocuElevate/commit/49326bb850d01d81ba170cebc723ff32625266c0))
+
+
+## v0.188.3 (2026-07-19)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0887ced`](https://github.com/christianlouis/DocuElevate/commit/0887cedf94221d072c9a3cfad3797a16309f3974))
+
+- **changelog**: Update changelog [skip ci]
+  ([`66af7d2`](https://github.com/christianlouis/DocuElevate/commit/66af7d2a8e71ed895a69e758909b98b0395453ad))
+
+
 ## Unreleased
 
 ### Documentation
