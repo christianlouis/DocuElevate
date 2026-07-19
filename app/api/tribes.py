@@ -87,7 +87,12 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _invitation_payload(invitation: TribeInvitation, *, token: str | None = None) -> dict[str, Any]:
+def _invitation_payload(
+    invitation: TribeInvitation,
+    *,
+    token: str | None = None,
+    tribe_name: str | None = None,
+) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "id": invitation.id,
@@ -102,6 +107,8 @@ def _invitation_payload(invitation: TribeInvitation, *, token: str | None = None
         "revoked_at": invitation.revoked_at.isoformat() if invitation.revoked_at else None,
         "expired": _as_utc(invitation.expires_at) <= now,
     }
+    if tribe_name is not None:
+        payload["tribe_name"] = tribe_name
     if token is not None:
         payload["token"] = token
     return payload
@@ -139,7 +146,15 @@ def list_members(request: Request, tribe_id: str, db: DbSession) -> list[dict[st
         .order_by(TribeMembership.created_at.asc(), TribeMembership.user_id.asc())
         .all()
     )
-    return [{"user_id": row.user_id, "role": row.role, "created_at": row.created_at.isoformat()} for row in rows]
+    return [
+        {
+            "membership_id": row.id,
+            "user_id": row.user_id,
+            "role": row.role,
+            "created_at": row.created_at.isoformat(),
+        }
+        for row in rows
+    ]
 
 
 @router.post("/{tribe_id}/invitations", status_code=status.HTTP_201_CREATED)
@@ -206,7 +221,8 @@ def pending_invitations(request: Request, db: DbSession) -> list[dict[str, Any]]
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     now = datetime.now(timezone.utc)
     rows = (
-        db.query(TribeInvitation)
+        db.query(TribeInvitation, Tribe)
+        .join(Tribe, Tribe.id == TribeInvitation.tribe_id)
         .filter(
             TribeInvitation.accepted_at.is_(None),
             TribeInvitation.revoked_at.is_(None),
@@ -215,7 +231,11 @@ def pending_invitations(request: Request, db: DbSession) -> list[dict[str, Any]]
         .order_by(TribeInvitation.created_at.desc())
         .all()
     )
-    return [_invitation_payload(row) for row in rows if row.invitee_id.strip().casefold() in identities]
+    return [
+        _invitation_payload(invitation, tribe_name=tribe.name)
+        for invitation, tribe in rows
+        if invitation.invitee_id.strip().casefold() in identities
+    ]
 
 
 @router.post("/invitations/accept")
@@ -250,6 +270,7 @@ def accept_invitation(request: Request, body: InvitationAccept, db: DbSession) -
         "tenant_id": invitation.tenant_id,
         "tribe_id": invitation.tribe_id,
         "role": membership.role,
+        "tribe_name": db.query(Tribe.name).filter(Tribe.id == invitation.tribe_id).scalar(),
     }
 
 
@@ -272,17 +293,21 @@ def revoke_invitation(request: Request, tribe_id: str, invitation_id: int, db: D
     return {"revoked": True}
 
 
-@router.patch("/{tribe_id}/members/{member_id}")
+@router.patch("/{tribe_id}/members/{membership_id}")
 def update_member_role(
     request: Request,
     tribe_id: str,
-    member_id: str,
+    membership_id: int,
     body: MembershipRoleUpdate,
     db: DbSession,
 ) -> dict[str, str]:
     actor_id = _current_user_id(request)
     _require_admin(db, tribe_id, actor_id)
-    membership = _membership(db, tribe_id, member_id)
+    membership = (
+        db.query(TribeMembership)
+        .filter(TribeMembership.id == membership_id, TribeMembership.tribe_id == tribe_id)
+        .first()
+    )
     if membership is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tribe member not found")
     if membership.role == "admin" and body.role != "admin":
@@ -298,11 +323,15 @@ def update_member_role(
     return {"user_id": membership.user_id, "role": membership.role}
 
 
-@router.delete("/{tribe_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_member(request: Request, tribe_id: str, member_id: str, db: DbSession) -> None:
+@router.delete("/{tribe_id}/members/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_member(request: Request, tribe_id: str, membership_id: int, db: DbSession) -> None:
     actor_id = _current_user_id(request)
     _require_admin(db, tribe_id, actor_id)
-    membership = _membership(db, tribe_id, member_id)
+    membership = (
+        db.query(TribeMembership)
+        .filter(TribeMembership.id == membership_id, TribeMembership.tribe_id == tribe_id)
+        .first()
+    )
     if membership is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tribe member not found")
     if membership.role == "admin":

@@ -57,9 +57,11 @@ class TestTribeInvitations:
 
         assert pending.status_code == 200
         assert len(pending.json()) == 1
+        assert pending.json()[0]["tribe_name"] == "Family Krakau"
         assert "token" not in pending.json()[0]
         assert accepted.status_code == 200
         assert accepted.json()["role"] == "routing_manager"
+        assert accepted.json()["tribe_name"] == "Family Krakau"
         assert replay.status_code == 404
         membership = db_session.query(TribeMembership).filter_by(tribe_id=tribe.id, user_id="oauth-julia").one()
         assert membership.tenant_id == tribe.tenant_id
@@ -137,12 +139,13 @@ class TestTribeMembershipAdministration:
 
     def test_last_admin_cannot_be_demoted_or_removed(self, client, db_session):
         tribe = _shared_tribe(db_session)
+        admin_membership = db_session.query(TribeMembership).filter_by(tribe_id=tribe.id, user_id="admin").one()
         with _session({"id": "admin"}):
             demote = client.patch(
-                f"/api/tribes/{tribe.id}/members/admin",
+                f"/api/tribes/{tribe.id}/members/{admin_membership.id}",
                 json={"role": "member"},
             )
-            remove = client.delete(f"/api/tribes/{tribe.id}/members/admin")
+            remove = client.delete(f"/api/tribes/{tribe.id}/members/{admin_membership.id}")
 
         assert demote.status_code == 409
         assert remove.status_code == 409
@@ -157,14 +160,16 @@ class TestTribeMembershipAdministration:
             role="member",
         )
         db_session.commit()
+        admin_membership = db_session.query(TribeMembership).filter_by(tribe_id=tribe.id, user_id="admin").one()
+        julia_membership = db_session.query(TribeMembership).filter_by(tribe_id=tribe.id, user_id="julia").one()
 
         with _session({"id": "admin"}):
             promote = client.patch(
-                f"/api/tribes/{tribe.id}/members/julia",
+                f"/api/tribes/{tribe.id}/members/{julia_membership.id}",
                 json={"role": "admin"},
             )
             demote = client.patch(
-                f"/api/tribes/{tribe.id}/members/admin",
+                f"/api/tribes/{tribe.id}/members/{admin_membership.id}",
                 json={"role": "member"},
             )
 
@@ -172,6 +177,31 @@ class TestTribeMembershipAdministration:
         assert demote.status_code == 200
         assert _role(db_session, tribe.id, "julia") == "admin"
         assert _role(db_session, tribe.id, "admin") == "member"
+
+    def test_membership_id_keeps_opaque_oauth_subjects_out_of_route_paths(self, client, db_session):
+        tribe = _shared_tribe(db_session)
+        opaque_subject = "oauth/google/users/123"
+        membership = ensure_tribe_membership(
+            db_session,
+            tenant_id=tribe.tenant_id,
+            tribe_id=tribe.id,
+            user_id=opaque_subject,
+            role="member",
+        )
+        db_session.commit()
+
+        with _session({"id": "admin"}):
+            listed = client.get(f"/api/tribes/{tribe.id}/members")
+            promoted = client.patch(
+                f"/api/tribes/{tribe.id}/members/{membership.id}",
+                json={"role": "routing_manager"},
+            )
+
+        assert listed.status_code == 200
+        listed_member = next(item for item in listed.json() if item["user_id"] == opaque_subject)
+        assert listed_member["membership_id"] == membership.id
+        assert promoted.status_code == 200
+        assert promoted.json() == {"user_id": opaque_subject, "role": "routing_manager"}
 
 
 def _role(db_session, tribe_id: str, user_id: str) -> str:

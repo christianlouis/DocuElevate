@@ -38,6 +38,7 @@ from app.views.shared_links import router as shared_links_router
 from app.views.status import router as status_router
 from app.views.subscriptions import router as subscriptions_router  # Pricing + subscription pages
 from app.views.system_reset import router as system_reset_router  # System reset / factory reset
+from app.views.tribes import router as tribes_router
 from app.views.webhooks import router as webhooks_router
 from app.views.wizard import router as wizard_router
 
@@ -66,6 +67,7 @@ router.include_router(onboarding_router)  # User onboarding wizard
 router.include_router(pipelines_router)  # Processing pipelines
 router.include_router(profile_router)  # User self-service profile settings
 router.include_router(privacy_rules_router)  # Owner-controlled document privacy rules
+router.include_router(tribes_router)  # Tenant-safe family/team spaces
 router.include_router(qr_login_router)  # QR code mobile login page
 router.include_router(imap_accounts_router)  # Per-user IMAP ingestion accounts
 router.include_router(integrations_router)  # Unified integrations dashboard
