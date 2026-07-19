@@ -1132,12 +1132,14 @@ DocuElevate supports multiple OCR engines that can be used individually or in co
 
 | **Variable**          | **Description**                                                                                   | **Default** |
 |-----------------------|---------------------------------------------------------------------------------------------------|-------------|
-| `OCR_PROVIDERS`       | Comma-separated list of OCR engines to use, e.g. `azure`, `mistral`, `azure,tesseract`.         | `azure`     |
-| `OCR_MERGE_STRATEGY`  | Strategy for combining results from multiple providers: `ai_merge`, `longest`, or `primary`.     | `ai_merge`  |
+| `OCR_PROVIDERS`          | Comma-separated list of OCR engines to use, e.g. `tesseract`, `azure`, `azure,tesseract`.                            | `tesseract` |
+| `OCR_MERGE_STRATEGY`     | Strategy for combining results from multiple providers: `ai_merge`, `longest`, or `primary`.                        | `ai_merge`  |
+| `OCR_EMBED_TEXT_LAYER`   | Run an additional `ocrmypdf` pass when the provider returns text only, adding selectable text to the output PDF.    | `false`     |
 
 **Supported `OCR_PROVIDERS` values**: `azure`, `tesseract`, `easyocr`, `mistral`, `google_docai`, `aws_textract`
 
 When multiple providers are listed, all run in parallel and their results are merged according to `OCR_MERGE_STRATEGY`.
+The packaged image includes Tesseract, so a fresh installation can process scans without cloud credentials.
 
 #### Embedded Text Quality Check
 
@@ -1175,13 +1177,13 @@ Not all OCR providers embed a searchable text layer in the output PDF. The table
 | **Provider**      | **Embeds text layer?** | **Notes** |
 |-------------------|------------------------|-----------|
 | `azure`           | ✅ Yes                 | Azure Document Intelligence returns a PDF/A with an embedded text layer. |
-| `tesseract`       | ❌ No (text only)      | Text is extracted but the PDF is not modified. `embed_text_layer` post-processing is applied automatically. |
+| `tesseract`       | ❌ No (text only)      | Text is extracted and indexed; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
 | `easyocr`         | ❌ No (text only)      | Same as above. |
-| `mistral`         | ❌ No (text only)      | Mistral OCR API returns plain text; `embed_text_layer` post-processing is applied automatically. |
-| `google_docai`    | ❌ No (text only)      | Google Cloud Document AI returns plain text; `embed_text_layer` post-processing is applied automatically. |
-| `aws_textract`    | ❌ No (text only)      | AWS Textract returns plain text; `embed_text_layer` post-processing is applied automatically. |
+| `mistral`         | ❌ No (text only)      | Mistral OCR API returns plain text; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
+| `google_docai`    | ❌ No (text only)      | Google Cloud Document AI returns plain text; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
+| `aws_textract`    | ❌ No (text only)      | AWS Textract returns plain text; optional PDF post-processing is controlled by `OCR_EMBED_TEXT_LAYER`. |
 
-For providers that do **not** embed a text layer, DocuElevate automatically runs `ocrmypdf --skip-text` after OCR to add an invisible Tesseract-generated text layer to the PDF. This makes the file selectable and searchable in PDF viewers. The step is silently skipped if `ocrmypdf` is not available on `PATH` (a warning is logged).
+The extracted OCR text is always indexed and searchable inside DocuElevate. Set `OCR_EMBED_TEXT_LAYER=true` if output PDFs must also contain selectable text. For providers that do **not** return a searchable PDF, this runs an additional `ocrmypdf --skip-text` pass. The second OCR pass is more CPU- and memory-intensive, so it is disabled by default. When enabled, the step is skipped gracefully if `ocrmypdf` is unavailable on `PATH`.
 
 #### Azure Document Intelligence
 

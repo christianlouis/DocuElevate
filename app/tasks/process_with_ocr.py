@@ -4,7 +4,7 @@
 This task replaces the single-provider ``process_with_azure_document_intelligence``
 task with a multi-engine OCR pipeline that:
 
-1. Runs every OCR provider listed in ``OCR_PROVIDERS`` (default: ``azure``).
+1. Runs every OCR provider listed in ``OCR_PROVIDERS`` (default: ``tesseract``).
 2. Merges/cross-checks the results using the configured AI model when more
    than one provider is active (see ``OCR_MERGE_STRATEGY``).
 3. Writes the best searchable PDF back to the working directory.
@@ -237,10 +237,12 @@ def process_with_ocr(
                 searchable_pdf_path=searchable_pdf_path,
             )
 
-        # If no provider produced a searchable PDF, post-process the original
-        # PDF with ocrmypdf to embed an invisible text layer so the output is
-        # selectable/searchable in PDF viewers.
-        if searchable_pdf_path is None:
+        # If explicitly enabled and no provider produced a searchable PDF,
+        # post-process the original with ocrmypdf. This is intentionally opt-in:
+        # it runs OCR a second time and can be memory-intensive. The extracted
+        # text remains searchable inside DocuElevate without this PDF layer.
+        embed_text_layer_enabled = getattr(settings, "ocr_embed_text_layer", False) is True
+        if searchable_pdf_path is None and embed_text_layer_enabled:
             # Use the per-call language override; fall back to global setting
             embed_lang = (
                 language
@@ -272,6 +274,14 @@ def process_with_ocr(
                     "ocrmypdf unavailable – PDF will not have a searchable text layer",
                     file_id=file_id,
                 )
+        elif searchable_pdf_path is None:
+            log_task_progress(
+                task_id,
+                "embed_text_layer",
+                "skipped",
+                "PDF text-layer embedding is disabled; extracted OCR text remains searchable in DocuElevate",
+                file_id=file_id,
+            )
 
         # ----------------------------------------------------------------
         # Head-to-head comparison with original embedded text (if provided)

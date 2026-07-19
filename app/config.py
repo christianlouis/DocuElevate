@@ -226,8 +226,17 @@ class Settings(BaseSettings):
     # Comma-separated list of OCR engines to use.
     # Supported values: azure, tesseract, easyocr, mistral, google_docai, aws_textract
     # When multiple engines are listed all are run and results are merged.
+    # The packaged image includes Tesseract, so a fresh installation can OCR
+    # scans without requiring a paid cloud credential.  Operators may opt into
+    # Azure or combine providers explicitly.
     # Example: OCR_PROVIDERS=azure,tesseract
-    ocr_providers: str = "azure"
+    ocr_providers: str = "tesseract"
+
+    # Optionally run the resource-intensive ocrmypdf post-processing step when
+    # the selected OCR provider returns text but no searchable PDF. Extracted
+    # OCR text is indexed by DocuElevate regardless, so fresh installations
+    # keep this disabled to work reliably on modest hardware.
+    ocr_embed_text_layer: bool = False
 
     # Strategy for merging results from multiple OCR providers.
     # - ai_merge  : Ask the AI model to produce the best merged text (default).

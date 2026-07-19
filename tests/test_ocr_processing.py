@@ -5,7 +5,7 @@ These tests verify OCR processing logic with mocked external AI/ML services
 (OpenAI, Azure Document Intelligence). Tests cover typical and edge cases.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
 from azure.ai.documentintelligence.models import AnalyzeResult
@@ -1233,6 +1233,7 @@ class TestProcessWithOCRTextLayerEmbedding:
         ):
             mock_settings.workdir = str(tmp_path)
             mock_settings.tesseract_language = "eng"
+            mock_settings.ocr_embed_text_layer = True
             provider_mock = Mock()
             provider_mock.name = "mistral"
             provider_mock.process.return_value = mock_result
@@ -1270,6 +1271,7 @@ class TestProcessWithOCRTextLayerEmbedding:
         ):
             mock_settings.workdir = str(tmp_path)
             mock_settings.tesseract_language = "eng"
+            mock_settings.ocr_embed_text_layer = True
             provider_mock = Mock()
             provider_mock.name = "azure"
             provider_mock.process.return_value = mock_result
@@ -1302,6 +1304,7 @@ class TestProcessWithOCRTextLayerEmbedding:
         ):
             mock_settings.workdir = str(tmp_path)
             mock_settings.tesseract_language = "eng+deu"
+            mock_settings.ocr_embed_text_layer = True
             provider_mock = Mock()
             provider_mock.name = "tesseract"
             provider_mock.process.return_value = mock_result
@@ -1312,6 +1315,51 @@ class TestProcessWithOCRTextLayerEmbedding:
         # Task should succeed and return the original file path as searchable_pdf
         assert result["cleaned_text"] == "Hello Tesseract"
         assert result["searchable_pdf"] == str(pdf_file)
+
+    @patch("app.tasks.process_with_ocr.log_task_progress")
+    @patch("app.tasks.process_with_ocr.rotate_pdf_pages")
+    def test_embed_text_layer_disabled_by_default(self, mock_rotate, mock_log, tmp_path):
+        """Text-only OCR stays searchable without a second, expensive OCR pass."""
+        from app.tasks.process_with_ocr import process_with_ocr
+        from app.utils.ocr_provider import OCRResult
+
+        tmp_dir = tmp_path / "tmp"
+        tmp_dir.mkdir()
+        pdf_file = tmp_dir / "scan.pdf"
+        pdf_file.write_bytes(self._MINIMAL_PDF)
+
+        mock_result = OCRResult(provider="tesseract", text="Searchable in DocuElevate")
+        mock_rotate.delay = Mock()
+
+        with (
+            patch("app.tasks.process_with_ocr.settings") as mock_settings,
+            patch("app.tasks.process_with_ocr.get_ocr_providers") as mock_providers,
+            patch(
+                "app.tasks.process_with_ocr.merge_ocr_results",
+                return_value=("Searchable in DocuElevate", None, {}),
+            ),
+            patch("app.tasks.process_with_ocr.embed_text_layer") as mock_embed,
+        ):
+            mock_settings.workdir = str(tmp_path)
+            mock_settings.tesseract_language = "eng+deu"
+            mock_settings.ocr_embed_text_layer = False
+            provider_mock = Mock()
+            provider_mock.name = "tesseract"
+            provider_mock.process.return_value = mock_result
+            mock_providers.return_value = [provider_mock]
+
+            result = process_with_ocr.run("scan.pdf", file_id=42)
+
+        mock_embed.assert_not_called()
+        assert result["cleaned_text"] == "Searchable in DocuElevate"
+        assert result["searchable_pdf"] == str(pdf_file)
+        mock_log.assert_any_call(
+            ANY,
+            "embed_text_layer",
+            "skipped",
+            "PDF text-layer embedding is disabled; extracted OCR text remains searchable in DocuElevate",
+            file_id=42,
+        )
 
 
 @pytest.mark.unit

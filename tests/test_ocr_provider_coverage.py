@@ -882,13 +882,13 @@ class TestAWSTextractOCRProvider:
 class TestGetOCRProviders:
     """Tests for get_ocr_providers() factory function."""
 
-    def test_returns_azure_by_default(self):
-        """Returns AzureOCRProvider when no setting is configured."""
+    def test_returns_tesseract_by_default(self):
+        """Returns local Tesseract when no cloud OCR setting is configured."""
         with patch("app.utils.ocr_provider.settings") as ms:
             ms.ocr_providers = None
             providers = get_ocr_providers()
         assert len(providers) == 1
-        assert isinstance(providers[0], AzureOCRProvider)
+        assert isinstance(providers[0], TesseractOCRProvider)
 
     def test_single_provider(self):
         """Returns a single configured provider."""
@@ -916,13 +916,13 @@ class TestGetOCRProviders:
         assert len(providers) == 1
         assert isinstance(providers[0], AzureOCRProvider)
 
-    def test_all_unknown_falls_back_to_azure(self):
-        """Falls back to Azure when all providers are unknown."""
+    def test_all_unknown_falls_back_to_tesseract(self):
+        """Falls back to local Tesseract when all providers are unknown."""
         with patch("app.utils.ocr_provider.settings") as ms:
             ms.ocr_providers = "no_such_provider"
             providers = get_ocr_providers()
         assert len(providers) == 1
-        assert isinstance(providers[0], AzureOCRProvider)
+        assert isinstance(providers[0], TesseractOCRProvider)
 
     def test_known_providers_list(self):
         """All providers listed in KNOWN_OCR_PROVIDERS can be instantiated."""

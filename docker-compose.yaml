@@ -134,7 +134,7 @@ services:
 
   worker:
     <<: *docuelevate-service
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}", "-Q", "document_processor,default,celery"]
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_WORKER_CONCURRENCY:-1}", "-Q", "document_processor,default,celery,knowledge_research,search_index"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -162,6 +162,7 @@ services:
 
   knowledge-research-worker:
     <<: *docuelevate-service
+    profiles: ["scale"]
     command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "knowledge_research"]
     depends_on:
       bootstrap:
@@ -179,6 +180,7 @@ services:
 
   search-index-worker:
     <<: *docuelevate-service
+    profiles: ["scale"]
     command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "search_index"]
     depends_on:
       bootstrap:
