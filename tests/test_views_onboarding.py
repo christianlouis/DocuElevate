@@ -767,6 +767,19 @@ def test_storage_step_auto_selects_single_destination_but_keeps_external_copy_op
 
 
 @pytest.mark.unit
+def test_review_step_is_truthful_and_optional_steps_can_be_reopened():
+    template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
+    assert "onboarding.review_heading" in template
+    assert "onboarding.review_deferred_hint" in template
+    assert "reopenStep(5)" in template
+    assert "reopenStep(7)" in template
+    assert "completedTopics" in template
+    assert "skippedTopics" in template
+    assert "this.step === 6 ? 'destinations' : null" in template
+    assert "await this.persistProgress(previousStep)" in template
+
+
+@pytest.mark.unit
 def test_onboarding_copy_is_complete_in_english_and_german():
     """Every onboarding translation used by the journey has en/de copy."""
     template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
