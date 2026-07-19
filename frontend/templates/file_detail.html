@@ -949,7 +949,7 @@
     // Load PDFs when page loads
     document.addEventListener('DOMContentLoaded', function() {
       const fileId = {{ file.id | tojson }};
-      {% if original_file_exists %}
+      {% if original_file_exists and (file.mime_type == 'application/pdf' or (file.original_filename and file.original_filename.lower().endswith('.pdf'))) %}
       loadPDF('original', fileId);
       {% endif %}
       {% if processed_file_exists %}
@@ -1117,6 +1117,89 @@
     <p><strong>Error:</strong> {{ error }}</p>
   </div>
   {% else %}
+
+  {% if request.query_params.get("onboarding") == "first-document" and step_summary %}
+    {% set onboarding_main_completed = step_summary.main.success + step_summary.main.skipped %}
+    {# The first-document milestone proves the core intake and processing path.
+       Optional storage destinations remain visible below, but must not turn a
+       successfully processed document into a failed onboarding experience. #}
+    {% set onboarding_failed = step_summary.main.failure > 0 %}
+    {% set onboarding_finished = step_summary.total_main_steps > 0 and onboarding_main_completed == step_summary.total_main_steps and not onboarding_failed %}
+    <section style="margin-bottom:1.5rem;padding:1.25rem;border-radius:0.75rem;border:1px solid {{ '#fecaca' if onboarding_failed else ('#bbf7d0' if onboarding_finished else '#bfdbfe') }};background:{{ '#fef2f2' if onboarding_failed else ('#f0fdf4' if onboarding_finished else '#eff6ff') }};"
+             role="status"
+             aria-live="polite"
+             aria-labelledby="first-document-status-heading">
+      <div style="display:flex;gap:0.9rem;align-items:flex-start;">
+        <i class="fas {{ 'fa-circle-exclamation' if onboarding_failed else ('fa-circle-check' if onboarding_finished else 'fa-circle-notch fa-spin') }}"
+           style="margin-top:0.2rem;color:{{ '#dc2626' if onboarding_failed else ('#059669' if onboarding_finished else '#2563eb') }};"
+           aria-hidden="true"></i>
+        <div style="flex:1;">
+          <h2 id="first-document-status-heading" style="font-size:1.1rem;font-weight:700;color:#1f2937;margin:0;">
+            {% if onboarding_failed %}
+              {{ _("onboarding.first_document_failed_heading") }}
+            {% elif onboarding_finished %}
+              {{ _("onboarding.first_document_ready_heading") }}
+            {% else %}
+              {{ _("onboarding.first_document_processing_heading") }}
+            {% endif %}
+          </h2>
+          <p style="font-size:0.9rem;color:#4b5563;margin-top:0.35rem;">
+            {% if onboarding_failed %}
+              {{ _("onboarding.first_document_failed_description") }}
+            {% elif onboarding_finished %}
+              {{ _("onboarding.first_document_ready_description") }}
+            {% else %}
+              {{ _("onboarding.first_document_processing_description") }}
+              <span id="first-document-processing-elapsed" class="tabular-nums"></span>
+            {% endif %}
+          </p>
+          {% if onboarding_finished %}
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.9rem;">
+            <a href="/" class="px-4 py-2 bg-green-700 text-white rounded-lg font-semibold min-h-[44px] inline-flex items-center">
+              <i class="fas fa-house mr-2" aria-hidden="true"></i>{{ _("onboarding.open_dashboard") }}
+            </a>
+            <a href="/upload" class="px-4 py-2 border border-green-700 text-green-800 rounded-lg font-semibold min-h-[44px] inline-flex items-center">
+              <i class="fas fa-file-circle-plus mr-2" aria-hidden="true"></i>{{ _("onboarding.add_another_document") }}
+            </a>
+          </div>
+          {% elif onboarding_failed %}
+          <a href="#processing-history" class="inline-flex items-center mt-3 font-semibold text-red-700 min-h-[44px]">
+            <i class="fas fa-list-check mr-2" aria-hidden="true"></i>{{ _("onboarding.review_pipeline") }}
+          </a>
+          {% else %}
+          <p style="font-size:0.8rem;color:#6b7280;margin-top:0.5rem;">{{ _("onboarding.first_document_auto_refresh") }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+    <script>
+      (() => {
+        const storageKey = "docuelevate.firstDocumentStartedAt";
+        {% if onboarding_finished or onboarding_failed %}
+        window.sessionStorage.removeItem(storageKey);
+        {% else %}
+        let startedAt = Number(window.sessionStorage.getItem(storageKey));
+        if (!Number.isFinite(startedAt) || startedAt <= 0) {
+          startedAt = Date.now();
+          window.sessionStorage.setItem(storageKey, String(startedAt));
+        }
+        const elapsed = document.getElementById("first-document-processing-elapsed");
+        const renderElapsed = () => {
+          const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+          const minutes = Math.floor(seconds / 60);
+          elapsed.textContent = ` · ${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+        };
+        renderElapsed();
+        window.setInterval(renderElapsed, 1000);
+        window.setTimeout(() => {
+          if (Date.now() - startedAt < 300000) {
+            window.location.reload();
+          }
+        }, 3000);
+        {% endif %}
+      })();
+    </script>
+  {% endif %}
 
   <!-- Overall Processing Status Banner -->
   {% if step_summary %}
@@ -1362,6 +1445,8 @@
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 0.5rem;">Original Document</h4>
         {% if original_file_exists %}
+        {% set original_is_pdf = file.mime_type == 'application/pdf' or (file.original_filename and file.original_filename.lower().endswith('.pdf')) %}
+        {% if original_is_pdf %}
         <div class="pdf-viewer-container" id="original-pdf-container">
           <div class="pdf-controls">
             <button class="pdf-nav-btn" onclick="changePage('original', -1)" id="original-prev-btn">← Previous</button>
@@ -1375,6 +1460,25 @@
             </div>
           </div>
         </div>
+        {% elif file.mime_type in ['image/bmp', 'image/gif', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'] %}
+        <div class="pdf-viewer-container" id="original-image-container" style="display:flex;align-items:center;justify-content:center;padding:1rem;min-height:18rem;">
+          <img src="/files/{{ file.id }}/preview/original"
+               alt="{{ file.original_filename }}"
+               style="display:block;max-width:100%;max-height:42rem;object-fit:contain;border-radius:0.375rem;">
+        </div>
+        {% elif file.mime_type and file.mime_type.startswith('text/') %}
+        <iframe src="/files/{{ file.id }}/preview/original"
+                title="{{ file.original_filename }}"
+                style="width:100%;height:34rem;border:1px solid #e2e8f0;border-radius:0.5rem;background:#fff;"></iframe>
+        {% else %}
+        <div class="pdf-viewer-container" id="original-format-container" style="display:flex;align-items:center;justify-content:center;padding:2rem;min-height:18rem;text-align:center;">
+          <div>
+            <i class="fas fa-file" aria-hidden="true" style="font-size:2.5rem;color:#64748b;margin-bottom:1rem;"></i>
+            <p style="font-weight:600;color:#334155;">{{ _("file_processing.original_format_preserved") }}</p>
+            <p style="font-size:0.875rem;color:#64748b;margin-top:0.4rem;">{{ _("file_processing.original_format_preview_help") }}</p>
+          </div>
+        </div>
+        {% endif %}
         <button
           onclick="loadAndShowText('original', {{ file.id }})"
           style="margin-top: 0.5rem; background-color: #4299e1; color: white; padding: 0.5rem 1rem; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: 600; width: 100%;"
@@ -1583,7 +1687,7 @@
   {% endif %}
 
   <!-- Processing History Card (Collapsible) -->
-  <div class="detail-card">
+  <div id="processing-history" class="detail-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
       <h3 style="margin: 0;">Processing History</h3>
       {% if file_exists %}
@@ -1761,18 +1865,26 @@
       <div>
         <h4 style="font-weight: 600; color: #2d3748; margin-bottom: 1rem;">Original File</h4>
         <div style="border: 2px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; background-color: #f7fafc;">
-          {% if file.mime_type and file.mime_type.startswith('image/') %}
+          {% if file.mime_type in ['image/bmp', 'image/gif', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'] %}
           <!-- Image preview -->
           <img src="/api/files/{{ file.id }}/preview?version=original" alt="{{ file.original_filename }}" style="width: 100%; height: auto; display: block;">
           {% elif file.mime_type and file.mime_type.startswith('text/') %}
           <!-- Text file preview -->
           <iframe src="/api/files/{{ file.id }}/preview?version=original" title="Original text file preview" style="width: 100%; height: 600px; border: none;"></iframe>
-          {% else %}
+          {% elif file.mime_type == 'application/pdf' or (file.original_filename and file.original_filename.lower().endswith('.pdf')) %}
           <!-- PDF via pdf.js (rendered by loadPDF above) — fallback canvas container -->
           <div id="detail-original-canvas" class="pdf-canvas-wrapper" style="min-height: 400px; display: flex; justify-content: center; align-items: center; padding: 0.5rem;">
             <div class="pdf-loading">
               <i class="fas fa-file-pdf" aria-hidden="true" style="font-size: 2rem; margin-bottom: 1rem; color: #94a3b8;"></i>
               <p>This PDF is displayed in the Document Previews section at the top of the page.</p>
+            </div>
+          </div>
+          {% else %}
+          <div style="min-height:400px;display:flex;justify-content:center;align-items:center;padding:2rem;text-align:center;">
+            <div>
+              <i class="fas fa-file" aria-hidden="true" style="font-size:2rem;margin-bottom:1rem;color:#94a3b8;"></i>
+              <p style="font-weight:600;color:#475569;">{{ _("file_processing.original_format_preserved") }}</p>
+              <p style="font-size:0.875rem;color:#64748b;margin-top:0.4rem;">{{ _("file_processing.original_format_preview_help") }}</p>
             </div>
           </div>
           {% endif %}

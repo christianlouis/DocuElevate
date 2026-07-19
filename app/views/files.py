@@ -960,7 +960,7 @@ def _compute_step_summary(logs, pipeline_steps=None):
 @require_login
 def preview_original_file(request: Request, file_id: int, db: Session = Depends(get_db)):
     """
-    Serve the original (pre-processing) PDF file for preview
+    Serve the original pre-processing file with its actual media type.
     """
     import os
 
@@ -968,6 +968,7 @@ def preview_original_file(request: Request, file_id: int, db: Session = Depends(
     from fastapi.responses import FileResponse
 
     from app.models import FileRecord
+    from app.utils.preview_media import safe_preview_media_type
 
     file_record = apply_owner_filter(db.query(FileRecord).filter(FileRecord.id == file_id), request).first()
     if not file_record:
@@ -976,10 +977,15 @@ def preview_original_file(request: Request, file_id: int, db: Session = Depends(
     if not file_record.original_file_path or not os.path.exists(file_record.original_file_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original file not found on disk")
 
+    media_type = safe_preview_media_type(file_record.mime_type, file_record.original_file_path)
+
     return FileResponse(
         path=file_record.original_file_path,
-        media_type="application/pdf",
-        headers={"Content-Disposition": "inline"},
+        media_type=media_type,
+        headers={
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

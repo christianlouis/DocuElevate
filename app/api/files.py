@@ -33,6 +33,7 @@ from app.utils.file_queries import apply_status_filter
 from app.utils.file_status import get_files_processing_status
 from app.utils.filename_utils import sanitize_filename
 from app.utils.input_validation import validate_search_query, validate_sort_field, validate_sort_order
+from app.utils.preview_media import safe_preview_media_type
 from app.utils.privacy_rules import SINGLE_USER_PRIVACY_OWNER, match_rule_to_file
 from app.utils.user_scope import (
     apply_owner_filter,
@@ -1641,11 +1642,17 @@ def get_file_preview(
                 detail="Invalid version parameter. Use 'original' or 'processed'",
             )
 
-        # Return the file
+        declared_media_type = "application/pdf" if version == "processed" else file_record.mime_type
+
+        # Return the file. Active uploaded formats are neutralized so a preview
+        # cannot become a stored-XSS document under the DocuElevate origin.
         return FileResponse(
             path=file_path,
-            media_type=file_record.mime_type or "application/pdf",
-            headers={"Content-Disposition": f'inline; filename="{file_record.original_filename}"'},
+            media_type=safe_preview_media_type(declared_media_type, file_path),
+            headers={
+                "Content-Disposition": f'inline; filename="{file_record.original_filename}"',
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     except HTTPException:

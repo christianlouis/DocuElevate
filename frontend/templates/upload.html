@@ -12,6 +12,15 @@
       <div>
         <h2 class="font-bold text-blue-900">{{ _("upload.first_document_heading") }}</h2>
         <p class="text-sm text-blue-800 mt-1">{{ _("upload.first_document_description") }}</p>
+        <p id="firstDocumentTracker" class="text-sm font-medium text-blue-900 mt-3" aria-live="polite">
+          <span id="firstDocumentTrackerText">{{ _("upload.first_document_ready_to_upload") }}</span>
+          <span id="firstDocumentElapsed" class="hidden tabular-nums"></span>
+        </p>
+        <a id="firstDocumentDelayedLink"
+           href="/files"
+           class="hidden mt-2 inline-flex min-h-[44px] items-center font-semibold text-blue-800 underline">
+          <i class="fas fa-folder-open mr-2" aria-hidden="true"></i>{{ _("upload.first_document_open_files") }}
+        </a>
       </div>
     </div>
   </div>
@@ -160,7 +169,10 @@
     errorNetwork: {{ _("upload.error_network") | tojson }},
     urlSuccess: {{ _("upload.url_success") | tojson }},
     urlError: {{ _("upload.url_error") | tojson }},
-    urlNetworkError: {{ _("upload.url_network_error") | tojson }}
+    urlNetworkError: {{ _("upload.url_network_error") | tojson }},
+    firstDocumentQueued: {{ _("upload.first_document_queued") | tojson }},
+    firstDocumentOpening: {{ _("upload.first_document_opening") | tojson }},
+    firstDocumentDelayed: {{ _("upload.first_document_delayed") | tojson }}
   };
 </script>
 <script src="/static/js/upload.js"></script>
@@ -170,6 +182,86 @@
   const fileInput = document.getElementById("fileInput");
   const statusMessage = document.getElementById("statusMessage");
   const uploadProgress = document.getElementById("uploadProgress");
+  const firstDocumentMode = new URLSearchParams(window.location.search).get("onboarding") === "first-document";
+  const firstDocumentTrackerText = document.getElementById("firstDocumentTrackerText");
+  const firstDocumentElapsed = document.getElementById("firstDocumentElapsed");
+  const firstDocumentDelayedLink = document.getElementById("firstDocumentDelayedLink");
+  let followingFirstDocument = false;
+  let firstDocumentTimer = null;
+
+  function formatFirstDocumentElapsed(startedAt) {
+    const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+
+  function updateFirstDocumentTracker(message, startedAt = null) {
+    if (firstDocumentTrackerText) {
+      firstDocumentTrackerText.textContent = message;
+    }
+    if (!firstDocumentElapsed || startedAt === null) {
+      return;
+    }
+    firstDocumentElapsed.classList.remove("hidden");
+    firstDocumentElapsed.textContent = ` · ${formatFirstDocumentElapsed(startedAt)}`;
+  }
+
+  function startFirstDocumentTimer(startedAt) {
+    if (firstDocumentTimer !== null) {
+      window.clearInterval(firstDocumentTimer);
+    }
+    firstDocumentTimer = window.setInterval(() => {
+      updateFirstDocumentTracker(uploadMessage("firstDocumentQueued"), startedAt);
+    }, 1000);
+  }
+
+  async function followFirstDocument({ taskId = null, duplicateFileId = null }) {
+    if (!firstDocumentMode || followingFirstDocument) {
+      return false;
+    }
+    followingFirstDocument = true;
+    const startedAt = Date.now();
+    window.sessionStorage.setItem("docuelevate.firstDocumentStartedAt", String(startedAt));
+    updateFirstDocumentTracker(uploadMessage("firstDocumentQueued"), startedAt);
+    startFirstDocumentTimer(startedAt);
+
+    if (duplicateFileId) {
+      updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
+      window.location.href = `/files/${encodeURIComponent(duplicateFileId)}/process?onboarding=first-document`;
+      return true;
+    }
+
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      try {
+        const response = await fetch(`/api/logs/task/${encodeURIComponent(taskId)}`);
+        if (response.ok) {
+          const payload = await response.json();
+          const logWithFile = payload.logs.find((entry) => entry.file_id !== null);
+          if (logWithFile) {
+            updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
+            window.location.href = `/files/${encodeURIComponent(logWithFile.file_id)}/process?onboarding=first-document`;
+            return true;
+          }
+        } else if (response.status !== 404) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        // The processing queue remains authoritative. Keep polling so a brief
+        // API or database interruption does not strand the onboarding journey.
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    }
+
+    if (firstDocumentTimer !== null) {
+      window.clearInterval(firstDocumentTimer);
+    }
+    updateFirstDocumentTracker(uploadMessage("firstDocumentDelayed"), startedAt);
+    firstDocumentDelayedLink?.classList.remove("hidden");
+    followingFirstDocument = false;
+    return false;
+  }
+
+  window.onDocuElevateUploadQueued = followFirstDocument;
 
   dropZone.addEventListener("click", (event) => {
     // The hidden input lives inside the drop zone, so its programmatic click
@@ -283,10 +375,14 @@
         urlInput.value = "";
         urlFilename.value = "";
 
-        // Optionally redirect to files page after short delay
-        setTimeout(() => {
-          window.location.href = "/files";
-        }, 2000);
+        if (firstDocumentMode) {
+          void followFirstDocument({ taskId: data.task_id });
+        } else {
+          // Keep the established bulk-upload journey outside onboarding.
+          setTimeout(() => {
+            window.location.href = "/files";
+          }, 2000);
+        }
       } else {
         showUrlStatus(uploadMessage('urlError', { detail: data.detail || {{ _("upload.error_url_processing") | tojson }} }), "error");
       }

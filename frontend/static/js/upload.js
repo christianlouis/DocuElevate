@@ -469,10 +469,19 @@ function _uploadSingleFile(file, progressBar, statusEl, onTerminal) {
           progressBar.className = 'file-progress-bar bg-yellow-400 h-2 rounded-full';
           statusEl.textContent = uploadMessage('duplicate', { fileId: result.duplicate_of.original_file_id });
           statusEl.className = 'text-xs text-yellow-600 mt-1';
+          if (typeof window.onDocuElevateUploadQueued === 'function') {
+            window.onDocuElevateUploadQueued({
+              duplicateFileId: result.duplicate_of.original_file_id,
+              filename: file.name
+            });
+          }
         } else {
           progressBar.className = 'file-progress-bar bg-green-500 h-2 rounded-full';
           statusEl.textContent = uploadMessage('successTask', { taskId: result.task_id });
           statusEl.className = 'text-xs text-green-600 mt-1';
+          if (typeof window.onDocuElevateUploadQueued === 'function') {
+            window.onDocuElevateUploadQueued({ taskId: result.task_id, filename: file.name });
+          }
         }
         _onUploadSuccess();
         onTerminal();
