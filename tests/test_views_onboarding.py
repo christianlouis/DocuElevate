@@ -755,11 +755,13 @@ class TestOnboardingPage:
             Base.metadata.drop_all(bind=engine)
 
 
-def test_storage_step_auto_selects_single_destination_and_requires_selection():
+def test_storage_step_auto_selects_single_destination_but_keeps_external_copy_optional():
     template = (_REPO_ROOT / "frontend/templates/onboarding.html").read_text(encoding="utf-8")
     assert "configuredDestinationIds[0]" in template
     assert "selectedDestinationLabel" in template
-    assert "|| !selectedDestination" in template
+    assert "|| !selectedDestination" not in template
+    assert 'onboarding.local_archive_ready_heading' in template
+    assert 'onboarding.no_external_copy_heading' in template
     assert 'href="/integrations?onboarding=destination"' in template
     assert "{% if user.is_admin %}" not in template
 
