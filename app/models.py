@@ -86,6 +86,66 @@ class TribeInvitation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class RecipientIdentityProfile(Base):
+    """A person or household that may receive documents inside one Tribe."""
+
+    __tablename__ = "recipient_identity_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), nullable=False, index=True)
+    profile_type = Column(String(20), nullable=False, default="person", server_default="person")
+    display_name = Column(String(255), nullable=False)
+    user_ids = Column(Text, nullable=False, default="[]", server_default="[]")
+    aliases = Column(Text, nullable=False, default="[]", server_default="[]")
+    postal_addresses = Column(Text, nullable=False, default="[]", server_default="[]")
+    email_addresses = Column(Text, nullable=False, default="[]", server_default="[]")
+    identifiers = Column(Text, nullable=False, default="[]", server_default="[]")
+    is_active = Column(Boolean, nullable=False, default=True, server_default=true(), index=True)
+    created_by = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint("tribe_id", "display_name", name="uq_recipient_profiles_tribe_name"),)
+
+
+class RecipientRoutingPolicy(Base):
+    """Hot-reloadable recipient classification policy for one Tribe."""
+
+    __tablename__ = "recipient_routing_policies"
+
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    auto_assign_threshold = Column(Integer, nullable=False, default=80, server_default="80")
+    review_threshold = Column(Integer, nullable=False, default=45, server_default="45")
+    minimum_margin = Column(Integer, nullable=False, default=15, server_default="15")
+    ai_fallback_enabled = Column(Boolean, nullable=False, default=False, server_default="0")
+    ai_model = Column(String(255), nullable=True)
+    updated_by = Column(String, nullable=False, index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class DocumentRecipientDecision(Base):
+    """Explainable recipient set selected for a document."""
+
+    __tablename__ = "document_recipient_decisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK, ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    tenant_id = Column(String(64), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tribe_id = Column(String(64), ForeignKey("tribes.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, index=True)
+    recipient_user_ids = Column(Text, nullable=False, default="[]", server_default="[]")
+    matched_profile_ids = Column(Text, nullable=False, default="[]", server_default="[]")
+    candidates = Column(Text, nullable=False, default="[]", server_default="[]")
+    evidence = Column(Text, nullable=False, default="[]", server_default="[]")
+    confidence = Column(Integer, nullable=False, default=0, server_default="0")
+    strategy = Column(String(32), nullable=False, default="deterministic", server_default="deterministic")
+    classifier_version = Column(String(32), nullable=False, default="recipient-v1", server_default="recipient-v1")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class DocumentMetadata(Base):
     __tablename__ = "documents"
 

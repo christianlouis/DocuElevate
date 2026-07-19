@@ -239,6 +239,26 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
                     db.commit()
                     logger.info(f"[{task_id}] Updated database with processed_file_path and search fields")
 
+                    # Determine the intended person(s) while metadata and OCR
+                    # context are available.  The next issue owns routing; this
+                    # step only persists an explainable, Tribe-scoped decision.
+                    from app.utils.recipient_classifier import classify_and_persist_recipient
+
+                    recipient_decision = classify_and_persist_recipient(
+                        db,
+                        file_record,
+                        metadata,
+                        extracted_text,
+                    )
+                    db.commit()
+                    logger.info(
+                        "[%s] Recipient classification for file %s: %s (%s%%)",
+                        task_id,
+                        file_id,
+                        recipient_decision.status,
+                        recipient_decision.confidence,
+                    )
+
                     _dispatch_metadata_updated_webhook(file_record, metadata, task_id)
 
                     # Privacy must be decided after searchable content has been

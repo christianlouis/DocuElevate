@@ -68,3 +68,4 @@ nav:
   - Compliance:
       - Licensing: LicensingCompliance.md
       - Privacy & GDPR: PrivacyCompliance.md
+      - Recipient classification: RecipientClassification.md

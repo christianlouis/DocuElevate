@@ -42,6 +42,7 @@ from app.api.process import router as process_router
 from app.api.profile import router as profile_router
 from app.api.qr_auth import router as qr_auth_router
 from app.api.queue import router as queue_router
+from app.api.recipient_identities import router as recipient_identities_router
 from app.api.review_queue import router as review_queue_router
 from app.api.routing_rules import router as routing_rules_router
 from app.api.saved_searches import router as saved_searches_router
@@ -89,6 +90,7 @@ router.include_router(settings_router)
 router.include_router(url_upload_router)
 router.include_router(search_router)
 router.include_router(queue_router)
+router.include_router(recipient_identities_router)
 router.include_router(review_queue_router)
 router.include_router(saved_searches_router)
 router.include_router(similarity_router)
