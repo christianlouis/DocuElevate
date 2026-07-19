@@ -12,8 +12,8 @@ x-docuelevate-service: &docuelevate-service
     PYTHONPATH: /app
     WORKDIR: /workdir
     REDIS_URL: redis://redis:6379/0
-    CELERY_BROKER_URL: redis://redis:6379/0
-    CELERY_RESULT_BACKEND: redis://redis:6379/0
+    CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+    CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     GOTENBERG_URL: http://gotenberg:3000
     MEILISEARCH_URL: http://meilisearch:7700
     MEILISEARCH_INDEX_NAME: documents
