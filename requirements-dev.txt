@@ -15,7 +15,7 @@ redis>=8.0.0  # For Redis integration tests
 boto3>=1.43.51  # For S3 integration tests
 
 # Code quality
-ruff>=0.15.20
+ruff>=0.15.22
 mypy>=2.2.0
 djlint==1.36.4  # 1.40.9 crashes under Python 3.11 multiprocessing in CI
 
