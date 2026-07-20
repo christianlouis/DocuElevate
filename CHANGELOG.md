@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Build System
 
+- **deps**: Update google-api-python-client requirement from >=2.197.0 to >=2.198.0
+  ([#1203](https://github.com/christianlouis/DocuElevate/pull/1203),
+  [`eca0406`](https://github.com/christianlouis/DocuElevate/commit/eca04064e8957879b1195ae0ad5b935aec172769))
+
+- **deps**: Update pypdf requirement to >=6.14.2
+  ([#1202](https://github.com/christianlouis/DocuElevate/pull/1202),
+  [`90d56ee`](https://github.com/christianlouis/DocuElevate/commit/90d56ee2d9576be91564f39708b7649128e6465d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`0a66636`](https://github.com/christianlouis/DocuElevate/commit/0a66636e0f75921710e3b9776a00cea1bcf2f206))
+
+- **changelog**: Update changelog [skip ci]
+  ([`08c321e`](https://github.com/christianlouis/DocuElevate/commit/08c321e75e8849d0010094d058e616d28ee37c52))
+
+
+## Unreleased
+
+### Build System
+
 - **deps**: Update pypdf requirement to >=6.14.2
   ([#1202](https://github.com/christianlouis/DocuElevate/pull/1202),
   [`90d56ee`](https://github.com/christianlouis/DocuElevate/commit/90d56ee2d9576be91564f39708b7649128e6465d))
