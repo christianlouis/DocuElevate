@@ -276,26 +276,26 @@
         </div>
         <div class="pair-body">
           <div class="pair-file">
-            <div class="pair-filename" title="${escapeAttr(titleA)}">
+            <div class="pair-filename" title="${window.escapeHtml(titleA)}">
               <a href="/files/${pair.file_a.file_id}/detail" class="hover:text-blue-600">
-                ${escapeHtml(titleA)}
+                ${window.escapeHtml(titleA)}
               </a>
             </div>
             <div class="pair-meta">
-              #${pair.file_a.file_id} · ${escapeHtml(fnA)}${dateA ? ' · ' + dateA : ''}
+              #${pair.file_a.file_id} · ${window.escapeHtml(fnA)}${dateA ? ' · ' + dateA : ''}
             </div>
           </div>
           <div class="pair-connector" aria-hidden="true">
             <i class="fas fa-arrows-alt-h"></i>
           </div>
           <div class="pair-file">
-            <div class="pair-filename" title="${escapeAttr(titleB)}">
+            <div class="pair-filename" title="${window.escapeHtml(titleB)}">
               <a href="/files/${pair.file_b.file_id}/detail" class="hover:text-blue-600">
-                ${escapeHtml(titleB)}
+                ${window.escapeHtml(titleB)}
               </a>
             </div>
             <div class="pair-meta">
-              #${pair.file_b.file_id} · ${escapeHtml(fnB)}${dateB ? ' · ' + dateB : ''}
+              #${pair.file_b.file_id} · ${window.escapeHtml(fnB)}${dateB ? ' · ' + dateB : ''}
             </div>
           </div>
         </div>
@@ -349,9 +349,6 @@
     }, 5000);
   }
 
-  function escapeAttr(str) {
-    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
 
   // Load pairs on page load
   document.addEventListener('DOMContentLoaded', function() {
