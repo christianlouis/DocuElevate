@@ -40,3 +40,8 @@
 **Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/search.html` where `encodeActionValue` used `encodeURIComponent` which does not escape single quotes. Since the encoded value was injected into `onclick` attributes enclosed in single quotes, an attacker could break out of the string literal and execute arbitrary JavaScript.
 **Learning:** `encodeURIComponent` does not escape single quotes. If you inject its output into HTML attributes delimited by single quotes, it leads to XSS.
 **Prevention:** Explicitly escape single quotes after using `encodeURIComponent` by appending `.replace(/'/g, '%27')` when the value will be injected into single-quoted HTML attributes.
+
+## 2026-07-15 - [Fix DOM-based XSS in similarity_dashboard.html]
+**Vulnerability:** A DOM-based Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/similarity_dashboard.html` where `escapeAttr` was locally defined to only replace quotes (`"` and `'`), failing to escape `<` and `>`. Because these values were injected into `innerHTML`, attributes could contain payload that would render improperly, although the attribute context XSS vector via unescaped quotes was somewhat handled, escaping `<` and `>` is critical.
+**Learning:** Locally redefining HTML escape functions is dangerous. `escapeAttr` missed critical characters like `<` and `>` leading to potential vulnerabilities.
+**Prevention:** Rely on a centralized, robust escaping function (`window.escapeHtml` in `common.js`) that uses regex to escape all dangerous characters (`<`, `>`, `&`, `"`, `'`). Do not redefine sanitization logic locally.
