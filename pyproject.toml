@@ -123,6 +123,7 @@ ignore = [
     "S106",     # Hardcoded password func arg (false positives)
     "PLC0415",  # Import outside top-level (common in FastAPI/Celery)
     "PLR0913",  # Too many arguments
+    "PLR0917",  # Too many positional arguments
     "PLR0912",  # Too many branches
     "PLR0915",  # Too many statements
     "PLR0911",  # Too many return statements
