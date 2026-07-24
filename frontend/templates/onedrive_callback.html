@@ -165,9 +165,15 @@ document.addEventListener('DOMContentLoaded', function() {
     formData.append('tenant_id', tenantId);
 
     // Show more details in processing message
-    document.getElementById('processing-message').innerHTML =
-      '<p>Exchanging authorization code for refresh token...</p>' +
-      '<p class="text-xs text-gray-500 mt-2">Using tenant: ' + (tenantId || 'common') + '</p>';
+    const p1 = document.createElement('p');
+    p1.textContent = 'Exchanging authorization code for refresh token...';
+    const p2 = document.createElement('p');
+    p2.className = 'text-xs text-gray-500 mt-2';
+    p2.textContent = 'Using tenant: ' + (tenantId || 'common');
+    const container = document.getElementById('processing-message');
+    container.innerHTML = '';
+    container.appendChild(p1);
+    container.appendChild(p2);
 
     fetch('/api/onedrive/exchange-token', {
       method: 'POST',
