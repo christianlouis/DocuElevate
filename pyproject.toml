@@ -133,7 +133,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S110", "B017", "F841", "B007", "E402"]  # Allow assert, try-except-pass, assert-raises-exception, unused vars, unused loop vars, module imports not at top in tests
+"tests/*" = ["S101", "S110", "B017", "F841", "B007", "E402", "PLR0917"]  # Allow assert, try-except-pass, assert-raises-exception, unused vars, unused loop vars, module imports not at top in tests
 
 # pytest configuration
 [tool.pytest.ini_options]
