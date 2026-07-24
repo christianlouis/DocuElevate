@@ -213,8 +213,7 @@ def test_upload_to_webdav(webdav_container, sample_text_file):
 
         # Verify on server
         response = requests.get(
-            f"{webdav_container['url']}/test.txt",
-            auth=(webdav_container["username"], webdav_container["password"])
+            f"{webdav_container['url']}/test.txt", auth=(webdav_container["username"], webdav_container["password"])
         )
         assert response.status_code == 200
 ```
@@ -300,7 +299,9 @@ Set a breakpoint after test to inspect:
 def test_inspect(webdav_container):
     result = upload_file()
 
-    import pdb; pdb.set_trace()  # Container still running here
+    import pdb
+
+    pdb.set_trace()  # Container still running here
 
     # Manually inspect: docker ps, docker logs, etc.
 ```
@@ -426,18 +427,17 @@ jobs:
 ```python
 # Fast test - use unit
 @pytest.mark.unit
-def test_validation():
-    ...
+def test_validation(): ...
+
 
 # Needs Docker - mark it
 @pytest.mark.requires_docker
-def test_upload():
-    ...
+def test_upload(): ...
+
 
 # Slow test - mark it
 @pytest.mark.slow
-def test_large_file():
-    ...
+def test_large_file(): ...
 ```
 
 ### 2. Reuse Fixtures (Session Scope)
@@ -445,13 +445,12 @@ def test_large_file():
 ```python
 # Good - starts once for all tests in class
 @pytest.fixture(scope="session")
-def postgres_container():
-    ...
+def postgres_container(): ...
+
 
 # Bad - starts/stops for each test
 @pytest.fixture(scope="function")
-def postgres_container():
-    ...
+def postgres_container(): ...
 ```
 
 ### 3. Clean Up Resources

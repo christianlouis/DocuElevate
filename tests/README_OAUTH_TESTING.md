@@ -77,6 +77,7 @@ The mock server (https://github.com/navikt/mock-oauth2-server) provides:
 ```python
 import pytest
 
+
 @pytest.mark.integration
 def test_oauth_login(oauth_enabled_app):
     """Test OAuth login redirects to provider."""
@@ -89,6 +90,7 @@ def test_oauth_login(oauth_enabled_app):
 
 ```python
 from unittest.mock import patch
+
 
 @pytest.mark.integration
 @patch("app.auth.oauth.authentik.authorize_access_token")
