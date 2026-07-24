@@ -57,6 +57,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - **changelog**: Update changelog [skip ci]
+  ([`408c438`](https://github.com/christianlouis/DocuElevate/commit/408c4382f522ae20e246379d5bcc6462394f59d8))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ec0bfab`](https://github.com/christianlouis/DocuElevate/commit/ec0bfabe7891ea4144b21dc31311db65113774fd))
+
+- **changelog**: Update changelog [skip ci]
+  ([`c412e87`](https://github.com/christianlouis/DocuElevate/commit/c412e877fd3c1b4b4c59a78d03f5e4694a05cedb))
+
+- **changelog**: Update changelog [skip ci]
+  ([`0a66636`](https://github.com/christianlouis/DocuElevate/commit/0a66636e0f75921710e3b9776a00cea1bcf2f206))
+
+- **changelog**: Update changelog [skip ci]
+  ([`08c321e`](https://github.com/christianlouis/DocuElevate/commit/08c321e75e8849d0010094d058e616d28ee37c52))
+
+
+## Unreleased
+
+### Build System
+
+- **deps**: Update boto3 requirement from >=1.43.40 to >=1.43.51
+  ([#1205](https://github.com/christianlouis/DocuElevate/pull/1205),
+  [`6fe1173`](https://github.com/christianlouis/DocuElevate/commit/6fe1173813e0f23755460b1928f464945befb76b))
+
+- **deps**: Update google-api-python-client requirement from >=2.197.0 to >=2.198.0
+  ([#1203](https://github.com/christianlouis/DocuElevate/pull/1203),
+  [`eca0406`](https://github.com/christianlouis/DocuElevate/commit/eca04064e8957879b1195ae0ad5b935aec172769))
+
+- **deps**: Update msgraph-core requirement from >=1.0.0 to >=1.5.1
+  ([#1211](https://github.com/christianlouis/DocuElevate/pull/1211),
+  [`81e0aab`](https://github.com/christianlouis/DocuElevate/commit/81e0aab9f6e027936d410214ea1e221f5f117de1))
+
+- **deps**: Update pypdf requirement to >=6.14.2
+  ([#1202](https://github.com/christianlouis/DocuElevate/pull/1202),
+  [`90d56ee`](https://github.com/christianlouis/DocuElevate/commit/90d56ee2d9576be91564f39708b7649128e6465d))
+
+- **deps**: Update strawberry-graphql requirement from <1.0.0,>=0.320.4 to >=0.322.0,<1.0.0
+  ([#1207](https://github.com/christianlouis/DocuElevate/pull/1207),
+  [`829b97a`](https://github.com/christianlouis/DocuElevate/commit/829b97a61f7c1b13b3e2bb55d65d5d56eb768a4d))
+
+- **deps-dev**: Update mypy requirement from >=2.2.0 to >=2.3.0
+  ([#1208](https://github.com/christianlouis/DocuElevate/pull/1208),
+  [`d27e96e`](https://github.com/christianlouis/DocuElevate/commit/d27e96e7b93bd05fe06bde1e9eeb80140a0b31b9))
+
+- **deps-dev**: Update pip-audit requirement from >=2.10.0 to >=2.10.1
+  ([#1210](https://github.com/christianlouis/DocuElevate/pull/1210),
+  [`44641dc`](https://github.com/christianlouis/DocuElevate/commit/44641dc038823a935cd3538d170696e4a0e6682e))
+
+- **deps-dev**: Update pre-commit requirement from >=3.6.0 to >=4.6.0
+  ([#1204](https://github.com/christianlouis/DocuElevate/pull/1204),
+  [`663881a`](https://github.com/christianlouis/DocuElevate/commit/663881af1fa6e147dc01c4d99513c0a7afe6873f))
+
+- **deps-dev**: Update ruff requirement from >=0.15.20 to >=0.15.22
+  ([#1206](https://github.com/christianlouis/DocuElevate/pull/1206),
+  [`4c41dc3`](https://github.com/christianlouis/DocuElevate/commit/4c41dc31a48cc31ce7c9703965af3df781dc7fc4))
+
+- **deps-dev**: Update testcontainers requirement from >=3.7.1 to >=4.14.2
+  ([#1209](https://github.com/christianlouis/DocuElevate/pull/1209),
+  [`2d1c886`](https://github.com/christianlouis/DocuElevate/commit/2d1c886a0199d604cafb6b1c46bc85cc514d412d))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
   ([`ec0bfab`](https://github.com/christianlouis/DocuElevate/commit/ec0bfabe7891ea4144b21dc31311db65113774fd))
 
 - **changelog**: Update changelog [skip ci]
