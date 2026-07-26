@@ -31,7 +31,7 @@ msgraph-core>=1.5.1
 msal>=1.20.0
 
 # AWS S3
-boto3>=1.43.51
+boto3>=1.43.56
 
 # SFTP
 paramiko>=5.0.0  # SSH/SFTP implementation for Python (LGPL license)
