@@ -23,7 +23,7 @@ slowapi>=0.1.10  # Rate limiting middleware for FastAPI
 
 # Google Drive API
 google-api-python-client>=2.198.0
-google-auth>=2.22.0
+google-auth>=2.56.2
 google-auth-oauthlib>=1.4.0
 
 # OneDrive/Microsoft Graph API
