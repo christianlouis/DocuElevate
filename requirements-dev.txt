@@ -11,7 +11,7 @@ httpx>=0.28.1  # For async test client
 testcontainers>=4.14.2  # For integration tests with real containers
 fpdf2>=2.8.7  # For generating test PDF documents in integration tests
 minio>=7.2.20  # For MinIO/S3 integration tests
-redis>=8.0.0  # For Redis integration tests
+redis>=8.0.1  # For Redis integration tests
 boto3>=1.43.56  # For S3 integration tests
 
 # Code quality
