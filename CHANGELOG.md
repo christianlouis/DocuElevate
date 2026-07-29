@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.6 (2026-07-29)
+
+### Bug Fixes
+
+- Update vulnerable mobile transitive dependencies
+  ([`faeafb3`](https://github.com/christianlouis/DocuElevate/commit/faeafb389cd162ebfeca880ecbbdb3831b193226))
+
+
 ## v0.188.5 (2026-07-27)
 
 ### Bug Fixes
