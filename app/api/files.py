@@ -1119,6 +1119,7 @@ def bulk_download_files(request: Request, file_ids: List[int], db: DbSession):
 
                 # Build a unique archive name to avoid collisions
                 archive_name = file_record.original_filename or os.path.basename(file_path)
+                archive_name = sanitize_filename(archive_name)
                 if archive_name in seen_names:
                     seen_names[archive_name] += 1
                     stem, ext = os.path.splitext(archive_name)
