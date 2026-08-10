@@ -1053,8 +1053,8 @@
         let html = '<div style="display: grid; gap: 0.75rem;" role="list" aria-label="Similar documents">';
         for (const doc of data.similar_documents) {
           const scorePercent = Math.round(doc.similarity_score * 100);
-          const title = doc.document_title || doc.original_filename || 'Untitled';
-          const filename = doc.original_filename || 'Unknown';
+          const title = window.escapeHtml(doc.document_title || doc.original_filename || 'Untitled');
+          const filename = window.escapeHtml(doc.original_filename || 'Unknown');
           const createdAt = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
           const scoreLabel = scorePercent >= 80 ? 'High' : scorePercent >= 50 ? 'Medium' : 'Low';
 
