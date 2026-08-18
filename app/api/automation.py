@@ -290,10 +290,9 @@ def action_upload(
 
     # Sanitise filename to prevent path traversal attacks. Validate before
     # sanitizing so punctuation-only names cannot become generated fallbacks.
-    basename = os.path.basename(original_filename)
-    if not basename or not _has_upload_filename_content(basename):
+    if not _has_upload_filename_content(original_filename):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
-    safe_filename = sanitize_filename(basename)
+    safe_filename = sanitize_filename(original_filename)
 
     owner_id = user.get("preferred_username") or user.get("email") or user.get("id", "automation")
     workdir = settings.workdir or tempfile.gettempdir()
