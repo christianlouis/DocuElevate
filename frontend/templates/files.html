@@ -1188,14 +1188,14 @@
           }
           container.innerHTML = searches.map(s => {
             const params = new URLSearchParams(s.filters);
-            const safeName = escapeHtml(s.name);
+            const safeName = window.escapeHtml(s.name);
             const pinLabel = (s.pinned ? __i18n.unpinSavedSearchAria : __i18n.pinSavedSearchAria).replace('{name}', s.name);
             return `<span class="saved-search-tag" style="display: inline-flex; align-items: center; gap: 0.25rem; background: var(--bg-tertiary, #e5e7eb); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-size: 0.8rem;">
-              <button type="button" onclick="toggleSavedSearchPin(${s.id}, ${s.pinned ? 'false' : 'true'})" style="border: none; background: none; cursor: pointer; color: ${s.pinned ? '#d97706' : 'var(--text-muted)'}; padding: 0; line-height: 1;" aria-label="${escapeHtml(pinLabel)}">
+              <button type="button" onclick="toggleSavedSearchPin(${s.id}, ${s.pinned ? 'false' : 'true'})" style="border: none; background: none; cursor: pointer; color: ${s.pinned ? '#d97706' : 'var(--text-muted)'}; padding: 0; line-height: 1;" aria-label="${window.escapeHtml(pinLabel)}">
                 <i class="${s.pinned ? 'fas' : 'far'} fa-star" aria-hidden="true"></i>
               </button>
               <a href="/files?${params.toString()}" style="text-decoration: none; color: inherit;">${safeName}</a>
-              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="${escapeHtml(__i18n.deleteSavedSearchAria.replace('{name}', s.name))}">
+              <button type="button" onclick="deleteSavedSearch(${s.id})" style="border: none; background: none; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1;" aria-label="${window.escapeHtml(__i18n.deleteSavedSearchAria.replace('{name}', s.name))}">
                 <i class="fas fa-times" aria-hidden="true"></i>
               </button>
             </span>`;
@@ -1562,7 +1562,7 @@
         .then(data => renderSearchResults(data, q))
         .catch(err => {
           const errorMessage = err && err.message ? err.message : '';
-          list.innerHTML = '<div role="alert" aria-live="assertive" style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' + escapeHtml(__i18n.searchUnavailable.replace('{error}', errorMessage)) + '</div>';
+          list.innerHTML = '<div role="alert" aria-live="assertive" style="padding: 1rem; color: #dc2626; font-size: 0.875rem;"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i> ' + window.escapeHtml(__i18n.searchUnavailable.replace('{error}', errorMessage)) + '</div>';
           summary.textContent = '';
         });
     }
@@ -1573,7 +1573,7 @@
       let safe = String(html)
         .replace(/<mark>/gi, '\x00MARK_OPEN\x00')
         .replace(/<\/mark>/gi, '\x00MARK_CLOSE\x00');
-      safe = escapeHtml(safe);
+      safe = window.escapeHtml(safe);
       safe = safe
         .replace(/\x00MARK_OPEN\x00/g, '<mark>')
         .replace(/\x00MARK_CLOSE\x00/g, '</mark>');
@@ -1603,11 +1603,11 @@
         const tagsRaw = Array.isArray(hit.tags) ? hit.tags.join(', ') : (hit.tags || '');
         const docTypeRaw = hit.document_type || '';
 
-        const safeTitle = fmt.document_title ? sanitizeHighlight(titleRaw) : escapeHtml(titleRaw);
-        const safeFilename = escapeHtml(filenameRaw);
+        const safeTitle = fmt.document_title ? sanitizeHighlight(titleRaw) : window.escapeHtml(titleRaw);
+        const safeFilename = window.escapeHtml(filenameRaw);
         const safeSnippet = sanitizeHighlight(snippetRaw);
-        const safeTags = escapeHtml(tagsRaw);
-        const safeDocType = escapeHtml(docTypeRaw);
+        const safeTags = window.escapeHtml(tagsRaw);
+        const safeDocType = window.escapeHtml(docTypeRaw);
 
         return `<div style="padding: 0.75rem 1rem; border-bottom: 1px solid #f3f4f6; display: flex; gap: 0.75rem; align-items: flex-start;">
           <div style="flex-shrink: 0; color: #3b82f6; font-size: 1.25rem; padding-top: 0.1rem;">
@@ -1621,7 +1621,7 @@
             ${safeSnippet ? `<div style="margin-top: 0.4rem; font-size: 0.8rem; color: #374151; white-space: pre-wrap; word-break: break-word;">…${safeSnippet}…</div>` : ''}
           </div>
           <div style="flex-shrink: 0;">
-            <a href="/files/${escapeHtml(hit.file_id)}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="${__i18n.viewFile}">
+            <a href="/files/${window.escapeHtml(hit.file_id)}" style="padding: 0.25rem 0.6rem; background: #f3f4f6; color: #374151; border-radius: 0.25rem; font-size: 0.8rem; text-decoration: none; white-space: nowrap;" title="${__i18n.viewFile}">
               <i class="fas fa-external-link-alt"></i>
             </a>
           </div>
