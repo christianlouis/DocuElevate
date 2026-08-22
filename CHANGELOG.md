@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Chores
+
+- Clean up sentinel security fix metadata
+  ([`b2d6cb4`](https://github.com/christianlouis/DocuElevate/commit/b2d6cb41874da7460f52a49dc39d9c54a7ac91b4))
+
+
 ## v0.188.6 (2026-07-29)
 
 ### Bug Fixes
