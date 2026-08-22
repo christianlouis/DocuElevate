@@ -586,13 +586,23 @@ document.addEventListener('DOMContentLoaded', function() {
           if (data.status === 'success') {
             // If there's token info, we need to handle it specially
             if (data.token_info && data.token_info.expires_in_human) {
-              let message = escapeHtml(data.message || 'Connection successful');
-              message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
-                <span class="font-medium">${i18nStrings.tokenValidFor}</span> ${escapeHtml(data.token_info.expires_in_human)}
-                </div>`;
-
               modalTitle.textContent = i18nStrings.testSuccessful;
-              modalMessage.innerHTML = message;
+              modalMessage.textContent = '';
+              const textNode = document.createTextNode(data.message || 'Connection successful');
+              modalMessage.appendChild(textNode);
+
+              modalMessage.appendChild(document.createElement('br'));
+              modalMessage.appendChild(document.createElement('br'));
+
+              const infoDiv = document.createElement('div');
+              infoDiv.className = 'bg-blue-50 p-3 rounded mt-2';
+              const spanEl = document.createElement('span');
+              spanEl.className = 'font-medium';
+              spanEl.textContent = i18nStrings.tokenValidFor + ' ';
+              infoDiv.appendChild(spanEl);
+              infoDiv.appendChild(document.createTextNode(data.token_info.expires_in_human));
+              modalMessage.appendChild(infoDiv);
+
               modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
               modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4';
               resultModal.classList.remove('hidden');
@@ -651,13 +661,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Add token expiration info if available (especially for Google Drive)
             if (data.token_info && data.token_info.expires_in_human) {
-              message += `<br><br><div class="bg-blue-50 p-3 rounded mt-2">
-                <span class="font-medium">${i18nStrings.tokenValidFor}</span> ${escapeHtml(data.token_info.expires_in_human)}
-                </div>`;
-
-              // Show the message with HTML
+              // Show the message with safe DOM manipulation
               modalTitle.textContent = i18nStrings.connectionTestSuccessful;
-              modalMessage.innerHTML = message;
+              modalMessage.textContent = '';
+              const textNode = document.createTextNode(data.message || 'Connection successful');
+              modalMessage.appendChild(textNode);
+
+              modalMessage.appendChild(document.createElement('br'));
+              modalMessage.appendChild(document.createElement('br'));
+
+              const infoDiv = document.createElement('div');
+              infoDiv.className = 'bg-blue-50 p-3 rounded mt-2';
+              const spanEl = document.createElement('span');
+              spanEl.className = 'font-medium';
+              spanEl.textContent = i18nStrings.tokenValidFor + ' ';
+              infoDiv.appendChild(spanEl);
+              infoDiv.appendChild(document.createTextNode(data.token_info.expires_in_human));
+              modalMessage.appendChild(infoDiv);
+
               modalIcon.innerHTML = '<i class="fa-solid fa-check text-green-600 fa-2x"></i>';
               modalIcon.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4';
               resultModal.classList.remove('hidden');
