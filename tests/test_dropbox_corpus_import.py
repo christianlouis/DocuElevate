@@ -261,11 +261,11 @@ def test_dropbox_import_pauses_at_queue_high_watermark(db_session):
         "status": "paused",
         "job_id": job.id,
         "queue_depth": 25,
-        "resume_in_seconds": 12,
+        "resume_in_seconds": 30,
     }
     assert job.state == "queued"
     assert "depth 25" in job.error
-    schedule.assert_called_once_with(job.id, countdown=12)
+    schedule.assert_called_once_with(job.id, countdown=30)
 
 
 @pytest.mark.unit

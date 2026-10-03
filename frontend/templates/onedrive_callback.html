@@ -93,25 +93,6 @@
         <p id="folder-save-status" class="mt-2 text-sm hidden" aria-live="polite"></p>
       </div>
 
-      <div class="mt-6 p-4 bg-gray-100 rounded-md">
-        <h3 class="font-medium text-lg mb-2">Configuration for Worker Nodes</h3>
-        <p class="text-sm text-gray-600 mb-3">
-          Copy these environment variables to configure all worker nodes:
-        </p>
-
-        <div class="relative">
-          <pre id="env-vars" class="bg-gray-800 text-green-400 text-sm p-3 rounded overflow-x-auto"><code></code></pre>
-
-          <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
-            Copy
-          </button>
-        </div>
-
-        <p class="text-xs text-gray-500 mt-2">
-          Add these variables to your .env file or environment configuration.
-        </p>
-      </div>
-
       <div class="mt-4 text-center">
         <a href="/status" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Go to Status Page
@@ -126,14 +107,10 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
+  const oauthState = "{{ state }}";
 
-  // Get credentials from session storage (these take precedence over server-provided values)
-  const clientId = sessionStorage.getItem('onedrive_client_id') || "{{ client_id_value }}";
-  const clientSecret = sessionStorage.getItem('onedrive_client_secret') || "{{ client_secret_value }}";
-  const tenantId = sessionStorage.getItem('onedrive_tenant_id') || "{{ tenant_id }}" || "common";
-  const folderPath = sessionStorage.getItem('onedrive_folder_path') || "";
-  const integrationId = sessionStorage.getItem('oauth_integration_id');
-  const serverCredentialsConfigured = {{ 'true' if server_credentials_configured else 'false' }};
+  const tenantId = "{{ tenant_id }}" || "common";
+  const integrationId = "{{ integration_id or '' }}";
 
   // In user mode, point the "Return to Setup" link back to the wizard with integration_id
   if (integrationId) {
@@ -147,23 +124,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!clientId || (!clientSecret && !(serverCredentialsConfigured && !integrationId))) {
-      showError("Missing Client ID or Client Secret. Please go back to the setup page and try again.");
-      return;
-    }
-
-    exchangeCode(code, clientId, clientSecret, redirectUri, tenantId, folderPath);
+    exchangeCode(code, redirectUri, tenantId);
   } else {
     showError("No authorization code was found in the URL");
   }
 
-  function exchangeCode(code, clientId, clientSecret, redirectUri, tenantId, folderPath) {
+  function exchangeCode(code, redirectUri, tenantId) {
     const formData = new FormData();
-    formData.append('client_id', clientId);
-    formData.append('client_secret', clientSecret);
     formData.append('redirect_uri', redirectUri);
     formData.append('code', code);
     formData.append('tenant_id', tenantId);
+    formData.append('state', oauthState);
+    if (integrationId) formData.append('integration_id', integrationId);
 
     // Show more details in processing message
     const p1 = document.createElement('p');
@@ -189,97 +161,25 @@ document.addEventListener('DOMContentLoaded', function() {
       return response.json();
     })
     .then(data => {
-      if (data.refresh_token) {
+      if (data.status === 'success') {
         // Per-user flow: save to the user's integration record
         if (integrationId) {
-          const creds = {
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: data.refresh_token,
-            tenant_id: tenantId,
-          };
-
-          // Only send credentials — the integration's config (folder_path, source_type, etc.)
-          // is already set and must not be overwritten here.
-          const body = { credentials: creds };
-
           document.getElementById('processing-message').innerHTML =
             '<p>Saving credentials to your integration...</p>';
-
-          return fetch(`/api/integrations/${integrationId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          }).then(response => {
-            if (!response.ok) {
-              return response.json().then(err => {
-                throw new Error('Failed to save credentials: ' + (err.detail || 'Unknown error'));
-              });
-            }
-            return response.json();
-          }).then(() => {
-            // Clean up session storage
-            sessionStorage.removeItem('onedrive_client_id');
-            sessionStorage.removeItem('onedrive_client_secret');
-            sessionStorage.removeItem('onedrive_tenant_id');
-            sessionStorage.removeItem('onedrive_folder_path');
-            sessionStorage.removeItem('oauth_integration_id');
-            sessionStorage.removeItem('onedrive_use_system_creds');
-
-            // Hide processing spinner, show success
-            document.querySelector('.animate-spin').parentNode.classList.add('hidden');
-            document.getElementById('processing-message').innerHTML =
-              '<p class="text-green-600 font-semibold">✓ OneDrive authorized successfully!</p>';
-            document.getElementById('success-container').classList.remove('hidden');
-
-            // Show folder browser with the access token
-            initFolderBrowser(data.access_token, integrationId);
-          });
+          document.querySelector('.animate-spin').parentNode.classList.add('hidden');
+          document.getElementById('processing-message').innerHTML =
+            '<p class="text-green-600 font-semibold">✓ OneDrive authorized successfully!</p>';
+          document.getElementById('success-container').classList.remove('hidden');
+          initFolderBrowser(data.access_token, integrationId);
+          return;
         }
 
-        // Global flow: update settings in memory
-        const updateFormData = new FormData();
-        updateFormData.append('refresh_token', data.refresh_token);
-
-        // Use the values from session storage
-        updateFormData.append('client_id', clientId);
-        updateFormData.append('client_secret', clientSecret);
-        updateFormData.append('tenant_id', tenantId);
-
-        if (folderPath) {
-          updateFormData.append('folder_path', folderPath);
-        }
-
-        document.getElementById('processing-message').innerHTML =
-          '<p>Updating system settings with new token...</p>';
-
-        return fetch('/api/onedrive/update-settings', {
-          method: 'POST',
-          body: updateFormData
-        }).then(response => {
-          if (!response.ok) {
-            return response.json().then(err => {
-              throw new Error('Token received but failed to update settings: ' + (err.detail || 'Unknown error'));
-            });
-          }
-          return response.json();
-        }).then(() => {
-          // Show the success message and environment variables
-          showSuccess(data.refresh_token, clientId, clientSecret, tenantId, folderPath);
-
-          // In 10 seconds, redirect to status page (giving more time to copy)
-          setTimeout(() => {
-            window.location.href = '/status';
-          }, 10000);
-
-          // Clean up session storage
-          sessionStorage.removeItem('onedrive_client_id');
-          sessionStorage.removeItem('onedrive_client_secret');
-          sessionStorage.removeItem('onedrive_tenant_id');
-          sessionStorage.removeItem('onedrive_folder_path');
-        });
+        showSuccess();
+        setTimeout(() => {
+          window.location.href = '/status';
+        }, 10000);
       } else {
-        throw new Error('No refresh token was received from the server');
+        throw new Error('Authorization did not complete');
       }
     })
     .catch(error => {
@@ -296,44 +196,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('.animate-spin').parentNode.classList.add('hidden');
   }
 
-  function showSuccess(refreshToken, clientId, clientSecret, tenantId, folderPath) {
+  function showSuccess() {
     document.getElementById('processing-message').classList.add('hidden');
     document.getElementById('success-container').classList.remove('hidden');
 
     // Hide the spinner when showing success
     document.querySelector('.animate-spin').parentNode.classList.add('hidden');
 
-    // Update the environment variables pre block with the new token
-    const envVarsCode = document.querySelector('#env-vars code');
-    if (envVarsCode) {
-      envVarsCode.textContent = `ONEDRIVE_CLIENT_ID=${clientId}
-ONEDRIVE_CLIENT_SECRET=${clientSecret}
-ONEDRIVE_TENANT_ID=${tenantId || 'common'}
-ONEDRIVE_REFRESH_TOKEN=${refreshToken}
-ONEDRIVE_FOLDER_PATH=${folderPath || 'Documents/Uploads'}`;
-    }
-
-    // Add copy functionality
-    const copyEnvVarsBtn = document.getElementById('copy-env-vars');
-    if (copyEnvVarsBtn) {
-      copyEnvVarsBtn.addEventListener('click', function() {
-        const envVarsText = document.getElementById('env-vars').textContent;
-        navigator.clipboard.writeText(envVarsText)
-          .then(() => {
-            const originalText = copyEnvVarsBtn.textContent;
-            copyEnvVarsBtn.textContent = 'Copied!';
-            copyEnvVarsBtn.classList.add('bg-green-700');
-            setTimeout(() => {
-              copyEnvVarsBtn.textContent = originalText;
-              copyEnvVarsBtn.classList.remove('bg-green-700');
-            }, 2000);
-          })
-          .catch(err => {
-            console.error('Failed to copy: ', err);
-            alert('Failed to copy text to clipboard');
-          });
-      });
-    }
   }
 
   // ── Folder browser ────────────────────────────────────────────────
