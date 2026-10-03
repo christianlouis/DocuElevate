@@ -314,7 +314,7 @@ def action_upload(
     try:
         from app.tasks.process_document import process_document
 
-        result = process_document.delay(dest_path, owner_id)
+        result = process_document.delay(dest_path, owner_id=owner_id)
         task_id = result.id
         logger.info("Automation upload queued: file=%s, task=%s, owner=%s", safe_filename, task_id, owner_id)
     except Exception as exc:
