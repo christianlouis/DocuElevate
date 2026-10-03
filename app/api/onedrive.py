@@ -41,9 +41,9 @@ async def exchange_onedrive_token(
     request: Request,
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
-    redirect_uri: Annotated[str, Form(...)]=None,
-    code: Annotated[str, Form(...)]=None,
-    tenant_id: Annotated[str, Form(...)]=None,
+    redirect_uri: Annotated[str, Form(...)] = None,
+    code: Annotated[str, Form(...)] = None,
+    tenant_id: Annotated[str, Form(...)] = None,
 ):
     """
     Exchange an authorization code for a refresh token.

@@ -176,7 +176,10 @@ class TestRequireLogin:
     @pytest.mark.asyncio
     async def test_rejects_revoked_server_side_session(self):
         """A signed cookie must not restore access after its server record is revoked."""
-        with patch("app.auth.AUTH_ENABLED", True), patch("app.utils.session_manager.validate_session", return_value=False):
+        with (
+            patch("app.auth.AUTH_ENABLED", True),
+            patch("app.utils.session_manager.validate_session", return_value=False),
+        ):
             from app.auth import require_login
 
             @require_login

@@ -29,6 +29,7 @@ def _allow_example_hook_hosts(mocker):
     """Keep API fixture hosts deterministic; delivery still pins DNS in production."""
     mocker.patch("app.api.automation.is_private_ip", return_value=False)
 
+
 # ---------------------------------------------------------------------------
 # Unit tests – build_zapier_payload
 # ---------------------------------------------------------------------------

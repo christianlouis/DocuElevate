@@ -824,7 +824,9 @@ class TestAssignOwnerEndpoint:
             _patch_multi_user(True),
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}, "_session_token": "test-session"}),
+                new_callable=lambda: property(
+                    lambda self: {"user": {"id": "platform-admin", "is_admin": True}, "_session_token": "test-session"}
+                ),
             ),
             patch("app.utils.session_manager.validate_session", return_value=True),
         ):
@@ -861,7 +863,9 @@ class TestAssignOwnerEndpoint:
             _patch_multi_user(True),
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"id": "tribe-admin", "is_admin": False}, "_session_token": "test-session"}),
+                new_callable=lambda: property(
+                    lambda self: {"user": {"id": "tribe-admin", "is_admin": False}, "_session_token": "test-session"}
+                ),
             ),
             patch("app.utils.session_manager.validate_session", return_value=True),
         ):

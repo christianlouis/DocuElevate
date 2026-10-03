@@ -152,9 +152,13 @@ def _validate_target_url(target_url: str) -> None:
     """Reject local targets so hooks cannot be used as an SSRF primitive."""
     parsed = urlparse(target_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A public HTTP(S) target URL is required")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A public HTTP(S) target URL is required"
+        )
     if is_private_ip(parsed.hostname):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Private or local target URLs are not allowed")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Private or local target URLs are not allowed"
+        )
 
 
 def _hook_to_response(hook: AutomationHook) -> dict[str, Any]:
@@ -195,7 +199,9 @@ def subscribe_hook(body: HookSubscribe, db: DbSession, user: AuthUser) -> dict[s
     _validate_target_url(body.target_url)
     owner_id = user.get("preferred_username") or user.get("email") or user.get("id")
     if not owner_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
 
     hook = AutomationHook(
         target_url=body.target_url,
@@ -229,7 +235,9 @@ def unsubscribe_hook(hook_id: int, db: DbSession, user: AuthUser) -> None:
     Zapier calls this endpoint when a Zap is turned off or deleted.
     """
     owner_id = user.get("preferred_username") or user.get("email") or user.get("id")
-    hook = db.query(AutomationHook).filter(AutomationHook.id == hook_id, AutomationHook.owner_id == str(owner_id)).first()
+    hook = (
+        db.query(AutomationHook).filter(AutomationHook.id == hook_id, AutomationHook.owner_id == str(owner_id)).first()
+    )
     if not hook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hook not found")
 

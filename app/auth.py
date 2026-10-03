@@ -1265,9 +1265,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
     local_admin_exists = False
     if settings.multi_user_enabled:
         local_admin_exists = (
-            db.query(_LocalUser)
-            .filter(_LocalUser.is_admin.is_(True), _LocalUser.is_active.is_(True))
-            .first()
+            db.query(_LocalUser).filter(_LocalUser.is_admin.is_(True), _LocalUser.is_active.is_(True)).first()
             is not None
         )
     # Once database-backed local admins exist, the legacy global fallback must

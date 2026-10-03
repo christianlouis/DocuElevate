@@ -417,11 +417,12 @@ def test_initial_backfill_job_uses_token_budget():
     integration = SimpleNamespace(
         config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 8_500_000})
     )
-    with patch(
-        "app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 8_500_000
-    ), patch(
-        "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 9500)
-    ) as reserve:
+    with (
+        patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 8_500_000),
+        patch(
+            "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 9500)
+        ) as reserve,
+    ):
         from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
 
         assert _reserve_job_llm_tokens(job, integration) == (date(2026, 7, 15), 9500)
@@ -436,7 +437,9 @@ def test_initial_backfill_negative_budget_fails_closed():
         with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", -1):
             from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
 
-            with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+            with pytest.raises(
+                CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"
+            ):
                 _reserve_job_llm_tokens(job, integration)
     reserve.assert_not_called()
 
@@ -449,7 +452,9 @@ def test_initial_backfill_fractional_negative_budget_fails_closed():
         with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", -0.5):
             from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
 
-            with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+            with pytest.raises(
+                CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"
+            ):
                 _reserve_job_llm_tokens(job, integration)
     reserve.assert_not_called()
 
