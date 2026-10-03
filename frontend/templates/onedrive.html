@@ -294,6 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
   startAuthFlowBtn.addEventListener('click', function() {
     const clientId = document.getElementById('client-id').value.trim();
     const clientSecret = clientSecretInput.value.trim();
+    const secretConfigured = {{ 'true' if client_secret else 'false' }};
     const redirectUri = window.location.origin + "/onedrive-callback";
     const tenantId = document.getElementById('tenant-id').value.trim() || 'common';
     const folderPath = document.getElementById('folder-path') ? document.getElementById('folder-path').value.trim() : '';
@@ -303,14 +304,18 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    if (!clientSecret) {
+    if (!clientSecret && !secretConfigured) {
       showModal('error', 'Validation Error', 'Please enter your Client Secret');
       return;
     }
 
     // Save all entered values to session storage temporarily
     sessionStorage.setItem('onedrive_client_id', clientId);
-    sessionStorage.setItem('onedrive_client_secret', clientSecret);
+    if (clientSecret) {
+      sessionStorage.setItem('onedrive_client_secret', clientSecret);
+    } else {
+      sessionStorage.removeItem('onedrive_client_secret');
+    }
     sessionStorage.setItem('onedrive_tenant_id', tenantId);
 
     if (folderPath) {

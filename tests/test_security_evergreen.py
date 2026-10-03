@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 from unittest.mock import Mock
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -108,5 +109,19 @@ async def test_provider_setup_pages_do_not_render_global_tokens(
 
     assert result == captured
     assert captured.get("client_secret_value", captured.get("app_secret_value")) == ""
+    if module_name == "app.views.dropbox":
+        assert captured["app_secret"] is True
     if "refresh_token_value" in captured:
         assert captured["refresh_token_value"] == ""
+
+
+@pytest.mark.unit
+def test_oauth_setup_forms_allow_server_configured_secret_without_rendering_it():
+    """Configured server secrets permit an empty browser field without exposing the value."""
+    for name in ("dropbox", "google_drive", "onedrive"):
+        source = Path(f"frontend/templates/{name}.html").read_text(encoding="utf-8")
+        assert "&& !secretConfigured" in source
+        assert "sessionStorage.removeItem" in source
+        assert "secretConfigured = {{" in source
+        assert "app_secret_value if" not in source
+        assert "client_secret_value if" not in source

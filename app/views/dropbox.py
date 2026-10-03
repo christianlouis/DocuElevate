@@ -25,6 +25,7 @@ async def dropbox_setup_page(request: Request):
             "request": request,
             "is_configured": is_configured,
             "app_key_value": settings.dropbox_app_key or "",
+            "app_secret": bool(settings.dropbox_app_secret),
             "app_secret_value": "",
             "refresh_token_value": "",
             "folder_path": settings.dropbox_folder or "/Documents/Uploads",  # Default folder path
