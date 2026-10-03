@@ -10,6 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.7 (2026-10-03)
+
+### Bug Fixes
+
+- **security**: Close Critical and High isolation and credential gaps
+  ([#1254](https://github.com/christianlouis/DocuElevate/pull/1254),
+  [`fac0500`](https://github.com/christianlouis/DocuElevate/commit/fac0500ec9cef85208b520835b21a93d40c2fd3b))
+
+### Chores
+
+- Clean up sentinel security fix metadata
+  ([`b2d6cb4`](https://github.com/christianlouis/DocuElevate/commit/b2d6cb41874da7460f52a49dc39d9c54a7ac91b4))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`6c10885`](https://github.com/christianlouis/DocuElevate/commit/6c10885490c95f3b706fef280fc06359bee6faba))
+
+
 ## Unreleased
 
 ### Chores
