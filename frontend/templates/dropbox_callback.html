@@ -102,8 +102,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!appKey || !appSecret) {
-      showError("Missing App Key or App Secret. Please go back to the setup page and try again.");
+    if (!appKey) {
+      showError("Missing App Key. Please go back to the setup page and try again.");
       return;
     }
 
@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function exchangeCode(code, appKey, appSecret, redirectUri) {
     const formData = new FormData();
     formData.append('client_id', appKey);
-    formData.append('client_secret', appSecret);
+    if (appSecret) formData.append('client_secret', appSecret);
     formData.append('redirect_uri', redirectUri);
     formData.append('code', code);
     formData.append('folder_path', folderPath);

@@ -506,6 +506,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isOauthActive) {
       const clientId = clientIdInput.value.trim();
       const clientSecret = clientSecretInput.value.trim();
+      const secretConfigured = {{ 'true' if client_secret else 'false' }};
 
       if (clientId) formData.append('client_id', clientId);
       if (clientSecret) formData.append('client_secret', clientSecret);
@@ -653,7 +654,7 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
         return;
       }
 
-      if (!clientSecret) {
+      if (!clientSecret && !secretConfigured) {
         showModal('error', 'Validation Error', 'Please enter your Client Secret');
         return;
       }
@@ -662,7 +663,11 @@ GOOGLE_DRIVE_FOLDER_ID=${folderId}
 
       // Save values to session storage for use after redirect
       sessionStorage.setItem('google_drive_client_id', clientId);
-      sessionStorage.setItem('google_drive_client_secret', clientSecret);
+      if (clientSecret) {
+        sessionStorage.setItem('google_drive_client_secret', clientSecret);
+      } else {
+        sessionStorage.removeItem('google_drive_client_secret');
+      }
       if (folderId) {
         sessionStorage.setItem('google_drive_folder_id', folderId);
       }

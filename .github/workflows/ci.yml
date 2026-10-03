@@ -13,6 +13,7 @@ on:
   pull_request:
     branches:
       - main
+      - release-evergreen-0.30
 
 permissions:
   contents: read
@@ -54,7 +55,7 @@ jobs:
 
       - name: Run Ruff Format check
         # ruff format only supports --check; do not pass --fix here
-        run: ruff format --check app/ tests/
+        run: ruff format --check app/ tests/ --exclude '*.md'
 
   # ══════════════════════════════════════════════════════════════════════════
   # Stage 2: Tests & Type Checking (run in parallel after lint passes)

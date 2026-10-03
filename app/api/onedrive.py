@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
 import requests
-from fastapi import APIRouter, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 
-from app.auth import require_login
+from app.auth import AUTH_ENABLED, require_login
 from app.config import settings
 from app.utils.oauth_helper import exchange_oauth_token
 
@@ -20,20 +20,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request) -> dict:
+    """Require an operator session before changing global OneDrive settings."""
+    if not AUTH_ENABLED:
+        return {"is_admin": True}
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
 @router.post("/onedrive/exchange-token")
 @require_login
 async def exchange_onedrive_token(
     request: Request,
-    client_id: Annotated[str, Form(...)],
-    client_secret: Annotated[str, Form(...)],
     redirect_uri: Annotated[str, Form(...)],
     code: Annotated[str, Form(...)],
     tenant_id: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
 ):
     """
     Exchange an authorization code for a refresh token.
     This is done on the server to avoid exposing client secret in the browser.
     """
+    client_id = client_id or settings.onedrive_client_id
+    client_secret = client_secret or settings.onedrive_client_secret
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OneDrive OAuth client is not configured")
     # Prepare the token request
     token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
@@ -53,7 +67,7 @@ async def exchange_onedrive_token(
     return {"refresh_token": token_data["refresh_token"], "expires_in": token_data.get("expires_in", 3600)}
 
 
-@router.get("/onedrive/test-token")
+@router.get("/onedrive/test-token", dependencies=[Depends(_require_admin)])
 @require_login
 async def test_onedrive_token(request: Request):
     """
@@ -194,7 +208,7 @@ def format_time_remaining(time_delta):
     return ", ".join(parts)
 
 
-@router.post("/onedrive/save-settings")
+@router.post("/onedrive/save-settings", dependencies=[Depends(_require_admin)])
 @require_login
 async def save_onedrive_settings(
     request: Request,
@@ -288,7 +302,7 @@ async def save_onedrive_settings(
         )
 
 
-@router.post("/onedrive/update-settings")
+@router.post("/onedrive/update-settings", dependencies=[Depends(_require_admin)])
 @require_login
 async def update_onedrive_settings(
     request: Request,
@@ -344,7 +358,7 @@ async def update_onedrive_settings(
         )
 
 
-@router.get("/onedrive/get-full-config")
+@router.get("/onedrive/get-full-config", dependencies=[Depends(_require_admin)])
 @require_login
 async def get_onedrive_full_config(request: Request):
     """

@@ -273,6 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
   startAuthFlowBtn.addEventListener('click', function() {
     const appKey = document.getElementById('app-key').value.trim();
     const appSecret = appSecretInput.value.trim();
+    const secretConfigured = {{ 'true' if app_secret else 'false' }};
     const folderPath = document.getElementById('folder-path').value.trim();
     const redirectUri = window.location.origin + "/dropbox-callback";
 
@@ -281,14 +282,18 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    if (!appSecret) {
+    if (!appSecret && !secretConfigured) {
       showModal('error', 'Validation Error', 'Please enter your App Secret');
       return;
     }
 
     // Save app key, app secret and folder path to session storage temporarily
     sessionStorage.setItem('dropbox_app_key', appKey);
-    sessionStorage.setItem('dropbox_app_secret', appSecret);
+    if (appSecret) {
+      sessionStorage.setItem('dropbox_app_secret', appSecret);
+    } else {
+      sessionStorage.removeItem('dropbox_app_secret');
+    }
     if (folderPath) {
       sessionStorage.setItem('dropbox_folder_path', folderPath);
     }

@@ -7,9 +7,9 @@ import os
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 
-from app.auth import require_login
+from app.auth import AUTH_ENABLED, require_login
 from app.config import settings
 from app.utils.oauth_helper import exchange_oauth_token
 
@@ -19,20 +19,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _require_admin(request: Request) -> dict:
+    """Require an operator session before changing global Drive settings."""
+    if not AUTH_ENABLED:
+        return {"is_admin": True}
+    user = request.session.get("user")
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
 @router.post("/google-drive/exchange-token")
 @require_login
 async def exchange_google_drive_token(
     request: Request,
-    client_id: Annotated[str, Form(...)],
-    client_secret: Annotated[str, Form(...)],
     redirect_uri: Annotated[str, Form(...)],
     code: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
     folder_id: Annotated[Optional[str], Form()] = None,
 ):
     """
     Exchange an authorization code for refresh and access tokens from Google.
     This is done on the server to avoid exposing client secret in the browser.
     """
+    client_id = client_id or settings.google_drive_client_id
+    client_secret = client_secret or settings.google_drive_client_secret
+    if not client_id or not client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Google Drive OAuth client is not configured"
+        )
     # Prepare the token request
     token_url = "https://oauth2.googleapis.com/token"
 
@@ -55,7 +71,7 @@ async def exchange_google_drive_token(
     }
 
 
-@router.post("/google-drive/update-settings")
+@router.post("/google-drive/update-settings", dependencies=[Depends(_require_admin)])
 @require_login
 async def update_google_drive_settings(
     request: Request,
@@ -105,7 +121,7 @@ async def update_google_drive_settings(
         )
 
 
-@router.get("/google-drive/test-token")
+@router.get("/google-drive/test-token", dependencies=[Depends(_require_admin)])
 @require_login
 async def test_google_drive_token(request: Request):
     """
@@ -221,7 +237,7 @@ async def test_google_drive_token(request: Request):
         return {"status": "error", "message": f"Unexpected error: {str(e)}"}
 
 
-@router.get("/google-drive/get-token-info")
+@router.get("/google-drive/get-token-info", dependencies=[Depends(_require_admin)])
 @require_login
 async def get_google_drive_token_info(request: Request):
     """
@@ -324,7 +340,7 @@ def format_time_remaining(time_delta):
     return ", ".join(parts)
 
 
-@router.post("/google-drive/save-settings")
+@router.post("/google-drive/save-settings", dependencies=[Depends(_require_admin)])
 @require_login
 async def save_dropbox_settings(
     request: Request,
