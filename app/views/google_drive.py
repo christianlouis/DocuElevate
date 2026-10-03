@@ -50,9 +50,9 @@ async def google_drive_setup_page(request: Request):
             "client_id": bool(settings.google_drive_client_id),
             "client_id_value": settings.google_drive_client_id or "",
             "client_secret": bool(settings.google_drive_client_secret),
-            "client_secret_value": settings.google_drive_client_secret or "",
+            "client_secret_value": "",
             "refresh_token": bool(settings.google_drive_refresh_token),
-            "refresh_token_value": settings.google_drive_refresh_token or "",
+            "refresh_token_value": "",
             "folder_id": settings.google_drive_folder_id or "",
             "has_credentials_json": bool(settings.google_drive_credentials_json),
         },
@@ -76,7 +76,15 @@ async def google_drive_callback(request: Request, code: str = None, error: str =
         )
 
     # Display the processing page with automatic token exchange
-    return templates.TemplateResponse("google_drive_callback.html", {"request": request, "code": code, "state": state})
+    return templates.TemplateResponse(
+        "google_drive_callback.html",
+        {
+            "request": request,
+            "code": code,
+            "state": state,
+            "client_id_value": settings.google_drive_client_id or "",
+        },
+    )
 
 
 @router.get("/google-drive-auth-start")

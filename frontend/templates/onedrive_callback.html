@@ -103,8 +103,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!clientId || !clientSecret) {
-      showError("Missing Client ID or Client Secret. Please go back to the setup page and try again.");
+    if (!clientId) {
+      showError("Missing Client ID. Please go back to the setup page and try again.");
       return;
     }
 
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function exchangeCode(code, clientId, clientSecret, redirectUri, tenantId, folderPath) {
     const formData = new FormData();
     formData.append('client_id', clientId);
-    formData.append('client_secret', clientSecret);
+    if (clientSecret) formData.append('client_secret', clientSecret);
     formData.append('redirect_uri', redirectUri);
     formData.append('code', code);
     formData.append('tenant_id', tenantId);

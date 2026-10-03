@@ -30,10 +30,10 @@ async def onedrive_setup_page(request: Request):
             "client_id": bool(settings.onedrive_client_id),
             "client_id_value": settings.onedrive_client_id or "",  # Pass the actual value for the form
             "client_secret": bool(settings.onedrive_client_secret),
-            "client_secret_value": settings.onedrive_client_secret if settings.onedrive_client_secret else "",
+            "client_secret_value": "",
             "tenant_id": settings.onedrive_tenant_id,
             "refresh_token": bool(settings.onedrive_refresh_token),
-            "refresh_token_value": settings.onedrive_refresh_token if settings.onedrive_refresh_token else "",
+            "refresh_token_value": "",
             "folder_path": settings.onedrive_folder_path or "Documents/Uploads",  # Default folder path
         },
     )
@@ -62,7 +62,7 @@ async def onedrive_callback(request: Request, code: str = None, error: str = Non
             "request": request,
             "code": code,
             "client_id_value": settings.onedrive_client_id or "",
-            "client_secret_value": settings.onedrive_client_secret or "",
+            "client_secret_value": "",
             "tenant_id": settings.onedrive_tenant_id or "common",
         },
     )

@@ -25,8 +25,8 @@ async def dropbox_setup_page(request: Request):
             "request": request,
             "is_configured": is_configured,
             "app_key_value": settings.dropbox_app_key or "",
-            "app_secret_value": settings.dropbox_app_secret if settings.dropbox_app_secret else "",
-            "refresh_token_value": settings.dropbox_refresh_token if settings.dropbox_refresh_token else "",
+            "app_secret_value": "",
+            "refresh_token_value": "",
             "folder_path": settings.dropbox_folder or "/Documents/Uploads",  # Default folder path
         },
     )
@@ -48,15 +48,15 @@ async def dropbox_callback(request: Request, code: str = None, error: str = None
         )
 
     # Display the processing page with automatic token exchange
-    # Note: We provide empty strings for app_key_value and app_secret_value
-    # to prevent overriding what's in sessionStorage
+    # The app key is public and can be used as a server-side fallback. Secrets
+    # stay server-side and are resolved by the exchange endpoint.
     return templates.TemplateResponse(
         "dropbox_callback.html",
         {
             "request": request,
             "code": code,
-            "app_key_value": "",  # The callback will prioritize sessionStorage values
-            "app_secret_value": "",  # The callback will prioritize sessionStorage values
+            "app_key_value": settings.dropbox_app_key or "",
+            "app_secret_value": "",
             "folder_path": "",  # The callback will prioritize sessionStorage values
         },
     )

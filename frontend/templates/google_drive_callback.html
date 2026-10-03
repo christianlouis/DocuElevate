@@ -135,8 +135,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const code = "{{ code }}";
 
   // Get credentials from session storage
-  const clientId = sessionStorage.getItem('google_drive_client_id');
-  const clientSecret = sessionStorage.getItem('google_drive_client_secret');
+  const clientId = sessionStorage.getItem('google_drive_client_id') || "{{ client_id_value }}";
+  const clientSecret = sessionStorage.getItem('google_drive_client_secret') || "";
   const folderId = sessionStorage.getItem('google_drive_folder_id');
 
   const redirectUri = window.location.origin + "/google-drive-callback";
@@ -151,8 +151,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!clientId || !clientSecret) {
-      showError("Missing Client ID or Client Secret. Please go back to the setup page and try again.");
+    if (!clientId) {
+      showError("Missing Client ID. Please go back to the setup page and try again.");
       return;
     }
 
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function exchangeCode(code, clientId, clientSecret, redirectUri, folderId) {
     const formData = new FormData();
     formData.append('client_id', clientId);
-    formData.append('client_secret', clientSecret);
+    if (clientSecret) formData.append('client_secret', clientSecret);
     formData.append('redirect_uri', redirectUri);
     formData.append('code', code);
     if (folderId) {
