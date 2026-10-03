@@ -58,7 +58,10 @@
     "retry_msg": "Do you want to retry uploading \"{filename}\"?",
     "capture_label": "Capture document with camera",
     "photo_label": "Select photo from library",
-    "file_label": "Pick file from device"
+    "file_label": "Pick file from device",
+    "share_confirm_title": "Upload shared file?",
+    "share_confirm_msg": "Do you want to upload \"{filename}\" to DocuElevate?",
+    "confirm_upload": "Upload"
   },
   "files": {
     "title": "My Documents",

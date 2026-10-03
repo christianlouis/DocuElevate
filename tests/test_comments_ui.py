@@ -154,14 +154,14 @@ class TestCommentsUIRendering:
         assert 'id="comments-list"' not in html
         assert 'id="annotation-form"' not in html
 
-    def test_annotations_page_has_embedpdf_viewer_for_pdf(self, client: TestClient, db_session, tmp_path):
-        """The annotations page should include the EmbedPDF viewer for PDF files."""
+    def test_annotations_page_has_native_pdf_viewer_for_pdf(self, client: TestClient, db_session, tmp_path):
+        """The annotations page should use a native viewer without third-party script execution."""
         f = _create_file(db_session, tmp_path)
         resp = client.get(f"/files/{f.id}/annotations")
         assert resp.status_code == 200
         html = resp.text
         assert 'id="embedpdf-viewer"' in html
-        assert "@embedpdf/snippet" in html
+        assert "@embedpdf/snippet" not in html
 
     def test_embedpdf_init_subscribes_to_page_change(self, client: TestClient, db_session, tmp_path):
         """The EmbedPDF init script should subscribe to page change events to sync the form."""

@@ -402,7 +402,9 @@ def test_corpus_token_budget_rejects_negative_global_setting():
 def test_incremental_watch_job_bypasses_backfill_token_budget():
     job = SimpleNamespace(is_backfill=False)
     integration = SimpleNamespace(config="{}")
-    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
+    with patch(
+        "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 42)
+    ) as reserve:
         from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
 
         assert _reserve_job_llm_tokens(job, integration) == (None, 0)
@@ -416,6 +418,8 @@ def test_initial_backfill_job_uses_token_budget():
         config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 8_500_000})
     )
     with patch(
+        "app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 8_500_000
+    ), patch(
         "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 9500)
     ) as reserve:
         from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
@@ -427,47 +431,43 @@ def test_initial_backfill_job_uses_token_budget():
 @pytest.mark.unit
 def test_initial_backfill_negative_budget_fails_closed():
     job = SimpleNamespace(is_backfill=True)
-    integration = SimpleNamespace(
-        config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": -1})
-    )
+    integration = SimpleNamespace(config=json.dumps({"backfill_daily_llm_token_budget": 1}))
     with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
-        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
+        with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", -1):
+            from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
 
-        with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
-            _reserve_job_llm_tokens(job, integration)
+            with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+                _reserve_job_llm_tokens(job, integration)
     reserve.assert_not_called()
 
 
 @pytest.mark.unit
 def test_initial_backfill_fractional_negative_budget_fails_closed():
     job = SimpleNamespace(is_backfill=True)
-    integration = SimpleNamespace(
-        config=json.dumps({"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": -0.5})
-    )
+    integration = SimpleNamespace(config=json.dumps({"backfill_daily_llm_token_budget": 1}))
     with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
-        from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
+        with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", -0.5):
+            from app.tasks.dropbox_corpus_import import CorpusDailyBudgetUnavailable, _reserve_job_llm_tokens
 
-        with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
-            _reserve_job_llm_tokens(job, integration)
+            with pytest.raises(CorpusDailyBudgetUnavailable, match="Negative corpus backfill token budgets are invalid"):
+                _reserve_job_llm_tokens(job, integration)
     reserve.assert_not_called()
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    "config",
-    [
-        {"backfill_token_budget_enabled": False, "backfill_daily_llm_token_budget": 9_000_000},
-        {"backfill_token_budget_enabled": True, "backfill_daily_llm_token_budget": 0},
-    ],
-)
-def test_initial_backfill_budget_can_be_disabled_live(config):
+def test_initial_backfill_budget_ignores_tenant_override():
     job = SimpleNamespace(is_backfill=True)
-    integration = SimpleNamespace(config=json.dumps(config))
-    with patch("app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens") as reserve:
-        from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
+    integration = SimpleNamespace(
+        config=json.dumps({"backfill_token_budget_enabled": False, "backfill_daily_llm_token_budget": 0})
+    )
+    with patch(
+        "app.tasks.dropbox_corpus_import._reserve_corpus_llm_tokens", return_value=(date(2026, 7, 15), 42)
+    ) as reserve:
+        with patch("app.tasks.dropbox_corpus_import.settings.corpus_backfill_daily_llm_token_budget", 100):
+            from app.tasks.dropbox_corpus_import import _reserve_job_llm_tokens
 
-        assert _reserve_job_llm_tokens(job, integration) == (None, 0)
-    reserve.assert_not_called()
+            assert _reserve_job_llm_tokens(job, integration) == (date(2026, 7, 15), 42)
+        reserve.assert_called_once_with(budget=100)
 
 
 @pytest.mark.unit

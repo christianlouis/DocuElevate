@@ -10,7 +10,7 @@ import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_current_user, require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.env_utils import update_env_file
@@ -26,7 +26,7 @@ router = APIRouter()
 
 def _require_admin(request: Request) -> dict:
     """Ensure the caller is an admin. Raises 403 otherwise."""
-    user = request.session.get("user")
+    user = get_current_user(request)
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
@@ -39,17 +39,21 @@ AdminUser = Annotated[dict, Depends(_require_admin)]
 @require_login
 async def exchange_onedrive_token(
     request: Request,
-    client_id: Annotated[str, Form(...)],
-    client_secret: Annotated[str, Form(...)],
-    redirect_uri: Annotated[str, Form(...)],
-    code: Annotated[str, Form(...)],
-    tenant_id: Annotated[str, Form(...)],
+    client_id: Annotated[Optional[str], Form()] = None,
+    client_secret: Annotated[Optional[str], Form()] = None,
+    redirect_uri: Annotated[str, Form(...)]=None,
+    code: Annotated[str, Form(...)]=None,
+    tenant_id: Annotated[str, Form(...)]=None,
 ):
     """
     Exchange an authorization code for a refresh token.
     This is done on the server to avoid exposing client secret in the browser.
     """
     # Prepare the token request
+    client_id = client_id or settings.onedrive_client_id
+    client_secret = client_secret or settings.onedrive_client_secret
+    if not client_id or not client_secret or not redirect_uri or not code or not tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OneDrive OAuth client is not configured")
     token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
     payload = {
@@ -363,10 +367,10 @@ async def save_onedrive_settings(
 
 
 @router.post("/onedrive/update-settings")
-@require_login
 async def update_onedrive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
     tenant_id: Annotated[str, Form()] = "common",
@@ -439,8 +443,7 @@ async def update_onedrive_settings(
 
 
 @router.get("/onedrive/get-full-config")
-@require_login
-async def get_onedrive_full_config(request: Request):
+async def get_onedrive_full_config(request: Request, _admin: AdminUser):
     """
     Get the full OneDrive configuration for sharing with worker nodes
     """

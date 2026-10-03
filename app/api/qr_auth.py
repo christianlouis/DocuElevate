@@ -163,7 +163,10 @@ async def create_challenge(
     # The QR payload is a JSON-like string with enough info for the mobile
     # app to know the server URL and challenge token.
     base_url = str(request.base_url).rstrip("/")
-    qr_payload = f"docuelevate://qr-login?token={challenge.challenge_token}&server={base_url}"
+    # Use an HTTPS payload so the bearer challenge is not routed through a
+    # hijackable custom URL scheme. The mobile scanner requires explicit user
+    # confirmation before submitting this one-time value.
+    qr_payload = f"{base_url}/qr-login?token={challenge.challenge_token}"
 
     # Compute the TTL in seconds so the client can run a countdown timer
     # without comparing absolute timestamps (which breaks when client and

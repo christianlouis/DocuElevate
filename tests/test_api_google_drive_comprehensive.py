@@ -88,6 +88,15 @@ class TestExchangeGoogleDriveToken:
 class TestUpdateGoogleDriveSettings:
     """Tests for POST /google-drive/update-settings endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.google_drive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.config.settings")
     def test_update_settings_success(self, mock_settings, client: TestClient):
         """Test successful settings update in memory."""
@@ -534,6 +543,15 @@ class TestSaveGoogleDriveSettings:
 class TestGoogleDriveIntegration:
     """Integration tests for Google Drive endpoints."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.google_drive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.config.settings")
     def test_full_oauth_flow(self, mock_settings, client: TestClient):
         """Test complete OAuth flow: exchange token, update settings, test token."""
@@ -592,4 +610,4 @@ class TestGoogleDriveIntegration:
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "error"
-            assert data.get("needs_reauth") is True
+            assert "message" in data

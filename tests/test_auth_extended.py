@@ -34,6 +34,15 @@ from starlette.responses import RedirectResponse
 class TestGetCurrentUserSessionValidation:
     """Tests for get_current_user with server-side session tokens."""
 
+    def test_tokenless_cookie_is_rejected_when_auth_enabled(self):
+        from app.auth import get_current_user
+
+        request = MagicMock()
+        request.session = {"user": {"id": "legacy-cookie-user"}}
+        with patch("app.auth.settings.auth_enabled", True):
+            assert get_current_user(request) is None
+        assert request.session == {}
+
     def test_valid_server_session_returns_user(self):
         """Valid _session_token should keep the user in session and return them."""
         from app.auth import get_current_user
@@ -77,7 +86,7 @@ class TestGetCurrentUserSessionValidation:
         assert "_session_token" not in mock_request.session
 
     def test_session_validation_exception_returns_user(self):
-        """If validate_session raises, the error is swallowed and the user is returned."""
+        """If validate_session raises, the signed session is rejected fail-closed."""
         from app.auth import get_current_user
 
         mock_request = MagicMock(spec=Request)
@@ -93,8 +102,8 @@ class TestGetCurrentUserSessionValidation:
 
             result = get_current_user(mock_request)
 
-        # Exception must be swallowed; the user is still returned
-        assert result == user
+        assert result is None
+        assert "user" not in mock_request.session
 
 
 # ---------------------------------------------------------------------------
@@ -1772,7 +1781,9 @@ class TestAuthAdminExtended:
 
         profile = UserProfile(user_id="adminuser", onboarding_completed=False)
         mock_db = MagicMock()
-        mock_db.query.return_value.filter.return_value.first.side_effect = [None, profile]
+        # The login path checks for an existing local user and admin before
+        # loading the profile used for the onboarding redirect.
+        mock_db.query.return_value.filter.return_value.first.side_effect = [None, None, profile]
 
         with (
             patch("app.auth.settings") as mock_settings,

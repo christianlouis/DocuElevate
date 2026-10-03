@@ -318,6 +318,10 @@ def get_current_user(request: Request):
     if session_user:
         # Validate server-side session if a session token is present
         session_token = request.session.get("_session_token")
+        if settings.auth_enabled and not session_token:
+            logger.debug("[AUTH] get_current_user: untracked multi-user session rejected")
+            request.session.pop("user", None)
+            return None
         if session_token:
             try:
                 from app.database import SessionLocal
@@ -334,7 +338,13 @@ def get_current_user(request: Request):
                 finally:
                     db.close()
             except Exception:
+                # A session cannot be trusted when its revocation record is
+                # unavailable; fail closed instead of falling back to the
+                # signed cookie alone.
                 logger.debug("[AUTH] get_current_user: session validation error", exc_info=True)
+                request.session.pop("user", None)
+                request.session.pop("_session_token", None)
+                return None
         logger.debug(
             "[AUTH] get_current_user: resolved from session (user=%s)",
             session_user.get("preferred_username") or session_user.get("email") or session_user.get("id"),
@@ -441,7 +451,9 @@ def require_login(func):
     async def wrapper(request: Request, *args, **kwargs):
         url_path = urlparse(str(request.url)).path
         # Check session auth first
-        if request.session.get("user"):
+        # Session cookies are signed but intentionally not authoritative: the
+        # server-side record is revocable and must be checked on every request.
+        if request.session.get("user") and get_current_user(request):
             logger.debug("[AUTH] require_login: session auth OK for %s", url_path)
             if inspect.iscoroutinefunction(func):
                 return await func(*args, request=request, **kwargs)
@@ -1250,7 +1262,17 @@ async def auth(request: Request, db: Session = Depends(get_db)):
     # ADMIN_USERNAME nor ADMIN_PASSWORD is set, allowing any request that omits
     # those form fields to be authenticated as an admin — creating a phantom
     # "None@local.docuelevate" admin profile with full privileges.
-    admin_configured = bool(settings.admin_username and settings.admin_password)
+    local_admin_exists = False
+    if settings.multi_user_enabled:
+        local_admin_exists = (
+            db.query(_LocalUser)
+            .filter(_LocalUser.is_admin.is_(True), _LocalUser.is_active.is_(True))
+            .first()
+            is not None
+        )
+    # Once database-backed local admins exist, the legacy global fallback must
+    # be disabled so a placeholder ADMIN_PASSWORD cannot remain a backdoor.
+    admin_configured = bool(settings.admin_username and settings.admin_password) and not local_admin_exists
     logger.debug(
         "[AUTH] Admin credential check: admin_configured=%s username_match=%s multi_user_enabled=%s",
         admin_configured,
@@ -1258,7 +1280,8 @@ async def auth(request: Request, db: Session = Depends(get_db)):
         settings.multi_user_enabled,
     )
     if (
-        settings.admin_username
+        admin_configured
+        and settings.admin_username
         and settings.admin_password
         and (username or "").lower() == settings.admin_username.lower()
         and password == settings.admin_password

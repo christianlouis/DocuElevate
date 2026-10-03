@@ -502,6 +502,9 @@ class AutomationHook(Base):
     __tablename__ = "automation_hooks"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Hooks are tenant/user scoped; a subscription must never receive events
+    # belonging to another authenticated principal.
+    owner_id = Column(String, nullable=False, index=True, default="")
     target_url = Column(String, nullable=False)  # URL to POST events to
     secret = Column(String, nullable=True)  # Optional HMAC-SHA256 signing secret
     events = Column(Text, nullable=False)  # JSON list of subscribed event names

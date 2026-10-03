@@ -10,7 +10,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_current_user, require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
@@ -25,7 +25,7 @@ router = APIRouter()
 
 def _require_admin(request: Request) -> dict:
     """Ensure the caller is an admin. Raises 403 otherwise."""
-    user = request.session.get("user")
+    user = get_current_user(request)
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
@@ -71,10 +71,10 @@ async def exchange_google_drive_token(
 
 
 @router.post("/google-drive/update-settings")
-@require_login
 async def update_google_drive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
     folder_id: Annotated[Optional[str], Form()] = None,

@@ -578,6 +578,15 @@ class TestSIEMForwarding:
 class TestAuditLogAPI:
     """Test /api/audit-logs REST endpoints."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.audit_logs import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     def test_list_audit_logs_empty(self, client):
         """GET /api/audit-logs returns empty list when no events exist."""
         resp = client.get("/api/audit-logs")

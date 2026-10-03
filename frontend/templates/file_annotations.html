@@ -829,10 +829,9 @@
 {% if current_user_role == 'owner' %}
 <script src="{{ url_for('static', path='js/sharing.js') }}" defer></script>
 {% endif %}
-<!-- ── EmbedPDF Viewer init ── -->
+<!-- ── Native PDF viewer ── -->
 {% if file and is_pdf and (processed_file_exists or original_file_exists) %}
-<script async type="module">
-  import EmbedPDF from 'https://cdn.jsdelivr.net/npm/@embedpdf/snippet@2/dist/embedpdf.js';
+<script>
 
   const viewerEl = document.getElementById('embedpdf-viewer');
   if (viewerEl) {
@@ -843,11 +842,7 @@
     const pdfUrl = '/api/files/' + fileId + '/preview?version=original';
     {% endif %}
 
-    const viewer = EmbedPDF.init({
-      type: 'container',
-      target: viewerEl,
-      src: pdfUrl,
-    });
+  const viewer = null;
 
     if (viewer) {
       viewer.registry.then(function (registry) {
@@ -927,6 +922,13 @@
       }).catch(function () {});
     }
   }
+  if (viewerEl) {
+    const frame = document.createElement('iframe');
+    frame.title = 'PDF document';
+    frame.style.cssText = 'width:100%;height:600px;border:0';
+    frame.src = pdfUrl;
+    viewerEl.replaceChildren(frame);
+  }
 </script>
 {% endif %}
 {% if multi_user_enabled and file and file.owner_id is none %}
@@ -942,4 +944,3 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 {% endif %}
 {% endblock %}
-

@@ -10,7 +10,7 @@
 
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,50 +25,15 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { useLocale, t } from "../i18n";
+import api from "../services/api";
 
 export default function LoginScreen() {
-  const { signIn, signInWithQR } = useAuth();
+  const { signIn } = useAuth();
   const router = useRouter();
   const [serverUrl, setServerUrl] = useState("https://app.docuelevate.org");
   const [loading, setLoading] = useState(false);
-  const [qrLoading, setQrLoading] = useState(false);
   // Subscribe to language changes so translated strings re-render.
   useLocale();
-
-  // Handle incoming deep links for QR login (docuelevate://qr-login?token=...&server=...)
-  const handleDeepLink = useCallback(
-    async (event: { url: string }) => {
-      try {
-        const url = new URL(event.url);
-        if (url.hostname === "qr-login" || url.pathname === "/qr-login") {
-          const token = url.searchParams.get("token");
-          const server = url.searchParams.get("server");
-          if (token && server) {
-            setQrLoading(true);
-            await signInWithQR(server, token);
-          }
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : t("login.qr_login_failed");
-        Alert.alert(t("login.qr_login_failed"), message);
-      } finally {
-        setQrLoading(false);
-      }
-    },
-    [signInWithQR]
-  );
-
-  useEffect(() => {
-    // Listen for incoming deep links
-    const subscription = Linking.addEventListener("url", handleDeepLink);
-
-    // Check if the app was opened via a deep link
-    Linking.getInitialURL().then((url) => {
-      if (url) handleDeepLink({ url });
-    });
-
-    return () => subscription.remove();
-  }, [handleDeepLink]);
 
   async function handleSignIn() {
     const url = serverUrl.trim();
@@ -127,7 +92,7 @@ export default function LoginScreen() {
         <Pressable
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleSignIn}
-          disabled={loading || qrLoading}
+          disabled={loading}
           accessibilityRole="button"
           accessibilityLabel={t("login.sign_in_sso")}
         >
@@ -145,19 +110,20 @@ export default function LoginScreen() {
         </View>
 
         <Pressable
-          style={[styles.qrButton, qrLoading && styles.buttonDisabled]}
+          style={styles.qrButton}
           onPress={() => {
-            router.push("/(auth)/qr-scanner");
+            const url = serverUrl.trim();
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+              Alert.alert(t("login.invalid_url"), t("login.invalid_url_msg"));
+              return;
+            }
+            void api.init(url).then(() => router.push("/(auth)/qr-scanner"));
           }}
-          disabled={loading || qrLoading}
+          disabled={loading}
           accessibilityRole="button"
           accessibilityLabel={t("login.scan_qr")}
         >
-          {qrLoading ? (
-            <ActivityIndicator color="#1e40af" />
-          ) : (
-            <Text style={styles.qrButtonText}>{t("login.scan_qr")}</Text>
-          )}
+          <Text style={styles.qrButtonText}>{t("login.scan_qr")}</Text>
         </Pressable>
 
         <Text style={styles.hint}>{t("login.hint")}</Text>

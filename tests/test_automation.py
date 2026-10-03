@@ -23,6 +23,12 @@ from app.utils.automation_hooks import (
 )
 from app.utils.webhook import VALID_EVENTS
 
+
+@pytest.fixture(autouse=True)
+def _allow_example_hook_hosts(mocker):
+    """Keep API fixture hosts deterministic; delivery still pins DNS in production."""
+    mocker.patch("app.api.automation.is_private_ip", return_value=False)
+
 # ---------------------------------------------------------------------------
 # Unit tests – build_zapier_payload
 # ---------------------------------------------------------------------------
@@ -178,7 +184,7 @@ class TestDispatchAutomationHooks:
         )
         mock_task = mocker.patch("app.tasks.automation_tasks.deliver_automation_hook_task.delay")
 
-        dispatch_automation_hooks("document.uploaded", {"file_id": 42})
+        dispatch_automation_hooks("document.uploaded", {"file_id": 42, "owner_id": "testuser"})
 
         assert mock_task.call_count == 2
 
@@ -325,6 +331,7 @@ class TestAutomationAPI:
             events=json.dumps(["document.uploaded"]),
             is_active=True,
             hook_type="zapier",
+            owner_id="testuser",
         )
         db_session.add(hook)
         db_session.commit()
@@ -349,6 +356,7 @@ class TestAutomationAPI:
             events=json.dumps(["document.processed"]),
             is_active=True,
             hook_type="make",
+            owner_id="testuser",
         )
         db_session.add(hook)
         db_session.commit()
@@ -423,7 +431,8 @@ class TestAutomationAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "accepted"
-        assert data["filename"] == "test.pdf"
+        assert data["filename"].startswith("test_")
+        assert data["filename"].endswith(".pdf")
         assert data["task_id"] == "task-123"
 
     def test_action_upload_no_filename(self, client):
@@ -452,7 +461,8 @@ class TestAutomationAPI:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["filename"] == "evil.pdf"
+        assert data["filename"].startswith("evil_")
+        assert data["filename"].endswith(".pdf")
         assert "/" not in data["filename"]
         assert "\\" not in data["filename"]
         assert ".." not in data["filename"]

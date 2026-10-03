@@ -135,7 +135,7 @@ SAMPLE_PAYLOADS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 
-def get_active_hooks_for_event(event: str) -> list[dict[str, Any]]:
+def get_active_hooks_for_event(event: str, owner_id: str | None = None) -> list[dict[str, Any]]:
     """Return all active automation hooks subscribed to *event*.
 
     Args:
@@ -147,7 +147,10 @@ def get_active_hooks_for_event(event: str) -> list[dict[str, Any]]:
     """
     db = SessionLocal()
     try:
-        hooks = db.query(AutomationHook).filter(AutomationHook.is_active.is_(True)).all()
+        query = db.query(AutomationHook).filter(AutomationHook.is_active.is_(True))
+        if owner_id is not None:
+            query = query.filter(AutomationHook.owner_id == owner_id)
+        hooks = query.all()
         result: list[dict[str, Any]] = []
         for hook in hooks:
             try:
@@ -161,6 +164,7 @@ def get_active_hooks_for_event(event: str) -> list[dict[str, Any]]:
                         "target_url": hook.target_url,
                         "secret": hook.secret,
                         "events": subscribed,
+                        "owner_id": hook.owner_id,
                     }
                 )
         return result
@@ -190,7 +194,15 @@ def dispatch_automation_hooks(event: str, data: dict[str, Any]) -> None:
         logger.warning("Ignoring unknown automation hook event: %s", event)
         return
 
-    hooks = get_active_hooks_for_event(event)
+    # Event payloads carry an owner_id for document/user events. Only that
+    # principal's subscriptions may receive the event.
+    owner_id = data.get("owner_id") or data.get("user_id")
+    # Do not fan out tenant-bearing events when the producer failed to attach
+    # an owner. An unscoped fallback would recreate the original leak.
+    if owner_id is None:
+        logger.warning("Ignoring automation event without owner scope: %s", event)
+        return
+    hooks = get_active_hooks_for_event(event, str(owner_id))
     if not hooks:
         logger.debug("No active automation hooks for event %s", event)
         return

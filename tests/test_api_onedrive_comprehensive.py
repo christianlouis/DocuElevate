@@ -97,7 +97,7 @@ class TestExchangeOneDriveToken:
             },
         )
 
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400  # Endpoint reports missing form fields explicitly
 
 
 @pytest.mark.unit
@@ -487,6 +487,15 @@ class TestSaveOneDriveSettings:
 class TestUpdateOneDriveSettings:
     """Tests for POST /onedrive/update-settings endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     @patch("app.config.settings")
     def test_update_settings_success(self, mock_settings, mock_get_token, client: TestClient):
@@ -560,10 +569,27 @@ class TestUpdateOneDriveSettings:
         # Should still update settings even if test fails
         assert response.status_code == 200
 
+    def test_update_settings_denies_non_admin(self, client: TestClient):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+        response = client.post("/api/onedrive/update-settings", data={"refresh_token": "token"})
+        assert response.status_code == 403
+
 
 @pytest.mark.unit
 class TestGetOneDriveFullConfig:
     """Tests for GET /onedrive/get-full-config endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
 
     @patch("app.config.settings")
     def test_get_full_config_success(self, mock_settings, client: TestClient):
@@ -610,10 +636,27 @@ class TestGetOneDriveFullConfig:
         # May return success or error depending on settings access
         assert "status" in data
 
+    def test_get_full_config_denies_non_admin(self, client: TestClient):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+        response = client.get("/api/onedrive/get-full-config")
+        assert response.status_code == 403
+
 
 @pytest.mark.unit
 class TestOneDriveIntegration:
     """Integration tests for OneDrive endpoints."""
+
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
 
     @patch("app.config.settings")
     def test_full_oauth_flow(self, mock_settings, client: TestClient):
