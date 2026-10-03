@@ -210,6 +210,15 @@ class TestDropboxSaveSettingsDbPersist:
 class TestGoogleDriveUpdateSettingsDbPersist:
     """Unit tests for update_google_drive_settings DB persistence."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.google_drive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.api.google_drive.settings")
     @patch("app.api.google_drive.notify_settings_updated")
     @patch("app.api.google_drive.save_setting_to_db")

@@ -123,12 +123,12 @@ No extra configuration is needed — just run `npx expo start` and scan the QR c
 As an alternative to SSO, users can log in by scanning a QR code displayed in the web UI:
 
 1. The authenticated web user navigates to **Profile → Security & Sessions → Log in on mobile via QR code**.
-2. A QR code is displayed containing a deep link: `docuelevate://qr-login?token=<challenge_token>&server=<server_url>`.
+2. A QR code is displayed containing an HTTPS challenge URL: `https://<server>/qr-login?token=<challenge_token>`.
 3. In the mobile app, the user taps **Scan QR Code to Login**, which opens the device camera.
-4. The app scans the QR code, extracts both the server URL and the challenge token, and calls `POST /api/qr-auth/claim`.
+4. The app scans the QR code, checks it matches the server origin selected during login, asks for confirmation, and calls `POST /api/qr-auth/claim`.
 5. An API token is issued and stored securely — no need to enter the server URL manually.
 
-> **Note:** The QR code already contains the server URL, so users do not need to type it in when using QR login.
+> **Note:** QR login requires an HTTPS server and an explicitly selected server origin; custom URL schemes are not accepted for challenge claims.
 
 ### Auto-generated Mobile Token
 

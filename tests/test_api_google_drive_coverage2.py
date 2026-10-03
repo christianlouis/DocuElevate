@@ -14,6 +14,15 @@ from fastapi.testclient import TestClient
 class TestUpdateSettingsExceptionHandler:
     """Cover lines 125-127: update_google_drive_settings outer exception."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.google_drive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     def test_update_settings_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in update_google_drive_settings."""
         with patch("app.api.google_drive.save_setting_to_db", side_effect=Exception("DB crash")):

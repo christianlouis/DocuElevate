@@ -127,15 +127,22 @@ def _wipe_database(db: Session) -> dict[str, int]:
         A dict mapping table name → number of rows deleted.
     """
     from app.models import (
+        ApiToken,
         AuditLog,
+        AutomationHook,
         BackupRecord,
+        DocumentAnnotation,
+        DocumentComment,
         DocumentMetadata,
         FileProcessingStep,
         FileRecord,
         InAppNotification,
+        LocalUser,
+        MobileDevice,
         PrivacyDecisionAudit,
         PrivacyRuleModel,
         ProcessingLog,
+        QRLoginChallenge,
         SavedSearch,
         SettingsAuditLog,
         SharedLink,
@@ -143,10 +150,14 @@ def _wipe_database(db: Session) -> dict[str, int]:
         UserIntegration,
         UserNotificationPreference,
         UserNotificationTarget,
+        UserProfile,
+        UserSession,
     )
 
     # Order matters: delete children before parents to respect FK constraints.
     tables_to_wipe: list[tuple[str, type]] = [
+        ("document_annotations", DocumentAnnotation),
+        ("document_comments", DocumentComment),
         ("file_processing_steps", FileProcessingStep),
         ("processing_logs", ProcessingLog),
         ("shared_links", SharedLink),
@@ -163,6 +174,15 @@ def _wipe_database(db: Session) -> dict[str, int]:
         ("document_metadata", DocumentMetadata),
         ("privacy_rules", PrivacyRuleModel),
         ("files", FileRecord),
+        # A factory reset must invalidate every identity and credential, not
+        # merely remove document rows that those identities could access.
+        ("automation_hooks", AutomationHook),
+        ("qr_login_challenges", QRLoginChallenge),
+        ("mobile_devices", MobileDevice),
+        ("user_sessions", UserSession),
+        ("api_tokens", ApiToken),
+        ("user_profiles", UserProfile),
+        ("local_users", LocalUser),
     ]
 
     result: dict[str, int] = {}

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user_id, require_login
 from app.database import get_db
 from app.models import (
+    FILE_SHARE_ROLE_EDITOR,
     FILE_SHARE_ROLE_VIEWER,
     DocumentAnnotation,
     DocumentComment,
@@ -439,6 +440,11 @@ def resolve_comment(
     Returns:
         The updated comment object.
     """
+    owner_id = get_current_owner_id(request)
+    file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first()
+    if not file_record or not has_file_role(file_record, owner_id, db, minimum_role=FILE_SHARE_ROLE_EDITOR):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found")
+
     comment = (
         db.query(DocumentComment).filter(DocumentComment.id == comment_id, DocumentComment.file_id == file_id).first()
     )

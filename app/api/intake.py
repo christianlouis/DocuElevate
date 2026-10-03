@@ -112,6 +112,14 @@ async def intake_document(
     """Store a document atomically and queue the normal ingestion pipeline."""
     principal_id, owner_id = _authenticate_intake(request, x_docuelevate_intake_secret)
 
+    if settings.multi_user_enabled and owner_id:
+        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
+
+        try:
+            check_upload_allowed(db, owner_id, get_user_tier_id(db, owner_id))
+        except QuotaExceeded as exc:
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
+
     existing = (
         db.query(DocumentIntake)
         .filter(
