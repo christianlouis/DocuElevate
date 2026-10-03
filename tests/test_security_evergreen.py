@@ -1,8 +1,8 @@
 """Regression coverage for the evergreen global-integration backport."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
