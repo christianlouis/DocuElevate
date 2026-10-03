@@ -831,18 +831,33 @@
 {% endif %}
 <!-- ── Native PDF viewer ── -->
 {% if file and is_pdf and (processed_file_exists or original_file_exists) %}
-<script>
+<script async type="module">
+  // EmbedPDF 2.15.1 is vendored under static/vendor and served by this app.
+  // Keeping the module local prevents an unpinned third-party script from
+  // executing with the document's privileges.
+  import EmbedPDF from "{{ url_for('static', path='vendor/embedpdf/2.15.1/embedpdf.js') }}";
 
   const viewerEl = document.getElementById('embedpdf-viewer');
+  let pdfUrl = '';
   if (viewerEl) {
     const fileId = {{ file.id | tojson }};
     {% if processed_file_exists %}
-    const pdfUrl = '/api/files/' + fileId + '/preview?version=processed';
+    pdfUrl = '/api/files/' + fileId + '/preview?version=processed';
     {% else %}
-    const pdfUrl = '/api/files/' + fileId + '/preview?version=original';
+    pdfUrl = '/api/files/' + fileId + '/preview?version=original';
     {% endif %}
 
-  const viewer = null;
+    const viewer = EmbedPDF.init({
+      type: 'container',
+      target: viewerEl,
+      src: pdfUrl,
+      worker: true,
+      wasmUrl: "{{ url_for('static', path='vendor/embedpdf/2.15.1/pdfium.wasm') }}",
+      // Keep all viewer resources same-origin; use system font fallbacks.
+      fontFallback: null,
+      fonts: { ui: null, signature: null },
+      stamp: { manifests: [] },
+    });
 
     if (viewer) {
       viewer.registry.then(function (registry) {
@@ -921,13 +936,6 @@
         }
       }).catch(function () {});
     }
-  }
-  if (viewerEl) {
-    const frame = document.createElement('iframe');
-    frame.title = 'PDF document';
-    frame.style.cssText = 'width:100%;height:600px;border:0';
-    frame.src = pdfUrl;
-    viewerEl.replaceChildren(frame);
   }
 </script>
 {% endif %}

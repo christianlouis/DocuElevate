@@ -34,7 +34,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import AutomationHook
-from app.utils.automation_hooks import SAMPLE_PAYLOADS
+from app.utils.automation_hooks import SAMPLE_PAYLOADS, get_event_owner_id
 from app.utils.filename_utils import sanitize_filename
 from app.utils.network import is_private_ip
 from app.utils.webhook import VALID_EVENTS
@@ -197,7 +197,7 @@ def subscribe_hook(body: HookSubscribe, db: DbSession, user: AuthUser) -> dict[s
     """
     _validate_events(body.events)
     _validate_target_url(body.target_url)
-    owner_id = user.get("preferred_username") or user.get("email") or user.get("id")
+    owner_id = get_event_owner_id(user)
     if not owner_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
@@ -234,7 +234,11 @@ def unsubscribe_hook(hook_id: int, db: DbSession, user: AuthUser) -> None:
 
     Zapier calls this endpoint when a Zap is turned off or deleted.
     """
-    owner_id = user.get("preferred_username") or user.get("email") or user.get("id")
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
     hook = (
         db.query(AutomationHook).filter(AutomationHook.id == hook_id, AutomationHook.owner_id == str(owner_id)).first()
     )
@@ -254,7 +258,11 @@ def unsubscribe_hook(hook_id: int, db: DbSession, user: AuthUser) -> None:
 @router.get("/hooks", summary="List automation hook subscriptions")
 def list_hooks(db: DbSession, user: AuthUser) -> list[dict[str, Any]]:
     """Return all active automation hook subscriptions."""
-    owner_id = user.get("preferred_username") or user.get("email") or user.get("id")
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
     hooks = db.query(AutomationHook).filter(AutomationHook.owner_id == str(owner_id)).order_by(AutomationHook.id).all()
     return [_hook_to_response(h) for h in hooks]
 
@@ -322,7 +330,11 @@ def action_upload(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
     safe_filename = sanitize_filename(basename)
 
-    owner_id = user.get("preferred_username") or user.get("email") or user.get("id", "automation")
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
     if settings.multi_user_enabled:
         from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
 

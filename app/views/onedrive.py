@@ -4,9 +4,10 @@ OneDrive integration views for setup and OAuth callback.
 
 import json
 
-from fastapi import Query, Request
+from fastapi import HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.models import UserIntegration
 from app.utils.user_scope import get_current_owner_id
 from app.views.base import APIRouter, Depends, get_db, require_login, settings, templates
@@ -58,6 +59,7 @@ async def onedrive_setup_page(
                     "integration_type": integration.integration_type,
                     "folder_path": folder_path,
                     "has_system_credentials": has_system_credentials,
+                    "server_credentials_configured": has_system_credentials,
                     "client_id": bool(settings.onedrive_client_id) if has_system_credentials else False,
                     "client_id_value": settings.onedrive_client_id or "" if has_system_credentials else "",
                     "client_secret": bool(settings.onedrive_client_secret) if has_system_credentials else False,
@@ -67,8 +69,12 @@ async def onedrive_setup_page(
                     "refresh_token_value": "",
                 },
             )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
 
     # ── Admin / global mode ──────────────────────────────────────────────────
+    user = get_current_user(request)
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     is_configured = bool(
         settings.onedrive_client_id and settings.onedrive_client_secret and settings.onedrive_refresh_token
     )
@@ -80,13 +86,16 @@ async def onedrive_setup_page(
             "user_mode": False,
             "is_configured": is_configured,
             "has_system_credentials": bool(settings.onedrive_client_id and settings.onedrive_client_secret),
+            "server_credentials_configured": bool(settings.onedrive_client_id and settings.onedrive_client_secret),
             "client_id": bool(settings.onedrive_client_id),
             "client_id_value": settings.onedrive_client_id or "",
             "client_secret": bool(settings.onedrive_client_secret),
             "client_secret_value": "",
             "tenant_id": settings.onedrive_tenant_id,
             "refresh_token": bool(settings.onedrive_refresh_token),
-            "refresh_token_value": settings.onedrive_refresh_token if settings.onedrive_refresh_token else "",
+            # Never render the global bearer credential into HTML. The boolean
+            # lets the admin see whether configuration exists without exposing it.
+            "refresh_token_value": "",
             "folder_path": settings.onedrive_folder_path or "Documents/Uploads",
             "integration_id": integration_id,
             "integration_name": None,
@@ -120,5 +129,6 @@ async def onedrive_callback(request: Request, code: str = None, error: str = Non
             "client_id_value": settings.onedrive_client_id or "",
             "client_secret_value": "",
             "tenant_id": settings.onedrive_tenant_id or "common",
+            "server_credentials_configured": bool(settings.onedrive_client_id and settings.onedrive_client_secret),
         },
     )

@@ -32,6 +32,7 @@
     "server_url_required_msg": "Please enter the URL of your DocuElevate server.",
     "invalid_url": "Invalid URL",
     "invalid_url_msg": "The server URL must start with http:// or https://",
+    "https_only_msg": "Use a valid HTTPS URL for your DocuElevate server.",
     "sign_in_failed": "Sign-in failed",
     "qr_login_failed": "QR Login Failed"
   },

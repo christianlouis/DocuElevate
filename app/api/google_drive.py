@@ -164,6 +164,7 @@ async def test_google_drive_token(request: Request):
                 return {
                     "status": "error",
                     "message": "Google Drive OAuth credentials are not fully configured",
+                    "needs_reauth": True,
                 }
 
             try:

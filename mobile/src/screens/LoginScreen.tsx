@@ -35,14 +35,25 @@ export default function LoginScreen() {
   // Subscribe to language changes so translated strings re-render.
   useLocale();
 
+  function validatedServerUrl(): string | null {
+    const value = serverUrl.trim();
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "https:" || !parsed.hostname) return null;
+      return parsed.origin;
+    } catch {
+      return null;
+    }
+  }
+
   async function handleSignIn() {
-    const url = serverUrl.trim();
-    if (!url) {
+    if (!serverUrl.trim()) {
       Alert.alert(t("login.server_url_required"), t("login.server_url_required_msg"));
       return;
     }
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      Alert.alert(t("login.invalid_url"), t("login.invalid_url_msg"));
+    const url = validatedServerUrl();
+    if (!url) {
+      Alert.alert(t("login.invalid_url"), t("login.https_only_msg"));
       return;
     }
 
@@ -112,9 +123,9 @@ export default function LoginScreen() {
         <Pressable
           style={styles.qrButton}
           onPress={() => {
-            const url = serverUrl.trim();
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-              Alert.alert(t("login.invalid_url"), t("login.invalid_url_msg"));
+            const url = validatedServerUrl();
+            if (!url) {
+              Alert.alert(t("login.invalid_url"), t("login.https_only_msg"));
               return;
             }
             void api.init(url).then(() => router.push("/(auth)/qr-scanner"));

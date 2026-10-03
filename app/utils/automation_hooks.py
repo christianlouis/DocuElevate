@@ -23,6 +23,15 @@ from app.utils.webhook import VALID_EVENTS
 logger = logging.getLogger(__name__)
 
 
+def get_event_owner_id(user: dict[str, Any]) -> str | None:
+    """Return the stable identity used to scope automation events.
+
+    ``sub`` is the identity-provider subject and must win over mutable display
+    claims such as email or preferred_username.
+    """
+    return user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+
+
 # ---------------------------------------------------------------------------
 # Payload helpers
 # ---------------------------------------------------------------------------
@@ -96,6 +105,7 @@ SAMPLE_PAYLOADS: dict[str, dict[str, Any]] = {
         "assignment_source": "routing_rule",
         "routing_rule_id": 3,
         "reason": "Matched pre-processing routing rule 'Invoices'",
+        "owner_id": "user@example.com",
     },
     "document.metadata_updated": {
         "id": "evt_sample0005",
@@ -104,6 +114,7 @@ SAMPLE_PAYLOADS: dict[str, dict[str, Any]] = {
         "document_id": 42,
         "filename": "invoice_2024.pdf",
         "updated_fields": ["tags", "document_type"],
+        "owner_id": "user@example.com",
     },
     "user.signup": {
         "id": "evt_sample0006",

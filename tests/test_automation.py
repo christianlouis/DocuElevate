@@ -20,6 +20,7 @@ from app.utils.automation_hooks import (
     build_zapier_payload,
     dispatch_automation_hooks,
     get_active_hooks_for_event,
+    get_event_owner_id,
 )
 from app.utils.webhook import VALID_EVENTS
 
@@ -75,6 +76,12 @@ class TestBuildZapierPayload:
         """Each call should produce a unique ID."""
         ids = {build_zapier_payload("document.uploaded", {})["id"] for _ in range(50)}
         assert len(ids) == 50
+
+    def test_event_owner_prefers_provider_subject(self):
+        """Mutable profile claims must not change a hook tenant's identity."""
+        assert get_event_owner_id({"sub": "stable", "email": "changed@example.com", "id": "legacy"}) == "stable"
+        assert get_event_owner_id({"email": "user@example.com"}) == "user@example.com"
+        assert get_event_owner_id({}) is None
 
 
 # ---------------------------------------------------------------------------

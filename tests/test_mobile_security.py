@@ -17,3 +17,9 @@ def test_qr_login_requires_persisted_server_origin():
     assert "!configuredServer" in source
     assert "new URL(configuredServer).origin !== url.origin" in source
     assert "Confirm QR Login" in source
+
+
+def test_qr_challenges_require_https_origin():
+    source = (ROOT / "app/api/qr_auth.py").read_text()
+    assert 'urlparse(base_url).scheme != "https"' in source
+    assert "QR login requires an HTTPS server origin" in source

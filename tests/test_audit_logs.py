@@ -595,6 +595,18 @@ class TestAuditLogAPI:
         assert data["items"] == []
         assert data["total"] == 0
 
+    def test_non_admin_cannot_list_audit_logs(self, client):
+        """The endpoint must enforce admin authorization, not rely on callers."""
+        from app.api.audit_logs import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+        try:
+            response = client.get("/api/audit-logs")
+        finally:
+            fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        assert response.status_code == 403
+
     def test_list_audit_logs_with_data(self, client, db_session):
         """GET /api/audit-logs returns recorded events."""
         entry = AuditLog(user="tester", action="test.action", severity="info")

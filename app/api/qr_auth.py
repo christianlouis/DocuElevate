@@ -24,6 +24,7 @@ import io
 import logging
 from datetime import datetime
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 import segno
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -157,12 +158,16 @@ async def create_challenge(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="QR login feature is currently disabled. Please contact your administrator to enable it.",
         )
-    ip = get_client_ip(request)
-    challenge = create_qr_challenge(db, owner_id, ip_address=ip)
-
     # The QR payload is a JSON-like string with enough info for the mobile
     # app to know the server URL and challenge token.
     base_url = str(request.base_url).rstrip("/")
+    if urlparse(base_url).scheme != "https":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="QR login requires an HTTPS server origin",
+        )
+    ip = get_client_ip(request)
+    challenge = create_qr_challenge(db, owner_id, ip_address=ip)
     # Use an HTTPS payload so the bearer challenge is not routed through a
     # hijackable custom URL scheme. The mobile scanner requires explicit user
     # confirmation before submitting this one-time value.

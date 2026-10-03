@@ -1048,6 +1048,7 @@ def bulk_tag_files(request: Request, body: BulkTagRequest, db: DbSession):
                         "filename": file_record.original_filename,
                         "updated_fields": ["tags"],
                         "mode": body.mode,
+                        "owner_id": file_record.owner_id,
                     },
                 )
         except Exception as webhook_exc:
@@ -2335,6 +2336,7 @@ def assign_pipeline_to_file(
                 "assignment_source": file_record.pipeline_assignment_source,
                 "routing_rule_id": file_record.pipeline_routing_rule_id,
                 "reason": file_record.pipeline_assignment_reason,
+                "owner_id": file_record.owner_id,
             },
         )
     except Exception as webhook_exc:

@@ -133,6 +133,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const tenantId = sessionStorage.getItem('onedrive_tenant_id') || "{{ tenant_id }}" || "common";
   const folderPath = sessionStorage.getItem('onedrive_folder_path') || "";
   const integrationId = sessionStorage.getItem('oauth_integration_id');
+  const serverCredentialsConfigured = {{ 'true' if server_credentials_configured else 'false' }};
 
   // In user mode, point the "Return to Setup" link back to the wizard with integration_id
   if (integrationId) {
@@ -146,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Automatically exchange the code for a refresh token
   if (code) {
-    if (!clientId || !clientSecret) {
+    if (!clientId || (!clientSecret && !(serverCredentialsConfigured && !integrationId))) {
       showError("Missing Client ID or Client Secret. Please go back to the setup page and try again.");
       return;
     }

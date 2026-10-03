@@ -14,8 +14,10 @@ class TestOnedriveViews:
 
     def test_onedrive_setup_page(self, client):
         """Test the OneDrive setup page."""
-        response = client.get("/onedrive-setup")
+        with patch("app.views.onedrive.get_current_user", return_value={"is_admin": True}):
+            response = client.get("/onedrive-setup")
         assert response.status_code == 200
+        assert "const serverCredentialsConfigured" in response.text
 
     def test_onedrive_callback_no_code(self, client):
         """Test the OneDrive OAuth callback without code."""
@@ -35,14 +37,12 @@ class TestOnedriveViews:
     def test_onedrive_setup_page_with_integration_id(self, client):
         """Test the OneDrive setup page accepts integration_id query param."""
         response = client.get("/onedrive-setup?integration_id=77")
-        assert response.status_code == 200
-        # The template should store the integration_id for per-user OAuth flow
-        assert b"oauth_integration_id" in response.content
-        assert b"77" in response.content
+        assert response.status_code == 404
 
     def test_onedrive_setup_page_without_integration_id(self, client):
         """Test the OneDrive setup page works without integration_id (global flow)."""
-        response = client.get("/onedrive-setup")
+        with patch("app.views.onedrive.get_current_user", return_value={"is_admin": True}):
+            response = client.get("/onedrive-setup")
         assert response.status_code == 200
         body = response.text
         assert "oauth_integration_id" in body
@@ -115,13 +115,11 @@ class TestOnedriveViews:
         assert b"Back to Integrations" in response.content
 
     def test_onedrive_setup_user_mode_integration_not_found(self, client, db_session):
-        """Test user-mode falls back to admin mode when integration not owned by user."""
+        """An unknown or foreign integration cannot fall back to global settings."""
         with patch("app.views.onedrive.get_current_owner_id", return_value="other_user@example.com"):
             response = client.get("/onedrive-setup?integration_id=999999")
 
-        assert response.status_code == 200
-        # Falls back to admin mode (no "Back to Integrations" link)
-        assert b"OneDrive Integration Setup" in response.content
+        assert response.status_code == 404
 
     def test_onedrive_setup_user_mode_valid_config(self, client, db_session):
         """Test user-mode correctly loads folder path from integration config."""

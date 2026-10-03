@@ -6,7 +6,7 @@ Target: Bring coverage from 9.45% to 70%+
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 from fastapi import HTTPException
@@ -175,19 +175,20 @@ class TestTestGoogleDriveToken:
         assert data["auth_type"] == "oauth"
         assert "test@example.com" in data["message"]
 
-    @patch("app.config.settings")
+    @patch("app.api.google_drive.settings")
     def test_test_token_oauth_not_configured(self, mock_settings, client: TestClient):
         """Test when OAuth is enabled but credentials are not configured."""
         # Create a mock settings object with proper attribute access
-        mock_settings_obj = Mock()
-        mock_settings_obj.google_drive_use_oauth = True
-        mock_settings_obj.google_drive_client_id = None
-        mock_settings_obj.google_drive_client_secret = None
-        mock_settings_obj.google_drive_refresh_token = None
+        mock_settings.google_drive_use_oauth = True
+        mock_settings.google_drive_client_id = None
+        mock_settings.google_drive_client_secret = None
+        mock_settings.google_drive_refresh_token = None
 
-        # Skip this test due to complex mock interactions
-        # The actual functionality is tested in integration tests
-        pytest.skip("Complex mock interactions - covered by integration tests")
+        response = client.get("/api/google-drive/test-token")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "error"
+        assert data["needs_reauth"] is True
 
     @patch("app.tasks.upload_to_google_drive.get_drive_service_oauth")
     @patch("app.config.settings")

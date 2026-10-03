@@ -310,6 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const systemClientId = {{ (client_id_value or '') | tojson }};
   const systemClientSecret = {{ (client_secret_value or '') | tojson }};
   const systemTenantId = {{ (tenant_id or 'common') | tojson }};
+  const serverCredentialsConfigured = {{ 'true' if server_credentials_configured else 'false' }};
 
   // Store integration_id if provided (for per-user OAuth flow)
   const integrationId = "{{ integration_id or '' }}";
@@ -397,14 +398,14 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    if (!clientSecret) {
+    if (!clientSecret && !(serverCredentialsConfigured && !userMode)) {
       showModal('error', 'Validation Error', 'Please enter your Client Secret');
       return;
     }
 
     // Save all entered values to session storage temporarily
     sessionStorage.setItem('onedrive_client_id', clientId);
-    sessionStorage.setItem('onedrive_client_secret', clientSecret);
+    if (clientSecret) sessionStorage.setItem('onedrive_client_secret', clientSecret);
     sessionStorage.setItem('onedrive_tenant_id', tenantId);
     if (useSystemCreds) {
       sessionStorage.setItem('onedrive_use_system_creds', 'true');

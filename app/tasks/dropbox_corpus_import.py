@@ -739,6 +739,7 @@ def _run_dropbox_corpus_import(
             "backfill_queue_high_watermark",
             settings.corpus_backfill_queue_high_watermark,
             minimum=1,
+            maximum=settings.corpus_backfill_queue_high_watermark,
         )
         queue_depth = _pending_queue_depth(exclude_current_delivery=True)
         if queue_depth is not None and queue_depth >= high_watermark:
