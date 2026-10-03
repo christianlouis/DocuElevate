@@ -102,3 +102,20 @@ class ApplicationSettings(Base):
     value = Column(String, nullable=True)  # Setting value (stored as string, converted as needed)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class EvergreenMobileToken(Base):
+    """Hashed native-client token and the authenticated user's profile snapshot."""
+
+    __tablename__ = "evergreen_mobile_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    email = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)
+    avatar_url = Column(String, nullable=True)
+    is_admin = Column(Boolean, nullable=False, default=False)
+    preferred_language = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True, index=True)

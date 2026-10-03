@@ -12,6 +12,7 @@ from app.api.dropbox import router as dropbox_router
 from app.api.files import router as files_router
 from app.api.google_drive import router as google_drive_router
 from app.api.logs import router as logs_router
+from app.api.mobile import router as mobile_router
 from app.api.onedrive import router as onedrive_router
 from app.api.openai import router as openai_router
 from app.api.process import router as process_router
@@ -38,5 +39,6 @@ router.include_router(openai_router)
 router.include_router(azure_router)
 router.include_router(google_drive_router)
 router.include_router(logs_router)
+router.include_router(mobile_router)
 router.include_router(settings_router)
 router.include_router(url_upload_router)

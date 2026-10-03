@@ -33,6 +33,10 @@
         <div class="mb-8" id="local-auth">
             <h2 class="text-lg font-semibold mb-4 text-gray-700">Sign in with username</h2>
             <form method="POST" action="/auth" class="space-y-4">
+                {% if mobile and mobile_redirect_uri %}
+                <input type="hidden" name="mobile" value="1">
+                <input type="hidden" name="redirect_uri" value="{{ mobile_redirect_uri }}">
+                {% endif %}
                 <div>
                     <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
                     <input type="text" id="username" name="username" required
@@ -63,7 +67,7 @@
         </div>
 
         <div class="mt-6 grid grid-cols-1 gap-3">
-            <a href="/oauth-login"
+            <a href="/oauth-login{% if mobile and mobile_redirect_uri %}?mobile=1&amp;redirect_uri={{ mobile_redirect_uri|urlencode }}{% endif %}"
                class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 <span class="sr-only">Sign in with SSO</span>
                 <i class="fas fa-lock mr-2"></i>

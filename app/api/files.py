@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import mobile_or_web_login, require_login
 from app.config import settings
 from app.database import get_db
 from app.models import FileRecord, ProcessingLog
@@ -38,7 +38,7 @@ def get_limiter():
 
 
 @router.get("/files")
-@require_login
+@mobile_or_web_login
 def list_files_api(
     request: Request,
     db: DbSession,
@@ -153,7 +153,7 @@ def _get_file_processing_status(db: Session, file_id: int) -> dict:
 
 
 @router.get("/files/{file_id}")
-@require_login
+@mobile_or_web_login
 def get_file_details(request: Request, file_id: int, db: DbSession):
     """
     Get detailed information about a specific file including processing history.
@@ -911,7 +911,7 @@ def download_file(
 
 
 @router.post("/ui-upload")
-@require_login
+@mobile_or_web_login
 async def ui_upload(request: Request, file: UploadFile = File(...)):
     """Endpoint to accept a user-uploaded file and enqueue it for processing."""
     workdir = settings.workdir
