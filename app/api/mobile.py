@@ -4,6 +4,7 @@ import hashlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.concurrency import run_in_threadpool
 
 from app.auth import mobile_user_or_401
 from app.database import SessionLocal
@@ -15,7 +16,7 @@ router = APIRouter()
 @router.get("/mobile/whoami")
 async def mobile_whoami(request: Request):
     """Native profile shape; bearer access is limited to this identity route."""
-    user = mobile_user_or_401(request)
+    user = await run_in_threadpool(mobile_user_or_401, request)
     return {
         "id": user.get("id") or user.get("sub"),
         "owner_id": user.get("id") or user.get("sub"),
@@ -29,7 +30,7 @@ async def mobile_whoami(request: Request):
 
 @router.post("/i18n/language")
 async def set_language(request: Request):
-    user = mobile_user_or_401(request)
+    user = await run_in_threadpool(mobile_user_or_401, request)
     try:
         payload = await request.json()
     except ValueError as exc:
@@ -38,6 +39,10 @@ async def set_language(request: Request):
     if not isinstance(language, str) or len(language) > 16 or not language.strip():
         raise HTTPException(status_code=400, detail="Invalid language")
     language = language.strip()
+    return await run_in_threadpool(_save_language, request, user, language)
+
+
+def _save_language(request: Request, user: dict, language: str):
     db = SessionLocal()
     try:
         token = request.headers.get("authorization", "")[7:].strip()
@@ -62,11 +67,15 @@ async def set_language(request: Request):
 
 @router.post("/auth/mobile/revoke")
 async def revoke_mobile_token(request: Request):
-    mobile_user_or_401(request)
+    await run_in_threadpool(mobile_user_or_401, request)
     header = request.headers.get("authorization", "")
     token = header[7:].strip() if header.lower().startswith("bearer ") else ""
     if not token:
         raise HTTPException(status_code=400, detail="Bearer token required")
+    return await run_in_threadpool(_revoke_token, token)
+
+
+def _revoke_token(token: str):
     db = SessionLocal()
     try:
         record = (

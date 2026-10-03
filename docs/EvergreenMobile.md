@@ -11,6 +11,10 @@ opaque bearer token. The database stores only its SHA-256 hash. Tokens expire
 after 30 days and can be revoked with `POST /api/auth/mobile/revoke`; expired,
 revoked, or unknown tokens receive JSON 401 responses. Token issuance failures
 return `error=mobile_token_failed` to the validated native callback.
+OAuth callback destinations are bound to the provider's generated state, so
+overlapping web and native logins cannot consume each other's destination.
+Pending native destinations expire after ten minutes and are bounded to eight
+entries per browser session.
 
 Bearer access is deliberately limited to identity, language preference, file
 list/detail, and the existing UI upload route. Signed-in browser sessions retain

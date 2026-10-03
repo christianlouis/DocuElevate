@@ -2,14 +2,16 @@ import hashlib
 import inspect
 import pathlib
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, RedirectResponse
 
 from app.config import settings
@@ -27,6 +29,8 @@ templates = Jinja2Templates(directory=str(templates_dir))
 # Configure OAuth provider if credentials are provided
 OAUTH_CONFIGURED = False
 OAUTH_PROVIDER_NAME = "Single Sign-On"
+_MOBILE_OAUTH_STATE_LIMIT = 8
+_MOBILE_OAUTH_STATE_TTL = 600
 
 if AUTH_ENABLED and settings.authentik_client_id and settings.authentik_client_secret:
     oauth.register(
@@ -65,6 +69,31 @@ def validate_mobile_redirect_uri(value: str | None) -> str | None:
     except ValueError:
         return None
     return None
+
+
+def _store_mobile_oauth_state(request: Request, state: str, redirect_uri: str) -> None:
+    now = time.time()
+    states = request.session.get("mobile_oauth_redirects")
+    if not isinstance(states, dict):
+        states = {}
+    states = {key: value for key, value in states.items() if isinstance(value, dict) and value.get("expires", 0) > now}
+    states[state] = {"redirect_uri": redirect_uri, "expires": now + _MOBILE_OAUTH_STATE_TTL}
+    if len(states) > _MOBILE_OAUTH_STATE_LIMIT:
+        states = dict(sorted(states.items(), key=lambda item: item[1]["expires"])[-_MOBILE_OAUTH_STATE_LIMIT:])
+    request.session["mobile_oauth_redirects"] = states
+
+
+def _pop_mobile_oauth_state(request: Request, state: str | None) -> str | None:
+    if not state:
+        return None
+    states = request.session.get("mobile_oauth_redirects")
+    if not isinstance(states, dict):
+        return None
+    entry = states.pop(state, None)
+    request.session["mobile_oauth_redirects"] = states
+    if not isinstance(entry, dict) or entry.get("expires", 0) <= time.time():
+        return None
+    return validate_mobile_redirect_uri(entry.get("redirect_uri"))
 
 
 def _profile_from_user(user: dict) -> dict:
@@ -144,21 +173,17 @@ def mobile_or_web_login(func):
     @wraps(func)
     async def wrapper(request: Request, *args, **kwargs):
         if request.session.get("user") or not AUTH_ENABLED:
-            return (
-                await func(request, *args, **kwargs)
-                if inspect.iscoroutinefunction(func)
-                else func(request, *args, **kwargs)
-            )
+            if inspect.iscoroutinefunction(func):
+                return await func(request, *args, **kwargs)
+            return await run_in_threadpool(func, request, *args, **kwargs)
         auth_header = request.headers.get("authorization", "")
         token = auth_header[7:].strip() if auth_header.lower().startswith("bearer ") else ""
-        user = _mobile_user_from_token(token)
+        user = await run_in_threadpool(_mobile_user_from_token, token)
         if user:
             request.state.mobile_user = user
-            return (
-                await func(request, *args, **kwargs)
-                if inspect.iscoroutinefunction(func)
-                else func(request, *args, **kwargs)
-            )
+            if inspect.iscoroutinefunction(func):
+                return await func(request, *args, **kwargs)
+            return await run_in_threadpool(func, request, *args, **kwargs)
         if request.url.path.startswith("/api/"):
             return JSONResponse({"detail": "Not authenticated"}, status_code=401)
         request.session["redirect_after_login"] = str(request.url)
@@ -244,13 +269,20 @@ async def oauth_login(request: Request):
     if request.query_params.get("mobile") == "1" or mobile_redirect_uri:
         if not mobile_redirect_uri:
             return JSONResponse({"detail": "Invalid mobile callback"}, status_code=400)
-        request.session["mobile_redirect_uri"] = mobile_redirect_uri
+        request.session.pop("mobile_redirect_uri", None)
     redirect_uri = request.url_for("oauth_callback")
-    return await oauth.authentik.authorize_redirect(request, redirect_uri)
+    response = await oauth.authentik.authorize_redirect(request, redirect_uri)
+    if mobile_redirect_uri:
+        state = parse_qs(urlsplit(response.headers["location"]).query).get("state", [None])[0]
+        if state:
+            _store_mobile_oauth_state(request, state, mobile_redirect_uri)
+    return response
 
 
 async def oauth_callback(request: Request):
     """Handle OAuth callback from provider"""
+    state = request.query_params.get("state")
+    mobile_redirect_uri = _pop_mobile_oauth_state(request, state)
     try:
         token = await oauth.authentik.authorize_access_token(request)
         userinfo = token.get("userinfo")
@@ -281,10 +313,9 @@ async def oauth_callback(request: Request):
 
         request.session["user"] = user_data
 
-        mobile_redirect_uri = validate_mobile_redirect_uri(request.session.pop("mobile_redirect_uri", None))
         if mobile_redirect_uri:
             try:
-                token_value = issue_mobile_token(user_data)
+                token_value = await run_in_threadpool(issue_mobile_token, user_data)
             except Exception:
                 return RedirectResponse(url=f"{mobile_redirect_uri}?error=mobile_token_failed", status_code=302)
             return RedirectResponse(url=f"{mobile_redirect_uri}?token={token_value}", status_code=302)
@@ -321,7 +352,7 @@ async def auth(request: Request):
             mobile_redirect_uri = validate_mobile_redirect_uri(form_data.get("redirect_uri"))
         if mobile_redirect_uri:
             try:
-                token_value = issue_mobile_token(request.session["user"])
+                token_value = await run_in_threadpool(issue_mobile_token, request.session["user"])
             except Exception:
                 return RedirectResponse(url=f"{mobile_redirect_uri}?error=mobile_token_failed", status_code=302)
             return RedirectResponse(url=f"{mobile_redirect_uri}?token={token_value}", status_code=302)

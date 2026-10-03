@@ -100,7 +100,9 @@ def test_mocked_oauth_callback_issues_native_token(mobile_client, monkeypatch):
     from starlette.responses import RedirectResponse
 
     mocked_client = SimpleNamespace(
-        authorize_redirect=AsyncMock(return_value=RedirectResponse("https://idp.example/authorize", status_code=302)),
+        authorize_redirect=AsyncMock(
+            return_value=RedirectResponse("https://idp.example/authorize?state=state-1", status_code=302)
+        ),
         authorize_access_token=AsyncMock(
             return_value={"userinfo": {"sub": "oidc-1", "email": "user@example.test", "name": "Native User"}}
         ),
@@ -109,9 +111,9 @@ def test_mocked_oauth_callback_issues_native_token(mobile_client, monkeypatch):
     monkeypatch.setattr(auth, "oauth", SimpleNamespace(authentik=mocked_client))
     start = client.get("/oauth-login", follow_redirects=False)
     assert start.status_code == 302
-    assert start.headers["location"] == "https://idp.example/authorize"
+    assert start.headers["location"] == "https://idp.example/authorize?state=state-1"
     mocked_client.authorize_redirect.assert_awaited_once()
-    response = client.get("/oauth-callback?code=mock", follow_redirects=False)
+    response = client.get("/oauth-callback?code=mock&state=state-1", follow_redirects=False)
     assert response.status_code == 302
     assert "docuelevate://callback?token=" in response.headers["location"]
     token = parse_qs(urlsplit(response.headers["location"]).query)["token"][0]
@@ -223,11 +225,20 @@ def test_mobile_token_failure_returns_safe_callback(mobile_client, monkeypatch, 
     if login_method == "local":
         response = client.post("/auth", data={"username": "admin", "password": "secret"}, follow_redirects=False)
     else:
+        from starlette.responses import RedirectResponse
+
         mocked_client = SimpleNamespace(
-            authorize_access_token=AsyncMock(return_value={"userinfo": {"sub": "oidc-1", "email": "user@example.test"}})
+            authorize_redirect=AsyncMock(
+                return_value=RedirectResponse("https://idp.example/authorize?state=state-fail", status_code=302)
+            ),
+            authorize_access_token=AsyncMock(
+                return_value={"userinfo": {"sub": "oidc-1", "email": "user@example.test"}}
+            ),
         )
+        monkeypatch.setattr(auth, "OAUTH_CONFIGURED", True)
         monkeypatch.setattr(auth, "oauth", SimpleNamespace(authentik=mocked_client))
-        response = client.get("/oauth-callback?code=mock", follow_redirects=False)
+        client.get("/oauth-login", follow_redirects=False)
+        response = client.get("/oauth-callback?code=mock&state=state-fail", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "docuelevate://callback?error=mobile_token_failed"
     assert "private database diagnostics" not in response.text
@@ -245,3 +256,76 @@ def test_oauth_state_failure_never_issues_mobile_token(mobile_client, monkeypatc
     assert response.headers["location"].startswith("/login?error=")
     assert db.query(EvergreenMobileToken).count() == 0
     assert client.get("/api/mobile/whoami").status_code == 401
+
+
+def test_overlapping_oauth_callbacks_use_their_matching_mobile_callback(mobile_client, monkeypatch):
+    from starlette.responses import RedirectResponse
+
+    client, _ = mobile_client
+    mocked_client = SimpleNamespace(
+        authorize_redirect=AsyncMock(
+            side_effect=[
+                RedirectResponse("https://idp.example/authorize?state=state-a", status_code=302),
+                RedirectResponse("https://idp.example/authorize?state=state-b", status_code=302),
+            ]
+        ),
+        authorize_access_token=AsyncMock(
+            side_effect=[
+                {"userinfo": {"sub": "oidc-b", "email": "b@example.test"}},
+                {"userinfo": {"sub": "oidc-a", "email": "a@example.test"}},
+            ]
+        ),
+    )
+    monkeypatch.setattr(auth, "OAUTH_CONFIGURED", True)
+    monkeypatch.setattr(auth, "oauth", SimpleNamespace(authentik=mocked_client))
+
+    first = client.get("/oauth-login?mobile=1&redirect_uri=docuelevate://callback", follow_redirects=False)
+    second = client.get("/oauth-login?mobile=1&redirect_uri=exp://localhost:19000/callback", follow_redirects=False)
+    assert first.status_code == second.status_code == 302
+
+    callback_b = client.get("/oauth-callback?code=b&state=state-b", follow_redirects=False)
+    callback_a = client.get("/oauth-callback?code=a&state=state-a", follow_redirects=False)
+    assert callback_b.headers["location"].startswith("exp://localhost:19000/callback?token=")
+    assert callback_a.headers["location"].startswith("docuelevate://callback?token=")
+
+
+@pytest.mark.parametrize("completion_order", [("web", "mobile"), ("mobile", "web")])
+def test_overlapping_web_and_mobile_oauth_flows_keep_their_destinations(mobile_client, monkeypatch, completion_order):
+    from starlette.responses import RedirectResponse
+
+    client, db = mobile_client
+
+    async def access_token(request):
+        if request.query_params.get("state") == "web-state":
+            return {"userinfo": {"sub": "web-user", "email": "web@example.test"}}
+        return {"userinfo": {"sub": "mobile-user", "email": "mobile@example.test"}}
+
+    mocked_client = SimpleNamespace(
+        authorize_redirect=AsyncMock(
+            side_effect=[
+                RedirectResponse("https://idp.example/authorize?state=web-state", status_code=302),
+                RedirectResponse("https://idp.example/authorize?state=mobile-state", status_code=302),
+            ]
+        ),
+        authorize_access_token=access_token,
+    )
+    monkeypatch.setattr(auth, "OAUTH_CONFIGURED", True)
+    monkeypatch.setattr(auth, "oauth", SimpleNamespace(authentik=mocked_client))
+
+    client.get("/oauth-login", follow_redirects=False)
+    client.get("/oauth-login?mobile=1&redirect_uri=docuelevate://callback", follow_redirects=False)
+    responses = {
+        "web": lambda: client.get("/oauth-callback?code=web&state=web-state", follow_redirects=False),
+        "mobile": lambda: client.get("/oauth-callback?code=mobile&state=mobile-state", follow_redirects=False),
+    }
+    completed = {name: responses[name]() for name in completion_order}
+
+    assert completed["web"].headers["location"] == "/upload"
+    mobile_location = completed["mobile"].headers["location"]
+    assert mobile_location.startswith("docuelevate://callback?token=")
+    mobile_token = parse_qs(urlsplit(mobile_location).query)["token"][0]
+    client.cookies.clear()
+    profile = client.get("/api/mobile/whoami", headers={"Authorization": f"Bearer {mobile_token}"})
+    assert profile.status_code == 200
+    assert profile.json()["owner_id"] == "mobile-user"
+    assert db.query(EvergreenMobileToken).count() == 1
