@@ -43,6 +43,7 @@ def _dispatch_metadata_updated_webhook(file_record: FileRecord, metadata: dict, 
                 "file_id": file_record.id,
                 "filename": file_record.original_filename,
                 "updated_fields": sorted(metadata.keys()),
+                "owner_id": file_record.owner_id,
             },
         )
     except Exception as webhook_exc:

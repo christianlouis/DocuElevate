@@ -2,8 +2,8 @@
  * QRScannerScreen – camera-based QR code scanner for mobile login.
  *
  * Opens the device camera and scans for QR codes containing a
- * `docuelevate://qr-login?token=...&server=...` payload.  On successful
- * scan the token is claimed via the API and the user is signed in.
+ * `https://server/qr-login?token=...` payload. On explicit confirmation the
+ * one-time token is claimed via the API and the user is signed in.
  */
 
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import api from "../services/api";
 
 export default function QRScannerScreen() {
   const { signInWithQR } = useAuth();
@@ -34,8 +35,10 @@ export default function QRScannerScreen() {
 
       const { data } = result;
 
-      // Only accept docuelevate:// QR codes
-      if (!data.startsWith("docuelevate://qr-login")) return;
+      // Only accept HTTPS QR codes for the expected login path. Custom URL
+      // schemes are intentionally rejected to prevent intercepted links from
+      // being handed to the app by another application.
+      if (!data.startsWith("https://")) return;
 
       processingRef.current = true;
       setScanned(true);
@@ -44,9 +47,15 @@ export default function QRScannerScreen() {
       try {
         const url = new URL(data);
         const token = url.searchParams.get("token");
-        const server = url.searchParams.get("server");
+        const server = `${url.protocol}//${url.host}`;
+        const configuredServer = api.getBaseUrl();
 
-        if (!token || !server) {
+        if (
+          url.pathname !== "/qr-login" ||
+          !token ||
+          !configuredServer ||
+          new URL(configuredServer).origin !== url.origin
+        ) {
           Alert.alert("Invalid QR Code", "This QR code does not contain valid login information.");
           setScanned(false);
           processingRef.current = false;
@@ -54,8 +63,33 @@ export default function QRScannerScreen() {
           return;
         }
 
-        await signInWithQR(server, token);
-        // signInWithQR updates AuthContext → AuthGuard redirects to main app
+        Alert.alert(
+          "Confirm QR Login",
+          `Sign in to ${server}?`,
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+              onPress: () => {
+                setScanned(false);
+                processingRef.current = false;
+                setProcessing(false);
+              },
+            },
+            {
+              text: "Sign In",
+              onPress: () => {
+                void signInWithQR(server, token).catch((err: unknown) => {
+                  const message = err instanceof Error ? err.message : "QR login failed";
+                  Alert.alert("QR Login Failed", message);
+                  setScanned(false);
+                  processingRef.current = false;
+                  setProcessing(false);
+                });
+              },
+            },
+          ],
+        );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "QR login failed";
         Alert.alert("QR Login Failed", message);
@@ -203,7 +237,11 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   overlayTop: {
     flex: 1,

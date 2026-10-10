@@ -453,28 +453,16 @@ def _fail_import_job(db, job: DropboxImportJob, message: str) -> None:
 
 
 def _configured_backfill_token_budget(integration: UserIntegration) -> int:
-    """Resolve the live per-integration backfill budget with a global fallback."""
+    """Return the operator-controlled budget; tenants cannot disable or raise it."""
+    raw_budget = settings.corpus_backfill_daily_llm_token_budget
     try:
-        config = json.loads(integration.config or "{}")
-    except (json.JSONDecodeError, TypeError):
-        config = {}
-    if not isinstance(config, dict):
-        config = {}
-    enabled = config.get("backfill_token_budget_enabled", True)
-    if enabled is False or str(enabled).strip().lower() in {"0", "false", "no", "off"}:
-        return 0
-    raw_budget = config.get("backfill_daily_llm_token_budget")
-    if isinstance(raw_budget, (int, float)) and raw_budget < 0:
-        raise CorpusDailyBudgetUnavailable(
-            "Negative corpus backfill token budgets are invalid; use 0 or disable the budget explicitly"
-        )
-    try:
-        budget = (
-            int(raw_budget) if raw_budget not in (None, "") else int(settings.corpus_backfill_daily_llm_token_budget)
-        )
-    except (TypeError, ValueError):
-        logger.warning("Ignoring invalid backfill_daily_llm_token_budget integration override: %r", raw_budget)
-        budget = int(settings.corpus_backfill_daily_llm_token_budget)
+        if float(raw_budget) < 0:
+            raise CorpusDailyBudgetUnavailable("Negative corpus backfill token budgets are invalid")
+        budget = int(raw_budget)
+    except (TypeError, ValueError) as exc:
+        raise CorpusDailyBudgetUnavailable("Corpus backfill token budget is invalid") from exc
+    if budget < 0:
+        raise CorpusDailyBudgetUnavailable("Negative corpus backfill token budgets are invalid")
     return budget
 
 
@@ -593,6 +581,15 @@ def _import_file(
     )
     if imported and imported.revision == entry.rev and imported.state != "failed":
         return "skipped"
+
+    if settings.multi_user_enabled and job.owner_id:
+        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
+
+        try:
+            check_upload_allowed(db, job.owner_id, get_user_tier_id(db, job.owner_id))
+        except QuotaExceeded as exc:
+            logger.warning("Dropbox import skipped after upload quota was reached for owner %s: %s", job.owner_id, exc)
+            return "skipped"
 
     idempotency_key = f"dropbox:{integration.id}:{entry.id}:{entry.rev}"
     intake = (
@@ -742,6 +739,7 @@ def _run_dropbox_corpus_import(
             "backfill_queue_high_watermark",
             settings.corpus_backfill_queue_high_watermark,
             minimum=1,
+            maximum=settings.corpus_backfill_queue_high_watermark,
         )
         queue_depth = _pending_queue_depth(exclude_current_delivery=True)
         if queue_depth is not None and queue_depth >= high_watermark:
@@ -753,7 +751,8 @@ def _run_dropbox_corpus_import(
                 config,
                 "backfill_resume_delay_seconds",
                 settings.corpus_backfill_resume_delay_seconds,
-                minimum=1,
+                minimum=settings.corpus_backfill_resume_delay_seconds,
+                maximum=settings.corpus_backfill_resume_delay_seconds,
             )
             return {
                 "status": "paused",
@@ -778,7 +777,7 @@ def _run_dropbox_corpus_import(
                 "backfill_batch_size",
                 settings.corpus_backfill_batch_size,
                 minimum=1,
-                maximum=2000,
+                maximum=settings.corpus_backfill_batch_size,
             )
             page = client.files_list_folder(root, recursive=True, include_deleted=False, limit=batch_size)
         _ensure_import_coordinator_lock(lock_lost_event)
@@ -896,7 +895,8 @@ def _run_dropbox_corpus_import(
                         config,
                         "backfill_resume_delay_seconds",
                         settings.corpus_backfill_resume_delay_seconds,
-                        minimum=1,
+                        minimum=settings.corpus_backfill_resume_delay_seconds,
+                        maximum=settings.corpus_backfill_resume_delay_seconds,
                     )
                     return {
                         "status": "paused",
@@ -1234,6 +1234,7 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
             "backfill_queue_high_watermark",
             settings.corpus_backfill_queue_high_watermark,
             minimum=1,
+            maximum=settings.corpus_backfill_queue_high_watermark,
         )
         queue_depth = _pending_queue_depth()
         if queue_depth is not None and queue_depth >= high_watermark:

@@ -791,6 +791,7 @@ class TestDocumentTaskWebhookDispatch:
             pipeline_assignment_source="routing_rule",
             pipeline_routing_rule_id=3,
             pipeline_assignment_reason="Matched invoices",
+            owner_id=None,
         )
 
         from app.tasks.process_document import _dispatch_routed_webhook
@@ -806,6 +807,7 @@ class TestDocumentTaskWebhookDispatch:
                 "assignment_source": "routing_rule",
                 "routing_rule_id": 3,
                 "reason": "Matched invoices",
+                "owner_id": None,
             },
         )
 
@@ -828,7 +830,7 @@ class TestDocumentTaskWebhookDispatch:
     def test_metadata_event_payload(self, mocker):
         """Metadata dispatch reports the stable file identity and changed keys."""
         dispatch = mocker.patch("app.utils.webhook.dispatch_webhook_event")
-        record = Mock(id=42, original_filename="invoice.pdf")
+        record = Mock(id=42, original_filename="invoice.pdf", owner_id=None)
 
         from app.tasks.embed_metadata_into_pdf import _dispatch_metadata_updated_webhook
 
@@ -844,6 +846,7 @@ class TestDocumentTaskWebhookDispatch:
                 "file_id": 42,
                 "filename": "invoice.pdf",
                 "updated_fields": ["document_type", "tags"],
+                "owner_id": None,
             },
         )
 

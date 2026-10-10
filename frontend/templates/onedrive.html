@@ -130,8 +130,8 @@
     </h2>
 
     <div class="space-y-4">
-      {% if user_mode and has_system_credentials %}
-      <!-- System credentials toggle (user mode only) -->
+      {% if has_system_credentials %}
+      <!-- System credentials remain server-side until the exchange succeeds. -->
       <div class="bg-green-50 border border-green-200 rounded-md p-4">
         <label class="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" id="use-system-creds" checked class="rounded border-gray-300 text-green-600 focus:ring-green-500 h-5 w-5" />
@@ -143,16 +143,16 @@
       </div>
       {% endif %}
 
-      <div id="custom-creds-section" {% if user_mode and has_system_credentials %}class="hidden"{% endif %}>
+      <div id="custom-creds-section" {% if has_system_credentials %}class="hidden"{% endif %}>
         <div class="space-y-4">
           <div>
             <label for="client-id" class="block text-sm font-medium text-gray-700">Client ID <span class="text-red-500" aria-hidden="true">*</span></label>
-            <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value if not (user_mode and has_system_credentials) else '' }}">
+            <input type="text" id="client-id" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client ID" value="{{ client_id_value if not has_system_credentials else '' }}">
           </div>
 
           <div>
             <label for="client-secret" class="block text-sm font-medium text-gray-700">Client Secret <span class="text-red-500" aria-hidden="true">*</span></label>
-            <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="{{ client_secret_value if not (user_mode and has_system_credentials) else '' }}">
+            <input type="password" id="client-secret" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter your Azure AD application client secret" value="">
           </div>
 
           <div>
@@ -306,16 +306,11 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const userMode = {{ 'true' if user_mode else 'false' }};
-  const hasSystemCredentials = {{ 'true' if (user_mode and has_system_credentials) else 'false' }};
+  const hasSystemCredentials = {{ 'true' if has_system_credentials else 'false' }};
   const systemClientId = {{ (client_id_value or '') | tojson }};
-  const systemClientSecret = {{ (client_secret_value or '') | tojson }};
   const systemTenantId = {{ (tenant_id or 'common') | tojson }};
 
-  // Store integration_id if provided (for per-user OAuth flow)
   const integrationId = "{{ integration_id or '' }}";
-  if (integrationId) {
-    sessionStorage.setItem('oauth_integration_id', integrationId);
-  }
 
   // Elements
   const startAuthFlowBtn = document.getElementById('start-auth-flow');
@@ -388,8 +383,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Determine which credentials to use
     const useSystemCreds = hasSystemCredentials && useSystemCredsCheckbox && useSystemCredsCheckbox.checked;
     const clientId = useSystemCreds ? systemClientId : document.getElementById('client-id').value.trim();
-    const clientSecret = useSystemCreds ? systemClientSecret : clientSecretInput.value.trim();
-    const redirectUri = window.location.origin + "/onedrive-callback";
+    const clientSecret = useSystemCreds ? '' : clientSecretInput.value.trim();
     const tenantId = useSystemCreds ? systemTenantId : (document.getElementById('tenant-id').value.trim() || 'common');
 
     if (!clientId) {
@@ -397,32 +391,28 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    if (!clientSecret) {
+    if (!useSystemCreds && !clientSecret) {
       showModal('error', 'Validation Error', 'Please enter your Client Secret');
       return;
     }
 
-    // Save all entered values to session storage temporarily
-    sessionStorage.setItem('onedrive_client_id', clientId);
-    sessionStorage.setItem('onedrive_client_secret', clientSecret);
-    sessionStorage.setItem('onedrive_tenant_id', tenantId);
-    if (useSystemCreds) {
-      sessionStorage.setItem('onedrive_use_system_creds', 'true');
+    // Create a server-bound, owner-scoped OAuth transaction. Client secrets
+    // never need to cross the callback page or appear in its HTML.
+    const startForm = new FormData();
+    if (integrationId) startForm.append('integration_id', integrationId);
+    if (clientId && !useSystemCreds) startForm.append('client_id', clientId);
+    if (clientSecret && !useSystemCreds) startForm.append('client_secret', clientSecret);
+    startForm.append('tenant_id', tenantId);
+    const folderPathEl = document.getElementById('folder-path');
+    if (!userMode && folderPathEl && folderPathEl.value.trim()) {
+      startForm.append('folder_path', folderPathEl.value.trim());
     }
-
-    // In admin mode also store folder path; in user mode the config is already set
-    if (!userMode) {
-      const folderPathEl = document.getElementById('folder-path');
-      if (folderPathEl && folderPathEl.value.trim()) {
-        sessionStorage.setItem('onedrive_folder_path', folderPathEl.value.trim());
-      }
-    }
-
-    // Generate the authorization URL with .default scope
-    const authUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&response_mode=query&scope=${encodeURIComponent('https://graph.microsoft.com/.default offline_access')}&prompt=consent`;
-
-    // Redirect the user to the Microsoft login page
-    window.location.href = authUrl;
+    // FormData owns the submitted value; clear the DOM field before navigation.
+    if (!useSystemCreds) clientSecretInput.value = '';
+    fetch('/onedrive-auth-start', { method: 'POST', body: startForm })
+      .then(response => response.ok ? response.json() : response.json().then(err => { throw new Error(err.detail || 'Unable to start OAuth'); }))
+      .then(data => { window.location.href = data.authorize_url; })
+      .catch(error => showModal('error', 'Authorization Error', error.message));
   });
 
   // Test Token button click (admin mode only)
@@ -513,23 +503,6 @@ document.addEventListener('DOMContentLoaded', function() {
           showModal('error', 'Copy Failed', 'Failed to copy text to clipboard');
         });
     });
-  }
-
-  // Try to retrieve values from session storage (if coming back from auth or browser refresh)
-  if (clientSecretInput && !clientSecretInput.value && sessionStorage.getItem('onedrive_client_secret')) {
-    clientSecretInput.value = sessionStorage.getItem('onedrive_client_secret');
-  }
-
-  // Also check for client ID in session storage
-  const clientIdInput = document.getElementById('client-id');
-  if (clientIdInput && !clientIdInput.value && sessionStorage.getItem('onedrive_client_id')) {
-    clientIdInput.value = sessionStorage.getItem('onedrive_client_id');
-  }
-
-  // Check for tenant ID in session storage
-  const tenantIdInput = document.getElementById('tenant-id');
-  if (tenantIdInput && !tenantIdInput.value && sessionStorage.getItem('onedrive_tenant_id')) {
-    tenantIdInput.value = sessionStorage.getItem('onedrive_tenant_id');
   }
 
   // If token is configured and we have a client ID, show the token status section (admin mode)

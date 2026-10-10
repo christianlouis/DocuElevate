@@ -2,7 +2,10 @@
 OneDrive API endpoints
 """
 
+import json
 import logging
+import re
+import secrets
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
@@ -10,13 +13,20 @@ import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_current_user, require_login
 from app.config import settings
 from app.database import get_db
+from app.models import UserIntegration
+from app.utils.encryption import encrypt_value
 from app.utils.env_utils import update_env_file
 from app.utils.oauth_helper import exchange_oauth_token
+from app.utils.onedrive_oauth import (
+    OneDriveOAuthTransactionUnavailable,
+    consume_pending_onedrive_oauth,
+)
 from app.utils.settings_service import save_setting_to_db
 from app.utils.settings_sync import notify_settings_updated
+from app.utils.user_scope import get_current_owner_id
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -24,9 +34,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _valid_tenant_id(value: str) -> bool:
+    """Reject URL/path injection while allowing Microsoft tenant aliases."""
+    return bool(value and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,127}", value))
+
+
 def _require_admin(request: Request) -> dict:
     """Ensure the caller is an admin. Raises 403 otherwise."""
-    user = request.session.get("user")
+    user = get_current_user(request)
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
@@ -39,17 +54,55 @@ AdminUser = Annotated[dict, Depends(_require_admin)]
 @require_login
 async def exchange_onedrive_token(
     request: Request,
-    client_id: Annotated[str, Form(...)],
-    client_secret: Annotated[str, Form(...)],
-    redirect_uri: Annotated[str, Form(...)],
-    code: Annotated[str, Form(...)],
-    tenant_id: Annotated[str, Form(...)],
+    redirect_uri: Annotated[str, Form(...)] = None,
+    code: Annotated[str, Form(...)] = None,
+    tenant_id: Annotated[str, Form(...)] = None,
+    integration_id: Annotated[Optional[int], Form()] = None,
+    state: Annotated[Optional[str], Form()] = None,
+    db: Session = Depends(get_db),
 ):
     """
     Exchange an authorization code for a refresh token.
     This is done on the server to avoid exposing client secret in the browser.
     """
-    # Prepare the token request
+    oauth = request.session.get("onedrive_oauth", {})
+    if not oauth or not state or not secrets.compare_digest(state, oauth.get("state", "")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OneDrive OAuth state")
+    owner_id = get_current_owner_id(request)
+    if not owner_id or not secrets.compare_digest(owner_id, oauth.get("owner_id", "")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OneDrive OAuth owner mismatch")
+    if oauth.get("integration_id") != integration_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth integration mismatch")
+    try:
+        pending = consume_pending_onedrive_oauth(state)
+    except OneDriveOAuthTransactionUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    if not pending:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OneDrive OAuth state")
+    if (
+        pending.get("integration_id") != integration_id
+        or not secrets.compare_digest(str(pending.get("owner_id", "")), owner_id)
+        or pending.get("redirect_uri") != oauth.get("redirect_uri")
+        or pending.get("tenant_id") != oauth.get("tenant_id")
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OneDrive OAuth transaction mismatch")
+
+    client_id = pending.get("client_id")
+    client_secret = pending.get("client_secret")
+    redirect_uri = pending.get("redirect_uri")
+    tenant_id = pending.get("tenant_id")
+    if integration_id is not None:
+        integration = (
+            db.query(UserIntegration)
+            .filter(UserIntegration.id == integration_id, UserIntegration.owner_id == owner_id)
+            .first()
+        )
+        if not integration:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration not found")
+    else:
+        _require_admin(request)
+    if not client_id or not client_secret or not redirect_uri or not code or not _valid_tenant_id(tenant_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OneDrive OAuth client is not configured")
     token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
     payload = {
@@ -63,12 +116,46 @@ async def exchange_onedrive_token(
 
     # Use shared OAuth helper (handles secure logging and error handling)
     token_data = exchange_oauth_token(provider_name="OneDrive", token_url=token_url, payload=payload)
+    request.session.pop("onedrive_oauth", None)
 
     # Return just what's needed by the frontend
+    if integration_id is not None:
+        integration.credentials = encrypt_value(
+            json.dumps(
+                {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": token_data["refresh_token"],
+                    "tenant_id": tenant_id,
+                }
+            )
+        )
+        db.commit()
+    else:
+        user = request.session.get("user", {})
+        changed_by = (
+            user.get("preferred_username") or user.get("username") or user.get("email") or user.get("id") or "wizard"
+        )
+        values = {
+            "onedrive_refresh_token": token_data["refresh_token"],
+            "onedrive_client_id": client_id,
+            "onedrive_client_secret": client_secret,
+            "onedrive_tenant_id": tenant_id,
+            "onedrive_folder_path": pending.get("folder_path") or settings.onedrive_folder_path,
+        }
+        for key, value in values.items():
+            setattr(settings, key, value)
+            if not save_setting_to_db(db, key, value, changed_by=changed_by):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save OneDrive settings"
+                )
+        update_env_file({key.upper(): value for key, value in values.items() if value is not None})
+        notify_settings_updated()
     return {
-        "refresh_token": token_data["refresh_token"],
-        "access_token": token_data.get("access_token", ""),
-        "expires_in": token_data.get("expires_in", 3600),
+        "status": "success",
+        # The short-lived access token is needed only to browse a newly
+        # authorized personal integration. Refresh and client credentials stay server-side.
+        "access_token": token_data.get("access_token", "") if integration_id is not None else "",
     }
 
 
@@ -363,10 +450,10 @@ async def save_onedrive_settings(
 
 
 @router.post("/onedrive/update-settings")
-@require_login
 async def update_onedrive_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
     client_id: Annotated[Optional[str], Form()] = None,
     client_secret: Annotated[Optional[str], Form()] = None,
     tenant_id: Annotated[str, Form()] = "common",
@@ -439,8 +526,7 @@ async def update_onedrive_settings(
 
 
 @router.get("/onedrive/get-full-config")
-@require_login
-async def get_onedrive_full_config(request: Request):
+async def get_onedrive_full_config(request: Request, _admin: AdminUser):
     """
     Get the full OneDrive configuration for sharing with worker nodes
     """

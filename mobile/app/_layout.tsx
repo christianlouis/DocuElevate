@@ -38,7 +38,6 @@ const APP_SCHEME_PREFIX = "docuelevate://";
  * These are in-app deep-link routes handled by their respective screens
  * (e.g. QR login, OAuth callback).
  */
-const DEEP_LINK_PATHS = ["qr-login", "callback"];
 
 /** Extract a display filename from a file:// or content:// URI. */
 function filenameFromUri(uri: string): string {
@@ -73,21 +72,9 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string; mim
     let fileUri = url;
 
     // iOS may pass a filesystem path under the app's custom scheme.
-    // Rewrite it to a file:// URL unless it looks like an in-app deep-link
-    // (expo-router groups always start with "(").
+    // Custom-scheme URLs are never proof of an OS-granted local file.
     if (url.startsWith(APP_SCHEME_PREFIX)) {
-      const path = url.slice(APP_SCHEME_PREFIX.length);
-
-      // Skip known in-app deep-link paths (e.g. qr-login, callback).
-      // These are handled by their respective screens, not the share flow.
-      const pathBase = path.split("?")[0].replace(/^\/+/, "");
-      if (DEEP_LINK_PATHS.includes(pathBase) || path.startsWith("(")) {
-        return;
-      }
-
-      if (path.length > 0) {
-        fileUri = "file:///" + path.replace(/^\/+/, "");
-      }
+      return;
     }
 
     if (!fileUri.startsWith("file://") && !fileUri.startsWith("content://")) return;

@@ -55,6 +55,23 @@ def test_release_version_is_empty_without_a_direct_release_child(git_repo: Path)
     assert version == ""
 
 
+@pytest.mark.integration
+def test_release_version_ignores_malformed_tag(git_repo: Path):
+    """A tag cannot inject shell/Python syntax into release metadata."""
+    _commit(git_repo, "initial", "VERSION")
+    merge_sha = _commit(git_repo, "fix: release", "feature.txt")
+    _commit(git_repo, "release metadata", "CHANGELOG.md")
+    _git(git_repo, "tag", "v1.2.3$(touch${IFS}PWNED)")
+
+    script = Path(__file__).parents[1] / "scripts" / "resolve_release_version.sh"
+    version = subprocess.check_output(  # noqa: S603
+        ["/bin/bash", str(script), merge_sha], cwd=git_repo, text=True
+    ).strip()
+
+    assert version == ""
+    assert not (git_repo / "PWNED").exists()
+
+
 @pytest.mark.unit
 def test_image_tags_and_oci_label_use_resolved_release_version():
     workflow = (Path(__file__).parents[1] / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

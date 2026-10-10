@@ -32,6 +32,7 @@
     "server_url_required_msg": "Please enter the URL of your DocuElevate server.",
     "invalid_url": "Invalid URL",
     "invalid_url_msg": "The server URL must start with http:// or https://",
+    "https_only_msg": "Use a valid HTTPS URL for your DocuElevate server.",
     "sign_in_failed": "Sign-in failed",
     "qr_login_failed": "QR Login Failed"
   },
@@ -58,7 +59,10 @@
     "retry_msg": "Do you want to retry uploading \"{filename}\"?",
     "capture_label": "Capture document with camera",
     "photo_label": "Select photo from library",
-    "file_label": "Pick file from device"
+    "file_label": "Pick file from device",
+    "share_confirm_title": "Upload shared file?",
+    "share_confirm_msg": "Do you want to upload \"{filename}\" to DocuElevate?",
+    "confirm_upload": "Upload"
   },
   "files": {
     "title": "My Documents",
