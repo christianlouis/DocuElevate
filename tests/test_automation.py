@@ -1,3 +1,5 @@
+import re
+
 """Tests for the Zapier / Make.com automation integration.
 
 Covers:
@@ -447,7 +449,8 @@ class TestAutomationAPI:
         assert len(args) == 1
         assert "/uploads/test_" in args[0]
         assert args[0].endswith(".pdf")
-        assert kwargs == {"original_filename": "test.pdf", "owner_id": "testuser"}
+        assert kwargs["owner_id"] == "testuser"
+        assert re.fullmatch(r"test_[a-f0-9]{16}\.pdf", kwargs["original_filename"])
 
     def test_action_upload_no_filename(self, client):
         """POST /api/automation/actions/upload rejects empty filename."""
