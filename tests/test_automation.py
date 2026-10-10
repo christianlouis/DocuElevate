@@ -445,8 +445,9 @@ class TestAutomationAPI:
         mock_delay.assert_called_once()
         args, kwargs = mock_delay.call_args
         assert len(args) == 1
-        assert args[0].endswith("/uploads/test.pdf")
-        assert kwargs == {"owner_id": "testuser"}
+        assert "/uploads/test_" in args[0]
+        assert args[0].endswith(".pdf")
+        assert kwargs == {"original_filename": "test.pdf", "owner_id": "testuser"}
 
     def test_action_upload_no_filename(self, client):
         """POST /api/automation/actions/upload rejects empty filename."""
