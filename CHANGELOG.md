@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Build System
+
+- **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
+  ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
+  [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
+
+
 ## v0.188.7 (2026-10-03)
 
 ### Bug Fixes
