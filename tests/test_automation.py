@@ -8,8 +8,8 @@ Covers:
 - Integration with existing webhook dispatch
 """
 
-import re
 import json
+import re
 import time
 from unittest.mock import MagicMock
 
