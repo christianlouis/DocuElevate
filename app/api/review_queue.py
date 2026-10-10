@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user_id, require_login
 from app.database import get_db
-from app.models import DocumentReviewItem, FileRecord
-from app.utils.user_scope import apply_owner_filter
+from app.models import FILE_SHARE_ROLE_EDITOR, DocumentReviewItem, FileRecord
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id, has_file_role
 
 router = APIRouter(prefix="/review-queue", tags=["review-queue"])
 
@@ -75,6 +75,8 @@ def resolve_review_item(item_id: int, body: ReviewResolution, request: Request, 
     if not row:
         raise HTTPException(status_code=404, detail="Review item not found")
     item, file_record = row
+    if not has_file_role(file_record, get_current_owner_id(request), db, minimum_role=FILE_SHARE_ROLE_EDITOR):
+        raise HTTPException(status_code=404, detail="Review item not found")
     if item.status != "pending":
         raise HTTPException(status_code=409, detail="Review item has already been resolved")
     if body.metadata is not None:

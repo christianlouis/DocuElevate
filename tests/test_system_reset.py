@@ -1,6 +1,7 @@
 """Tests for the system reset feature (app/api/system_reset.py, app/utils/system_reset.py, app/views/system_reset.py)."""
 
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,10 +12,17 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 from app.models import (
+    ApiToken,
+    AutomationHook,
     DocumentMetadata,
     FileProcessingStep,
     FileRecord,
+    LocalUser,
+    MobileDevice,
     ProcessingLog,
+    QRLoginChallenge,
+    UserProfile,
+    UserSession,
 )
 
 # ---------------------------------------------------------------------------
@@ -71,6 +79,32 @@ def reset_db_session():
     session.add(ProcessingLog(file_id=fr.id, task_id="t1", step_name="hash_file", status="success"))
     session.add(FileProcessingStep(file_id=fr.id, step_name="hash_file", status="success"))
     session.add(DocumentMetadata(filename="test.pdf", sender="Alice", recipient="Bob"))
+    session.add(LocalUser(email="reset@example.com", username="reset", hashed_password="hash"))
+    session.add(UserProfile(user_id="reset@example.com"))
+    session.add(
+        AutomationHook(
+            owner_id="reset@example.com",
+            target_url="https://hooks.example.invalid/event",
+            events='["document.processed"]',
+            secret="reset-hook-secret",
+        )
+    )
+    session.add(ApiToken(owner_id="reset@example.com", name="reset", token_hash="a" * 64, token_prefix="a" * 8))
+    session.add(MobileDevice(owner_id="reset@example.com", device_name="test", platform="ios", push_token="push-token"))
+    session.add(
+        UserSession(
+            session_token="session-token",
+            user_id="reset@example.com",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+    )
+    session.add(
+        QRLoginChallenge(
+            challenge_token="challenge-token",
+            user_id="reset@example.com",
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+        )
+    )
     session.commit()
 
     yield session
@@ -154,6 +188,8 @@ class TestWipeDatabase:
         assert reset_db_session.query(ProcessingLog).count() == 0
         assert reset_db_session.query(FileProcessingStep).count() == 0
         assert reset_db_session.query(DocumentMetadata).count() == 0
+        for model in (LocalUser, UserProfile, ApiToken, MobileDevice, UserSession, QRLoginChallenge, AutomationHook):
+            assert reset_db_session.query(model).count() == 0
 
 
 @pytest.mark.unit

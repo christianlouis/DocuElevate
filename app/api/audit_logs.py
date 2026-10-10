@@ -9,10 +9,10 @@ import logging
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_current_user
 from app.database import get_db
 from app.utils.audit_service import count_events, query_events
 
@@ -23,11 +23,21 @@ router = APIRouter()
 DbSession = Annotated[Session, Depends(get_db)]
 
 
+def _require_admin(request: Request) -> dict:
+    user = get_current_user(request)
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return user
+
+
+AdminUser = Annotated[dict, Depends(_require_admin)]
+
+
 @router.get("/audit-logs")
-@require_login
 async def list_audit_logs(
     request: Request,
     db: DbSession,
+    _admin: AdminUser,
     action: Annotated[str | None, Query(description="Filter by action (exact match)")] = None,
     user: Annotated[str | None, Query(description="Filter by username")] = None,
     resource_type: Annotated[str | None, Query(description="Filter by resource type")] = None,
@@ -70,10 +80,10 @@ async def list_audit_logs(
 
 
 @router.get("/audit-logs/actions")
-@require_login
 async def list_distinct_actions(
     request: Request,
     db: DbSession,
+    _admin: AdminUser,
 ) -> list[str]:
     """Return the distinct action values present in the audit log."""
     from app.models import AuditLog
@@ -83,10 +93,10 @@ async def list_distinct_actions(
 
 
 @router.get("/audit-logs/users")
-@require_login
 async def list_distinct_users(
     request: Request,
     db: DbSession,
+    _admin: AdminUser,
 ) -> list[str]:
     """Return the distinct user values present in the audit log."""
     from app.models import AuditLog

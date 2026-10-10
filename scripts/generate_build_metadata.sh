@@ -57,6 +57,10 @@ fi
 
 # Update VERSION file: prefer PSR's NEW_VERSION env var, then existing file
 if [ -n "${NEW_VERSION}" ]; then
+    if [[ ! "${NEW_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+        echo "Invalid release version" >&2
+        exit 1
+    fi
     echo "${NEW_VERSION}" > VERSION
     VERSION="${NEW_VERSION}"
     echo "✓ VERSION (from NEW_VERSION env): ${VERSION}"
@@ -96,14 +100,14 @@ fi
 RELEASE_NAME=""
 if [ -f "release_names.json" ] && command -v python3 > /dev/null 2>&1; then
     MINOR_PREFIX=$(echo "${VERSION}" | cut -d. -f1-2)
-    RELEASE_NAME=$(python3 -c "
-import json, sys
+    RELEASE_NAME=$(VERSION="${VERSION}" MINOR_PREFIX="${MINOR_PREFIX}" python3 - <<'PY'
+import json, os
 try:
     with open('release_names.json') as f:
         data = json.load(f)
     releases = data.get('releases', {})
-    version = '${VERSION}'
-    minor = '${MINOR_PREFIX}'
+    version = os.environ['VERSION']
+    minor = os.environ['MINOR_PREFIX']
     codename = None
     if version in releases:
         codename = releases[version].get('codename')
@@ -113,7 +117,8 @@ try:
         print(codename)
 except Exception:
     pass
-" 2>/dev/null || true)
+PY
+    2>/dev/null || true)
 fi
 
 if [ -n "${RELEASE_NAME}" ]; then
