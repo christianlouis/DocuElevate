@@ -430,7 +430,7 @@ class TestAutomationAPI:
         self._with_auth(client)
         mock_task = MagicMock()
         mock_task.id = "task-123"
-        mocker.patch("app.tasks.process_document.process_document.delay", return_value=mock_task)
+        mock_delay = mocker.patch("app.tasks.process_document.process_document.delay", return_value=mock_task)
 
         resp = client.post(
             "/api/automation/actions/upload",
@@ -442,6 +442,12 @@ class TestAutomationAPI:
         assert data["filename"].startswith("test_")
         assert data["filename"].endswith(".pdf")
         assert data["task_id"] == "task-123"
+        mock_delay.assert_called_once()
+        args, kwargs = mock_delay.call_args
+        assert len(args) == 1
+        assert "/uploads/test_" in args[0]
+        assert args[0].endswith(".pdf")
+        assert kwargs == {"original_filename": "test.pdf", "owner_id": "testuser"}
 
     def test_action_upload_no_filename(self, client):
         """POST /api/automation/actions/upload rejects empty filename."""
