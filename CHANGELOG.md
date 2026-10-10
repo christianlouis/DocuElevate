@@ -42,6 +42,127 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([#1233](https://github.com/christianlouis/DocuElevate/pull/1233),
   [`fddc91b`](https://github.com/christianlouis/DocuElevate/commit/fddc91b7f317f040c23dc52329f5c9c5f9da5c09))
 
+- **deps**: Update boto3 requirement
+  ([`48fce8a`](https://github.com/christianlouis/DocuElevate/commit/48fce8a9d350e1d4531f5b6ca46de6a7258567ed))
+
+- **deps**: Update litellm requirement from <2.0.0,>=1.90.0 to >=1.94.0,<2.0.0
+  ([#1232](https://github.com/christianlouis/DocuElevate/pull/1232),
+  [`ace56f6`](https://github.com/christianlouis/DocuElevate/commit/ace56f6dcde90f769377b74a77eb49c24462e19d))
+
+- **deps**: Update mkdocs-material requirement from >=9.7.6 to >=9.7.7
+  ([#1237](https://github.com/christianlouis/DocuElevate/pull/1237),
+  [`72e9071`](https://github.com/christianlouis/DocuElevate/commit/72e90713a6b8107cd198ed78daba352eb3787260))
+
+- **deps**: Update redis requirement from >=8.0.1 to >=8.1.0
+  ([#1230](https://github.com/christianlouis/DocuElevate/pull/1230),
+  [`7b272c2`](https://github.com/christianlouis/DocuElevate/commit/7b272c2a117f050aea861648317b24951fc2a813))
+
+- **deps**: Update sentry-sdk requirement from <3.0.0,>=2.63.0 to >=2.66.1,<3.0.0
+  ([#1238](https://github.com/christianlouis/DocuElevate/pull/1238),
+  [`8cff119`](https://github.com/christianlouis/DocuElevate/commit/8cff119d03af4524ef94a44b24555574c6cf07ae))
+
+- **deps-dev**: Bump @humanfs/node from 0.16.7 to 0.16.8 in /mobile
+  ([#1249](https://github.com/christianlouis/DocuElevate/pull/1249),
+  [`824efe4`](https://github.com/christianlouis/DocuElevate/commit/824efe48449aeadd8657cf53c57a543e26cbb775))
+
+- **deps-dev**: Bump djlint from 1.42.3 to 1.43.1
+  ([#1231](https://github.com/christianlouis/DocuElevate/pull/1231),
+  [`2a201e2`](https://github.com/christianlouis/DocuElevate/commit/2a201e2d1bf95401225c488558fe39f3d068346e))
+
+- **deps-dev**: Bump postcss-selector-parser from 6.1.2 to 6.1.4 in /frontend
+  ([#1245](https://github.com/christianlouis/DocuElevate/pull/1245),
+  [`16f8ac8`](https://github.com/christianlouis/DocuElevate/commit/16f8ac8b10f964bd298ee39943c998171d7b8ec3))
+
+- **deps-dev**: Bump source-map-js from 1.2.1 to 1.2.2 in /frontend
+  ([#1256](https://github.com/christianlouis/DocuElevate/pull/1256),
+  [`8f73da8`](https://github.com/christianlouis/DocuElevate/commit/8f73da82df3289e3bcd0c941c43af2705eeaafb1))
+
+- **deps-dev**: Update ruff requirement from >=0.15.22 to >=0.16.1
+  ([#1236](https://github.com/christianlouis/DocuElevate/pull/1236),
+  [`925e8fa`](https://github.com/christianlouis/DocuElevate/commit/925e8fa42642d8f490057c62aab76cc35e49ce91))
+
+- **deps-dev**: Update testcontainers requirement from >=4.14.2 to >=4.15.0
+  ([#1234](https://github.com/christianlouis/DocuElevate/pull/1234),
+  [`db45ae7`](https://github.com/christianlouis/DocuElevate/commit/db45ae7f9c7d135d098898e92950524bc3a1538c))
+
+- **deps-dev**: Update types-paramiko requirement from >=5.0.0.20260617 to >=5.0.0.20260724
+  ([#1235](https://github.com/christianlouis/DocuElevate/pull/1235),
+  [`2453386`](https://github.com/christianlouis/DocuElevate/commit/24533867294e6daf9f85520cef67415ffa851928))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`3efd0d3`](https://github.com/christianlouis/DocuElevate/commit/3efd0d3086f70a528d1f3859871e2c87b802cd51))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f2c018b`](https://github.com/christianlouis/DocuElevate/commit/f2c018bafb3e7a6f2c2afd04b0721f79e6d4b4f9))
+
+- **changelog**: Update changelog [skip ci]
+  ([`d146adc`](https://github.com/christianlouis/DocuElevate/commit/d146adcd8801439b3175d38941ab4eff1d407b65))
+
+- **changelog**: Update changelog [skip ci]
+  ([`83eab5e`](https://github.com/christianlouis/DocuElevate/commit/83eab5ea687dc55b8c6c4e0747fc63ed3e411694))
+
+- **changelog**: Update changelog [skip ci]
+  ([`d4ed9f2`](https://github.com/christianlouis/DocuElevate/commit/d4ed9f2484ab2c2313b0445d3415cafe73f03f27))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2dbe9af`](https://github.com/christianlouis/DocuElevate/commit/2dbe9af5ff85d54c9e36ac75a60c2ceaf63321f2))
+
+- **changelog**: Update changelog [skip ci]
+  ([`ed55b7a`](https://github.com/christianlouis/DocuElevate/commit/ed55b7ad66e7e1e400feaa70aeadc5759789608f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`2f84e43`](https://github.com/christianlouis/DocuElevate/commit/2f84e43f63b3936b3bcb8b7c49145b83dbc8081f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`f5509d6`](https://github.com/christianlouis/DocuElevate/commit/f5509d68131a85acb0af4198cddeccde22093c07))
+
+- **changelog**: Update changelog [skip ci]
+  ([`df02215`](https://github.com/christianlouis/DocuElevate/commit/df02215eab959df044b1786d28ba4f2243cd4686))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9d7739c`](https://github.com/christianlouis/DocuElevate/commit/9d7739ca909803a2e03c3fec4625690c5dcb372f))
+
+### Testing
+
+- Verify automation upload task preserves owner and filename
+  ([#1252](https://github.com/christianlouis/DocuElevate/pull/1252),
+  [`30d8ce7`](https://github.com/christianlouis/DocuElevate/commit/30d8ce7f6e779cab92fcd54062b17666ce7532dd))
+
+
+## Unreleased
+
+### Build System
+
+- **deps**: Bump @xmldom/xmldom from 0.8.13 to 0.8.15 in /mobile
+  ([#1248](https://github.com/christianlouis/DocuElevate/pull/1248),
+  [`9c78755`](https://github.com/christianlouis/DocuElevate/commit/9c787557c890163502eb421cbacfd6a9cde8d8f8))
+
+- **deps**: Bump baseline-browser-mapping from 2.10.8 to 2.11.22 in /mobile
+  ([#1250](https://github.com/christianlouis/DocuElevate/pull/1250),
+  [`0af62bb`](https://github.com/christianlouis/DocuElevate/commit/0af62bb91be44af98eef45f70fd77cf5681d49b8))
+
+- **deps**: Bump browserslist from 4.28.1 to 4.28.8 in /mobile
+  ([#1246](https://github.com/christianlouis/DocuElevate/pull/1246),
+  [`5c3a335`](https://github.com/christianlouis/DocuElevate/commit/5c3a335a39ff132f3b3fb6c39fba2e3be0949e3e))
+
+- **deps**: Bump compression from 1.8.1 to 1.8.2 in /mobile
+  ([#1258](https://github.com/christianlouis/DocuElevate/pull/1258),
+  [`8f0673b`](https://github.com/christianlouis/DocuElevate/commit/8f0673b1c0659df127f96428030ed8bccf4a15c5))
+
+- **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
+  ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
+  [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
+
+- **deps**: Bump nanoid from 3.3.12 to 3.3.18 in /mobile
+  ([#1242](https://github.com/christianlouis/DocuElevate/pull/1242),
+  [`2a9ac12`](https://github.com/christianlouis/DocuElevate/commit/2a9ac12e40b22ac54900e7d1fd8ea99de2e654a7))
+
+- **deps**: Update aiohttp requirement from <4.0.0,>=3.14.1 to >=3.14.3,<4.0.0
+  ([#1233](https://github.com/christianlouis/DocuElevate/pull/1233),
+  [`fddc91b`](https://github.com/christianlouis/DocuElevate/commit/fddc91b7f317f040c23dc52329f5c9c5f9da5c09))
+
 - **deps**: Update litellm requirement from <2.0.0,>=1.90.0 to >=1.94.0,<2.0.0
   ([#1232](https://github.com/christianlouis/DocuElevate/pull/1232),
   [`ace56f6`](https://github.com/christianlouis/DocuElevate/commit/ace56f6dcde90f769377b74a77eb49c24462e19d))
