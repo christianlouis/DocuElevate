@@ -20,7 +20,7 @@ mypy>=2.3.0
 djlint==1.42.3  # 1.40.9 crashes under Python 3.11 multiprocessing in CI
 
 # Documentation (builds the embedded /help site via MkDocs Material)
-mkdocs-material>=9.7.6  # MkDocs Material theme – same package used in docs/requirements.txt
+mkdocs-material>=9.7.7  # MkDocs Material theme – same package used in docs/requirements.txt
 
 # Type stubs for mypy
 types-aiofiles>=25.1.0.20260518
