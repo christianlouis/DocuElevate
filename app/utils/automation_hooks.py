@@ -23,6 +23,15 @@ from app.utils.webhook import VALID_EVENTS
 logger = logging.getLogger(__name__)
 
 
+def get_event_owner_id(user: dict[str, Any]) -> str | None:
+    """Return the stable identity used to scope automation events.
+
+    ``sub`` is the identity-provider subject and must win over mutable display
+    claims such as email or preferred_username.
+    """
+    return user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+
+
 # ---------------------------------------------------------------------------
 # Payload helpers
 # ---------------------------------------------------------------------------
@@ -96,6 +105,7 @@ SAMPLE_PAYLOADS: dict[str, dict[str, Any]] = {
         "assignment_source": "routing_rule",
         "routing_rule_id": 3,
         "reason": "Matched pre-processing routing rule 'Invoices'",
+        "owner_id": "user@example.com",
     },
     "document.metadata_updated": {
         "id": "evt_sample0005",
@@ -104,6 +114,7 @@ SAMPLE_PAYLOADS: dict[str, dict[str, Any]] = {
         "document_id": 42,
         "filename": "invoice_2024.pdf",
         "updated_fields": ["tags", "document_type"],
+        "owner_id": "user@example.com",
     },
     "user.signup": {
         "id": "evt_sample0006",
@@ -135,7 +146,7 @@ SAMPLE_PAYLOADS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------------
 
 
-def get_active_hooks_for_event(event: str) -> list[dict[str, Any]]:
+def get_active_hooks_for_event(event: str, owner_id: str | None = None) -> list[dict[str, Any]]:
     """Return all active automation hooks subscribed to *event*.
 
     Args:
@@ -147,7 +158,10 @@ def get_active_hooks_for_event(event: str) -> list[dict[str, Any]]:
     """
     db = SessionLocal()
     try:
-        hooks = db.query(AutomationHook).filter(AutomationHook.is_active.is_(True)).all()
+        query = db.query(AutomationHook).filter(AutomationHook.is_active.is_(True))
+        if owner_id is not None:
+            query = query.filter(AutomationHook.owner_id == owner_id)
+        hooks = query.all()
         result: list[dict[str, Any]] = []
         for hook in hooks:
             try:
@@ -161,6 +175,7 @@ def get_active_hooks_for_event(event: str) -> list[dict[str, Any]]:
                         "target_url": hook.target_url,
                         "secret": hook.secret,
                         "events": subscribed,
+                        "owner_id": hook.owner_id,
                     }
                 )
         return result
@@ -190,7 +205,15 @@ def dispatch_automation_hooks(event: str, data: dict[str, Any]) -> None:
         logger.warning("Ignoring unknown automation hook event: %s", event)
         return
 
-    hooks = get_active_hooks_for_event(event)
+    # Event payloads carry an owner_id for document/user events. Only that
+    # principal's subscriptions may receive the event.
+    owner_id = data.get("owner_id") or data.get("user_id")
+    # Do not fan out tenant-bearing events when the producer failed to attach
+    # an owner. An unscoped fallback would recreate the original leak.
+    if owner_id is None:
+        logger.warning("Ignoring automation event without owner scope: %s", event)
+        return
+    hooks = get_active_hooks_for_event(event, str(owner_id))
     if not hooks:
         logger.debug("No active automation hooks for event %s", event)
         return

@@ -10,6 +10,11 @@ head_sha="$(git rev-parse "${head_ref}^{commit}")"
 # parent is the merge commit that triggered the release workflow. Matching the
 # parent prevents a concurrent newer release from being assigned to this build.
 while IFS= read -r tag; do
+  # Tags are attacker-controlled repository metadata. Keep the value within
+  # the release-version grammar before it reaches build scripts.
+  if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+    continue
+  fi
   tag_commit="$(git rev-parse "${tag}^{commit}")"
   read -r -a commit_line <<<"$(git rev-list --parents -n 1 "${tag_commit}")"
   for parent_sha in "${commit_line[@]:1}"; do

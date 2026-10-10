@@ -14,7 +14,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -263,7 +263,16 @@ export default function UploadScreen() {
     const files = [...pendingFiles];
     clearPendingFiles();
     files.forEach((file) => {
-      void uploadFile(file.uri, file.filename, file.mimeType);
+      // A URL/deep link is not proof that the user intended to upload its
+      // referenced file. Require explicit confirmation before reading it.
+      Alert.alert(
+        t("upload.share_confirm_title"),
+        t("upload.share_confirm_msg", { filename: file.filename }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          { text: t("upload.confirm_upload"), onPress: () => void uploadFile(file.uri, file.filename, file.mimeType) },
+        ],
+      );
     });
   }, [pendingFiles, isAuthenticated, clearPendingFiles, uploadFile]);
 

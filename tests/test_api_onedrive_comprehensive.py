@@ -7,10 +7,31 @@ Target: Bring coverage from 10.51% to 70%+
 
 from datetime import timedelta
 from unittest.mock import Mock, mock_open, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+
+
+def _start_global_transaction(client: TestClient, client_id: str, client_secret: str, tenant_id: str = "common"):
+    transactions = {}
+
+    def store(state, transaction):
+        transactions[state] = transaction
+
+    with (
+        patch("app.views.onedrive.get_current_user", return_value={"is_admin": True}),
+        patch("app.views.onedrive.get_current_owner_id", return_value="admin@example.com"),
+        patch("app.views.onedrive.store_pending_onedrive_oauth", side_effect=store),
+    ):
+        response = client.post(
+            "/onedrive-auth-start",
+            data={"client_id": client_id, "client_secret": client_secret, "tenant_id": tenant_id},
+        )
+    assert response.status_code == 200
+    state = parse_qs(urlparse(response.json()["authorize_url"]).query)["state"][0]
+    return state, transactions
 
 
 @pytest.mark.unit
@@ -26,22 +47,23 @@ class TestExchangeOneDriveToken:
             "expires_in": 3600,
         }
 
-        response = client.post(
-            "/api/onedrive/exchange-token",
-            data={
-                "client_id": "test_client_id",
-                "client_secret": "test_client_secret",
-                "redirect_uri": "http://localhost/callback",
-                "code": "test_auth_code",
-                "tenant_id": "common",
-            },
-        )
+        state, transactions = _start_global_transaction(client, "test_client_id", "test_client_secret")
+        with (
+            patch("app.api.onedrive.get_current_owner_id", return_value="admin@example.com"),
+            patch("app.api.onedrive._require_admin", return_value={"is_admin": True}),
+            patch("app.api.onedrive.consume_pending_onedrive_oauth", side_effect=transactions.pop),
+            patch("app.api.onedrive.save_setting_to_db", return_value=True),
+            patch("app.api.onedrive.update_env_file"),
+            patch("app.api.onedrive.notify_settings_updated"),
+        ):
+            response = client.post(
+                "/api/onedrive/exchange-token",
+                data={"redirect_uri": "ignored", "code": "test_auth_code", "tenant_id": "ignored", "state": state},
+            )
 
         assert response.status_code == 200
         data = response.json()
-        assert "refresh_token" in data
-        assert data["refresh_token"] == "test_refresh_token"
-        assert data["expires_in"] == 3600
+        assert data == {"status": "success", "access_token": ""}
         assert mock_exchange.called
 
     @patch("app.api.onedrive.exchange_oauth_token")
@@ -53,16 +75,21 @@ class TestExchangeOneDriveToken:
             "expires_in": 3600,
         }
 
-        response = client.post(
-            "/api/onedrive/exchange-token",
-            data={
-                "client_id": "test_client_id",
-                "client_secret": "test_client_secret",
-                "redirect_uri": "http://localhost/callback",
-                "code": "test_auth_code",
-                "tenant_id": "specific-tenant-id",
-            },
+        state, transactions = _start_global_transaction(
+            client, "test_client_id", "test_client_secret", tenant_id="specific-tenant-id"
         )
+        with (
+            patch("app.api.onedrive.get_current_owner_id", return_value="admin@example.com"),
+            patch("app.api.onedrive._require_admin", return_value={"is_admin": True}),
+            patch("app.api.onedrive.consume_pending_onedrive_oauth", side_effect=transactions.pop),
+            patch("app.api.onedrive.save_setting_to_db", return_value=True),
+            patch("app.api.onedrive.update_env_file"),
+            patch("app.api.onedrive.notify_settings_updated"),
+        ):
+            response = client.post(
+                "/api/onedrive/exchange-token",
+                data={"redirect_uri": "ignored", "code": "test_auth_code", "tenant_id": "ignored", "state": state},
+            )
 
         assert response.status_code == 200
         # Verify the token URL uses the correct tenant
@@ -97,7 +124,7 @@ class TestExchangeOneDriveToken:
             },
         )
 
-        assert response.status_code == 422  # Validation error
+        assert response.status_code == 400  # Endpoint reports missing form fields explicitly
 
 
 @pytest.mark.unit
@@ -106,7 +133,7 @@ class TestTestOneDriveToken:
 
     @patch("requests.post")
     @patch("requests.get")
-    @patch("app.config.settings")
+    @patch("app.api.onedrive.settings")
     def test_test_token_success(self, mock_settings, mock_get, mock_post, client: TestClient):
         """Test successful token validation with properly mocked responses."""
         # Configure settings with property mocking
@@ -142,7 +169,7 @@ class TestTestOneDriveToken:
         data = response.json()
         assert "status" in data
 
-    @patch("app.config.settings")
+    @patch("app.api.onedrive.settings")
     def test_test_token_not_configured(self, mock_settings, client: TestClient):
         """Test when OneDrive credentials are not configured."""
         mock_settings.onedrive_refresh_token = None
@@ -487,6 +514,15 @@ class TestSaveOneDriveSettings:
 class TestUpdateOneDriveSettings:
     """Tests for POST /onedrive/update-settings endpoint."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     @patch("app.tasks.upload_to_onedrive.get_onedrive_token")
     @patch("app.config.settings")
     def test_update_settings_success(self, mock_settings, mock_get_token, client: TestClient):
@@ -560,10 +596,27 @@ class TestUpdateOneDriveSettings:
         # Should still update settings even if test fails
         assert response.status_code == 200
 
+    def test_update_settings_denies_non_admin(self, client: TestClient):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+        response = client.post("/api/onedrive/update-settings", data={"refresh_token": "token"})
+        assert response.status_code == 403
+
 
 @pytest.mark.unit
 class TestGetOneDriveFullConfig:
     """Tests for GET /onedrive/get-full-config endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
 
     @patch("app.config.settings")
     def test_get_full_config_success(self, mock_settings, client: TestClient):
@@ -610,15 +663,31 @@ class TestGetOneDriveFullConfig:
         # May return success or error depending on settings access
         assert "status" in data
 
+    def test_get_full_config_denies_non_admin(self, client: TestClient):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+        response = client.get("/api/onedrive/get-full-config")
+        assert response.status_code == 403
+
 
 @pytest.mark.unit
 class TestOneDriveIntegration:
     """Integration tests for OneDrive endpoints."""
 
-    @patch("app.config.settings")
-    def test_full_oauth_flow(self, mock_settings, client: TestClient):
-        """Test complete OAuth flow: exchange token, update settings, test token."""
-        # Step 1: Exchange token
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
+    def test_full_oauth_flow(self, client: TestClient):
+        """A global OAuth exchange persists its transaction-bound client server-side."""
+        state, transactions = _start_global_transaction(client, "test_client_id", "test_client_secret")
         with patch("app.api.onedrive.exchange_oauth_token") as mock_exchange:
             mock_exchange.return_value = {
                 "refresh_token": "new_refresh_token",
@@ -626,31 +695,21 @@ class TestOneDriveIntegration:
                 "expires_in": 3600,
             }
 
-            response = client.post(
-                "/api/onedrive/exchange-token",
-                data={
-                    "client_id": "test_client_id",
-                    "client_secret": "test_client_secret",
-                    "redirect_uri": "http://localhost/callback",
-                    "code": "auth_code",
-                    "tenant_id": "common",
-                },
-            )
+            with (
+                patch("app.api.onedrive.get_current_owner_id", return_value="admin@example.com"),
+                patch("app.api.onedrive._require_admin", return_value={"is_admin": True}),
+                patch("app.api.onedrive.consume_pending_onedrive_oauth", side_effect=transactions.pop),
+                patch("app.api.onedrive.save_setting_to_db", return_value=True),
+                patch("app.api.onedrive.update_env_file"),
+                patch("app.api.onedrive.notify_settings_updated"),
+            ):
+                response = client.post(
+                    "/api/onedrive/exchange-token",
+                    data={"redirect_uri": "ignored", "code": "auth_code", "tenant_id": "ignored", "state": state},
+                )
 
             assert response.status_code == 200
-            token_data = response.json()
-
-        # Step 2: Update settings
-        with patch("app.tasks.upload_to_onedrive.get_onedrive_token"):
-            response = client.post(
-                "/api/onedrive/update-settings",
-                data={
-                    "refresh_token": token_data["refresh_token"],
-                    "tenant_id": "common",
-                },
-            )
-
-            assert response.status_code == 200
+            assert response.json()["status"] == "success"
 
     @patch("requests.post")
     @patch("requests.get")

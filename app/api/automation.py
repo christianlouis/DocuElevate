@@ -24,16 +24,19 @@ import os
 import re
 import tempfile
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import AutomationHook
-from app.utils.automation_hooks import SAMPLE_PAYLOADS
+from app.utils.automation_hooks import SAMPLE_PAYLOADS, get_event_owner_id
 from app.utils.filename_utils import sanitize_filename
+from app.utils.network import is_private_ip
 from app.utils.webhook import VALID_EVENTS
 
 logger = logging.getLogger(__name__)
@@ -65,7 +68,7 @@ def _require_api_user(request: Request) -> dict:
         return user
 
     # Fall back to session user
-    user = request.session.get("user")
+    user = get_current_user(request)
     if user:
         return user
 
@@ -145,6 +148,19 @@ def _validate_events(events: list[str]) -> None:
         )
 
 
+def _validate_target_url(target_url: str) -> None:
+    """Reject local targets so hooks cannot be used as an SSRF primitive."""
+    parsed = urlparse(target_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A public HTTP(S) target URL is required"
+        )
+    if is_private_ip(parsed.hostname):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Private or local target URLs are not allowed"
+        )
+
+
 def _hook_to_response(hook: AutomationHook) -> dict[str, Any]:
     """Convert a DB model instance to a response dict."""
     try:
@@ -180,6 +196,12 @@ def subscribe_hook(body: HookSubscribe, db: DbSession, user: AuthUser) -> dict[s
     ``target_url``.
     """
     _validate_events(body.events)
+    _validate_target_url(body.target_url)
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
 
     hook = AutomationHook(
         target_url=body.target_url,
@@ -188,6 +210,7 @@ def subscribe_hook(body: HookSubscribe, db: DbSession, user: AuthUser) -> dict[s
         is_active=True,
         hook_type=body.hook_type or "generic",
         description=body.description,
+        owner_id=str(owner_id),
     )
     try:
         db.add(hook)
@@ -211,7 +234,14 @@ def unsubscribe_hook(hook_id: int, db: DbSession, user: AuthUser) -> None:
 
     Zapier calls this endpoint when a Zap is turned off or deleted.
     """
-    hook = db.query(AutomationHook).filter(AutomationHook.id == hook_id).first()
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
+    hook = (
+        db.query(AutomationHook).filter(AutomationHook.id == hook_id, AutomationHook.owner_id == str(owner_id)).first()
+    )
     if not hook:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Hook not found")
 
@@ -228,7 +258,12 @@ def unsubscribe_hook(hook_id: int, db: DbSession, user: AuthUser) -> None:
 @router.get("/hooks", summary="List automation hook subscriptions")
 def list_hooks(db: DbSession, user: AuthUser) -> list[dict[str, Any]]:
     """Return all active automation hook subscriptions."""
-    hooks = db.query(AutomationHook).order_by(AutomationHook.id).all()
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
+    hooks = db.query(AutomationHook).filter(AutomationHook.owner_id == str(owner_id)).order_by(AutomationHook.id).all()
     return [_hook_to_response(h) for h in hooks]
 
 
@@ -294,11 +329,26 @@ def action_upload(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
     safe_filename = sanitize_filename(original_filename)
 
-    owner_id = user.get("preferred_username") or user.get("email") or user.get("id", "automation")
+    owner_id = get_event_owner_id(user)
+    if not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Authenticated user has no stable owner identifier"
+        )
+    if settings.multi_user_enabled:
+        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
+
+        try:
+            check_upload_allowed(db, str(owner_id), get_user_tier_id(db, str(owner_id)))
+        except QuotaExceeded as exc:
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
     workdir = settings.workdir or tempfile.gettempdir()
     upload_dir = os.path.join(workdir, "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
+    # Never let two uploads overwrite each other; the generated name remains
+    # safe while preserving the caller's extension for downstream detection.
+    stem, extension = os.path.splitext(safe_filename)
+    safe_filename = f"{stem}_{os.urandom(8).hex()}{extension}"
     dest_path = os.path.join(upload_dir, safe_filename)
     try:
         contents = file.file.read()
@@ -313,7 +363,7 @@ def action_upload(
     try:
         from app.tasks.process_document import process_document
 
-        result = process_document.delay(dest_path, owner_id)
+        result = process_document.delay(dest_path, original_filename=basename, owner_id=str(owner_id))
         task_id = result.id
         logger.info("Automation upload queued: file=%s, task=%s, owner=%s", safe_filename, task_id, owner_id)
     except Exception as exc:
