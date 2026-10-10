@@ -680,7 +680,7 @@ def _test_google_drive_connection(config: dict[str, Any] | None, credentials: di
             google_credentials = GoogleCredentials(
                 None,
                 refresh_token=refresh_token,
-                token_uri=creds.get("token_uri") or "https://oauth2.googleapis.com/token",
+                token_uri="https://oauth2.googleapis.com/token",
                 client_id=client_id,
                 client_secret=client_secret,
                 scopes=[scope],

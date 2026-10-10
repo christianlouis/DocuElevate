@@ -197,7 +197,7 @@ QR code login allows users to authenticate a mobile device by scanning a QR code
 
 1. The authenticated web user opens the **QR Login** page and a challenge QR code is displayed.
 2. The user opens the DocuElevate mobile app and taps **Scan QR Code to Login**, which opens the device camera.
-3. The mobile app scans the QR code. The QR code contains both the challenge token and the server URL (`docuelevate://qr-login?token=...&server=...`), so there is no need to enter the server URL manually.
+3. The mobile app scans the QR code. The QR code contains the HTTPS challenge URL. The app only accepts the server origin already selected during login and asks the user to confirm before claiming the one-time challenge.
 4. An API token is issued for the mobile device and the web UI is notified via polling.
 
 > **Note:** The countdown timer on the web page uses server-relative time (TTL in seconds) rather than absolute timestamps, so it works correctly even when the client's clock is not in sync with the server.

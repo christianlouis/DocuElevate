@@ -59,8 +59,11 @@ def get_current_owner_id(request: Request) -> str | None:
     Returns:
         A stable string identifier for the user, or ``None``.
     """
-    # 1. Session-based auth (most common for web UI)
-    user = request.session.get("user")
+    # 1. Resolve through the central auth helper so revoked/expired
+    # server-side sessions cannot continue to pass owner-scoped dependencies.
+    from app.auth import get_current_user
+
+    user = get_current_user(request)
     if user and isinstance(user, dict):
         return _owner_id_from_user(user)
 

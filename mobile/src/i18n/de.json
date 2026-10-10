@@ -31,6 +31,7 @@
     "server_url_required": "Server-URL erforderlich",
     "server_url_required_msg": "Bitte geben Sie die URL Ihres DocuElevate-Servers ein.",
     "invalid_url": "Ungültige URL",
+    "https_only_msg": "Verwenden Sie eine gültige HTTPS-URL für Ihren DocuElevate-Server.",
     "invalid_url_msg": "Die Server-URL muss mit http:// oder https:// beginnen",
     "sign_in_failed": "Anmeldung fehlgeschlagen",
     "qr_login_failed": "QR-Anmeldung fehlgeschlagen"

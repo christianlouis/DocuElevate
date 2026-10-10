@@ -154,14 +154,43 @@ class TestCommentsUIRendering:
         assert 'id="comments-list"' not in html
         assert 'id="annotation-form"' not in html
 
-    def test_annotations_page_has_embedpdf_viewer_for_pdf(self, client: TestClient, db_session, tmp_path):
-        """The annotations page should include the EmbedPDF viewer for PDF files."""
+    def test_annotations_page_has_native_pdf_viewer_for_pdf(self, client: TestClient, db_session, tmp_path):
+        """The annotations page should use a native viewer without third-party script execution."""
         f = _create_file(db_session, tmp_path)
         resp = client.get(f"/files/{f.id}/annotations")
         assert resp.status_code == 200
         html = resp.text
         assert 'id="embedpdf-viewer"' in html
-        assert "@embedpdf/snippet" in html
+        assert "@embedpdf/snippet" not in html
+
+    def test_annotations_page_uses_pinned_self_hosted_embedpdf_bundle(self, client: TestClient, db_session, tmp_path):
+        """The viewer runtime and WASM engine must be served from the application itself."""
+        f = _create_file(db_session, tmp_path)
+        resp = client.get(f"/files/{f.id}/annotations")
+        assert resp.status_code == 200
+        html = resp.text
+        assert "/static/vendor/embedpdf/2.15.1/embedpdf.js" in html
+        assert "/static/vendor/embedpdf/2.15.1/pdfium.wasm" in html
+        assert "fontFallback: null" in html
+        assert "fonts: { ui: null, signature: null }" in html
+        assert "stamp: { manifests: [] }" in html
+        assert "cdn.jsdelivr.net/npm/@embedpdf" not in html
+
+        from pathlib import Path
+
+        bundle = Path("frontend/static/vendor/embedpdf/2.15.1")
+        for asset in (
+            "embedpdf.js",
+            "embedpdf-cl9qiF45.js",
+            "worker-engine-BCCrxWYm.js",
+            "browser-BKLM0ThC-BCLQGPD6.js",
+            "pdfium.wasm",
+            "LICENSE",
+        ):
+            assert (bundle / asset).is_file()
+            assert (bundle / asset).stat().st_size > 0
+        assert client.get("/static/vendor/embedpdf/2.15.1/embedpdf.js").status_code == 200
+        assert client.get("/static/vendor/embedpdf/2.15.1/pdfium.wasm").status_code == 200
 
     def test_embedpdf_init_subscribes_to_page_change(self, client: TestClient, db_session, tmp_path):
         """The EmbedPDF init script should subscribe to page change events to sync the form."""

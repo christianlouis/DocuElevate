@@ -286,6 +286,7 @@ def _dispatch_routed_webhook(file_record: FileRecord, task_id: str | None) -> No
                 "assignment_source": file_record.pipeline_assignment_source,
                 "routing_rule_id": file_record.pipeline_routing_rule_id,
                 "reason": file_record.pipeline_assignment_reason,
+                "owner_id": file_record.owner_id,
             },
         )
     except Exception as webhook_exc:

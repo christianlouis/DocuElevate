@@ -174,6 +174,29 @@ class TestRequireLogin:
             assert result["user"]["id"] == "test_user"
 
     @pytest.mark.asyncio
+    async def test_rejects_revoked_server_side_session(self):
+        """A signed cookie must not restore access after its server record is revoked."""
+        with (
+            patch("app.auth.AUTH_ENABLED", True),
+            patch("app.utils.session_manager.validate_session", return_value=False),
+        ):
+            from app.auth import require_login
+
+            @require_login
+            async def protected_endpoint(request: Request):
+                return {"message": "success"}
+
+            mock_request = MagicMock(spec=Request)
+            mock_request.session = {"user": {"id": "test_user"}, "_session_token": "revoked"}
+            mock_request.url = MagicMock()
+            mock_request.url.__str__ = MagicMock(return_value="http://test.com/protected")
+
+            result = await protected_endpoint(mock_request)
+
+            assert isinstance(result, RedirectResponse)
+            assert "user" not in mock_request.session
+
+    @pytest.mark.asyncio
     async def test_handles_async_functions(self):
         """Test that require_login correctly wraps async functions."""
         with patch("app.auth.AUTH_ENABLED", True):

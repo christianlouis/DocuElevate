@@ -480,6 +480,7 @@ Credentials are encrypted at rest using Fernet encryption.
 | `SESSION_LIFETIME_DAYS` | Number of days before a server-side session expires. Default: `30`. |
 | `SESSION_LIFETIME_CUSTOM_DAYS` | Override for `SESSION_LIFETIME_DAYS` when set.        |
 | `QR_LOGIN_CHALLENGE_TTL_SECONDS` | How long a QR login challenge is valid (seconds). Default: `120`. |
+| `UNOWNED_DOCS_VISIBLE_TO_ALL` | Show documents without an owner to every authenticated user. Default: `false`. |
 | `ADMIN_USERNAME`        | Username for basic authentication (when not using OIDC).     |
 | `ADMIN_PASSWORD`        | Password for basic authentication (when not using OIDC).     |
 | `ADMIN_GROUP_NAME`      | Group name in OIDC claims that grants admin access. Default: `admin`. |

@@ -41,6 +41,7 @@ class TestUpdateSettingsEmptyRefreshToken:
                 result = await update_google_drive_settings(
                     request=mock_request,
                     refresh_token="",  # falsy → branch 88->93
+                    _admin={"is_admin": True},
                     client_id="cid",
                     client_secret=None,
                     folder_id=None,

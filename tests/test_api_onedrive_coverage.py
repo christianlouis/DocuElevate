@@ -322,6 +322,15 @@ class TestSaveSettingsException:
 class TestUpdateSettingsException:
     """Cover lines 400-402: update_onedrive_settings outer exception handler."""
 
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
+
     def test_update_settings_outer_exception(self, client: TestClient):
         """Trigger the outer exception handler in update_onedrive_settings."""
         with patch("app.api.onedrive.save_setting_to_db", side_effect=Exception("DB crash")):
@@ -338,6 +347,15 @@ class TestUpdateSettingsException:
 @pytest.mark.unit
 class TestGetFullConfigException:
     """Cover lines 436-438: get_onedrive_full_config exception handler."""
+
+    @pytest.fixture(autouse=True)
+    def _admin_override(self):
+        from app.api.onedrive import _require_admin
+        from app.main import app as fastapi_app
+
+        fastapi_app.dependency_overrides[_require_admin] = lambda: {"is_admin": True}
+        yield
+        fastapi_app.dependency_overrides.pop(_require_admin, None)
 
     def test_get_full_config_exception(self, client: TestClient):
         """Trigger the exception handler in get_onedrive_full_config."""

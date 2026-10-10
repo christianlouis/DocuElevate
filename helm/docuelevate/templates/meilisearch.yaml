@@ -35,7 +35,7 @@ spec:
           env:
             - name: MEILI_NO_ANALYTICS
               value: {{ .Values.meilisearch.env.MEILI_NO_ANALYTICS | quote }}
-            {{- if .Values.secrets.MEILISEARCH_API_KEY }}
+            {{- if or .Values.secrets.MEILISEARCH_API_KEY .Values.secrets.existingSecret }}
             - name: MEILI_MASTER_KEY
               valueFrom:
                 secretKeyRef:

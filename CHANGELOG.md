@@ -12,6 +12,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Build System
+
+- **deps**: Bump @xmldom/xmldom from 0.8.13 to 0.8.15 in /mobile
+  ([#1248](https://github.com/christianlouis/DocuElevate/pull/1248),
+  [`9c78755`](https://github.com/christianlouis/DocuElevate/commit/9c787557c890163502eb421cbacfd6a9cde8d8f8))
+
+- **deps**: Bump baseline-browser-mapping from 2.10.8 to 2.11.22 in /mobile
+  ([#1250](https://github.com/christianlouis/DocuElevate/pull/1250),
+  [`0af62bb`](https://github.com/christianlouis/DocuElevate/commit/0af62bb91be44af98eef45f70fd77cf5681d49b8))
+
+- **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
+  ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
+  [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
+
+- **deps-dev**: Bump @humanfs/node from 0.16.7 to 0.16.8 in /mobile
+  ([#1249](https://github.com/christianlouis/DocuElevate/pull/1249),
+  [`824efe4`](https://github.com/christianlouis/DocuElevate/commit/824efe48449aeadd8657cf53c57a543e26cbb775))
+
+- **deps-dev**: Bump postcss-selector-parser from 6.1.2 to 6.1.4 in /frontend
+  ([#1245](https://github.com/christianlouis/DocuElevate/pull/1245),
+  [`16f8ac8`](https://github.com/christianlouis/DocuElevate/commit/16f8ac8b10f964bd298ee39943c998171d7b8ec3))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`df02215`](https://github.com/christianlouis/DocuElevate/commit/df02215eab959df044b1786d28ba4f2243cd4686))
+
+- **changelog**: Update changelog [skip ci]
+  ([`9d7739c`](https://github.com/christianlouis/DocuElevate/commit/9d7739ca909803a2e03c3fec4625690c5dcb372f))
+
+
+## Unreleased
+
+### Build System
+
+- **deps**: Bump baseline-browser-mapping from 2.10.8 to 2.11.22 in /mobile
+  ([#1250](https://github.com/christianlouis/DocuElevate/pull/1250),
+  [`0af62bb`](https://github.com/christianlouis/DocuElevate/commit/0af62bb91be44af98eef45f70fd77cf5681d49b8))
+
+- **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
+  ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
+  [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9d7739c`](https://github.com/christianlouis/DocuElevate/commit/9d7739ca909803a2e03c3fec4625690c5dcb372f))
+
+
+## Unreleased
+
+### Build System
+
+- **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
+  ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
+  [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
+
+
+## v0.188.7 (2026-10-03)
+
+### Bug Fixes
+
+- **security**: Close Critical and High isolation and credential gaps
+  ([#1254](https://github.com/christianlouis/DocuElevate/pull/1254),
+  [`fac0500`](https://github.com/christianlouis/DocuElevate/commit/fac0500ec9cef85208b520835b21a93d40c2fd3b))
+
+### Chores
+
+- Clean up sentinel security fix metadata
+  ([`b2d6cb4`](https://github.com/christianlouis/DocuElevate/commit/b2d6cb41874da7460f52a49dc39d9c54a7ac91b4))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`6c10885`](https://github.com/christianlouis/DocuElevate/commit/6c10885490c95f3b706fef280fc06359bee6faba))
+
+
+## Unreleased
+
 ### Chores
 
 - Clean up sentinel security fix metadata
