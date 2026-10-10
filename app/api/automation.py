@@ -325,10 +325,9 @@ def action_upload(
 
     # Sanitise filename to prevent path traversal attacks. Validate before
     # sanitizing so punctuation-only names cannot become generated fallbacks.
-    basename = os.path.basename(original_filename)
-    if not basename or not _has_upload_filename_content(basename):
+    if not _has_upload_filename_content(original_filename):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required")
-    safe_filename = sanitize_filename(basename)
+    safe_filename = sanitize_filename(original_filename)
 
     owner_id = get_event_owner_id(user)
     if not owner_id:
@@ -364,7 +363,7 @@ def action_upload(
     try:
         from app.tasks.process_document import process_document
 
-        result = process_document.delay(dest_path, original_filename=basename, owner_id=str(owner_id))
+        result = process_document.delay(dest_path, original_filename=safe_filename, owner_id=str(owner_id))
         task_id = result.id
         logger.info("Automation upload queued: file=%s, task=%s, owner=%s", safe_filename, task_id, owner_id)
     except Exception as exc:
