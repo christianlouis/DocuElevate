@@ -14,6 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Build System
 
+- **deps**: Bump baseline-browser-mapping from 2.10.8 to 2.11.22 in /mobile
+  ([#1250](https://github.com/christianlouis/DocuElevate/pull/1250),
+  [`0af62bb`](https://github.com/christianlouis/DocuElevate/commit/0af62bb91be44af98eef45f70fd77cf5681d49b8))
+
+- **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
+  ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
+  [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`9d7739c`](https://github.com/christianlouis/DocuElevate/commit/9d7739ca909803a2e03c3fec4625690c5dcb372f))
+
+
+## Unreleased
+
+### Build System
+
 - **deps**: Bump fast-uri from 3.1.4 to 3.1.8 in /mobile
   ([#1251](https://github.com/christianlouis/DocuElevate/pull/1251),
   [`5944367`](https://github.com/christianlouis/DocuElevate/commit/59443675d5c9875109570d242eebef74c0a152c6))
