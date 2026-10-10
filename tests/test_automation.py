@@ -1,4 +1,5 @@
 import re
+
 """Tests for the Zapier / Make.com automation integration.
 
 Covers:
