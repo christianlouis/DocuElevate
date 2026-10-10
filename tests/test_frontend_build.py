@@ -70,9 +70,9 @@ class TestFrontendBuildAssets:
         """input.css must include Tailwind CSS directives."""
         input_css = FRONTEND_DIR / "input.css"
         content = input_css.read_text(encoding="utf-8")
-        assert "@tailwind base" in content, "Missing @tailwind base directive"
-        assert "@tailwind components" in content, "Missing @tailwind components directive"
-        assert "@tailwind utilities" in content, "Missing @tailwind utilities directive"
+        # Tailwind v4 uses a single import instead of the v3 layer directives.
+        assert '@import "tailwindcss"' in content, "Missing Tailwind v4 import"
+        assert '@config "./tailwind.config.js"' in content, "Missing Tailwind v4 config directive"
 
     def test_tailwind_config_exists(self) -> None:
         """tailwind.config.js must exist in the frontend directory."""

@@ -11,6 +11,7 @@ Covers:
 """
 
 import json
+import re
 import time
 from unittest.mock import MagicMock
 
