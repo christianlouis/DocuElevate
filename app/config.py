@@ -164,7 +164,7 @@ class Settings(BaseSettings):
     # Making Dropbox optional
     dropbox_enabled: bool = Field(
         default=True,
-        description="Enable Dropbox as an upload destination. Set to False to disable uploads even when credentials are configured.",
+        description="Enable Dropbox as an upload destination.",
     )
     dropbox_app_key: Optional[str] = None
     dropbox_app_secret: Optional[str] = None
@@ -365,12 +365,12 @@ class Settings(BaseSettings):
         ),
     )
     unowned_docs_visible_to_all: bool = Field(
-        default=True,
+        default=False,
         description=(
             "In multi-user mode, controls whether documents without an owner (owner_id is NULL) "
             "are visible to all authenticated users. When True, unowned documents appear in every "
             "user's file list alongside their own files. When False, only admins can see unowned "
-            "documents. Default: True for compatibility; bundled deployments override this to False."
+            "documents. Default: False."
         ),
     )
     default_owner_id: Optional[str] = Field(

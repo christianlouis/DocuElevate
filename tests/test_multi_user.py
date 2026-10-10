@@ -89,6 +89,7 @@ def _mock_request(user=None):
     """Create a mock request with the given session user."""
     request = MagicMock()
     request.session = {"user": user} if user else {}
+    request.state.api_token_user = user
     return request
 
 
@@ -210,7 +211,7 @@ class TestGetCurrentOwnerId:
         request = MagicMock()
         request.session = {"user": {"sub": "session-sub", "email": "session@example.com"}}
         request.state.api_token_user = {"id": "tok-owner"}
-        assert get_current_owner_id(request) == "session-sub"
+        assert get_current_owner_id(request) == "tok-owner"
 
     @pytest.mark.unit
     def test_resolves_bearer_token_directly(self, mu_engine, mu_session):
@@ -616,9 +617,9 @@ class TestUnownedDocsConfig:
     """Verify the new multi-user configuration settings."""
 
     @pytest.mark.unit
-    def test_unowned_docs_visible_compatibility_default_true(self):
-        """The code fallback preserves legacy auth-free visibility."""
-        assert settings.unowned_docs_visible_to_all is True
+    def test_unowned_docs_are_quarantined_by_default(self):
+        """Unowned documents are hidden unless explicitly enabled."""
+        assert settings.unowned_docs_visible_to_all is False
 
     @pytest.mark.unit
     def test_default_owner_id_default_none(self):
@@ -823,8 +824,11 @@ class TestAssignOwnerEndpoint:
             _patch_multi_user(True),
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"id": "platform-admin", "is_admin": True}}),
+                new_callable=lambda: property(
+                    lambda self: {"user": {"id": "platform-admin", "is_admin": True}, "_session_token": "test-session"}
+                ),
             ),
+            patch("app.utils.session_manager.validate_session", return_value=True),
         ):
             response = client.post(f"/api/files/assign-owner?owner_id=target&file_ids={record.id}")
 
@@ -859,8 +863,11 @@ class TestAssignOwnerEndpoint:
             _patch_multi_user(True),
             patch(
                 "starlette.requests.Request.session",
-                new_callable=lambda: property(lambda self: {"user": {"id": "tribe-admin", "is_admin": False}}),
+                new_callable=lambda: property(
+                    lambda self: {"user": {"id": "tribe-admin", "is_admin": False}, "_session_token": "test-session"}
+                ),
             ),
+            patch("app.utils.session_manager.validate_session", return_value=True),
         ):
             response = client.post(f"/api/files/assign-owner?owner_id=target&file_ids={record.id}")
 

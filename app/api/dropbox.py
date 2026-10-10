@@ -11,7 +11,7 @@ import httpx
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.auth import require_login
+from app.auth import get_current_user, require_login
 from app.config import settings
 from app.database import get_db
 from app.utils.oauth_helper import exchange_oauth_token
@@ -26,7 +26,7 @@ router = APIRouter()
 
 def _require_admin(request: Request) -> dict:
     """Ensure the caller is an admin. Raises 403 otherwise."""
-    user = request.session.get("user")
+    user = get_current_user(request)
     if not user or not user.get("is_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
@@ -159,10 +159,10 @@ async def exchange_dropbox_token(
 
 
 @router.post("/dropbox/update-settings")
-@require_login
 async def update_dropbox_settings(
     request: Request,
     refresh_token: Annotated[str, Form(...)],
+    _admin: AdminUser,
     app_key: Annotated[Optional[str], Form()] = None,
     app_secret: Annotated[Optional[str], Form()] = None,
     folder_path: Annotated[Optional[str], Form()] = None,

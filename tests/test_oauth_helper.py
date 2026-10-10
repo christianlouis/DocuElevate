@@ -4,6 +4,7 @@ Tests for app/utils/oauth_helper.py
 Tests OAuth token exchange helper functions.
 """
 
+import logging
 from unittest.mock import Mock, patch
 
 import pytest
@@ -84,8 +85,9 @@ class TestOAuthTokenExchange:
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
-    def test_exchange_oauth_token_http_error(self, mock_settings, mock_post):
+    def test_exchange_oauth_token_http_error(self, mock_settings, mock_post, caplog):
         """Test handling of HTTP error responses"""
+        caplog.set_level(logging.INFO)
         from app.utils.oauth_helper import exchange_oauth_token
 
         mock_settings.http_request_timeout = 30
@@ -95,7 +97,7 @@ class TestOAuthTokenExchange:
         mock_response.status_code = 400
         mock_response.json.return_value = {
             "error": "invalid_grant",
-            "error_description": "Invalid authorization code",
+            "error_description": "provider-secret-description",
         }
         mock_post.return_value = mock_response
 
@@ -110,6 +112,32 @@ class TestOAuthTokenExchange:
             )
 
         assert exc_info.value.status_code == 400
+        assert "invalid_grant" in str(exc_info.value.detail)
+        assert "provider-secret-description" not in str(exc_info.value.detail)
+        assert "provider-secret-description" not in caplog.text
+
+    @patch("app.utils.oauth_helper.requests.post")
+    @patch("app.utils.oauth_helper.settings")
+    def test_exchange_oauth_token_unknown_error_code_is_generic(self, mock_settings, mock_post, caplog):
+        """Unknown provider error codes must not be reflected to callers or logs."""
+        caplog.set_level(logging.INFO)
+        from app.utils.oauth_helper import exchange_oauth_token
+
+        mock_settings.http_request_timeout = 30
+        mock_response = Mock(status_code=400)
+        mock_response.json.return_value = {
+            "error": "provider-secret-error",
+            "error_description": "provider-secret-description",
+        }
+        mock_post.return_value = mock_response
+
+        with pytest.raises(HTTPException) as exc_info:
+            exchange_oauth_token("TestProvider", "https://oauth.example.com/token", {})
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "Token exchange failed: provider_error"
+        assert "provider-secret" not in str(exc_info.value.detail)
+        assert "provider-secret" not in caplog.text
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
@@ -142,14 +170,15 @@ class TestOAuthTokenExchange:
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
-    def test_exchange_oauth_token_network_error(self, mock_settings, mock_post):
+    def test_exchange_oauth_token_network_error(self, mock_settings, mock_post, caplog):
         """Test handling of network errors"""
+        caplog.set_level(logging.INFO)
         from app.utils.oauth_helper import exchange_oauth_token
 
         mock_settings.http_request_timeout = 30
 
         # Mock network error
-        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
+        mock_post.side_effect = requests.exceptions.ConnectionError("network-secret")
 
         payload = {"grant_type": "authorization_code"}
 
@@ -162,17 +191,20 @@ class TestOAuthTokenExchange:
             )
 
         assert exc_info.value.status_code == 503
+        assert "network-secret" not in str(exc_info.value.detail)
+        assert "network-secret" not in caplog.text
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
-    def test_exchange_oauth_token_timeout_error(self, mock_settings, mock_post):
+    def test_exchange_oauth_token_timeout_error(self, mock_settings, mock_post, caplog):
         """Test handling of timeout errors"""
+        caplog.set_level(logging.INFO)
         from app.utils.oauth_helper import exchange_oauth_token
 
         mock_settings.http_request_timeout = 30
 
         # Mock timeout error
-        mock_post.side_effect = requests.exceptions.Timeout("Request timed out")
+        mock_post.side_effect = requests.exceptions.Timeout("timeout-secret")
 
         payload = {"grant_type": "authorization_code"}
 
@@ -185,11 +217,14 @@ class TestOAuthTokenExchange:
             )
 
         assert exc_info.value.status_code == 503
+        assert "timeout-secret" not in str(exc_info.value.detail)
+        assert "timeout-secret" not in caplog.text
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
-    def test_exchange_oauth_token_json_decode_error(self, mock_settings, mock_post):
+    def test_exchange_oauth_token_json_decode_error(self, mock_settings, mock_post, caplog):
         """Test handling when error response is not valid JSON"""
+        caplog.set_level(logging.INFO)
         from app.utils.oauth_helper import exchange_oauth_token
 
         mock_settings.http_request_timeout = 30
@@ -197,7 +232,7 @@ class TestOAuthTokenExchange:
         # Mock error response with invalid JSON
         mock_response = Mock()
         mock_response.status_code = 400
-        mock_response.json.side_effect = requests.exceptions.JSONDecodeError("Invalid JSON", "", 0)
+        mock_response.json.side_effect = requests.exceptions.JSONDecodeError("json-secret", "", 0)
         mock_post.return_value = mock_response
 
         payload = {"grant_type": "authorization_code"}
@@ -211,17 +246,20 @@ class TestOAuthTokenExchange:
             )
 
         assert exc_info.value.status_code == 400
+        assert "json-secret" not in str(exc_info.value.detail)
+        assert "json-secret" not in caplog.text
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
-    def test_exchange_oauth_token_unexpected_exception(self, mock_settings, mock_post):
+    def test_exchange_oauth_token_unexpected_exception(self, mock_settings, mock_post, caplog):
         """Test handling of unexpected exceptions"""
+        caplog.set_level(logging.INFO)
         from app.utils.oauth_helper import exchange_oauth_token
 
         mock_settings.http_request_timeout = 30
 
         # Mock unexpected exception
-        mock_post.side_effect = Exception("Unexpected error")
+        mock_post.side_effect = Exception("unexpected-secret")
 
         payload = {"grant_type": "authorization_code"}
 
@@ -234,6 +272,8 @@ class TestOAuthTokenExchange:
             )
 
         assert exc_info.value.status_code == 500
+        assert "unexpected-secret" not in str(exc_info.value.detail)
+        assert "unexpected-secret" not in caplog.text
 
     @patch("app.utils.oauth_helper.requests.post")
     @patch("app.utils.oauth_helper.settings")
