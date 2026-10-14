@@ -131,7 +131,7 @@ async def intake_document(
     if existing:
         return _serialize_intake(existing, duplicate=True)
 
-    safe_filename = sanitize_filename(os.path.basename(file.filename or "document")) or "document"
+    safe_filename = sanitize_filename(file.filename or "document") or "document"
     extension = os.path.splitext(safe_filename)[1].lower()
     content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
     supported_type = extension in ALLOWED_EXTENSIONS if extension else content_type in ALLOWED_MIME_TYPES
