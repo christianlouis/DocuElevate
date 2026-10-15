@@ -53,3 +53,7 @@
 **Vulnerability:** A Cross-Site Scripting (XSS) vulnerability existed in `frontend/templates/status_dashboard.html` where unescaped external API data (`data.message` and `data.token_info.expires_in_human`) was directly concatenated and injected into the DOM via `.innerHTML`.
 **Learning:** Even if some variables in a string are wrapped in `escapeHtml()`, assigning the final concatenated string to `.innerHTML` can still be vulnerable if any part of the string contains untrusted data or if the structure allows escaping boundaries. It is safer to use native DOM methods.
 **Prevention:** Always use safe DOM manipulation techniques like `document.createElement()`, `document.createTextNode()`, and `.textContent` instead of `.innerHTML` when handling untrusted data, even if it comes from an internal API.
+## 2025-02-14 - Fix DOM-based XSS via Error Message innerHTML injection
+**Vulnerability:** In frontend templates (e.g., frontend/templates/file_detail.html), dynamic content like fetch error messages (error.message) was assigned to .innerHTML.
+**Learning:** API responses and fetch error messages might reflect manipulated input or be intercepted, leading to DOM-based XSS if placed into innerHTML unsafely. Using custom utilities like window.escapeHtml may fail if the script is missing, crashing the application.
+**Prevention:** Use document.createElement and .textContent for error messages rather than .innerHTML, avoiding both XSS risks and reliance on global sanitization utilities.
