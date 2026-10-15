@@ -785,13 +785,25 @@
         document.getElementById(contentId).textContent = data.text;
       } catch (error) {
         console.error('Error loading text:', error);
-        document.getElementById(loadingId).innerHTML = `
-          <div style="color: #f56565;">
-            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-            <p>Failed to extract text from PDF</p>
-            <p style="font-size: 0.875rem;">${error.message}</p>
-          </div>
-        `;
+        const errorContainer = document.createElement('div');
+        errorContainer.style.color = '#f56565';
+        const errorIcon = document.createElement('i');
+        errorIcon.className = 'fas fa-exclamation-triangle';
+        errorIcon.style.fontSize = '2rem';
+        errorIcon.style.marginBottom = '1rem';
+        const errorTitle = document.createElement('p');
+        errorTitle.textContent = 'Failed to extract text from PDF';
+        const errorMsg = document.createElement('p');
+        errorMsg.style.fontSize = '0.875rem';
+        errorMsg.textContent = error.message;
+
+        errorContainer.appendChild(errorIcon);
+        errorContainer.appendChild(errorTitle);
+        errorContainer.appendChild(errorMsg);
+
+        const loadingDiv = document.getElementById(loadingId);
+        loadingDiv.textContent = '';
+        loadingDiv.appendChild(errorContainer);
       }
     }
 
