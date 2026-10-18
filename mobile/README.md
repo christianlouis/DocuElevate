@@ -178,7 +178,7 @@ expo-router strips the scheme and tries to match `/private/var/mobile/…` as an
 To use the share sheet:
 
 1. Ensure the app is installed on the device.
-2. Open a supported file or select mail text/attachment in Files, Mail, Safari, or another sharing app. Raw `.eml` files may be rejected because `message/rfc822` is not currently an allowed backend upload type.
+2. Open a supported file or select mail text/attachment in Files, Mail, Safari, or another sharing app. Raw `.eml` files are intentionally rejected before upload; share the mail text, share a PDF attachment, or print the mail as PDF and retry. The native extension is limited to 10 items; iOS may cancel the share before launch when more than 10 files are selected.
 3. Tap the **Share** button → find **DocuElevate** in the share sheet.
 4. Review the staged items in the native extension and press **Upload**. The app reports success only after the server returns a queued task or duplicate receipt.
 
