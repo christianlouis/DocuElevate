@@ -69,9 +69,17 @@ final class ShareViewController: UIViewController, URLSessionTaskDelegate {
   private func stage(_ provider: NSItemProvider, _ index: Int, _ completion: @escaping (Result<StagedFile, StageError>) -> Void) {
     let fileTypes = [UTType.pdf.identifier, "public.email-message", UTType.fileURL.identifier]
     if let type = fileTypes.first(where: provider.hasItemConformingToTypeIdentifier) {
+      if type == UTType.fileURL.identifier {
+        provider.loadObject(ofClass: NSURL.self) { object, error in
+          let source = (object as? NSURL).map { $0 as URL }
+          guard let source, error == nil else { completion(.failure(StageError(message: self.itemError(index, "could not be read")))); return }
+          self.stageFile(source, provider.suggestedName, index, completion)
+        }
+        return
+      }
       provider.loadFileRepresentation(forTypeIdentifier: type) { source, error in
         guard let source, error == nil else { completion(.failure(StageError(message: self.itemError(index, "could not be read")))); return }
-        if source.pathExtension.lowercased() == "eml" { completion(.failure(self.rawEMLGuard(index))); return }
+        if source.pathExtension.lowercased() == "eml" || self.isRawEML(source, provider.suggestedName) { completion(.failure(self.rawEMLGuard(index))); return }
         do { let values = try source.resourceValues(forKeys: [.fileSizeKey, .nameKey]); guard let size = values.fileSize, Int64(size) <= maxItemBytes else { completion(.failure(StageError(message: self.itemError(index, "exceeds the 50 MB limit")))); return }; let name = self.safeName(values.name ?? source.lastPathComponent); let dest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name); try FileManager.default.copyItem(at: source, to: dest); completion(.success(StagedFile(index: index, url: dest, name: name, mime: self.mime(source.pathExtension)))) } catch { completion(.failure(StageError(message: self.itemError(index, "could not be staged")))) }
       }; return
     }
@@ -85,9 +93,13 @@ final class ShareViewController: UIViewController, URLSessionTaskDelegate {
     guard provider.hasItemConformingToTypeIdentifier(UTType.data.identifier) else { completion(.failure(StageError(message: itemError(index, "uses an unsupported format")))); return }
     provider.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { source, error in
       guard let source, error == nil else { completion(.failure(StageError(message: self.itemError(index, "could not be read")))); return }
-      if source.pathExtension.lowercased() == "eml" { completion(.failure(self.rawEMLGuard(index))); return }
+      if source.pathExtension.lowercased() == "eml" || self.isRawEML(source, provider.suggestedName) { completion(.failure(self.rawEMLGuard(index))); return }
       do { let values = try source.resourceValues(forKeys: [.fileSizeKey, .nameKey]); guard let size = values.fileSize, Int64(size) <= maxItemBytes else { completion(.failure(StageError(message: self.itemError(index, "exceeds the 50 MB limit")))); return }; let name = self.safeName(values.name ?? source.lastPathComponent); let dest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name); try FileManager.default.copyItem(at: source, to: dest); completion(.success(StagedFile(index: index, url: dest, name: name, mime: self.mime(source.pathExtension)))) } catch { completion(.failure(StageError(message: self.itemError(index, "could not be staged")))) }
     }
+  }
+  private func stageFile(_ source: URL, _ suggestedName: String?, _ index: Int, _ completion: @escaping (Result<StagedFile, StageError>) -> Void) {
+    if isRawEML(source, suggestedName) { completion(.failure(rawEMLGuard(index))); return }
+    do { let values = try source.resourceValues(forKeys: [.fileSizeKey, .nameKey]); guard let size = values.fileSize, Int64(size) <= maxItemBytes else { completion(.failure(StageError(message: itemError(index, "exceeds the 50 MB limit")))); return }; let name = safeName(values.name ?? source.lastPathComponent); let dest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + "-" + name); try FileManager.default.copyItem(at: source, to: dest); completion(.success(StagedFile(index: index, url: dest, name: name, mime: mime(source.pathExtension)))) } catch { completion(.failure(StageError(message: itemError(index, "could not be staged")))) }
   }
   private func makePDF(_ text: String, _ index: Int) throws -> StagedFile {
     guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CocoaError(.fileWriteInvalidFileName) }
@@ -133,6 +145,7 @@ final class ShareViewController: UIViewController, URLSessionTaskDelegate {
   private func removeCurrentBody() { if let currentBody { try? FileManager.default.removeItem(at: currentBody) }; currentBody = nil }
   private func fail(_ message: String) { status.text = message; spinner.stopAnimating(); upload.isHidden = true; retry.isHidden = true }
   private func itemError(_ index: Int, _ message: String) -> String { "Item \(index + 1) \(message)." }
+  private func isRawEML(_ source: URL, _ suggestedName: String?) -> Bool { source.pathExtension.lowercased() == "eml" || suggestedName?.split(separator: ".").last?.lowercased() == "eml" }
   private func rawEMLGuard(_ index: Int) -> StageError { StageError(message: itemError(index, "raw .eml files are not supported; share the mail text or a PDF attachment, or print the mail as PDF, then retry")) }
   private func safeName(_ value: String) -> String { let clean = value.replacingOccurrences(of: "[^A-Za-z0-9._-]", with: "_", options: .regularExpression); return clean.isEmpty ? "shared-document" : String(clean.prefix(120)) }
   private func mime(_ ext: String) -> String { UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream" }
@@ -212,6 +225,22 @@ private extension ShareViewController {
     }
     let rawEMLMessage = rawEMLGuard(0).message
     guard rawEMLMessage.contains("raw .eml files"), rawEMLMessage.contains("mail text"), rawEMLMessage.contains("PDF attachment"), rawEMLMessage.contains("print the mail as PDF") else { fatalError("raw .eml guidance is incomplete") }
+    guard isRawEML(URL(fileURLWithPath: "/tmp/file_URL"), "message.eml"), isRawEML(URL(fileURLWithPath: "/tmp/message.eml"), nil), !isRawEML(URL(fileURLWithPath: "/tmp/file_URL"), "message.pdf") else { fatalError("raw .eml source-name guard is invalid") }
+    let emlFixture = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".eml")
+    try Data("From: harness@example.invalid\r\n\r\nMail body".utf8).write(to: emlFixture)
+    defer { try? FileManager.default.removeItem(at: emlFixture) }
+    guard let emlProvider = NSItemProvider(contentsOf: emlFixture) else { fatalError("could not create EML item provider") }
+    var emlResult: Result<StagedFile, StageError>?
+    stage(emlProvider, 0) { emlResult = $0 }
+    guard waitForHarness({ emlResult != nil }), case let .failure(error) = emlResult!, error.message.contains("raw .eml files") else { fatalError("NSItemProvider EML was not rejected before upload") }
+    let genericBytes = Data("generic file bytes".utf8), genericFixture = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".bin")
+    try genericBytes.write(to: genericFixture)
+    defer { try? FileManager.default.removeItem(at: genericFixture) }
+    guard let genericProvider = NSItemProvider(contentsOf: genericFixture) else { fatalError("could not create generic item provider") }
+    var genericResult: Result<StagedFile, StageError>?
+    stage(genericProvider, 0) { genericResult = $0 }
+    guard waitForHarness({ genericResult != nil }), case let .success(genericFile) = genericResult!, (try? Data(contentsOf: genericFile.url)) == genericBytes else { fatalError("NSItemProvider generic file bytes changed") }
+    try? FileManager.default.removeItem(at: genericFile.url)
 
     let credential = Credential(baseURL: "https://example.invalid", token: "harness-token", ownerID: "harness-owner")
     func stagedFile(_ name: String, _ index: Int) throws -> StagedFile {
