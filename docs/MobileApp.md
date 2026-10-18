@@ -195,18 +195,18 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 
 ### Share Sheet (iOS) / Share Intent (Android)
 
-The app registers itself as a share target so any file can be sent directly to DocuElevate from another app:
+The native iOS Share Extension is the primary iOS share path; Android continues to use its share intents:
 
 1. Open a file in Files, Mail, Safari, or any other app.
 2. Tap the **Share** button (iOS) or **Share** (Android).
 3. Find and tap **DocuElevate** in the share sheet.
-4. The file is immediately uploaded and queued for processing.
+4. On iOS, review the staged items and press **Upload**. The extension reports success only after a queued task receipt or duplicate receipt. Android continues through the app upload flow.
 
 > **Note:** The app must be installed on the device for it to appear in the share sheet.
 
-#### iOS implementation
+#### iOS fallback: Open With and deep links
 
-`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a URL via `application:openURL:options:`.
+`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`. This supports the fallback Open With/deep-link path; it is not the native Share Extension implementation. When the user opens a matching file with that fallback, iOS opens the main app with a URL via `application:openURL:options:`.
 
 The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
 
@@ -230,9 +230,9 @@ Shared files may reference paths outside the app's sandbox or use security-scope
 - **`UploadScreen`** uses `expo-file-system` (`FileSystem.copyAsync`) to copy any `file://` URI that is outside the app's cache/documents directory to a local cache path before uploading.  This ensures the file is readable regardless of its origin.
 - **MIME type inference**: Both `+not-found.tsx` and the `Linking` handler in `_layout.tsx` infer the MIME type from the file extension (e.g. `.pdf` → `application/pdf`) so the server receives a correct `Content-Type` instead of `application/octet-stream`.
 
-##### iOS fallback: Open With and deep links
+##### Native extension boundary
 
-The native share extension is the primary standalone iOS path and runs in its own process with the scoped shared Keychain record described above. The existing `CFBundleDocumentTypes` registration and `Linking` handling remain a fallback for **Open With** and deep-link flows when the native extension is unavailable. Expo Go supports the development deep-link fallback, but it does not include or validate the native share extension; use a development or production native build for share-extension testing.
+The native share extension is the primary standalone iOS path and runs in its own process with the scoped shared Keychain record described above. Expo Go supports the development deep-link fallback, but it does not include or validate the native share extension; use a development or production native build for share-extension testing.
 
 #### Android implementation
 
