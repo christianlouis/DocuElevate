@@ -7,6 +7,8 @@
  */
 
 import * as SecureStore from "expo-secure-store";
+import { checkMobileSupport } from "./mobileAuth";
+export { MobileServerPreflightError, MobileServerUnsupportedError } from "./mobileAuth";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -132,6 +134,10 @@ class DocuElevateAPI {
 
   getBaseUrl(): string {
     return this.baseUrl;
+  }
+
+  async checkMobileSupport(baseUrl: string): Promise<void> {
+    await checkMobileSupport(baseUrl);
   }
 
   private async getToken(): Promise<string | null> {
