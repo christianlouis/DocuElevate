@@ -2,7 +2,7 @@ node_modules/
 .expo/
 dist/
 web-build/
-ios/
+/ios/
 android/
 .env
 google-services.json

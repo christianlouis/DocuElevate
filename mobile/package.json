@@ -5,11 +5,13 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
+    "test:mobile-auth": "node --test scripts/mobile-auth.test.mjs",
+    "test:share-extension": "node --test scripts/share-extension.test.mjs",
     "build:ios": "eas build --platform ios",
     "build:android": "eas build --platform android",
     "build:all": "eas build --platform all",
@@ -17,6 +19,7 @@
     "submit:android": "eas submit --platform android"
   },
   "dependencies": {
+    "@docuelevate/auth-bridge": "file:./modules/docuelevate-auth",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.4.0",
@@ -82,7 +85,9 @@
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
-        "exclude": ["@react-navigation/bottom-tabs"]
+        "exclude": [
+          "@react-navigation/bottom-tabs"
+        ]
       }
     }
   }

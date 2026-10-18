@@ -105,11 +105,11 @@ No code changes are needed to point the app at a different server.  The server U
 ## Authentication Flow
 
 1. User enters the DocuElevate server URL on the login screen
-2. The app opens the server's `/login?mobile=1&redirect_uri=docuelevate://callback` URL in the system browser
-3. The user authenticates (SSO / local login)
-4. The server redirects back to `docuelevate://callback`
-5. The app exchanges the browser session for a permanent API token via `POST /api/mobile/generate-token`
-6. The token is stored in the device's secure keychain (`expo-secure-store`)
+2. The app makes an unauthenticated `GET /api/mobile/whoami` preflight. A `401` or `403` confirms that the server supports mobile login; a `404` stops the flow before opening the browser.
+3. The app opens the server's `/login?mobile=1&redirect_uri=docuelevate://callback` URL in the system browser
+4. The user authenticates (SSO / local login)
+5. The server redirects back to `docuelevate://callback?token=<token>`
+6. The app verifies the callback target and stores the returned token in the device's secure keychain (`expo-secure-store`)
 
 ## Push Notifications
 
@@ -178,15 +178,15 @@ expo-router strips the scheme and tries to match `/private/var/mobile/…` as an
 To use the share sheet:
 
 1. Ensure the app is installed on the device.
-2. Open any supported file in Files, Mail, Safari, etc.
+2. Open a supported file or select mail text/attachment in Files, Mail, Safari, or another sharing app. Raw `.eml` files may be rejected because `message/rfc822` is not currently an allowed backend upload type.
 3. Tap the **Share** button → find **DocuElevate** in the share sheet.
-4. The file is uploaded immediately.
+4. Review the staged items in the native extension and press **Upload**. The app reports success only after the server returns a queued task or duplicate receipt.
 
 > **Note:** `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` means DocuElevate appears in the share sheet as an option but does **not** become the default app for any file type.
 
-#### iOS Action Extension (future enhancement)
+#### iOS fallback: Open With and deep links
 
-Apps like DeepL ("Translate in DeepL") appear as **Action Extensions** in the iOS share sheet, which requires a separate Xcode target and native Swift code.  This is planned as a future enhancement.  The current `CFBundleDocumentTypes` approach places DocuElevate in the "Open With" row of the share sheet.
+The standalone native iOS share extension is the primary share path. The existing `CFBundleDocumentTypes` registration and deep-link handling remain a fallback for **Open With** flows. Expo Go supports the development deep-link fallback, but it does not include or validate the native share extension; use a native development or production build for share-extension testing.
 
 ### Android – how it works
 
@@ -210,6 +210,10 @@ The mobile app uses the following backend endpoints:
 Authentication uses `Authorization: Bearer <api_token>` on all requests.
 
 ## Troubleshooting
+
+### Mobile login says the server is unsupported
+
+The app checks `/api/mobile/whoami` before opening the browser. If that endpoint returns `404`, update the DocuElevate server to a release with mobile API support and try again. Network errors are reported separately; check the URL and that the server is reachable from the device.
 
 ### `Session expired Local session` when running `eas build`
 
