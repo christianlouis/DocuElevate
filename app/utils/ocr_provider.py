@@ -54,9 +54,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _iter_pdf_pages(
-    convert_from_path: Callable[..., List[Any]], file_path: str, *, dpi: int
-) -> Iterator[Any]:
+def _iter_pdf_pages(convert_from_path: Callable[..., List[Any]], file_path: str, *, dpi: int) -> Iterator[Any]:
     """Yield one rendered PDF page at a time and release it after use.
 
     ``pdf2image.convert_from_path`` otherwise returns every rendered page in a
