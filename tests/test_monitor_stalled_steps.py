@@ -175,7 +175,9 @@ class TestMonitorStalledSteps:
     @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
     @patch("app.tasks.monitor_stalled_steps.SessionLocal")
     @patch("app.tasks.monitor_stalled_steps.time.sleep")
-    def test_transient_commit_error_retries_and_returns_recovered(self, mock_sleep, mock_session_local, mock_mark_stalled):
+    def test_transient_commit_error_retries_and_returns_recovered(
+        self, mock_sleep, mock_session_local, mock_mark_stalled
+    ):
         from app.tasks.monitor_stalled_steps import monitor_stalled_steps
 
         first_db, second_db = MagicMock(), MagicMock()

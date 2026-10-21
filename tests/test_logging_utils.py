@@ -5,9 +5,13 @@ Tests task progress logging functionality.
 """
 
 import logging
+from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
+from app.models import FileProcessingStep, ProcessingLog
 
 
 @pytest.mark.unit
@@ -315,7 +319,7 @@ class TestLogTaskProgressWithFileProcessingStep:
         mock_session_local.return_value.__enter__.return_value = mock_db
 
         # No existing step record
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
         # Mock datetime
         from datetime import datetime as dt
@@ -359,7 +363,7 @@ class TestLogTaskProgressWithFileProcessingStep:
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
         from datetime import datetime as dt
         from datetime import timezone
@@ -398,7 +402,7 @@ class TestLogTaskProgressWithFileProcessingStep:
         mock_db = MagicMock()
         mock_session_local.return_value.__enter__.return_value = mock_db
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
 
         from datetime import datetime as dt
         from datetime import timezone
@@ -438,7 +442,9 @@ class TestLogTaskProgressWithFileProcessingStep:
         # Existing step without started_at
         mock_existing_step = Mock()
         mock_existing_step.started_at = None
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_existing_step
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = (
+            mock_existing_step
+        )
 
         from datetime import datetime as dt
         from datetime import timezone
@@ -462,6 +468,71 @@ class TestLogTaskProgressWithFileProcessingStep:
     @patch("app.utils.logging.SessionLocal")
     @patch("app.utils.logging.ProcessingLog")
     @patch("app.utils.logging.datetime")
+    def test_new_task_attempt_resets_stale_in_progress_step(
+        self, mock_datetime, mock_processing_log, mock_session_local
+    ):
+        """A retry with a new task ID starts a fresh timeout window."""
+        from datetime import datetime as dt
+        from datetime import timezone
+
+        from app.utils.logging import log_task_progress
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        old_started_at = dt(2024, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.timezone = timezone
+
+        step = Mock(status="in_progress", started_at=old_started_at, completed_at=old_started_at, error_message="old")
+        latest_log = Mock(task_id="old-task")
+        latest_log_query = MagicMock()
+        latest_log_query.filter.return_value.order_by.return_value.first.return_value = latest_log
+        step_query = MagicMock()
+        step_query.filter.return_value.with_for_update.return_value.first.return_value = step
+        mock_db.query.side_effect = [step_query, latest_log_query]
+
+        log_task_progress("new-task", "ocr", "in_progress", "retrying", file_id=4)
+
+        assert step.status == "in_progress"
+        assert step.started_at == mock_now
+        assert step.completed_at is None
+        assert step.error_message is None
+
+    @patch("app.utils.logging.SessionLocal")
+    @patch("app.utils.logging.ProcessingLog")
+    @patch("app.utils.logging.datetime")
+    def test_same_task_progress_preserves_active_start(self, mock_datetime, mock_processing_log, mock_session_local):
+        """Repeated progress from the same task must not postpone its timeout."""
+        from datetime import datetime as dt
+        from datetime import timezone
+
+        from app.utils.logging import log_task_progress
+
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_now = dt(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        old_started_at = dt(2024, 1, 1, 11, 0, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.timezone = timezone
+
+        step = Mock(status="in_progress", started_at=old_started_at, completed_at=None, error_message=None)
+        latest_log = Mock(task_id="same-task")
+        latest_log_query = MagicMock()
+        latest_log_query.filter.return_value.order_by.return_value.first.return_value = latest_log
+        step_query = MagicMock()
+        step_query.filter.return_value.with_for_update.return_value.first.return_value = step
+        mock_db.query.side_effect = [step_query, latest_log_query]
+
+        log_task_progress("same-task", "ocr", "in_progress", "still working", file_id=4)
+
+        assert step.started_at == old_started_at
+        assert step.completed_at is None
+        assert step.error_message is None
+
+    @patch("app.utils.logging.SessionLocal")
+    @patch("app.utils.logging.ProcessingLog")
+    @patch("app.utils.logging.datetime")
     def test_updates_existing_file_processing_step_to_failure_with_detail(
         self, mock_datetime, mock_processing_log, mock_session_local
     ):
@@ -473,7 +544,9 @@ class TestLogTaskProgressWithFileProcessingStep:
 
         mock_existing_step = Mock()
         mock_existing_step.started_at = None
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_existing_step
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = (
+            mock_existing_step
+        )
 
         from datetime import datetime as dt
         from datetime import timezone
@@ -494,6 +567,90 @@ class TestLogTaskProgressWithFileProcessingStep:
         # Verify error_message uses detail when message is None
         assert mock_existing_step.error_message == "Detailed error information"
         assert mock_existing_step.status == "failure"
+
+    def test_real_session_restarts_attempts_without_postponing_heartbeats(self, db_session):
+        """Retry state is refreshed, while a same-task overdue heartbeat remains detectable."""
+        from app.utils.logging import log_task_progress
+        from app.utils.step_timeout import mark_stalled_steps_as_failed
+
+        old_started_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        terminal_step = FileProcessingStep(
+            file_id=101,
+            step_name="terminal_retry",
+            status="failure",
+            started_at=old_started_at,
+            completed_at=old_started_at,
+            error_message="previous attempt failed",
+        )
+        retried_step = FileProcessingStep(
+            file_id=101,
+            step_name="requeued_step",
+            status="in_progress",
+            started_at=old_started_at,
+        )
+        heartbeat_step = FileProcessingStep(
+            file_id=101,
+            step_name="heartbeat_step",
+            status="in_progress",
+            started_at=old_started_at,
+        )
+        db_session.add_all(
+            [
+                terminal_step,
+                retried_step,
+                heartbeat_step,
+                ProcessingLog(file_id=101, step_name="terminal_retry", task_id="same-task", status="failure"),
+                ProcessingLog(file_id=101, step_name="requeued_step", task_id="old-task", status="in_progress"),
+                ProcessingLog(file_id=101, step_name="heartbeat_step", task_id="same-task", status="in_progress"),
+            ]
+        )
+        db_session.commit()
+
+        with patch("app.utils.logging.SessionLocal", return_value=nullcontext(db_session)):
+            log_task_progress("same-task", "terminal_retry", "in_progress", file_id=101, detail="retry")
+            log_task_progress("new-task", "requeued_step", "in_progress", file_id=101, detail="retry")
+            log_task_progress("same-task", "heartbeat_step", "in_progress", file_id=101, detail="heartbeat")
+
+        assert terminal_step.status == "in_progress"
+        assert terminal_step.completed_at is None
+        assert terminal_step.error_message is None
+        old_started_at_naive = old_started_at.replace(tzinfo=None)
+        assert terminal_step.started_at > old_started_at_naive
+        assert retried_step.started_at > old_started_at_naive
+        assert heartbeat_step.started_at == old_started_at_naive
+        assert mark_stalled_steps_as_failed(db_session, timeout_seconds=600, file_id=101) == 1
+        assert heartbeat_step.status == "failure"
+
+        timed_out_started_at = heartbeat_step.started_at
+        timed_out_completed_at = heartbeat_step.completed_at
+        timed_out_error = heartbeat_step.error_message
+        with patch("app.utils.logging.SessionLocal", return_value=nullcontext(db_session)):
+            # Celery self.retry keeps the task ID: it must not reopen a step
+            # already closed by the monitor or postpone its original deadline.
+            log_task_progress("same-task", "heartbeat_step", "in_progress", file_id=101, detail="retrying")
+
+        assert heartbeat_step.status == "failure"
+        assert heartbeat_step.started_at == timed_out_started_at
+        assert heartbeat_step.completed_at == timed_out_completed_at
+        assert heartbeat_step.error_message == timed_out_error
+        latest_heartbeat = (
+            db_session.query(ProcessingLog)
+            .filter(ProcessingLog.file_id == 101, ProcessingLog.step_name == "heartbeat_step")
+            .order_by(ProcessingLog.id.desc())
+            .first()
+        )
+        assert latest_heartbeat.task_id == "same-task"
+        assert latest_heartbeat.status == "in_progress"
+        assert latest_heartbeat.detail == "retrying"
+
+        with patch("app.utils.logging.SessionLocal", return_value=nullcontext(db_session)):
+            log_task_progress("new-task", "heartbeat_step", "in_progress", file_id=101, detail="requeued")
+
+        assert heartbeat_step.status == "in_progress"
+        assert heartbeat_step.started_at > timed_out_started_at
+        assert heartbeat_step.completed_at is None
+        assert heartbeat_step.error_message is None
+        assert mark_stalled_steps_as_failed(db_session, timeout_seconds=600, file_id=101) == 0
 
     @patch("app.utils.logging.SessionLocal")
     @patch("app.utils.logging.ProcessingLog")

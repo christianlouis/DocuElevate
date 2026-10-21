@@ -94,25 +94,15 @@ def log_task_progress(
 
     try:
         with SessionLocal() as db:
-            # Log to ProcessingLog (for historical viewing)
-            log_entry = ProcessingLog(
-                task_id=task_id,
-                step_name=step_name,
-                status=status,
-                message=message,
-                file_id=file_id,
-                detail=detail,
-            )
-            db.add(log_entry)
-
             # Update FileProcessingStep table (for status tracking) if file_id is provided
             if file_id and step_name:
                 # Find or create the step record
-                step_record = (
+                step_query = (
                     db.query(FileProcessingStep)
                     .filter(FileProcessingStep.file_id == file_id, FileProcessingStep.step_name == step_name)
-                    .first()
+                    .with_for_update()
                 )
+                step_record = step_query.first()
 
                 now = datetime.now(timezone.utc)
 
@@ -129,13 +119,60 @@ def log_task_progress(
                     db.add(step_record)
                 else:
                     # Update existing step record
-                    step_record.status = status
-                    if status == "in_progress" and not step_record.started_at:
+                    latest_log = None
+                    if status == "in_progress" and (
+                        (step_record.status == "in_progress" and step_record.started_at)
+                        or (step_record.status == "failure" and step_record.completed_at)
+                    ):
+                        latest_log = (
+                            db.query(ProcessingLog)
+                            .filter(ProcessingLog.file_id == file_id, ProcessingLog.step_name == step_name)
+                            .order_by(ProcessingLog.id.desc())
+                            .first()
+                        )
+                    same_timed_out_attempt = (
+                        status == "in_progress"
+                        and step_record.status == "failure"
+                        and (step_record.error_message or "").startswith("Step timeout after ")
+                        and latest_log is not None
+                        and latest_log.task_id == task_id
+                        and latest_log.status == "in_progress"
+                    )
+                    # Celery self.retry keeps the task ID. After the monitor closes
+                    # that attempt, preserve the terminal timeout instead of reopening it.
+                    new_attempt = (
+                        status == "in_progress"
+                        and not same_timed_out_attempt
+                        and (
+                            step_record.status != "in_progress"
+                            or not step_record.started_at
+                            or latest_log is None
+                            or latest_log.task_id != task_id
+                        )
+                    )
+                    if not same_timed_out_attempt:
+                        step_record.status = status
+                    if new_attempt:
                         step_record.started_at = now
-                    if status in ("success", "failure", "skipped"):
+                    if not same_timed_out_attempt and status in ("success", "failure", "skipped"):
                         step_record.completed_at = now
-                    if status == "failure":
+                    if not same_timed_out_attempt and status == "failure":
                         step_record.error_message = message or detail
+                    elif not same_timed_out_attempt and status == "in_progress" and new_attempt:
+                        # A retry must not retain terminal fields from the prior attempt.
+                        step_record.completed_at = None
+                        step_record.error_message = None
+
+            # Log to ProcessingLog (for historical viewing)
+            log_entry = ProcessingLog(
+                task_id=task_id,
+                step_name=step_name,
+                status=status,
+                message=message,
+                file_id=file_id,
+                detail=detail,
+            )
+            db.add(log_entry)
 
             db.commit()
     except Exception:

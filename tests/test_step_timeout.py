@@ -132,7 +132,9 @@ class TestStepTimeout:
         # Mock database session with file filter
         mock_db = MagicMock()
         # Set up the query chain with file filter (first .filter() for conditions, second for file_id)
-        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = [
+            step
+        ]
 
         # Run function for specific file
         count = mark_stalled_steps_as_failed(mock_db, file_id=42)
@@ -247,7 +249,9 @@ class TestStepTimeout:
         # Mock database session
         mock_db = MagicMock()
         # Set up the query chain with file filter (first .filter() for conditions, second for file_id)
-        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = [
+            step
+        ]
 
         # Run function
         result = check_and_recover_stalled_file(mock_db, 42)

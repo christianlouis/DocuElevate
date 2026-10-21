@@ -98,9 +98,9 @@ def mark_stalled_steps_as_failed(
 
     # A commit can fail after the in-memory objects were changed.  Emit these
     # success records only after the transaction has been durably persisted.
-    for file_id, step_name, started_at in recovered_steps:
+    for recovered_file_id, step_name, started_at in recovered_steps:
         logger.error(
-            f"[File {file_id}] Step '{step_name}' marked as failed due to timeout. "
+            f"[File {recovered_file_id}] Step '{step_name}' marked as failed due to timeout. "
             f"Started: {started_at}, Timeout at: {now}"
         )
 
