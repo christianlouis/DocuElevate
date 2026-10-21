@@ -112,11 +112,9 @@ class TestMonitorStalledSteps:
         # Simulate an exception
         mock_mark_stalled.side_effect = Exception("Database error")
 
-        # Run task
-        result = monitor_stalled_steps()
-
-        # Verify error handling
-        assert result == {"error": "Database error", "recovered": 0}
+        # Terminal failures must reach Celery as failures.
+        with pytest.raises(Exception, match="Database error"):
+            monitor_stalled_steps()
         mock_logger.error.assert_called_once()
 
     @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
@@ -159,7 +157,8 @@ class TestMonitorStalledSteps:
 
     @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
     @patch("app.tasks.monitor_stalled_steps.SessionLocal")
-    def test_transient_query_error_retries_with_fresh_session(self, mock_session_local, mock_mark_stalled):
+    @patch("app.tasks.monitor_stalled_steps.time.sleep")
+    def test_transient_query_error_retries_with_fresh_session(self, mock_sleep, mock_session_local, mock_mark_stalled):
         from app.tasks.monitor_stalled_steps import monitor_stalled_steps
 
         first, second = MagicMock(), MagicMock()
@@ -170,10 +169,12 @@ class TestMonitorStalledSteps:
 
         assert monitor_stalled_steps() == {"recovered": 0}
         assert mock_session_local.call_count == 2
+        mock_sleep.assert_called_once_with(1)
 
     @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
     @patch("app.tasks.monitor_stalled_steps.SessionLocal")
-    def test_transient_commit_error_retries_and_returns_recovered(self, mock_session_local, mock_mark_stalled):
+    @patch("app.tasks.monitor_stalled_steps.time.sleep")
+    def test_transient_commit_error_retries_and_returns_recovered(self, mock_sleep, mock_session_local, mock_mark_stalled):
         from app.tasks.monitor_stalled_steps import monitor_stalled_steps
 
         first_db, second_db = MagicMock(), MagicMock()
@@ -200,14 +201,14 @@ class TestMonitorStalledSteps:
         mock_session_local.return_value = db
         mock_mark_stalled.side_effect = OperationalError(message, None, None)
 
-        result = monitor_stalled_steps()
-        assert result["recovered"] == 0
-        assert "error" in result
+        with pytest.raises(OperationalError):
+            monitor_stalled_steps()
         mock_session_local.assert_called_once_with()
 
     @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
     @patch("app.tasks.monitor_stalled_steps.SessionLocal")
-    def test_transient_errors_exhaust_bounded_attempts(self, mock_session_local, mock_mark_stalled):
+    @patch("app.tasks.monitor_stalled_steps.time.sleep")
+    def test_transient_errors_exhaust_bounded_attempts(self, mock_sleep, mock_session_local, mock_mark_stalled):
         from app.tasks.monitor_stalled_steps import monitor_stalled_steps
 
         db = MagicMock()
@@ -215,7 +216,7 @@ class TestMonitorStalledSteps:
         mock_session_local.return_value = db
         mock_mark_stalled.side_effect = OperationalError("connection reset by peer", None, None)
 
-        result = monitor_stalled_steps()
-        assert result["recovered"] == 0
-        assert "error" in result
+        with pytest.raises(OperationalError):
+            monitor_stalled_steps()
         assert mock_session_local.call_count == 3
+        assert [call.args[0] for call in mock_sleep.call_args_list] == [1, 2]

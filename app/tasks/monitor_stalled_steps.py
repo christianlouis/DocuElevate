@@ -6,6 +6,7 @@ that have been stuck in "in_progress" state for too long and mark them as failed
 """
 
 import logging
+import time
 from datetime import datetime, timezone
 
 from sqlalchemy.exc import OperationalError
@@ -54,12 +55,19 @@ def monitor_stalled_steps():
 
     Scheduled to run every minute via Celery Beat.
     """
-    db = None
     for attempt in range(1, _MAX_DB_ATTEMPTS + 1):
         try:
             with SessionLocal() as db:
-                stalled_count = mark_stalled_steps_as_failed(db)
-            db = None
+                try:
+                    stalled_count = mark_stalled_steps_as_failed(db)
+                except Exception:
+                    # Keep rollback in the live session context.  If rollback
+                    # fails, the original database exception remains primary.
+                    try:
+                        db.rollback()
+                    except Exception:
+                        logger.exception("Could not roll back stalled-step monitor session")
+                    raise
 
             # This log is deliberately outside the session context: the
             # utility emits per-step success logs only after its commit too.
@@ -73,20 +81,18 @@ def monitor_stalled_steps():
                 logger.debug(f"[{datetime.now(timezone.utc).isoformat()}] No stalled steps found.")
             return {"recovered": stalled_count}
         except OperationalError as error:
-            if db is not None:
-                db.rollback()
-                db = None
             if not _is_transient_disconnect(error) or attempt == _MAX_DB_ATTEMPTS:
                 logger.error("Error in monitor_stalled_steps task: %s", error, exc_info=True)
-                return {"error": str(error), "recovered": 0}
+                raise
+            delay = min(2 ** (attempt - 1), 4)
             logger.warning(
                 "Transient database disconnect in monitor_stalled_steps; retrying with a fresh session "
-                "(attempt %s/%s)",
+                "(attempt %s/%s, delay=%ss)",
                 attempt + 1,
                 _MAX_DB_ATTEMPTS,
+                delay,
             )
+            time.sleep(delay)
         except Exception as error:
-            if db is not None:
-                db.rollback()
             logger.error("Error in monitor_stalled_steps task: %s", error, exc_info=True)
-            return {"error": str(error), "recovered": 0}
+            raise

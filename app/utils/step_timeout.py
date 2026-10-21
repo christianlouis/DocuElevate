@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import FileProcessingStep
@@ -70,8 +70,7 @@ def mark_stalled_steps_as_failed(
     # Prevent two beat workers from recovering the same row concurrently.
     # PostgreSQL skips rows already claimed by another worker; databases that
     # do not support row locks keep their normal query behavior.
-    if isinstance(query, Query):
-        query = query.with_for_update(skip_locked=True)
+    query = query.with_for_update(skip_locked=True)
 
     stalled_steps = query.all()
 
@@ -93,16 +92,16 @@ def mark_stalled_steps_as_failed(
             f"timeout triggered at {now}."
         )
         count += 1
-        recovered_steps.append(step)
+        recovered_steps.append((step.file_id, step.step_name, step.started_at))
 
     db.commit()
 
     # A commit can fail after the in-memory objects were changed.  Emit these
     # success records only after the transaction has been durably persisted.
-    for step in recovered_steps:
+    for file_id, step_name, started_at in recovered_steps:
         logger.error(
-            f"[File {step.file_id}] Step '{step.step_name}' marked as failed due to timeout. "
-            f"Started: {step.started_at}, Timeout at: {now}"
+            f"[File {file_id}] Step '{step_name}' marked as failed due to timeout. "
+            f"Started: {started_at}, Timeout at: {now}"
         )
 
     return count
