@@ -45,7 +45,7 @@ class TestStepTimeout:
         # Mock database session with proper query chain
         mock_db = MagicMock()
         # Set up the query chain to return empty list (single .filter() call with multiple conditions)
-        mock_db.query.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = []
 
         # Run function
         count = mark_stalled_steps_as_failed(mock_db)
@@ -75,7 +75,7 @@ class TestStepTimeout:
         # Mock database session
         mock_db = MagicMock()
         # Set up the query chain to return stalled steps (single .filter() call with multiple conditions)
-        mock_db.query.return_value.filter.return_value.all.return_value = [step1, step2]
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step1, step2]
 
         # Run function
         count = mark_stalled_steps_as_failed(mock_db)
@@ -106,7 +106,7 @@ class TestStepTimeout:
         # Mock database session
         mock_db = MagicMock()
         # Set up the query chain to return stalled step (single .filter() call with multiple conditions)
-        mock_db.query.return_value.filter.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
 
         # Run function with 150 second timeout
         count = mark_stalled_steps_as_failed(mock_db, timeout_seconds=150)
@@ -132,7 +132,9 @@ class TestStepTimeout:
         # Mock database session with file filter
         mock_db = MagicMock()
         # Set up the query chain with file filter (first .filter() for conditions, second for file_id)
-        mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = [
+            step
+        ]
 
         # Run function for specific file
         count = mark_stalled_steps_as_failed(mock_db, file_id=42)
@@ -158,7 +160,7 @@ class TestStepTimeout:
         # Mock database session
         mock_db = MagicMock()
         # Set up the query chain to return stalled step (single .filter() call with multiple conditions)
-        mock_db.query.return_value.filter.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
 
         # Run function
         count = mark_stalled_steps_as_failed(mock_db, timeout_seconds=600)
@@ -186,7 +188,7 @@ class TestStepTimeout:
         # Mock database session
         mock_db = MagicMock()
         # Set up the query chain to return stalled step (single .filter() call with multiple conditions)
-        mock_db.query.return_value.filter.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
 
         # Run function
         count = mark_stalled_steps_as_failed(mock_db)
@@ -195,6 +197,41 @@ class TestStepTimeout:
         assert count == 1
         mock_logger.warning.assert_called_once()
         mock_logger.error.assert_called_once()
+
+    @patch("app.utils.step_timeout.logger")
+    def test_timeout_success_log_is_emitted_after_commit(self, mock_logger):
+        from app.models import FileProcessingStep
+        from app.utils.step_timeout import mark_stalled_steps_as_failed
+
+        step = MagicMock(spec=FileProcessingStep)
+        step.file_id = 1
+        step.step_name = "ocr"
+        step.started_at = datetime.utcnow() - timedelta(seconds=700)
+        db = MagicMock()
+        db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
+        events = []
+        db.commit.side_effect = lambda: events.append("commit")
+        mock_logger.error.side_effect = lambda *args, **kwargs: events.append("log")
+
+        assert mark_stalled_steps_as_failed(db) == 1
+        assert events == ["commit", "log"]
+
+    @patch("app.utils.step_timeout.logger")
+    def test_timeout_commit_failure_emits_no_success_log(self, mock_logger):
+        from app.models import FileProcessingStep
+        from app.utils.step_timeout import mark_stalled_steps_as_failed
+
+        step = MagicMock(spec=FileProcessingStep)
+        step.file_id = 1
+        step.step_name = "ocr"
+        step.started_at = datetime.utcnow() - timedelta(seconds=700)
+        db = MagicMock()
+        db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
+        db.commit.side_effect = RuntimeError("commit failed")
+
+        with pytest.raises(RuntimeError):
+            mark_stalled_steps_as_failed(db)
+        mock_logger.error.assert_not_called()
 
     @patch("app.utils.step_timeout.logger")
     def test_check_and_recover_stalled_file_found(self, mock_logger):
@@ -212,7 +249,9 @@ class TestStepTimeout:
         # Mock database session
         mock_db = MagicMock()
         # Set up the query chain with file filter (first .filter() for conditions, second for file_id)
-        mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = [step]
+        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = [
+            step
+        ]
 
         # Run function
         result = check_and_recover_stalled_file(mock_db, 42)
@@ -228,7 +267,7 @@ class TestStepTimeout:
         # Mock database session with no stalled steps
         mock_db = MagicMock()
         # Set up the query chain with file filter (first .filter() for conditions, second for file_id)
-        mock_db.query.return_value.filter.return_value.filter.return_value.all.return_value = []
+        mock_db.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.all.return_value = []
 
         # Run function
         result = check_and_recover_stalled_file(mock_db, 42)
