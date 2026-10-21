@@ -35,7 +35,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Compiles Tailwind CSS (a devDependency) into the minified styles.css.
 # npm ci installs ALL deps (including devDependencies) so the tailwindcss CLI
 # is available; using --omit=dev would cause 'tailwindcss: not found'.
-FROM node:20-slim AS frontend-builder
+FROM node:22.23.4-slim AS frontend-builder
 
 # A clean installation must tolerate short registry/network interruptions.
 # Limiting sockets also avoids overwhelming small self-hosted Docker hosts.
