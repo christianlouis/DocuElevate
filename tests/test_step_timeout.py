@@ -197,6 +197,41 @@ class TestStepTimeout:
         mock_logger.error.assert_called_once()
 
     @patch("app.utils.step_timeout.logger")
+    def test_timeout_success_log_is_emitted_after_commit(self, mock_logger):
+        from app.models import FileProcessingStep
+        from app.utils.step_timeout import mark_stalled_steps_as_failed
+
+        step = MagicMock(spec=FileProcessingStep)
+        step.file_id = 1
+        step.step_name = "ocr"
+        step.started_at = datetime.utcnow() - timedelta(seconds=700)
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [step]
+        events = []
+        db.commit.side_effect = lambda: events.append("commit")
+        mock_logger.error.side_effect = lambda *args, **kwargs: events.append("log")
+
+        assert mark_stalled_steps_as_failed(db) == 1
+        assert events == ["commit", "log"]
+
+    @patch("app.utils.step_timeout.logger")
+    def test_timeout_commit_failure_emits_no_success_log(self, mock_logger):
+        from app.models import FileProcessingStep
+        from app.utils.step_timeout import mark_stalled_steps_as_failed
+
+        step = MagicMock(spec=FileProcessingStep)
+        step.file_id = 1
+        step.step_name = "ocr"
+        step.started_at = datetime.utcnow() - timedelta(seconds=700)
+        db = MagicMock()
+        db.query.return_value.filter.return_value.all.return_value = [step]
+        db.commit.side_effect = RuntimeError("commit failed")
+
+        with pytest.raises(RuntimeError):
+            mark_stalled_steps_as_failed(db)
+        mock_logger.error.assert_not_called()
+
+    @patch("app.utils.step_timeout.logger")
     def test_check_and_recover_stalled_file_found(self, mock_logger):
         """Test check_and_recover_stalled_file when stalled steps found."""
         from app.models import FileProcessingStep

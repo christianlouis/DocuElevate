@@ -8,11 +8,34 @@ that have been stuck in "in_progress" state for too long and mark them as failed
 import logging
 from datetime import datetime, timezone
 
+from sqlalchemy.exc import OperationalError
+
 from app.celery_app import celery
 from app.database import SessionLocal
 from app.utils.step_timeout import mark_stalled_steps_as_failed
 
 logger = logging.getLogger(__name__)
+
+_MAX_DB_ATTEMPTS = 3
+
+
+def _is_transient_disconnect(error: OperationalError) -> bool:
+    """Return whether a database error may succeed on a fresh connection."""
+    if getattr(error, "connection_invalidated", False):
+        return True
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            "bad record mac",
+            "connection reset",
+            "connection refused",
+            "server closed",
+            "unexpected eof",
+            "ssl connection has been closed",
+            "could not receive data",
+        )
+    )
 
 
 @celery.task(name="app.tasks.monitor_stalled_steps.monitor_stalled_steps")
@@ -31,10 +54,15 @@ def monitor_stalled_steps():
 
     Scheduled to run every minute via Celery Beat.
     """
-    try:
-        with SessionLocal() as db:
-            stalled_count = mark_stalled_steps_as_failed(db)
+    db = None
+    for attempt in range(1, _MAX_DB_ATTEMPTS + 1):
+        try:
+            with SessionLocal() as db:
+                stalled_count = mark_stalled_steps_as_failed(db)
+            db = None
 
+            # This log is deliberately outside the session context: the
+            # utility emits per-step success logs only after its commit too.
             if stalled_count > 0:
                 logger.warning(
                     f"[{datetime.now(timezone.utc).isoformat()}] "
@@ -43,9 +71,22 @@ def monitor_stalled_steps():
                 )
             else:
                 logger.debug(f"[{datetime.now(timezone.utc).isoformat()}] No stalled steps found.")
-
             return {"recovered": stalled_count}
-
-    except Exception as e:
-        logger.error(f"Error in monitor_stalled_steps task: {e}", exc_info=True)
-        return {"error": str(e), "recovered": 0}
+        except OperationalError as error:
+            if db is not None:
+                db.rollback()
+                db = None
+            if not _is_transient_disconnect(error) or attempt == _MAX_DB_ATTEMPTS:
+                logger.error("Error in monitor_stalled_steps task: %s", error, exc_info=True)
+                return {"error": str(error), "recovered": 0}
+            logger.warning(
+                "Transient database disconnect in monitor_stalled_steps; retrying with a fresh session "
+                "(attempt %s/%s)",
+                attempt + 1,
+                _MAX_DB_ATTEMPTS,
+            )
+        except Exception as error:
+            if db is not None:
+                db.rollback()
+            logger.error("Error in monitor_stalled_steps task: %s", error, exc_info=True)
+            return {"error": str(error), "recovered": 0}

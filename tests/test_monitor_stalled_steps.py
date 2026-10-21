@@ -7,6 +7,7 @@ This module tests the periodic task that monitors and recovers stalled processin
 from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 
 @pytest.mark.unit
@@ -155,3 +156,66 @@ class TestMonitorStalledSteps:
 
         # Check task name
         assert monitor_stalled_steps.name == "app.tasks.monitor_stalled_steps.monitor_stalled_steps"
+
+    @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_transient_query_error_retries_with_fresh_session(self, mock_session_local, mock_mark_stalled):
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        first, second = MagicMock(), MagicMock()
+        first.__enter__.side_effect = OperationalError("unexpected EOF", None, None)
+        second.__enter__.return_value = MagicMock()
+        mock_session_local.side_effect = [first, second]
+        mock_mark_stalled.return_value = 0
+
+        assert monitor_stalled_steps() == {"recovered": 0}
+        assert mock_session_local.call_count == 2
+
+    @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_transient_commit_error_retries_and_returns_recovered(self, mock_session_local, mock_mark_stalled):
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        first_db, second_db = MagicMock(), MagicMock()
+        first_db.__enter__.return_value = first_db
+        second_db.__enter__.return_value = second_db
+        first, second = first_db, second_db
+        mock_session_local.side_effect = [first, second]
+        mock_mark_stalled.side_effect = [
+            OperationalError("SSL bad record mac", None, None),
+            1,
+        ]
+
+        assert monitor_stalled_steps() == {"recovered": 1}
+        assert mock_session_local.call_count == 2
+
+    @pytest.mark.parametrize("message", ["syntax error", "permission denied"])
+    @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_nontransient_error_is_terminal(self, mock_session_local, mock_mark_stalled, message):
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        db = MagicMock()
+        db.__enter__.return_value = db
+        mock_session_local.return_value = db
+        mock_mark_stalled.side_effect = OperationalError(message, None, None)
+
+        result = monitor_stalled_steps()
+        assert result["recovered"] == 0
+        assert "error" in result
+        mock_session_local.assert_called_once_with()
+
+    @patch("app.tasks.monitor_stalled_steps.mark_stalled_steps_as_failed")
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_transient_errors_exhaust_bounded_attempts(self, mock_session_local, mock_mark_stalled):
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        db = MagicMock()
+        db.__enter__.return_value = db
+        mock_session_local.return_value = db
+        mock_mark_stalled.side_effect = OperationalError("connection reset by peer", None, None)
+
+        result = monitor_stalled_steps()
+        assert result["recovered"] == 0
+        assert "error" in result
+        assert mock_session_local.call_count == 3
