@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.9 (2026-10-21)
+
+### Bug Fixes
+
+- **processing**: Reset retry timeouts and recover monitor disconnects
+  ([#1276](https://github.com/christianlouis/DocuElevate/pull/1276),
+  [`15f8d1a`](https://github.com/christianlouis/DocuElevate/commit/15f8d1a935c706748b8effbf4a8f117bc94d42b5))
+
+
 ## v0.188.8 (2026-10-10)
 
 ### Bug Fixes
