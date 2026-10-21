@@ -4,6 +4,7 @@ Tests for app/tasks/monitor_stalled_steps.py
 This module tests the periodic task that monitors and recovers stalled processing steps.
 """
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -220,3 +221,109 @@ class TestMonitorStalledSteps:
             monitor_stalled_steps()
         assert mock_session_local.call_count == 3
         assert [call.args[0] for call in mock_sleep.call_args_list] == [1, 2]
+
+    @patch("app.tasks.monitor_stalled_steps.logger")
+    @patch("app.tasks.monitor_stalled_steps.time.sleep")
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_real_helper_commit_disconnect_rolls_back_and_retries_fresh_session(
+        self, mock_session_local, mock_sleep, mock_logger
+    ):
+        """A commit disconnect must not produce a success log for the failed attempt."""
+        from app.models import FileProcessingStep
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        step = MagicMock(spec=FileProcessingStep)
+        step.file_id = 7
+        step.step_name = "ocr"
+        step.started_at = datetime.now(timezone.utc) - timedelta(seconds=700)
+        first_db = MagicMock()
+        first_db.__enter__.return_value = first_db
+        first_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = [step]
+        first_db.commit.side_effect = OperationalError("SSL bad record mac", None, None)
+        second_db = MagicMock()
+        second_db.__enter__.return_value = second_db
+        second_db.query.return_value.filter.return_value.with_for_update.return_value.all.return_value = []
+        mock_session_local.side_effect = [first_db, second_db]
+
+        assert monitor_stalled_steps() == {"recovered": 0}
+        first_db.rollback.assert_called_once_with()
+        first_db.__exit__.assert_called_once()
+        assert mock_session_local.call_count == 2
+        mock_sleep.assert_called_once_with(1)
+        mock_logger.error.assert_not_called()
+
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_real_helper_nontransient_error_propagates_exact_exception(self, mock_session_local):
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        error = OperationalError("syntax error", None, None)
+        db = MagicMock()
+        db.__enter__.return_value = db
+        query = db.query.return_value.filter.return_value.with_for_update.return_value
+        query.all.side_effect = error
+        mock_session_local.return_value = db
+
+        with pytest.raises(OperationalError) as raised:
+            monitor_stalled_steps()
+        assert raised.value is error
+        db.rollback.assert_called_once_with()
+
+    @patch("app.tasks.monitor_stalled_steps.SessionLocal")
+    def test_real_helper_rollback_failure_preserves_original_exception(self, mock_session_local):
+        from app.tasks.monitor_stalled_steps import monitor_stalled_steps
+
+        error = OperationalError("connection reset by peer", None, None)
+        db = MagicMock()
+        db.__enter__.return_value = db
+        query = db.query.return_value.filter.return_value.with_for_update.return_value
+        query.all.side_effect = error
+        db.rollback.side_effect = RuntimeError("rollback failed")
+        mock_session_local.return_value = db
+
+        with patch("app.tasks.monitor_stalled_steps.time.sleep"):
+            with pytest.raises(OperationalError) as raised:
+                monitor_stalled_steps()
+        assert raised.value is error
+
+    def test_connection_invalidated_is_transient(self):
+        from app.tasks.monitor_stalled_steps import _is_transient_disconnect
+
+        error = OperationalError("database unavailable", None, None)
+        error.connection_invalidated = True
+        assert _is_transient_disconnect(error) is True
+
+    @patch("app.utils.step_timeout.logger")
+    def test_real_helper_locks_rows_and_logs_primitive_snapshot_after_commit(self, mock_logger):
+        from app.utils.step_timeout import mark_stalled_steps_as_failed
+
+        class Step:
+            file_id = 7
+            step_name = "ocr"
+
+            def __init__(self):
+                self._started_at = datetime.now(timezone.utc) - timedelta(seconds=700)
+                self.after_commit = False
+                self.status = "in_progress"
+
+            @property
+            def started_at(self):
+                if self.after_commit:
+                    raise AssertionError("postcommit ORM access")
+                return self._started_at
+
+            @started_at.setter
+            def started_at(self, value):
+                self._started_at = value
+
+        step = Step()
+        db = MagicMock()
+        query = db.query.return_value.filter.return_value.with_for_update.return_value
+        query.all.return_value = [step]
+
+        def commit():
+            step.after_commit = True
+
+        db.commit.side_effect = commit
+        assert mark_stalled_steps_as_failed(db) == 1
+        db.query.return_value.filter.return_value.with_for_update.assert_called_once_with(skip_locked=True)
+        mock_logger.error.assert_called_once()
