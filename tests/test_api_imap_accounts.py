@@ -540,6 +540,23 @@ class TestTestImapConnection:
         mock_mail.login.assert_called_once_with("user", "pass")
         mock_mail.logout.assert_called_once()
 
+    def test_login_error_shuts_down_connection(self):
+        """Login failures close the socket without issuing another protocol command."""
+        from app.utils.imap import test_imap_connection
+
+        mock_mail = MagicMock()
+        mock_mail.login.side_effect = TimeoutError("login timed out")
+        with (
+            patch("app.utils.imap.is_private_ip", return_value=False),
+            patch("imaplib.IMAP4_SSL", return_value=mock_mail) as mock_imap,
+        ):
+            result = test_imap_connection("imap.example.com", 993, "user", "pass", use_ssl=True)  # noqa: S106
+
+        assert result["success"] is False
+        mock_imap.assert_called_once_with("imap.example.com", 993, timeout=30)
+        mock_mail.shutdown.assert_called_once_with()
+        mock_mail.logout.assert_not_called()
+
     def test_auth_error(self):
         """An exception raised by IMAP4_SSL returns success=False."""
         from app.utils.imap import test_imap_connection

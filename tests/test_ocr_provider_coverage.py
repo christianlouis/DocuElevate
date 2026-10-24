@@ -387,7 +387,7 @@ class TestTesseractOCRProvider:
 
         mock_pytesseract = Mock()
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(
@@ -414,7 +414,7 @@ class TestTesseractOCRProvider:
         mock_pytesseract.image_to_string.return_value = "page text"
         mock_pytesseract.pytesseract = Mock()
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(
@@ -492,7 +492,7 @@ class TestEasyOCRProvider:
         mock_easyocr.Reader.return_value = mock_reader
 
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(
@@ -1135,7 +1135,7 @@ class TestTesseractLanguageOverride:
         mock_pytesseract.image_to_string.return_value = "Deutsches Text"
         mock_pytesseract.pytesseract = Mock()
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(
@@ -1164,7 +1164,7 @@ class TestTesseractLanguageOverride:
         mock_pytesseract.image_to_string.return_value = ""
         mock_pytesseract.pytesseract = Mock()
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(
@@ -1205,7 +1205,7 @@ class TestEasyOCRLanguageOverride:
         mock_easyocr = Mock()
         mock_easyocr.Reader.return_value = mock_reader
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(
@@ -1233,7 +1233,7 @@ class TestEasyOCRLanguageOverride:
         mock_easyocr = Mock()
         mock_easyocr.Reader.return_value = mock_reader
         mock_pdf2image = Mock()
-        mock_pdf2image.convert_from_path.return_value = [Mock()]
+        mock_pdf2image.convert_from_path.side_effect = [[Mock()], []]
 
         with (
             patch.dict(

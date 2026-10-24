@@ -96,8 +96,18 @@ This document provides solutions to common problems encountered when using DocuE
    - Ensure documents are clearly scanned
    - Try preprocessing images to improve quality before upload
 
+   For local Tesseract or EasyOCR, PDF pages are rendered and released one at a
+   time. If logs show `pdfinfo` or page-render errors, check that Poppler is
+   installed and that the worker can read the source PDF. A failed page render
+   stops that OCR attempt; retry only after correcting the PDF or Poppler
+   installation. The per-page cleanup also applies when OCR itself raises an
+   exception, so a failed document should not retain all rendered pages.
+
 4. **Try multi-provider OCR**
    Configure `OCR_PROVIDERS` (comma-separated list) with a merge strategy (`OCR_MERGE_STRATEGY`: `ai_merge`, `longest`, or `primary`) for better results.
+
+5. **Check PDF-read retry errors**
+   If a worker reports `multiple values for argument original_local_file` after a PDF-read error, update to the current release. The retry must carry the file path only as a keyword argument; older workers could preserve the original positional path and add it again, causing every retry to fail before processing resumed. Retries now also preserve the document owner.
 
 ### Email Integration Problems
 
@@ -112,9 +122,12 @@ This document provides solutions to common problems encountered when using DocuE
 
 2. **Test IMAP connectivity**
    ```bash
-   docker compose exec api python -c "import imaplib; m = imaplib.IMAP4_SSL('mail.example.com', 993); print('OK')"
+   docker compose exec api python -c "import imaplib; m = imaplib.IMAP4_SSL('mail.example.com', 993, timeout=30); print('OK')"
    ```
    Ensure the IMAP server is accessible from the container.
+
+   IMAP connections use a 30-second socket-operation timeout. A stalled server is
+   logged and its socket is closed so the next configured mailbox can be attempted.
 
 3. **Check for app-specific passwords**
    For Gmail and some providers, you must use app-specific passwords instead of your account password.

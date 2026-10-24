@@ -47,11 +47,41 @@ import os
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from contextlib import closing
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _iter_pdf_pages(convert_from_path: Callable[..., List[Any]], file_path: str, *, dpi: int) -> Iterator[Any]:
+    """Yield one rendered PDF page at a time and release it after use.
+
+    ``pdf2image.convert_from_path`` otherwise returns every rendered page in a
+    list. Rendering a large scanned PDF at 300 DPI can therefore expand a
+    bounded upload into many gigabytes of resident memory.
+    """
+    page_number = 1
+    while True:
+        page_images = convert_from_path(
+            file_path,
+            dpi=dpi,
+            first_page=page_number,
+            last_page=page_number,
+        )
+        if not page_images:
+            return
+
+        try:
+            yield page_images[0]
+        finally:
+            for page_image in page_images:
+                close = getattr(page_image, "close", None)
+                if close is not None:
+                    close()
+
+        page_number += 1
 
 
 def embed_text_layer(input_pdf_path: str, output_pdf_path: str, *, language: str = "eng") -> bool:
@@ -427,12 +457,12 @@ class TesseractOCRProvider(OCRProvider):
             )
 
         logger.info(f"[TesseractOCR] Processing {os.path.basename(file_path)} (lang={lang})")
-        pages = convert_from_path(file_path, dpi=300)
         texts: List[str] = []
-        for i, page_img in enumerate(pages):
-            page_text = pytesseract.image_to_string(page_img, lang=lang)
-            texts.append(page_text)
-            logger.debug(f"[TesseractOCR] Page {i + 1}: {len(page_text)} chars")
+        with closing(_iter_pdf_pages(convert_from_path, file_path, dpi=300)) as pages:
+            for i, page_img in enumerate(pages):
+                page_text = pytesseract.image_to_string(page_img, lang=lang)
+                texts.append(page_text)
+                logger.debug(f"[TesseractOCR] Page {i + 1}: {len(page_text)} chars")
 
         extracted_text = "\n".join(texts)
         logger.info(f"[TesseractOCR] Extracted {len(extracted_text)} chars total")
@@ -495,13 +525,13 @@ class EasyOCRProvider(OCRProvider):
         # log a clear message so operators know a download may be in progress.
         logger.info(f"[EasyOCR] Initialising reader for langs={langs} (models will be downloaded if absent)")
         reader = easyocr.Reader(langs, gpu=gpu)
-        pages = convert_from_path(file_path, dpi=300)
         texts: List[str] = []
-        for i, page_img in enumerate(pages):
-            result = reader.readtext(page_img, detail=0, paragraph=True)
-            page_text = "\n".join(result)
-            texts.append(page_text)
-            logger.debug(f"[EasyOCR] Page {i + 1}: {len(page_text)} chars")
+        with closing(_iter_pdf_pages(convert_from_path, file_path, dpi=300)) as pages:
+            for i, page_img in enumerate(pages):
+                result = reader.readtext(page_img, detail=0, paragraph=True)
+                page_text = "\n".join(result)
+                texts.append(page_text)
+                logger.debug(f"[EasyOCR] Page {i + 1}: {len(page_text)} chars")
 
         extracted_text = "\n".join(texts)
         logger.info(f"[EasyOCR] Extracted {len(extracted_text)} chars total")

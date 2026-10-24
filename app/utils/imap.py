@@ -6,6 +6,18 @@ from app.utils.network import is_private_ip
 
 logger = logging.getLogger(__name__)
 
+IMAP_SOCKET_TIMEOUT_SECONDS = 30
+
+
+def _shutdown_imap_connection(mail: imaplib.IMAP4) -> None:
+    """Close an IMAP connection without sending another protocol command."""
+    if mail is None:
+        return
+    try:
+        mail.shutdown()
+    except Exception:  # noqa: BLE001
+        logger.debug("Failed to shut down IMAP connection", exc_info=True)
+
 
 def test_imap_connection(host: str, port: int, username: str, password: str, use_ssl: bool) -> dict[str, Any]:
     """Attempt to connect and log in to the IMAP server.
@@ -18,13 +30,18 @@ def test_imap_connection(host: str, port: int, username: str, password: str, use
         logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
         return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
     try:
-        if use_ssl:
-            mail = imaplib.IMAP4_SSL(host, port)
-        else:
-            mail = imaplib.IMAP4(host, port)
+        mail = (
+            imaplib.IMAP4_SSL(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+            if use_ssl
+            else imaplib.IMAP4(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+        )
 
-        mail.login(username, password)
-        mail.logout()
+        try:
+            mail.login(username, password)
+            mail.logout()
+        except Exception:
+            _shutdown_imap_connection(mail)
+            raise
         return {"success": True, "message": "Connection successful"}
     except OSError as exc:
         logger.warning("IMAP network error for %s@%s: %s", username, host, exc)

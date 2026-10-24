@@ -647,7 +647,87 @@ class TestPullInbox:
             delete_after_process=False,
         )
 
-        mock_imap_class.assert_called_once_with("imap.example.com", 143)
+        mock_imap_class.assert_called_once_with("imap.example.com", 143, timeout=30)
+
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails", return_value={})
+    def test_login_exception_shuts_down_connection(self, _mock_load, mock_imap_class):
+        """A login timeout/error closes the socket without another IMAP command."""
+        mock_mail = MagicMock()
+        mock_mail.login.side_effect = TimeoutError("login timed out")
+        mock_imap_class.return_value = mock_mail
+
+        pull_inbox(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username="user",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+        )
+
+        mock_imap_class.assert_called_once_with("imap.example.com", 993, timeout=30)
+        mock_mail.shutdown.assert_called_once_with()
+        mock_mail.close.assert_not_called()
+        mock_mail.logout.assert_not_called()
+
+    @patch("app.tasks.imap_tasks._pull_user_integration_imap")
+    @patch("app.tasks.imap_tasks._pull_user_imap_accounts")
+    @patch("app.tasks.imap_tasks.release_lock")
+    @patch("app.tasks.imap_tasks.acquire_lock", return_value=True)
+    @patch("app.tasks.imap_tasks.save_processed_emails")
+    @patch("app.tasks.imap_tasks.load_processed_emails", return_value={})
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.settings")
+    def test_select_timeout_does_not_block_next_mailbox(
+        self,
+        mock_settings,
+        mock_imap_class,
+        _mock_load,
+        _mock_save,
+        _mock_acquire,
+        mock_release,
+        _mock_user_accounts,
+        _mock_user_integrations,
+    ):
+        """A timed-out mailbox is shut down and the next mailbox is still attempted."""
+        first_mail = MagicMock()
+        first_mail.login.return_value = ("OK", [])
+        first_mail.select.side_effect = TimeoutError("select timed out")
+        second_mail = MagicMock()
+        second_mail.login.return_value = ("OK", [])
+        second_mail.select.return_value = ("OK", [])
+        second_mail.search.return_value = ("OK", [b""])
+        mock_imap_class.side_effect = [first_mail, second_mail]
+
+        mock_settings.imap1_host = "slow.example.com"
+        mock_settings.imap1_port = 993
+        mock_settings.imap1_username = "slow-user"
+        mock_settings.imap1_password = _TEST_CREDENTIAL
+        mock_settings.imap1_ssl = True
+        mock_settings.imap1_delete_after_process = False
+        mock_settings.imap2_host = "healthy.example.com"
+        mock_settings.imap2_port = 993
+        mock_settings.imap2_username = "healthy-user"
+        mock_settings.imap2_password = _TEST_CREDENTIAL
+        mock_settings.imap2_ssl = True
+        mock_settings.imap2_delete_after_process = False
+        mock_settings.imap_readonly_mode = False
+
+        pull_all_inboxes()
+
+        assert mock_imap_class.call_args_list[0].kwargs == {"timeout": 30}
+        assert mock_imap_class.call_args_list[1].kwargs == {"timeout": 30}
+        first_mail.shutdown.assert_called_once_with()
+        first_mail.close.assert_not_called()
+        first_mail.logout.assert_not_called()
+        second_mail.login.assert_called_once_with("healthy-user", _TEST_CREDENTIAL)
+        second_mail.close.assert_called_once_with()
+        second_mail.logout.assert_called_once_with()
+        mock_release.assert_called_once_with()
 
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")

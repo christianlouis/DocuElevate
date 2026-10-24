@@ -797,6 +797,7 @@ def process_document(
             detail=str(exc),
         )
         raise self.retry(
+            args=(),
             exc=exc,
             countdown=10,
             kwargs={
@@ -804,6 +805,7 @@ def process_document(
                 "original_filename": original_filename,
                 "file_id": file_id,
                 "force_cloud_ocr": force_cloud_ocr,
+                "owner_id": owner_id,
                 "index_only": index_only,
             },
         )
