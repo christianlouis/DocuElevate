@@ -18,10 +18,11 @@ def test_imap_connection(host: str, port: int, username: str, password: str, use
         logger.warning("SSRF blocked: Attempt to connect to private IP %s", host)
         return {"success": False, "message": "Connection error: Invalid hostname or IP address"}
     try:
-        if use_ssl:
-            mail = imaplib.IMAP4_SSL(host, port)
-        else:
-            mail = imaplib.IMAP4(host, port)
+        mail = (
+            imaplib.IMAP4_SSL(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+            if use_ssl
+            else imaplib.IMAP4(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+        )
 
         mail.login(username, password)
         mail.logout()

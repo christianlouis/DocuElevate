@@ -445,6 +445,7 @@ def pull_inbox(
             logger.warning("Search failed on mailbox %s. Status=%s", mailbox_key, status)
             mail.close()
             mail.logout()
+            completed = True
             return
 
         msg_numbers = search_data[0].split()
