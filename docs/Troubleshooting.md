@@ -96,6 +96,13 @@ This document provides solutions to common problems encountered when using DocuE
    - Ensure documents are clearly scanned
    - Try preprocessing images to improve quality before upload
 
+   For local Tesseract or EasyOCR, PDF pages are rendered and released one at a
+   time. If logs show `pdfinfo` or page-render errors, check that Poppler is
+   installed and that the worker can read the source PDF. A failed page render
+   stops that OCR attempt; retry only after correcting the PDF or Poppler
+   installation. The per-page cleanup also applies when OCR itself raises an
+   exception, so a failed document should not retain all rendered pages.
+
 4. **Try multi-provider OCR**
    Configure `OCR_PROVIDERS` (comma-separated list) with a merge strategy (`OCR_MERGE_STRATEGY`: `ai_merge`, `longest`, or `primary`) for better results.
 

@@ -27,3 +27,40 @@ def test_iter_pdf_pages_renders_and_closes_one_page_at_a_time():
     ]
     for page in pages:
         page.close.assert_called_once_with()
+
+
+@pytest.mark.unit
+def test_iter_pdf_pages_closes_page_when_ocr_raises():
+    from app.utils.ocr_provider import _iter_pdf_pages
+
+    page = Mock(name="page")
+
+    def convert(_file_path, **kwargs):
+        return [page] if kwargs["first_page"] == 1 else []
+
+    pages = _iter_pdf_pages(convert, "/tmp/input.pdf", dpi=300)
+    next(pages)
+    try:
+        with pytest.raises(RuntimeError, match="OCR failed"):
+            raise RuntimeError("OCR failed")
+    finally:
+        pages.close()
+
+    page.close.assert_called_once_with()
+
+
+@pytest.mark.unit
+def test_iter_pdf_pages_closes_previous_page_when_render_fails():
+    from app.utils.ocr_provider import _iter_pdf_pages
+
+    page = Mock(name="page")
+
+    def convert(_file_path, **kwargs):
+        if kwargs["first_page"] == 1:
+            return [page]
+        raise RuntimeError("pdfinfo/render failed")
+
+    with pytest.raises(RuntimeError, match="pdfinfo/render failed"):
+        list(_iter_pdf_pages(convert, "/tmp/input.pdf", dpi=300))
+
+    page.close.assert_called_once_with()
