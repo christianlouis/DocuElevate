@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 IMAP_SOCKET_TIMEOUT_SECONDS = 30
 
 
-def _shutdown_imap_connection(mail) -> None:
+def _shutdown_imap_connection(mail: imaplib.IMAP4) -> None:
     """Close an IMAP connection without sending another protocol command."""
     if mail is None:
         return
