@@ -647,7 +647,31 @@ class TestPullInbox:
             delete_after_process=False,
         )
 
-        mock_imap_class.assert_called_once_with("imap.example.com", 143)
+        mock_imap_class.assert_called_once_with("imap.example.com", 143, timeout=30)
+
+    @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    @patch("app.tasks.imap_tasks.load_processed_emails", return_value={})
+    def test_login_exception_shuts_down_connection(self, _mock_load, mock_imap_class):
+        """A login timeout/error closes the socket without another IMAP command."""
+        mock_mail = MagicMock()
+        mock_mail.login.side_effect = TimeoutError("login timed out")
+        mock_imap_class.return_value = mock_mail
+
+        pull_inbox(
+            mailbox_key="imap1",
+            host="imap.example.com",
+            port=993,
+            username="user",
+            password=_TEST_CREDENTIAL,
+            use_ssl=True,
+            delete_after_process=False,
+        )
+
+        mock_imap_class.assert_called_once_with("imap.example.com", 993, timeout=30)
+        mock_mail.shutdown.assert_called_once_with()
+        mock_mail.close.assert_not_called()
+        mock_mail.logout.assert_not_called()
 
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")

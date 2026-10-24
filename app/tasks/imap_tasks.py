@@ -18,6 +18,7 @@ from app.utils.allowed_types import (
     DEFAULT_CATEGORIES,
     get_allowed_types_for_categories,
 )
+from app.utils.imap import IMAP_SOCKET_TIMEOUT_SECONDS, _shutdown_imap_connection
 from app.utils.network import is_private_ip
 
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
@@ -418,8 +419,14 @@ def pull_inbox(
         logger.warning("SSRF blocked: Attempt to pull mailbox from private IP %s", host)
         return
 
+    mail = None
+    completed = False
     try:
-        mail = imaplib.IMAP4_SSL(host, port) if use_ssl else imaplib.IMAP4(host, port)
+        mail = (
+            imaplib.IMAP4_SSL(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+            if use_ssl
+            else imaplib.IMAP4(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+        )
         mail.login(username, password)
 
         is_gmail_host = "gmail" in host.lower()
@@ -503,10 +510,14 @@ def pull_inbox(
 
         mail.close()
         mail.logout()
+        completed = True
         logger.info("Finished processing mailbox %s", mailbox_key)
 
     except Exception as e:
         logger.exception("Error pulling mailbox %s: %s", mailbox_key, e)
+    finally:
+        if mail is not None and not completed:
+            _shutdown_imap_connection(mail)
 
 
 def fetch_attachments_and_enqueue(

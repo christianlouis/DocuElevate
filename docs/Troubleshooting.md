@@ -119,9 +119,12 @@ This document provides solutions to common problems encountered when using DocuE
 
 2. **Test IMAP connectivity**
    ```bash
-   docker compose exec api python -c "import imaplib; m = imaplib.IMAP4_SSL('mail.example.com', 993); print('OK')"
+   docker compose exec api python -c "import imaplib; m = imaplib.IMAP4_SSL('mail.example.com', 993, timeout=30); print('OK')"
    ```
    Ensure the IMAP server is accessible from the container.
+
+   IMAP connections use a 30-second socket-operation timeout. A stalled server is
+   logged and its socket is closed so the next configured mailbox can be attempted.
 
 3. **Check for app-specific passwords**
    For Gmail and some providers, you must use app-specific passwords instead of your account password.
