@@ -150,6 +150,32 @@ logs = db.query(ProcessingLog)\
 # ... etc
 ```
 
+## Retry timing and stalled-step recovery
+
+`log_task_progress()` starts a fresh timeout window when a step returns to
+`in_progress` after a logged failure or completion, or when a new task ID replaces the previous
+task for an already active step. It also clears the previous completion time and
+error message. Repeated progress events from the same active task, including
+Celery retries that retain that task ID, preserve the original start time so that
+heartbeats cannot indefinitely postpone timeout detection. Once the monitor has
+timed out that task, late `in_progress` events from the same task ID retain the
+failure, including same-ID Celery retries. A new task ID can restart the step.
+Progress logging locks an existing step before inspecting its status and history.
+This rule governs progress logging; it does not add attempt ownership across all
+direct step updates or reject late terminal events from older tasks.
+
+The stalled-step monitor runs every minute and marks overdue steps as failed.
+On PostgreSQL it locks candidate rows with `FOR UPDATE SKIP LOCKED`, allowing
+concurrent monitor deliveries to skip rows already being handled. Timeout error
+logs are emitted only after the database commit succeeds.
+
+If a transient database disconnect interrupts the scan or commit, the monitor
+rolls back and retries with a fresh session, up to three attempts with delays of
+one and two seconds. Exhausted retries and nontransient errors fail the Celery
+task rather than returning a successful result with an error payload. This
+keeps persistent database outages visible to operators; retries do not resolve
+an unavailable database or Redis service.
+
 ## Migration from Logs
 
 For existing files with only ProcessingLog entries:

@@ -67,6 +67,11 @@ def mark_stalled_steps_as_failed(
     if file_id is not None:
         query = query.filter(FileProcessingStep.file_id == file_id)
 
+    # Prevent two beat workers from recovering the same row concurrently.
+    # PostgreSQL skips rows already claimed by another worker; databases that
+    # do not support row locks keep their normal query behavior.
+    query = query.with_for_update(skip_locked=True)
+
     stalled_steps = query.all()
 
     if not stalled_steps:
@@ -77,6 +82,7 @@ def mark_stalled_steps_as_failed(
     )
 
     count = 0
+    recovered_steps = []
     for step in stalled_steps:
         step.status = "failure"
         step.completed_at = now
@@ -86,13 +92,18 @@ def mark_stalled_steps_as_failed(
             f"timeout triggered at {now}."
         )
         count += 1
-
-        logger.error(
-            f"[File {step.file_id}] Step '{step.step_name}' marked as failed due to timeout. "
-            f"Started: {step.started_at}, Timeout at: {now}"
-        )
+        recovered_steps.append((step.file_id, step.step_name, step.started_at))
 
     db.commit()
+
+    # A commit can fail after the in-memory objects were changed.  Emit these
+    # success records only after the transaction has been durably persisted.
+    for recovered_file_id, step_name, started_at in recovered_steps:
+        logger.error(
+            f"[File {recovered_file_id}] Step '{step_name}' marked as failed due to timeout. "
+            f"Started: {started_at}, Timeout at: {now}"
+        )
+
     return count
 
 
