@@ -1,6 +1,6 @@
 """Regression tests for bounded PDF page rendering in local OCR providers."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -45,6 +45,32 @@ def test_iter_pdf_pages_closes_page_when_ocr_raises():
             raise RuntimeError("OCR failed")
     finally:
         pages.close()
+
+    page.close.assert_called_once_with()
+
+
+@pytest.mark.unit
+def test_tesseract_process_closes_page_when_ocr_raises(tmp_path):
+    from app.utils.ocr_provider import TesseractOCRProvider
+
+    pdf = tmp_path / "input.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    page = Mock(name="page")
+    mock_pytesseract = Mock()
+    mock_pytesseract.image_to_string.side_effect = RuntimeError("OCR failed")
+    mock_pytesseract.pytesseract = Mock()
+    mock_pdf2image = Mock()
+    mock_pdf2image.convert_from_path.side_effect = [[page], []]
+
+    with (
+        patch.dict("sys.modules", {"pytesseract": mock_pytesseract, "pdf2image": mock_pdf2image}),
+        patch("app.utils.ocr_provider.settings") as settings,
+        patch("app.utils.ocr_language_manager.ensure_tesseract_languages", return_value=[]),
+    ):
+        settings.tesseract_cmd = None
+        settings.tesseract_language = "eng"
+        with pytest.raises(RuntimeError, match="OCR failed"):
+            TesseractOCRProvider().process(str(pdf))
 
     page.close.assert_called_once_with()
 

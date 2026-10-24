@@ -47,6 +47,7 @@ import os
 import shutil
 import subprocess
 from abc import ABC, abstractmethod
+from contextlib import closing
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from app.config import settings
@@ -457,10 +458,11 @@ class TesseractOCRProvider(OCRProvider):
 
         logger.info(f"[TesseractOCR] Processing {os.path.basename(file_path)} (lang={lang})")
         texts: List[str] = []
-        for i, page_img in enumerate(_iter_pdf_pages(convert_from_path, file_path, dpi=300)):
-            page_text = pytesseract.image_to_string(page_img, lang=lang)
-            texts.append(page_text)
-            logger.debug(f"[TesseractOCR] Page {i + 1}: {len(page_text)} chars")
+        with closing(_iter_pdf_pages(convert_from_path, file_path, dpi=300)) as pages:
+            for i, page_img in enumerate(pages):
+                page_text = pytesseract.image_to_string(page_img, lang=lang)
+                texts.append(page_text)
+                logger.debug(f"[TesseractOCR] Page {i + 1}: {len(page_text)} chars")
 
         extracted_text = "\n".join(texts)
         logger.info(f"[TesseractOCR] Extracted {len(extracted_text)} chars total")
@@ -524,11 +526,12 @@ class EasyOCRProvider(OCRProvider):
         logger.info(f"[EasyOCR] Initialising reader for langs={langs} (models will be downloaded if absent)")
         reader = easyocr.Reader(langs, gpu=gpu)
         texts: List[str] = []
-        for i, page_img in enumerate(_iter_pdf_pages(convert_from_path, file_path, dpi=300)):
-            result = reader.readtext(page_img, detail=0, paragraph=True)
-            page_text = "\n".join(result)
-            texts.append(page_text)
-            logger.debug(f"[EasyOCR] Page {i + 1}: {len(page_text)} chars")
+        with closing(_iter_pdf_pages(convert_from_path, file_path, dpi=300)) as pages:
+            for i, page_img in enumerate(pages):
+                result = reader.readtext(page_img, detail=0, paragraph=True)
+                page_text = "\n".join(result)
+                texts.append(page_text)
+                logger.debug(f"[EasyOCR] Page {i + 1}: {len(page_text)} chars")
 
         extracted_text = "\n".join(texts)
         logger.info(f"[EasyOCR] Extracted {len(extracted_text)} chars total")
