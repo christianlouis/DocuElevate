@@ -106,6 +106,9 @@ This document provides solutions to common problems encountered when using DocuE
 4. **Try multi-provider OCR**
    Configure `OCR_PROVIDERS` (comma-separated list) with a merge strategy (`OCR_MERGE_STRATEGY`: `ai_merge`, `longest`, or `primary`) for better results.
 
+5. **Check PDF-read retry errors**
+   If a worker reports `multiple values for argument original_local_file` after a PDF-read error, update to the current release. The retry must carry the file path only as a keyword argument; older workers could preserve the original positional path and add it again, causing every retry to fail before processing resumed. Retries now also preserve the document owner.
+
 ### Email Integration Problems
 
 #### Symptoms

@@ -6,10 +6,13 @@ and doesn't cause DetachedInstanceError when accessing database objects.
 """
 
 from contextlib import nullcontext
+from inspect import signature
 from unittest.mock import MagicMock, patch
 
 import pypdf
 import pytest
+from celery.app.task import Context
+from celery.exceptions import Retry
 
 from app.models import FileRecord
 from app.tasks.process_document import process_document
@@ -831,13 +834,25 @@ startxref
 
         mock_pdf_reader.side_effect = PdfReadError("Test error")
 
-        # Call the task's run method and expect it to raise retry exception
-        with pytest.raises(Exception) as exc_info:
-            process_document.run(str(test_pdf))
+        # Capture the retry request from the task's run method.
+        with patch.object(process_document, "retry", side_effect=Retry("retry scheduled")) as retry:
+            with pytest.raises(Retry, match="retry scheduled"):
+                process_document.run(str(test_pdf), owner_id="owner@example.test")
 
-        # Verify that retry was triggered
-        # The retry method raises a special exception
-        assert exc_info.value is not None
+        retry_call = retry.call_args.kwargs
+        assert retry_call["args"] == ()
+        assert retry_call["kwargs"]["owner_id"] == "owner@example.test"
+
+        # Rebuild Celery's retry signature from the original positional request.
+        # Binding it to the task signature catches the duplicate positional
+        # ``original_local_file`` regression this test is guarding against.
+        request = Context(args=(str(test_pdf),), kwargs={})
+        retry_signature = process_document.signature_from_request(
+            request,
+            args=retry_call["args"],
+            kwargs=retry_call["kwargs"],
+        )
+        signature(process_document.run).bind(*retry_signature.args, **retry_signature.kwargs)
 
 
 @pytest.mark.unit
