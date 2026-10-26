@@ -25,6 +25,46 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+_SENSITIVE_EVENT_KEYS = frozenset(
+    {
+        "args",
+        "body",
+        "content",
+        "data",
+        "document",
+        "document_content",
+        "document_text",
+        "extracted_text",
+        "kwargs",
+        "local_vars",
+        "task_args",
+        "task_kwargs",
+    }
+)
+
+
+def _redact_sensitive_event(event: dict, hint: dict) -> dict:
+    """Remove request and task payloads while preserving error diagnostics."""
+    request = event.get("request")
+    if isinstance(request, dict):
+        for key in ("data", "cookies", "headers", "query_string"):
+            request.pop(key, None)
+
+    def scrub(container: object) -> None:
+        if isinstance(container, dict):
+            for key in list(container):
+                if str(key).lower() in _SENSITIVE_EVENT_KEYS:
+                    container.pop(key, None)
+                else:
+                    scrub(container[key])
+        elif isinstance(container, list):
+            for item in container:
+                scrub(item)
+
+    scrub(event.get("extra"))
+    scrub(event.get("contexts"))
+    return event
+
 
 def init_sentry(*, integrations_extra: list[str] | None = None) -> bool:
     """
@@ -90,10 +130,10 @@ def init_sentry(*, integrations_extra: list[str] | None = None) -> bool:
         traces_sample_rate=traces_rate,
         profiles_sample_rate=profiles_rate,
         send_default_pii=settings.sentry_send_default_pii,
-        # Attach a request body snapshot to every event (helps debugging)
-        max_request_body_size="medium",
-        # Keep the SDK from attaching local variable values to stack frames
-        # by default; enable explicitly if needed for deeper debugging.
+        # Request bodies, local variables, and task payloads are not telemetry.
+        max_request_body_size="never",
+        include_local_variables=False,
+        before_send=_redact_sensitive_event,
         attach_stacktrace=True,
     )
 
