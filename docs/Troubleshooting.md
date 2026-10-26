@@ -44,6 +44,10 @@ This document provides solutions to common problems encountered when using DocuE
    ```
    Ensure the database schema is up-to-date.
 
+### Dependency Scan Reports Vulnerable `filelock`
+
+Install from the current `requirements.txt`, which pins `filelock==3.20.3` to remain compatible with LiteLLM’s `filelock<4` requirement. This version fixes CVE-2026-22701 and is outside the newer affected ranges: CVE-2026-112940 and CVE-2026-112913 affect versions >=3.20.4 and <=4.2.0 ([GHSA-v4x8-3wr5-3wq8](https://github.com/advisories/GHSA-v4x8-3wr5-3wq8), [GHSA-9vhv-jxww-xfm5](https://github.com/advisories/GHSA-9vhv-jxww-xfm5)), while CVE-2026-112907 affects versions >=3.22.0 and <=4.2.0 ([GHSA-567q-5qvw-pf92](https://github.com/advisories/GHSA-567q-5qvw-pf92)). Revisit this pin when LiteLLM supports a patched 4.2.1+ release. For Docker deployments, rebuild or pull the updated release image and replace both API and worker containers. Verify the installed version with `python -m pip show filelock`; changing the requirements file alone does not update an existing container.
+
 ### Document Upload Fails
 
 #### Symptoms

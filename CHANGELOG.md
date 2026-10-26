@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.11 (2026-10-26)
+
+### Bug Fixes
+
+- Sanitize NUL text and pin compatible filelock
+  ([#1279](https://github.com/christianlouis/DocuElevate/pull/1279),
+  [`b623cd5`](https://github.com/christianlouis/DocuElevate/commit/b623cd543fa4f136ba51eaa2437abbb4dca0d065))
+
+
 ## v0.188.10 (2026-10-21)
 
 ### Bug Fixes
