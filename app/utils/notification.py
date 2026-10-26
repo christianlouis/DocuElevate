@@ -19,20 +19,9 @@ def _notification_service_name(server: object) -> str:
     return class_name or "notification provider"
 
 
-def _notification_servers(apprise_obj: apprise.Apprise) -> List[object]:
-    """Return configured services through Apprise's public iterable API.
-
-    Apprise 2.x deliberately exposes services via ``__iter__`` and no longer
-    provides the old ``servers`` attribute.  Keep a narrow fallback for older
-    adapters and test doubles without making the deprecated attribute the
-    production path.
-    """
-    servers = list(apprise_obj)
-    if not servers:
-        legacy_servers = getattr(apprise_obj, "servers", None)
-        if legacy_servers is not None and not callable(legacy_servers):
-            servers = list(legacy_servers)
-    return servers
+def _notification_servers(apprise_obj: apprise.Apprise) -> List[Any]:
+    """Return configured services through Apprise's public iterable API."""
+    return list(apprise_obj)
 
 
 def init_apprise() -> apprise.Apprise:
