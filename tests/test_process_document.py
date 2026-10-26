@@ -150,7 +150,7 @@ def test_index_first_persists_embedded_text_without_metadata_pipeline(db_session
         result = _complete_index_first_document(
             task_id="index-task",
             file_id=file_id,
-            extracted_text="Project deadline is Friday.",
+            extracted_text="Project deadline IN\x0012345678.\n",
             original_filename="index-first.pdf",
             original_input_path=str(working_pdf),
             working_path=str(working_pdf),
@@ -158,7 +158,8 @@ def test_index_first_persists_embedded_text_without_metadata_pipeline(db_session
 
     record = db_session.query(FileRecord).filter(FileRecord.id == file_id).one()
     assert result["status"] == "Queued for vector indexing"
-    assert record.ocr_text == "Project deadline is Friday."
+    assert record.ocr_text == "Project deadline IN12345678."
+    assert "\x00" not in record.ocr_text
     assert record.document_title == "index-first"
     assert record.local_filename == str(immutable_pdf)
     assert not working_pdf.exists()
