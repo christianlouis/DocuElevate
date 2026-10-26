@@ -28,6 +28,7 @@ from app.tasks.imap_tasks import (
     save_processed_emails,
 )
 from app.utils.allowed_types import ALL_CATEGORIES, DEFAULT_CATEGORIES, get_allowed_types_for_categories
+from app.utils.imap import IMAP_SOCKET_TIMEOUT_SECONDS
 
 _TEST_CREDENTIAL = "pass"  # noqa: S105
 
@@ -647,7 +648,9 @@ class TestPullInbox:
             delete_after_process=False,
         )
 
-        mock_imap_class.assert_called_once_with("imap.example.com", 143)
+        mock_imap_class.assert_called_once_with(
+            "imap.example.com", 143, timeout=IMAP_SOCKET_TIMEOUT_SECONDS
+        )
 
     @patch("app.tasks.imap_tasks._pull_user_integration_imap")
     @patch("app.tasks.imap_tasks._pull_user_imap_accounts")
