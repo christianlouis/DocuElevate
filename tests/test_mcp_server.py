@@ -3,10 +3,12 @@ import json
 import os
 import sys
 import threading
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import Mock
 
 import pytest
+import requests
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
@@ -56,6 +58,25 @@ def test_redirects_are_rejected_without_following_them():
     assert session.request.call_args.kwargs["allow_redirects"] is False
 
 
+def test_transport_and_json_failures_do_not_expose_upstream_data(caplog):
+    token = "transport-token-marker"
+    session = Mock()
+    session.request.side_effect = requests.RequestException(f"body={token}")
+    with pytest.raises(RuntimeError) as error:
+        DocuElevateClient("https://docs.example", token, session).document(1)
+    assert token not in "".join(traceback.format_exception(error.value))
+    assert token not in caplog.text
+
+    malformed = response(None)
+    malformed.json.side_effect = ValueError("body=malformed-json-marker")
+    session.request.side_effect = None
+    session.request.return_value = malformed
+    with pytest.raises(RuntimeError) as error:
+        DocuElevateClient("https://docs.example", token, session).document(1)
+    assert "malformed-json-marker" not in "".join(traceback.format_exception(error.value))
+    assert "malformed-json-marker" not in caplog.text
+
+
 def test_url_validation_rejects_unsafe_urls():
     with pytest.raises(ValueError):
         _validate_base_url("http://public.example")
@@ -102,9 +123,11 @@ def test_mcp_exposes_read_only_tools_and_calls_search(monkeypatch):
 
 def test_stdio_client_initializes_lists_tools_and_redacts_upstream_error(caplog):
     token = "de-transport-secret"
+    paths = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
+            paths.append(self.path)
             assert self.headers["Authorization"] == f"Bearer {token}"
             length = int(self.headers["Content-Length"])
             request = json.loads(self.rfile.read(length))
@@ -118,8 +141,21 @@ def test_stdio_client_initializes_lists_tools_and_redacts_upstream_error(caplog)
             self.wfile.write(body)
 
         def do_GET(self):
-            body = json.dumps({"detail": f"token={token}"}).encode()
-            self.send_response(401)
+            paths.append(self.path)
+            if self.path == "/api/knowledge/documents/7":
+                body = json.dumps(
+                    {
+                        "document_id": 7,
+                        "title": "Invoice",
+                        "text": "authoritative OCR",
+                        "source_url": "/files/7",
+                    }
+                ).encode()
+                status = 200
+            else:
+                body = json.dumps({"detail": f"token={token}"}).encode()
+                status = 401
+            self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -129,7 +165,8 @@ def test_stdio_client_initializes_lists_tools_and_redacts_upstream_error(caplog)
             return
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
     try:
         env = os.environ.copy()
         env.update(
@@ -148,15 +185,27 @@ def test_stdio_client_initializes_lists_tools_and_redacts_upstream_error(caplog)
                     await client.initialize()
                     tools = await client.list_tools()
                     assert {tool.name for tool in tools.tools} == {"search_documents", "get_document"}
+                    assert all(tool.annotations.read_only_hint for tool in tools.tools)
                     search = await client.call_tool("search_documents", {"query": "invoice"})
-                    denied = await client.call_tool("get_document", {"document_id": 7})
-                    return search, denied
+                    document = await client.call_tool("get_document", {"document_id": 7})
+                    denied = await client.call_tool("get_document", {"document_id": 8})
+                    return search, document, denied
 
-        search, denied = asyncio.run(invoke())
+        search, document, denied = asyncio.run(invoke())
         assert not search.is_error
         assert search.structured_content["results"][0]["source_url"].endswith("/files/7")
+        assert not document.is_error
+        assert document.structured_content["title"] == "Invoice"
+        assert document.structured_content["source_url"].endswith("/files/7")
         assert denied.is_error
         assert token not in str(denied)
         assert token not in caplog.text
+        assert paths == [
+            "/api/knowledge/search",
+            "/api/knowledge/documents/7",
+            "/api/knowledge/documents/8",
+        ]
     finally:
         server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=2)

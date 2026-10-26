@@ -52,5 +52,4 @@ Never put a token in tool arguments or commit it to a configuration file.
 Use a dedicated, expiring token in the client process environment; the
 current owner-bound token model has no separate read-only scopes. This first
 version intentionally supports stdio only and does not provide a shared HTTP
-MCP endpoint. Search also depends on the semantic index being enabled and
-healthy.
+MCP endpoint.

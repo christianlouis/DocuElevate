@@ -66,7 +66,7 @@ class DocuElevateClient:
             raise RuntimeError("DocuElevate returned a server error")
         if 300 <= response.status_code < 400 or response.is_redirect:
             raise RuntimeError("DocuElevate returned an unsafe redirect")
-        if not response.ok:
+        if not 200 <= response.status_code < 300:
             raise RuntimeError("DocuElevate rejected the request")
         try:
             payload = response.json()
