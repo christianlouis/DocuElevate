@@ -19,6 +19,22 @@ def _notification_service_name(server: object) -> str:
     return class_name or "notification provider"
 
 
+def _notification_servers(apprise_obj: apprise.Apprise) -> List[object]:
+    """Return configured services through Apprise's public iterable API.
+
+    Apprise 2.x deliberately exposes services via ``__iter__`` and no longer
+    provides the old ``servers`` attribute.  Keep a narrow fallback for older
+    adapters and test doubles without making the deprecated attribute the
+    production path.
+    """
+    servers = list(apprise_obj)
+    if not servers:
+        legacy_servers = getattr(apprise_obj, "servers", None)
+        if legacy_servers is not None and not callable(legacy_servers):
+            servers = list(legacy_servers)
+    return servers
+
+
 def init_apprise() -> apprise.Apprise:
     """Initialize the Apprise instance with configured notification services"""
     global _apprise
@@ -94,15 +110,16 @@ def send_notification(
         elif notification_type in ("failure", "error", "failed"):
             notify_type = apprise.NotifyType.FAILURE
 
-        # Send the notification to each service individually for better error reporting
-        if not apprise_obj.servers:  # Access servers as an attribute, not a method
+        # Send the notification to each service individually for better error reporting.
+        servers = _notification_servers(apprise_obj)
+        if not servers:
             logger.warning("No notification servers available despite having URLs configured")
             return False
 
-        total_services = len(apprise_obj.servers)
+        total_services = len(servers)
         successful_services = 0
 
-        for server in apprise_obj.servers:  # Iterate through the list directly
+        for server in servers:
             service_name = _notification_service_name(server)
             try:
                 service_result = server.notify(title=title, body=message, notify_type=notify_type, attach=attachments)

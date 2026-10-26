@@ -291,6 +291,22 @@ class TestSendNotification:
 
     @patch("app.utils.notification.init_apprise")
     @patch("app.utils.notification.settings")
+    def test_send_notification_uses_public_apprise_iterator(self, mock_settings, mock_init_apprise):
+        """Apprise 2.x services are iterable and do not expose ``servers``."""
+        from app.utils.notification import send_notification
+
+        mock_settings.notification_urls = ["https://example.com/notify"]
+        mock_apprise = MagicMock(spec=["__iter__"])
+        mock_server = MagicMock()
+        mock_server.notify.return_value = True
+        mock_apprise.__iter__.return_value = iter([mock_server])
+        mock_init_apprise.return_value = mock_apprise
+
+        assert send_notification("Test", "Message") is True
+        mock_server.notify.assert_called_once()
+
+    @patch("app.utils.notification.init_apprise")
+    @patch("app.utils.notification.settings")
     def test_send_notification_warning_type(self, mock_settings, mock_init_apprise):
         """Test notification with warning type."""
         from app.utils.notification import send_notification
