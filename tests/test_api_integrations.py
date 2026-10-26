@@ -40,6 +40,15 @@ _S3_DESTINATION = {
     "is_active": True,
 }
 
+_NOTION_DESTINATION = {
+    "direction": "DESTINATION",
+    "integration_type": "NOTION",
+    "name": "Knowledge Base",
+    "config": {"data_source_id": "00000000-0000-4000-8000-000000000001"},
+    "credentials": {"api_token": "notion-secret"},
+    "is_active": True,
+}
+
 
 # ---------------------------------------------------------------------------
 # Shared fixture helpers
@@ -451,6 +460,21 @@ class TestIntegrationCredentialIsolation:
         assert resp.json()["success"] is True
         assert "s3cr3t" not in resp.text
         mock_test.assert_called_once()
+
+    def test_notion_connection_test_receives_only_server_decrypted_token(self, int_client, int_session):
+        """Notion tokens are encrypted at rest and only decrypted for the connection test."""
+        mock_test = unittest.mock.MagicMock(return_value={"success": True, "message": "Notion connection ready"})
+        created = int_client.post("/api/integrations/", json=_NOTION_DESTINATION)
+        assert created.status_code == 201
+        record = int_session.query(UserIntegration).get(created.json()["id"])
+        assert record.credentials is not None and record.credentials.startswith("enc:")
+
+        with unittest.mock.patch.dict("app.api.integrations._CONNECTION_TESTERS", {"NOTION": mock_test}):
+            response = int_client.post(f"/api/integrations/{created.json()['id']}/test")
+
+        assert response.status_code == 200
+        assert "notion-secret" not in response.text
+        mock_test.assert_called_once_with(_NOTION_DESTINATION["config"], {"api_token": "notion-secret"})
 
 
 @pytest.mark.unit

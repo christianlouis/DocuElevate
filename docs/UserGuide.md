@@ -151,6 +151,9 @@ The quota bar on the Email Ingestion page shows your current usage against your 
 
 #### Integrations Dashboard
 
+See the [Notion destination guide](Notion.md) for setup, private links, and
+attachment limits.
+
 The **Integrations** page (`/integrations`) provides a unified view of all your configured ingestion sources and storage destinations. Instead of managing each integration type separately, you can create, edit, test, and delete any integration from a single dashboard.
 
 **Opening the dashboard:** Click **Integrations** in the top navigation bar.

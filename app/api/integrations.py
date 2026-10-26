@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import IntegrationDirection, IntegrationType, UserIntegration
+from app.tasks.upload_to_notion import test_notion_connection
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value, encrypt_value
 from app.utils.subscription import get_tier, get_user_tier_id
@@ -762,6 +763,7 @@ _CONNECTION_TESTERS: dict[str, Any] = {
     IntegrationType.WEBDAV: _test_webdav_connection,
     IntegrationType.NEXTCLOUD: _test_webdav_connection,
     IntegrationType.VECTOR_DATABASE: _test_vector_database_connection,
+    IntegrationType.NOTION: test_notion_connection,
 }
 
 
