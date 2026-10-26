@@ -7,6 +7,7 @@ document authorization to DocuElevate's existing API.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any
@@ -14,7 +15,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 from mcp.server import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class DocuElevateClient:
         self.token = token or os.getenv("DOCUELEVATE_API_TOKEN", "")
         if not self.token:
             raise ValueError("DOCUELEVATE_API_TOKEN is not configured")
+        self._owns_session = session is None
         self.session = session or requests.Session()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
@@ -48,8 +50,11 @@ class DocuElevateClient:
                 allow_redirects=False,
                 **kwargs,
             )
-        except requests.RequestException as exc:
-            raise RuntimeError("DocuElevate is unavailable") from exc
+        except requests.RequestException:
+            raise RuntimeError("DocuElevate is unavailable") from None
+        finally:
+            if self._owns_session:
+                self.session.close()
 
         if response.status_code in {401, 403}:
             raise RuntimeError("DocuElevate authentication or access was rejected")
@@ -65,8 +70,8 @@ class DocuElevateClient:
             raise RuntimeError("DocuElevate rejected the request")
         try:
             payload = response.json()
-        except (ValueError, requests.RequestException) as exc:
-            raise RuntimeError("DocuElevate returned invalid JSON") from exc
+        except (ValueError, requests.RequestException):
+            raise RuntimeError("DocuElevate returned invalid JSON") from None
         if not isinstance(payload, dict):
             raise RuntimeError("DocuElevate returned an invalid response")
         return payload
@@ -122,41 +127,60 @@ def _normalize_sources(payload: dict[str, Any], base_url: str) -> dict[str, Any]
     if isinstance(items, list):
         normalized_items = []
         for item in items:
+            normalized_item = item
             if isinstance(item, dict) and isinstance(item.get("source_url"), str):
-                item = dict(item)
-                parsed = urlparse(item["source_url"])
+                normalized_item = dict(item)
+                parsed = urlparse(normalized_item["source_url"])
                 if not parsed.scheme and not parsed.netloc:
-                    item["source_url"] = urljoin(
-                        base_url.rstrip("/") + "/", item["source_url"].lstrip("/")
+                    normalized_item["source_url"] = urljoin(
+                        base_url.rstrip("/") + "/", normalized_item["source_url"].lstrip("/")
                     )
-            normalized_items.append(item)
+            normalized_items.append(normalized_item)
         result["results"] = normalized_items
     if isinstance(result.get("source_url"), str):
         parsed = urlparse(result["source_url"])
         if not parsed.scheme and not parsed.netloc:
-            result["source_url"] = urljoin(
-                base_url.rstrip("/") + "/", result["source_url"].lstrip("/")
-            )
+            result["source_url"] = urljoin(base_url.rstrip("/") + "/", result["source_url"].lstrip("/"))
     return result
+
+
+def _tool_result(payload: dict[str, Any]) -> CallToolResult:
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structuredContent=payload,
+    )
+
+
+def _tool_error(error: RuntimeError) -> CallToolResult:
+    return CallToolResult(
+        content=[TextContent(type="text", text=str(error))],
+        isError=True,
+    )
 
 
 def search_documents(
     query: str,
     limit: int = DEFAULT_LIMIT,
     score_threshold: float | None = DEFAULT_SCORE_THRESHOLD,
-) -> dict[str, Any]:
+) -> CallToolResult:
     """Search accessible DocuElevate knowledge and return cited passages."""
     _validate_search(query, limit, score_threshold)
     client = _client()
-    return _normalize_sources(client.search(query, limit, score_threshold), client.base_url)
+    try:
+        return _tool_result(_normalize_sources(client.search(query, limit, score_threshold), client.base_url))
+    except RuntimeError as error:
+        return _tool_error(error)
 
 
-def get_document(document_id: int) -> dict[str, Any]:
+def get_document(document_id: int) -> CallToolResult:
     """Retrieve one accessible document and its authoritative OCR text."""
     if not isinstance(document_id, int) or isinstance(document_id, bool) or document_id < 1:
         raise ValueError("document_id must be a positive integer")
     client = _client()
-    return _normalize_sources(client.document(document_id), client.base_url)
+    try:
+        return _tool_result(_normalize_sources(client.document(document_id), client.base_url))
+    except RuntimeError as error:
+        return _tool_error(error)
 
 
 mcp = MCPServer("DocuElevate", version=CONTRACT_VERSION)

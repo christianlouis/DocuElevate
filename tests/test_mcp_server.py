@@ -1,7 +1,14 @@
-from unittest.mock import Mock
 import asyncio
+import json
+import os
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest.mock import Mock
 
 import pytest
+from mcp.client.session import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from app.mcp_server import (
     DocuElevateClient,
@@ -80,7 +87,7 @@ def test_mcp_exposes_read_only_tools_and_calls_search(monkeypatch):
             assert (query, limit, score_threshold) == ("invoice", 8, 0.25)
             return {"count": 1, "results": [{"source_url": "/files/7", "text": "invoice"}]}
 
-    monkeypatch.setattr("app.mcp_server._client", lambda: FakeClient())
+    monkeypatch.setattr("app.mcp_server._client", FakeClient)
 
     async def invoke():
         tools = await mcp.list_tools()
@@ -91,3 +98,65 @@ def test_mcp_exposes_read_only_tools_and_calls_search(monkeypatch):
     result = asyncio.run(invoke())
     assert result.is_error is False
     assert result.structured_content["results"][0]["source_url"] == "https://docs.example/files/7"
+
+
+def test_stdio_client_initializes_lists_tools_and_redacts_upstream_error(caplog):
+    token = "de-transport-secret"
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            assert self.headers["Authorization"] == f"Bearer {token}"
+            length = int(self.headers["Content-Length"])
+            request = json.loads(self.rfile.read(length))
+            assert request["query"] == "invoice"
+            payload = {"count": 1, "results": [{"text": "invoice", "source_url": "/files/7"}]}
+            body = json.dumps(payload).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            body = json.dumps({"detail": f"token={token}"}).encode()
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        env = os.environ.copy()
+        env.update(
+            DOCUELEVATE_URL=f"http://127.0.0.1:{server.server_port}",
+            DOCUELEVATE_API_TOKEN=token,
+        )
+        parameters = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "app.mcp_server"],
+            env=env,
+        )
+
+        async def invoke():
+            async with stdio_client(parameters) as (read_stream, write_stream):
+                async with ClientSession(read_stream, write_stream) as client:
+                    await client.initialize()
+                    tools = await client.list_tools()
+                    assert {tool.name for tool in tools.tools} == {"search_documents", "get_document"}
+                    search = await client.call_tool("search_documents", {"query": "invoice"})
+                    denied = await client.call_tool("get_document", {"document_id": 7})
+                    return search, denied
+
+        search, denied = asyncio.run(invoke())
+        assert not search.is_error
+        assert search.structured_content["results"][0]["source_url"].endswith("/files/7")
+        assert denied.is_error
+        assert token not in str(denied)
+        assert token not in caplog.text
+    finally:
+        server.shutdown()
