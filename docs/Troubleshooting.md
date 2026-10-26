@@ -99,6 +99,9 @@ This document provides solutions to common problems encountered when using DocuE
 4. **Try multi-provider OCR**
    Configure `OCR_PROVIDERS` (comma-separated list) with a merge strategy (`OCR_MERGE_STRATEGY`: `ai_merge`, `longest`, or `primary`) for better results.
 
+5. **Retry a failed PDF metadata step after a PostgreSQL NUL error**
+   Some PDF extractors can return an invisible NUL character (`\x00`) in the OCR text. DocuElevate removes this character before database, search, and translation writes. Deploy the fix, then use the UI's **Retry from this step** action so the original text can be saved safely.
+
 ### Email Integration Problems
 
 #### Symptoms

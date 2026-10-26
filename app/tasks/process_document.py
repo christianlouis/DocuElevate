@@ -19,7 +19,7 @@ from app.models import DocumentIntake, DropboxImportObject, FileRecord, Pipeline
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress
+from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress, remove_nul_bytes
 from app.utils.pdf_security import (
     ENCRYPTED_PDF_ERROR_CODE,
     ENCRYPTED_PDF_MESSAGE,
@@ -97,7 +97,7 @@ def _complete_index_first_document(
     working_path: str,
 ) -> dict[str, object]:
     """Persist searchable text and hand the historical document to Qdrant."""
-    cleaned_text = extracted_text.strip()
+    cleaned_text = remove_nul_bytes(extracted_text).strip()
     if not cleaned_text:
         return _mark_index_first_pending(
             task_id,

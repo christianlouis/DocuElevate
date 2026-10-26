@@ -104,7 +104,7 @@ def test_index_only_ocr_persists_text_and_queues_vector_index(db_session, tmp_pa
     db_session.commit()
     provider = Mock(name="provider")
     provider.name = "azure"
-    provider.process.return_value = OCRResult("azure", "Searchable OCR text", str(staged))
+    provider.process.return_value = OCRResult("azure", "Searchable OCR IN\x0012345678\n", str(staged))
 
     with (
         patch("app.tasks.process_with_ocr.settings.workdir", str(tmp_path)),
@@ -112,7 +112,7 @@ def test_index_only_ocr_persists_text_and_queues_vector_index(db_session, tmp_pa
         patch("app.tasks.process_with_ocr.get_ocr_providers", return_value=[provider]),
         patch(
             "app.tasks.process_with_ocr.merge_ocr_results",
-            return_value=("Searchable OCR text", str(staged), {}),
+            return_value=("Searchable OCR IN\x0012345678\n", str(staged), {}),
         ),
         patch("app.tasks.process_with_ocr.check_text_quality") as quality,
         patch("app.tasks.process_with_ocr.compare_text_quality") as compare,
@@ -134,7 +134,8 @@ def test_index_only_ocr_persists_text_and_queues_vector_index(db_session, tmp_pa
     db_session.refresh(imported)
     db_session.refresh(intake)
     assert result["status"] == "queued_for_vector_index"
-    assert record.ocr_text == "Searchable OCR text"
+    assert record.ocr_text == "Searchable OCR IN12345678"
+    assert "\x00" not in record.ocr_text
     assert imported.state == "indexing"
     assert intake.state == "indexing"
     assert not staged.exists()

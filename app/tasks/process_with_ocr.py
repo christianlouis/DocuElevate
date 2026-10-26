@@ -24,7 +24,7 @@ from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
-from app.utils import log_task_progress
+from app.utils import log_task_progress, remove_nul_bytes
 from app.utils.ocr_provider import OCRResult, embed_text_layer, get_ocr_providers, merge_ocr_results
 from app.utils.text_quality import TextSource, check_text_quality, compare_text_quality
 
@@ -57,7 +57,7 @@ def _complete_index_only_ocr(
     searchable_pdf_path: str | None,
 ) -> dict:
     """Persist OCR text and recoverably hand it to the low-priority indexer."""
-    cleaned_text = extracted_text.strip()
+    cleaned_text = remove_nul_bytes(extracted_text).strip()
     from app.tasks.vector_index import _set_source_state, index_document_vectors
 
     with SessionLocal() as db:

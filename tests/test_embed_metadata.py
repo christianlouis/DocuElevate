@@ -6,6 +6,7 @@ import pytest
 
 from app.tasks.embed_metadata_into_pdf import persist_metadata
 from app.utils.filename_utils import get_unique_filepath_with_counter
+from app.utils.text_sanitizer import remove_nul_bytes
 
 
 @pytest.mark.unit
@@ -58,3 +59,20 @@ class TestPersistMetadata:
 
         result = persist_metadata(metadata, pdf_path)
         assert result.endswith("2024-01-01_Invoice.json")
+
+
+@pytest.mark.unit
+class TestTextSanitizer:
+    """Tests for text cleanup before PostgreSQL persistence."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("\u00a0\nInvoice IN\x0012345678\nRechnung für März\n", "\u00a0\nInvoice IN12345678\nRechnung für März\n"),
+            ("  Clean Unicode – text\n", "  Clean Unicode – text\n"),
+            ("", ""),
+            (None, None),
+        ],
+    )
+    def test_removes_nul_bytes_and_preserves_other_text(self, text, expected):
+        assert remove_nul_bytes(text) == expected

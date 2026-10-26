@@ -131,8 +131,33 @@ class TestEmbedMetadataIntoPdf:
                                 "tags": ["invoice", "amazon"],
                             }
 
-                            result = embed_metadata_into_pdf.__wrapped__(
-                                "/workdir/tmp/test.pdf", "Sample text", metadata, file_id=123
+                            metadata["language"] = "de"
+                            extracted_text = "Sample IN\x0012345678\n"
+                            expected_text = "Sample IN12345678\n"
+
+                            def assert_commit_text_is_sanitized():
+                                assert mock_file_record.ocr_text == expected_text
+                                assert "\x00" not in mock_file_record.ocr_text
+
+                            mock_db.commit.side_effect = assert_commit_text_is_sanitized
+                            with (
+                                patch("app.utils.meilisearch_client.index_document") as mock_index,
+                                patch(
+                                    "app.tasks.translate_to_default_language.translate_to_default_language"
+                                ) as mock_translate,
+                            ):
+                                result = embed_metadata_into_pdf.__wrapped__(
+                                    "/workdir/tmp/test.pdf", extracted_text, metadata, file_id=123
+                                )
+
+                            # The text assigned before commit is safe for PostgreSQL and downstream consumers.
+                            assert mock_file_record.ocr_text == expected_text
+                            assert "\x00" not in mock_file_record.ocr_text
+                            mock_db.commit.assert_called()
+                            mock_index.assert_called_once()
+                            assert mock_index.call_args.args[1] == expected_text
+                            mock_translate.delay.assert_called_once_with(
+                                123, expected_text, "de", owner_id=mock_file_record.owner_id
                             )
 
                             # Verify PDF metadata was set

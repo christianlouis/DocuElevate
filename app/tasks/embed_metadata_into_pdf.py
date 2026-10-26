@@ -16,7 +16,7 @@ from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.finalize_document_storage import finalize_document_storage
 from app.tasks.retry_config import BaseTaskWithRetry
-from app.utils import get_unique_filepath_with_counter, log_task_progress
+from app.utils import get_unique_filepath_with_counter, log_task_progress, remove_nul_bytes
 from app.utils.filename_utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,9 @@ def embed_metadata_into_pdf(self, local_file_path: str, extracted_text: str, met
     Additionally, the metadata is persisted to a JSON file with the same base name.
     """
     task_id = self.request.id
+    # Retry payloads can contain raw PDF text, so sanitize at this durable
+    # persistence boundary before PostgreSQL, search indexing, or translation.
+    extracted_text = remove_nul_bytes(extracted_text)
     logger.info(f"[{task_id}] Starting metadata embedding for: {local_file_path}")
     log_task_progress(
         task_id,
