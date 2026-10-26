@@ -42,6 +42,7 @@ nav:
       - Email Ingestion: howto/EmailIngestion.md
       - Mobile Scanning: howto/MobileScanning.md
   - API: API.md
+  - MCP: MCP.md
   - CLI: CLIGuide.md
   - Deployment:
       - Overview: DeploymentGuide.md
@@ -57,7 +58,9 @@ nav:
       - Google Drive: GoogleDriveSetup.md
       - OneDrive: OneDriveSetup.md
       - Amazon S3: AmazonS3Setup.md
-      - Evernote: EvernoteSetup.md
+      - Notion: Notion.md
+      - Evernote (per-user): Evernote.md
+      - Evernote (global): EvernoteSetup.md
       - Authentication: AuthenticationSetup.md
       - Notifications: NotificationsSetup.md
   - Security:

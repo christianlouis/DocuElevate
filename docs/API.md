@@ -275,16 +275,18 @@ curl -X POST "https://<preprod-host>/api/knowledge/chat" \
 
 #### MCP adapter contract
 
-An MCP server does not need direct database or Qdrant access. It can be a stateless
-adapter holding a scoped DocuElevate API token and expose exactly these tools:
+The [included MCP adapter](MCP.md) runs over stdio and uses the existing knowledge
+API without direct database or Qdrant access. It exposes these read-only tools:
 
 | MCP tool | DocuElevate operation | Inputs |
 |----------|------------------------|--------|
 | `search_documents` | `POST /api/knowledge/search` | `query`, optional `limit`, optional `score_threshold` |
 | `get_document` | `GET /api/knowledge/documents/{document_id}` | `document_id` |
 
-The adapter must pass through the Bearer token, preserve citations, and treat 401,
-403/404, 429, and 502 as tool errors. Authorization remains in DocuElevate.
+The adapter passes through the Bearer token, preserves citations, and returns
+authentication, access, rate-limit, and server failures as tool errors.
+Authorization remains in DocuElevate. API tokens currently have no separate
+read-only scopes; use a dedicated, expiring token for the adapter.
 
 ### Pipeline Template Library
 
@@ -1483,6 +1485,19 @@ Send a processed file to Google Drive.
 ## Integrations
 
 Manage per-user integrations (sources and destinations). All endpoints require authentication and are scoped to the current user's integrations. Subscription-tier quota enforcement is applied on creation.
+
+The `NOTION` and `EVERNOTE` destination types use the same create, update, and
+connection-test endpoints. Their tokens belong in `credentials`, never `config`:
+
+| Type | Configuration | Credentials |
+|------|---------------|-------------|
+| `NOTION` | `data_source_id` or `database_id`, optional `title_property`, `document_url_base`, `attach_pdf` (default false) | `api_token` |
+| `EVERNOTE` | optional `notebook_guid`, `default_tags`, `include_metadata` (default true), `sandbox` (default false) | `auth_token` |
+
+Credentials are encrypted at rest and omitted from responses. Omit `credentials`
+on updates to retain the saved token. Saved connection tests read these tokens
+server-side and create no pages or notes. See [Notion](Notion.md) and
+[Evernote](Evernote.md) for provider setup and limitations.
 
 ### Quota Enforcement
 

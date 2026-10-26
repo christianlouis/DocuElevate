@@ -152,7 +152,9 @@ The quota bar on the Email Ingestion page shows your current usage against your 
 #### Integrations Dashboard
 
 See the [Notion destination guide](Notion.md) for setup, private links, and
-attachment limits.
+attachment limits, and the [per-user Evernote guide](Evernote.md) for notebook
+delivery. To search and retrieve documents from an assistant, use the
+[read-only MCP adapter](MCP.md).
 
 The **Integrations** page (`/integrations`) provides a unified view of all your configured ingestion sources and storage destinations. Instead of managing each integration type separately, you can create, edit, test, and delete any integration from a single dashboard.
 
@@ -177,6 +179,8 @@ The **Integrations** page (`/integrations`) provides a unified view of all your 
    - **Email Forward** — recipient email address
    - **Watch Folder** — source type (Local, S3, Dropbox, Google Drive, OneDrive, Nextcloud, WebDAV), per-type config fields, delete after processing toggle
    - **Paperless NGX** — URL and API token
+   - **Notion** — data source or database ID, integration token, optional PDF attachment and document link
+   - **Evernote** — existing token, optional notebook, default tags, metadata inclusion, and sandbox mode
    - **Webhook** — no configuration needed; the form shows a quick-start guide with sample `curl` and Python snippets for uploading documents via the API
 5. Click **Test Connection** to verify the settings before saving.
 6. Click **Save** to persist the integration.
