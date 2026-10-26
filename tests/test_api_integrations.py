@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.models import SubscriptionPlan, UserIntegration, UserProfile
+from app.utils.encryption import decrypt_value
 
 # ---------------------------------------------------------------------------
 # Test data constants
@@ -643,6 +644,34 @@ class TestImapPasswordEncryption:
                 verify_session.close()
         finally:
             app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+class TestEvernoteIntegration:
+    def test_create_encrypts_token_and_saved_tester_uses_it(self, int_client, int_session):
+        payload = {
+            "direction": "DESTINATION",
+            "integration_type": "EVERNOTE",
+            "name": "Personal Evernote",
+            "config": {"notebook_guid": "notebook-user", "sandbox": True},
+            "credentials": {"auth_token": "USER-TOKEN"},
+        }
+        created = int_client.post("/api/integrations/", json=payload)
+        assert created.status_code == 201
+        row = int_session.query(UserIntegration).first()
+        assert row.credentials.startswith("enc:")
+        assert json.loads(decrypt_value(row.credentials))["auth_token"] == "USER-TOKEN"
+        assert "USER-TOKEN" not in created.text
+
+        fake_store = unittest.mock.Mock()
+        fake_store.listNotebooks.return_value = [unittest.mock.Mock(guid="notebook-user")]
+        with unittest.mock.patch(
+            "app.tasks.upload_to_evernote._get_note_store", return_value=(fake_store, unittest.mock.Mock())
+        ):
+            response = int_client.post(f"/api/integrations/{created.json()['id']}/test")
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        fake_store.listNotebooks.assert_called_once_with("USER-TOKEN")
 
 
 # ---------------------------------------------------------------------------

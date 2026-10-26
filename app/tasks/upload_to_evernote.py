@@ -244,7 +244,9 @@ def upload_to_evernote_integration(
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("[%s] Evernote per-user upload failed: %s", task_id, type(exc).__name__)
-        raise RuntimeError("Evernote upload failed; verify the token, notebook, and service availability") from exc
+        # Do not retain the SDK exception as a chained cause: Celery's failure
+        # traceback is operator-visible and may contain a token or response body.
+        raise RuntimeError("Evernote upload failed; verify the token, notebook, and service availability") from None
     note_guid = getattr(created_note, "guid", None)
     return {
         "status": "Completed",
