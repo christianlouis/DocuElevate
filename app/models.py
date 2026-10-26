@@ -939,6 +939,7 @@ class IntegrationType:
     ICLOUD = "ICLOUD"
     VECTOR_DATABASE = "VECTOR_DATABASE"
     NOTION = "NOTION"
+    EVERNOTE = "EVERNOTE"
 
     ALL = {
         IMAP,
@@ -959,6 +960,7 @@ class IntegrationType:
         ICLOUD,
         VECTOR_DATABASE,
         NOTION,
+        EVERNOTE,
     }
 
 

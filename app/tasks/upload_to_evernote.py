@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 _UNKNOWN_PLACEHOLDERS = {"", "Unknown", "unknown", "N/A", "n/a", "None", "none", "null"}
 _MAX_EVERNOTE_TITLE_LENGTH = 255
+_MAX_EVERNOTE_TAG_LENGTH = 100
+_MAX_EVERNOTE_TAGS = 100
+_UNSET = object()
 
 
 def _get_evernote_sdk():
@@ -34,15 +37,22 @@ def _get_evernote_sdk():
 
 def _build_thrift_client(client_cls, url: str, binary_protocol, http_transport):
     transport = http_transport.THttpClient(url)
+    # Keep network failures bounded.  Older thrift versions expose this as
+    # milliseconds; test doubles and newer clients may not expose it.
+    set_timeout = getattr(transport, "setTimeout", None)
+    if callable(set_timeout):
+        set_timeout(30_000)
     protocol = binary_protocol.TBinaryProtocol(transport)
     return client_cls(protocol)
 
 
-def _get_note_store(auth_token: str):
+def _get_note_store(auth_token: str, *, sandbox: bool | None = None):
     NoteStore, Types, UserStore, TBinaryProtocol, THttpClient = _get_evernote_sdk()
 
     base_url = (
-        "https://sandbox.evernote.com" if getattr(settings, "evernote_sandbox", False) else "https://www.evernote.com"
+        "https://sandbox.evernote.com"
+        if (getattr(settings, "evernote_sandbox", False) if sandbox is None else sandbox)
+        else "https://www.evernote.com"
     )
     user_store = _build_thrift_client(UserStore.Client, f"{base_url}/edam/user", TBinaryProtocol, THttpClient)
     user = user_store.getUser(auth_token)
@@ -94,17 +104,20 @@ def _metadata_rows(metadata: dict[str, Any]) -> list[tuple[str, str]]:
     return rows
 
 
-def _extract_tags(metadata: dict[str, Any]) -> list[str]:
+def _extract_tags(metadata: dict[str, Any], default_tags: Any = _UNSET) -> list[str]:
     tags: list[str] = []
 
     def add_tag(value: Any) -> None:
         normalized = _normalize_metadata_value(value)
-        if normalized and normalized not in tags:
+        normalized = normalized[:_MAX_EVERNOTE_TAG_LENGTH]
+        if normalized and normalized not in tags and len(tags) < _MAX_EVERNOTE_TAGS:
             tags.append(normalized)
 
-    default_tags = getattr(settings, "evernote_default_tags", None)
+    if default_tags is _UNSET:
+        default_tags = getattr(settings, "evernote_default_tags", None)
     if default_tags:
-        for tag in str(default_tags).split(","):
+        values = default_tags if isinstance(default_tags, (list, tuple, set)) else str(default_tags).split(",")
+        for tag in values:
             add_tag(tag)
 
     metadata_tags = metadata.get("tags")
@@ -145,12 +158,28 @@ def _build_enml(metadata: dict[str, Any], resource_hash: str, resource_mime: str
     return "".join(body_parts)
 
 
-def _create_evernote_note(file_path: str, metadata: dict[str, Any], task_id: str):
-    auth_token = getattr(settings, "evernote_auth_token", None)
+def _create_evernote_note(
+    file_path: str,
+    metadata: dict[str, Any],
+    task_id: str,
+    *,
+    auth_token: str | object = _UNSET,
+    notebook_guid: str | None | object = _UNSET,
+    default_tags: Any = _UNSET,
+    include_metadata: bool | object = _UNSET,
+    sandbox: bool | object = _UNSET,
+):
+    legacy = auth_token is _UNSET
+    if legacy:
+        auth_token = getattr(settings, "evernote_auth_token", None)
+        notebook_guid = getattr(settings, "evernote_notebook_guid", None)
+        default_tags = getattr(settings, "evernote_default_tags", None)
+        include_metadata = getattr(settings, "evernote_include_metadata", True)
+        sandbox = getattr(settings, "evernote_sandbox", False)
     if not auth_token:
-        raise ValueError("Evernote auth token is not configured (EVERNOTE_AUTH_TOKEN)")
+        raise ValueError("Evernote auth token is not configured")
 
-    note_store, Types = _get_note_store(auth_token)
+    note_store, Types = _get_note_store(auth_token, sandbox=bool(sandbox))
 
     filename = os.path.basename(file_path)
     with open(file_path, "rb") as pdf_file:
@@ -176,15 +205,14 @@ def _create_evernote_note(file_path: str, metadata: dict[str, Any], task_id: str
         metadata,
         body_hash_hex,
         resource_mime,
-        include_metadata=getattr(settings, "evernote_include_metadata", True),
+        include_metadata=bool(include_metadata),
     )
     note.resources = [resource]
 
-    notebook_guid = getattr(settings, "evernote_notebook_guid", None)
     if notebook_guid:
         note.notebookGuid = notebook_guid
 
-    tag_names = _extract_tags(metadata)
+    tag_names = _extract_tags(metadata, default_tags)
     if tag_names:
         note.tagNames = tag_names
 
@@ -192,6 +220,58 @@ def _create_evernote_note(file_path: str, metadata: dict[str, Any], task_id: str
 
     logger.info("[%s] Created Evernote note %s for %s", task_id, getattr(created_note, "guid", None), file_path)
     return created_note
+
+
+def upload_to_evernote_integration(
+    file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str, *, file_id: int | None = None
+) -> dict[str, Any]:
+    """Upload using only the supplied user's credentials and configuration."""
+    auth_token = str(creds.get("auth_token") or "").strip()
+    if not auth_token:
+        raise ValueError("Evernote auth token is not configured for this integration")
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    try:
+        created_note = _create_evernote_note(
+            file_path,
+            _load_metadata(file_path),
+            task_id,
+            auth_token=auth_token,
+            notebook_guid=cfg.get("notebook_guid"),
+            default_tags=cfg.get("default_tags"),
+            include_metadata=cfg.get("include_metadata", True),
+            sandbox=bool(cfg.get("sandbox", False)),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[%s] Evernote per-user upload failed: %s", task_id, type(exc).__name__)
+        raise RuntimeError("Evernote upload failed; verify the token, notebook, and service availability") from exc
+    note_guid = getattr(created_note, "guid", None)
+    return {
+        "status": "Completed",
+        "file_path": file_path,
+        "evernote_note_guid": note_guid,
+        "evernote_title": getattr(created_note, "title", None),
+        "evernote_notebook_guid": getattr(created_note, "notebookGuid", None),
+    }
+
+
+def test_evernote_connection(config: dict[str, Any] | None, credentials: dict[str, Any] | None) -> dict[str, Any]:
+    """Read-only Evernote credential/notebook check; never creates a note."""
+    config = config or {}
+    credentials = credentials or {}
+    auth_token = str(credentials.get("auth_token") or "").strip()
+    if not auth_token:
+        return {"success": False, "message": "Evernote auth token is required"}
+    try:
+        note_store, _ = _get_note_store(auth_token, sandbox=bool(config.get("sandbox", False)))
+        notebooks = note_store.listNotebooks(auth_token)
+        notebook_guid = config.get("notebook_guid")
+        if notebook_guid and not any(getattr(item, "guid", None) == notebook_guid for item in notebooks):
+            return {"success": False, "message": "Configured Evernote notebook was not found or is not accessible"}
+        return {"success": True, "message": "Evernote credentials and notebook access are valid"}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Evernote connection test failed: %s", type(exc).__name__)
+        return {"success": False, "message": "Evernote connection failed; verify the token and service availability"}
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)

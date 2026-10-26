@@ -63,6 +63,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import IntegrationType, UserIntegration
 from app.tasks.retry_config import UploadTaskWithRetry
+from app.tasks.upload_to_evernote import upload_to_evernote_integration
 from app.tasks.upload_to_notion import NotionPageCreationUncertain, upload_to_notion
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value
@@ -774,6 +775,8 @@ _UPLOAD_HANDLERS = {
     IntegrationType.NOTION: upload_to_notion,
 }
 
+_UPLOAD_HANDLERS[IntegrationType.EVERNOTE] = upload_to_evernote_integration
+
 
 # ---------------------------------------------------------------------------
 # Celery task
@@ -881,6 +884,8 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         elif itype == IntegrationType.NOTION:
             result = handler(file_path, cfg, creds, task_id, file_id=file_id)
             notion_page_created = True
+        elif itype == IntegrationType.EVERNOTE:
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
         else:
             result = handler(file_path, cfg, creds, task_id)
 
