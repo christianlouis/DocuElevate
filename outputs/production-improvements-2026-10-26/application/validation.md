@@ -45,3 +45,17 @@ iterator, matching the production Apprise 2.x interface.
 
 Result: **62 passed, 1 warning in 0.17s**. Ruff lint and format checks for the
 two notification test modules and `app/utils/notification.py` also passed.
+
+## OCR coverage iterator compatibility
+
+The OCR coverage mocks now model the bounded page iterator contract: one
+rendered page followed by an empty result. The previous constant
+`[Mock()]` return value never terminated the production page iterator and was
+the cause of the CI test job stalling in OCR coverage.
+
+```text
+timeout 30s /tmp/docuelevate-validation-20261026.PBJjKu/bin/python -m pytest \
+  --override-ini addopts='' -q tests/test_ocr_provider_coverage.py
+```
+
+Result: **70 passed, 1 warning in 0.10s**.
