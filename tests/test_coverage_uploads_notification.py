@@ -478,7 +478,7 @@ class TestNotificationCoverage:
         mock_server.notify.return_value = True
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = [mock_server]
+        mock_apprise_instance.__iter__.return_value = iter([mock_server])
 
         with (
             patch("app.utils.notification.settings") as ms,
@@ -502,7 +502,7 @@ class TestNotificationCoverage:
         mock_server.notify.return_value = True
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = [mock_server]
+        mock_apprise_instance.__iter__.return_value = iter([mock_server])
 
         with (
             patch("app.utils.notification.settings") as ms,
@@ -525,7 +525,7 @@ class TestNotificationCoverage:
         mock_server.notify.return_value = True
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = [mock_server]
+        mock_apprise_instance.__iter__.return_value = iter([mock_server])
 
         with (
             patch("app.utils.notification.settings") as ms,
@@ -544,7 +544,7 @@ class TestNotificationCoverage:
         self._reset_apprise()
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = []
+        mock_apprise_instance.__iter__.return_value = iter([])
 
         with (
             patch("app.utils.notification.settings") as ms,
@@ -567,7 +567,7 @@ class TestNotificationCoverage:
         mock_server.notify.return_value = False
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = [mock_server]
+        mock_apprise_instance.__iter__.return_value = iter([mock_server])
 
         with (
             patch("app.utils.notification.settings") as ms,
@@ -590,7 +590,7 @@ class TestNotificationCoverage:
         mock_server.notify.side_effect = RuntimeError("boom")
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = [mock_server]
+        mock_apprise_instance.__iter__.return_value = iter([mock_server])
 
         with (
             patch("app.utils.notification.settings") as ms,
@@ -633,7 +633,7 @@ class TestNotificationCoverage:
         bad.notify.return_value = False
 
         mock_apprise_instance = MagicMock()
-        mock_apprise_instance.servers = [good, bad]
+        mock_apprise_instance.__iter__.return_value = iter([good, bad])
 
         with (
             patch("app.utils.notification.settings") as ms,
