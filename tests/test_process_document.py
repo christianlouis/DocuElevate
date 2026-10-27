@@ -821,6 +821,7 @@ startxref
         patch("app.tasks.process_document.settings") as mock_settings,
         patch("app.tasks.process_document.log_task_progress"),
         patch("app.tasks.process_document.open_pdf_reader") as mock_pdf_reader,
+        patch.object(process_document, "retry") as mock_retry,
     ):
         # Setup mocks
         mock_settings.workdir = str(tmp_path)
@@ -832,13 +833,33 @@ startxref
 
         mock_pdf_reader.side_effect = PdfReadError("Test error")
 
-        # Call the task's run method and expect it to raise retry exception
-        with pytest.raises(Exception) as exc_info:
-            process_document.run(str(test_pdf))
+        # Call the task body directly so Celery's autoretry wrapper does not
+        # issue a second retry for the test exception itself.
+        from celery.exceptions import Retry
 
-        # Verify that retry was triggered
-        # The retry method raises a special exception
-        assert exc_info.value is not None
+        mock_retry.side_effect = Retry()
+        with pytest.raises(Retry):
+            process_document._orig_run(
+                str(test_pdf),
+                original_filename="provided.pdf",
+                owner_id="owner@example.test",
+                index_only=True,
+            )
+
+        # Celery retains the original positional request args when ``args`` is
+        # omitted.  Supplying original_local_file again via kwargs would then
+        # fail with "multiple values for argument" on the retry attempt.
+        mock_retry.assert_called_once()
+        retry_call = mock_retry.call_args.kwargs
+        assert retry_call["args"] == ()
+        assert retry_call["kwargs"] == {
+            "original_local_file": str(test_pdf),
+            "original_filename": "provided.pdf",
+            "file_id": 1,
+            "force_cloud_ocr": False,
+            "owner_id": "owner@example.test",
+            "index_only": True,
+        }
 
 
 @pytest.mark.unit
