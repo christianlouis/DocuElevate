@@ -91,6 +91,21 @@ class TestInitSentry:
         assert call_kwargs["environment"] == "production"
         assert call_kwargs["release"] == "1.2.3"
         assert call_kwargs["send_default_pii"] is False
+        assert call_kwargs["max_request_body_size"] == "never"
+        assert call_kwargs["include_local_variables"] is False
+        event = {
+            "request": {"data": "secret body", "headers": {"Authorization": "secret"}},
+            "extra": {"task_args": ["document text"], "safe_id": 42},
+            "contexts": {"celery": {"kwargs": {"content": "secret"}, "task": "process"}},
+            "exception": {"values": [{"type": "ValueError"}]},
+        }
+        redacted = call_kwargs["before_send"](event, {})
+        assert "data" not in redacted["request"]
+        assert "headers" not in redacted["request"]
+        assert "task_args" not in redacted["extra"]
+        assert redacted["extra"]["safe_id"] == 42
+        assert "kwargs" not in redacted["contexts"]["celery"]
+        assert redacted["exception"]
 
     def test_celery_integration_included_when_requested(self, mocker):
         """CeleryIntegration is appended when integrations_extra=['celery']."""
