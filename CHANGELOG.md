@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.12 (2026-10-27)
+
+### Bug Fixes
+
+- Improve production processing reliability and telemetry privacy
+  ([#1280](https://github.com/christianlouis/DocuElevate/pull/1280),
+  [`3147063`](https://github.com/christianlouis/DocuElevate/commit/31470634dc5d47c31e087dcd4dcf88272dfc9cc6))
+
+
 ## v0.188.11 (2026-10-26)
 
 ### Bug Fixes
