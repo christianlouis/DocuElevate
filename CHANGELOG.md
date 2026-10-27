@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.188.13 (2026-10-27)
+
+### Bug Fixes
+
+- Avoid duplicate PDF retry arguments
+  ([#1282](https://github.com/christianlouis/DocuElevate/pull/1282),
+  [`f4fc5e9`](https://github.com/christianlouis/DocuElevate/commit/f4fc5e9fd97c14aee4cf7f2782eac8d932d72648))
+
+
 ## v0.188.12 (2026-10-27)
 
 ### Bug Fixes
