@@ -24,6 +24,7 @@ from app.tasks.imap_tasks import (
     mark_as_processed_with_star,
     pull_all_inboxes,
     pull_inbox,
+    record_poll_success,
     release_lock,
     save_processed_emails,
 )
@@ -83,6 +84,57 @@ class TestLoadSaveProcessedEmails:
 
         # Clean up
         os.remove("/tmp/test_processed_mails.json")
+
+
+@pytest.mark.unit
+class TestPollCheckpoint:
+    @patch("app.tasks.imap_tasks.record_poll_success")
+    @patch("app.tasks.imap_tasks.load_processed_emails", return_value={})
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    def test_successful_empty_poll_records_numeric_checkpoint(self, mock_imap, _private, _load, record):
+        mock_mail = mock_imap.return_value
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b""])
+
+        result = check_and_pull_mailbox("imap1", "imap.example.com", 993, "user", _TEST_CREDENTIAL, True, False)
+
+        assert result is True
+        record.assert_called_once_with("imap1")
+
+    @patch("app.tasks.imap_tasks.redis_client")
+    def test_checkpoint_uses_agreed_key_epoch_and_ttl(self, mock_redis):
+        observed_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        record_poll_success("imap2", now=observed_at)
+
+        mock_redis.set.assert_called_once_with(
+            "docuelevate:imap:last_success:imap2", str(int(observed_at.timestamp())), ex=24 * 60 * 60
+        )
+
+    @pytest.mark.parametrize("failure", ["login", "select", "search"])
+    @patch("app.tasks.imap_tasks.record_poll_success")
+    @patch("app.tasks.imap_tasks.load_processed_emails", return_value={})
+    @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
+    @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
+    def test_imap_failures_do_not_advance_checkpoint(self, mock_imap, _private, _load, record, failure):
+        mock_mail = mock_imap.return_value
+        mock_mail.login.return_value = ("OK", [])
+        mock_mail.select.return_value = ("OK", [])
+        mock_mail.search.return_value = ("OK", [b""])
+        if failure == "login":
+            mock_mail.login.side_effect = OSError("login failed")
+        elif failure == "select":
+            mock_mail.select.return_value = ("NO", None)
+        else:
+            mock_mail.search.return_value = ("NO", [])
+
+        result = check_and_pull_mailbox("imap1", "imap.example.com", 993, "user", _TEST_CREDENTIAL, True, False)
+
+        assert result is False
+        record.assert_not_called()
+        mock_mail.shutdown.assert_called_once_with()
 
 
 @pytest.mark.unit
@@ -585,8 +637,7 @@ class TestPullAllInboxes:
         mock_settings.imap2_delete_after_process = False
         mock_check.side_effect = Exception("Test error")
 
-        with pytest.raises(Exception):
-            pull_all_inboxes()
+        pull_all_inboxes()
 
         mock_release.assert_called_once()
 

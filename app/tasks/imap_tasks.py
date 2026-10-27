@@ -90,9 +90,21 @@ def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
 
 LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
+POLL_CHECKPOINT_TTL_SECONDS = 24 * 60 * 60
+POLL_CHECKPOINT_PREFIX = "docuelevate:imap:last_success:"
 
 # Local cache file for tracking processed emails
 CACHE_FILE = os.path.join(settings.workdir, "processed_mails.json")
+
+
+def record_poll_success(mailbox_key: str, *, now: datetime | None = None) -> None:
+    """Record the epoch time of a successful mailbox poll, including empty polls."""
+    observed_at = now or datetime.now(timezone.utc)
+    redis_client.set(
+        f"{POLL_CHECKPOINT_PREFIX}{mailbox_key}",
+        str(int(observed_at.timestamp())),
+        ex=POLL_CHECKPOINT_TTL_SECONDS,
+    )
 
 
 def acquire_lock():
@@ -187,7 +199,10 @@ def pull_all_inboxes():
             },
         ):
             if any(mailbox[field] for field in ("host", "username", "password")):
-                check_and_pull_mailbox(**mailbox)
+                try:
+                    check_and_pull_mailbox(**mailbox)
+                except Exception as exc:  # noqa: BLE001
+                    logger.error("Error polling mailbox %s: %s", mailbox["mailbox_key"], type(exc).__name__)
             else:
                 logger.debug("Mailbox %s is not configured; skipping silently.", mailbox["mailbox_key"])
 
@@ -355,10 +370,10 @@ def check_and_pull_mailbox(
     """Validates config and invokes pulling from the mailbox if valid."""
     if not (host and port and username and password):
         logger.warning(f"Mailbox {mailbox_key} is missing config, skipping.")
-        return
+        return False
 
     logger.info(f"Checking mailbox: {mailbox_key}")
-    pull_inbox(
+    succeeded = pull_inbox(
         mailbox_key=mailbox_key,
         host=host,
         port=port,
@@ -367,6 +382,9 @@ def check_and_pull_mailbox(
         use_ssl=use_ssl,
         delete_after_process=delete_after_process,
     )
+    if succeeded is True:
+        record_poll_success(mailbox_key)
+    return succeeded
 
 
 def pull_inbox(
@@ -435,16 +453,22 @@ def pull_inbox(
             all_mail_folder = find_all_mail_folder(mail)
             if all_mail_folder:
                 logger.info("Using Gmail All Mail folder: %s", all_mail_folder)
-                mail.select(f'"{all_mail_folder}"')
+                select_status, _ = mail.select(f'"{all_mail_folder}"')
             else:
                 logger.warning("Gmail All Mail folder not found, falling back to INBOX.")
-                mail.select("INBOX")
+                select_status, _ = mail.select("INBOX")
+            if select_status != "OK":
+                logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
+                return False
             # Use the X-GM-RAW query for Gmail.
             raw_query = "in:anywhere in:unread newer_than:3d has:attachment"
             status, search_data = mail.search(None, "X-GM-RAW", f'"{raw_query}"')
         else:
             # For non-Gmail, select INBOX and use SINCE/UNSEEN query.
-            mail.select("INBOX")
+            select_status, _ = mail.select("INBOX")
+            if select_status != "OK":
+                logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
+                return False
             since_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%d-%b-%Y")
             status, search_data = mail.search(None, f"(SINCE {since_date} UNSEEN)")
 
@@ -452,8 +476,7 @@ def pull_inbox(
             logger.warning("Search failed on mailbox %s. Status=%s", mailbox_key, status)
             mail.close()
             mail.logout()
-            completed = True
-            return
+            return False
 
         msg_numbers = search_data[0].split()
         logger.info("Found %d unread emails in %s.", len(msg_numbers), mailbox_key)
@@ -513,9 +536,11 @@ def pull_inbox(
         mail.logout()
         completed = True
         logger.info("Finished processing mailbox %s", mailbox_key)
+        return True
 
     except Exception as e:
         logger.exception("Error pulling mailbox %s: %s", mailbox_key, e)
+        return False
     finally:
         if mail is not None and not completed:
             _shutdown_imap_connection(mail)
