@@ -60,7 +60,7 @@ filelock==3.20.3
 # Self-hosted OCR engines (optional – only required when the provider is enabled)
 pytesseract>=0.3.13  # Python wrapper for Tesseract OCR
 pdf2image>=1.17.0  # Convert PDF pages to images (used by Tesseract and EasyOCR providers)
-ocrmypdf>=16.0.0,<18.0.0  # Post-processing: embeds searchable text layers into PDFs via Tesseract
+ocrmypdf>=17.13.0,<18.0.0  # Post-processing: embeds searchable text layers into PDFs via Tesseract
 meilisearch>=0.42.0  # Full-text search engine client
 stripe>=7.0.0,<16.0.0  # Stripe billing SDK (MIT license)
 
