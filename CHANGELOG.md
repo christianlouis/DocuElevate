@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.189.0 (2026-10-29)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`caac4d8`](https://github.com/christianlouis/DocuElevate/commit/caac4d863860a1621861ce2188de4e6008c7d347))
+
+### Features
+
+- **integrations**: Add Notion, per-user Evernote, and read-only MCP
+  ([#1281](https://github.com/christianlouis/DocuElevate/pull/1281),
+  [`c03ae1d`](https://github.com/christianlouis/DocuElevate/commit/c03ae1d6a6a79a86a0cebada55eb100dbada589b))
+
+
 ## Unreleased
 
 
