@@ -866,6 +866,30 @@
         </template>
 
         <!-- Paperless fields -->
+        <template x-if="form.integration_type === 'EVERNOTE'">
+          <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Evernote Settings</p>
+            <div>
+              <label for="evernote-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Developer token <span class="text-red-500" aria-hidden="true">*</span></label>
+              <input id="evernote-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.auth_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label for="evernote-notebook" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Notebook GUID <span class="text-gray-400">(optional)</span></label>
+              <input id="evernote-notebook" type="text" x-model="form.config.notebook_guid" placeholder="Notebook GUID" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label for="evernote-tags" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Default tags <span class="text-gray-400">(comma-separated)</span></label>
+              <input id="evernote-tags" type="text" x-model="form.config.default_tags" placeholder="docuelevate, archive" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+            </div>
+            <div class="flex gap-4 text-sm text-gray-700 dark:text-gray-200">
+              <label class="inline-flex items-center gap-2"><input type="checkbox" x-model="form.config.include_metadata" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /> Include metadata</label>
+              <label class="inline-flex items-center gap-2"><input type="checkbox" x-model="form.config.sandbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /> Sandbox</label>
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer"><input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /> Show token</label>
+          </div>
+        </template>
+
+        <!-- Paperless fields -->
         <template x-if="form.integration_type === 'PAPERLESS'">
           <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ _("integrations.paperless_settings") }}</p>
@@ -876,6 +900,44 @@
             <div>
               <label for="paperless-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ _("integrations.api_token_label") }} <span class="text-red-500" aria-hidden="true">*</span></label>
               <input id="paperless-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.api_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+              <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              {{ _("integrations.show_token") }}
+            </label>
+          </div>
+        </template>
+
+        <!-- Notion fields -->
+        <template x-if="form.integration_type === 'NOTION'">
+          <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-3">
+            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Notion settings</p>
+            <div>
+              <label for="notion-data-source" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Data source ID <span class="text-xs text-gray-400">one parent ID required</span></label>
+              <input id="notion-data-source" type="text" x-model="form.config.data_source_id" placeholder="Notion data source UUID" :required="!form.config.database_id" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+              <p class="text-xs text-gray-500 mt-1">Enter a data source ID, or use the database ID below—never both.</p>
+            </div>
+            <div>
+              <label for="notion-database" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Database ID <span class="text-xs text-gray-400">optional alternative</span></label>
+              <input id="notion-database" type="text" x-model="form.config.database_id" placeholder="Notion database UUID" :required="!form.config.data_source_id" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+              <p class="text-xs text-gray-500 mt-1">Use a database ID only when it has exactly one data source.</p>
+            </div>
+            <div>
+              <label for="notion-title-property" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Title property <span class="text-xs text-gray-400">optional</span></label>
+              <input id="notion-title-property" type="text" x-model="form.config.title_property" placeholder="Detected automatically" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+            </div>
+            <div>
+              <label for="notion-document-url" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">DocuElevate base URL <span class="text-xs text-gray-400">optional</span></label>
+              <input id="notion-document-url" type="url" x-model="form.config.document_url_base" placeholder="https://your-docuelevate-host" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
+              <p class="text-xs text-gray-500 mt-1">Defaults to the server URL and links to the authenticated /files/{id} page.</p>
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
+              <input type="checkbox" x-model="form.config.attach_pdf" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              Attach the PDF to the Notion page (maximum 20 MiB)
+            </label>
+            <div>
+              <label for="notion-token" class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Integration token <span class="text-red-500" aria-hidden="true">*</span></label>
+              <input id="notion-token" :type="showPassword ? 'text' : 'password'" x-model="form.credentials.api_token" :placeholder="editingIntegration ? '(unchanged if blank)' : ''" :required="!editingIntegration" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-sm" />
             </div>
             <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200 cursor-pointer">
               <input type="checkbox" x-model="showPassword" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
@@ -1120,8 +1182,8 @@ function integrationsDashboard() {
   const ONBOARDING_MODE = {{ onboarding_mode | tojson }};
   const DEFAULT_BACKFILL_TOKEN_BUDGET = {{ default_backfill_token_budget | tojson }};
   const SOURCE_TYPES = ['IMAP', 'WATCH_FOLDER', 'WEBHOOK'];
-  const DEST_TYPES = ['VECTOR_DATABASE', 'S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
-  const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'VECTOR_DATABASE', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
+  const DEST_TYPES = ['VECTOR_DATABASE', 'NOTION', 'EVERNOTE', 'S3', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'EMAIL', 'PAPERLESS', 'RCLONE'];
+  const TYPES_WITH_FORM_FIELDS = new Set(['IMAP', 'VECTOR_DATABASE', 'NOTION', 'EVERNOTE', 'S3', 'WEBDAV', 'NEXTCLOUD', 'FTP', 'SFTP', 'DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE', 'EMAIL', 'WATCH_FOLDER', 'PAPERLESS']);
   const OAUTH_TYPES = new Set(['DROPBOX', 'GOOGLE_DRIVE', 'ONEDRIVE']);
 
   const TYPE_LABELS = {
@@ -1138,8 +1200,10 @@ function integrationsDashboard() {
     SFTP: 'SFTP',
     EMAIL: 'Email Forward',
     PAPERLESS: 'Paperless NGX',
+    NOTION: 'Notion',
     RCLONE: 'Rclone',
     VECTOR_DATABASE: 'Qdrant / Vector Database',
+    EVERNOTE: 'Evernote',
   };
 
   const TYPE_ICONS = {
@@ -1156,8 +1220,10 @@ function integrationsDashboard() {
     SFTP: 'fa-server text-green-600',
     EMAIL: 'fa-paper-plane text-indigo-500',
     PAPERLESS: 'fa-file-pdf text-red-500',
+    NOTION: 'fa-book text-gray-700',
     RCLONE: 'fa-sync text-teal-500',
     VECTOR_DATABASE: 'fa-database text-purple-500',
+    EVERNOTE: 'fa-sticky-note text-yellow-600',
   };
 
   return {
@@ -1342,6 +1408,12 @@ function integrationsDashboard() {
       } else if (this.form.integration_type === 'PAPERLESS') {
         this.form.config = { url: '' };
         this.form.credentials = { api_token: '' };
+      } else if (this.form.integration_type === 'NOTION') {
+        this.form.config = { data_source_id: '', database_id: '', title_property: '', document_url_base: '', attach_pdf: false };
+        this.form.credentials = { api_token: '' };
+      } else if (this.form.integration_type === 'EVERNOTE') {
+        this.form.config = { notebook_guid: '', default_tags: '', include_metadata: true, sandbox: false };
+        this.form.credentials = { auth_token: '' };
       } else if (this.form.integration_type === 'VECTOR_DATABASE') {
         this.form.config = { provider: 'qdrant' };
         this.form.credentials = {};

@@ -2,6 +2,12 @@
 
 This guide explains how to configure DocuElevate to create Evernote notes for processed documents.
 
+For a personal connection managed in the Integrations dashboard, use the
+[per-user Evernote guide](Evernote.md). The settings below configure the existing
+global destination. Evernote's EDAM API is now deprecated; both paths require
+valid credentials for an existing integration. See the
+[official legacy API notice](https://dev.evernote.com/legacy).
+
 ## Overview
 
 The Evernote destination creates one note per processed document. The note contains:

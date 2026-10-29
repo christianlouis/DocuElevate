@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.models import SubscriptionPlan, UserIntegration, UserProfile
+from app.utils.encryption import decrypt_value
 
 # ---------------------------------------------------------------------------
 # Test data constants
@@ -37,6 +38,15 @@ _S3_DESTINATION = {
         "access_key_id": "AKIAIOSFODNN7EXAMPLE",
         "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     },
+    "is_active": True,
+}
+
+_NOTION_DESTINATION = {
+    "direction": "DESTINATION",
+    "integration_type": "NOTION",
+    "name": "Knowledge Base",
+    "config": {"data_source_id": "00000000-0000-4000-8000-000000000001"},
+    "credentials": {"api_token": "notion-secret"},
     "is_active": True,
 }
 
@@ -452,6 +462,21 @@ class TestIntegrationCredentialIsolation:
         assert "s3cr3t" not in resp.text
         mock_test.assert_called_once()
 
+    def test_notion_connection_test_receives_only_server_decrypted_token(self, int_client, int_session):
+        """Notion tokens are encrypted at rest and only decrypted for the connection test."""
+        mock_test = unittest.mock.MagicMock(return_value={"success": True, "message": "Notion connection ready"})
+        created = int_client.post("/api/integrations/", json=_NOTION_DESTINATION)
+        assert created.status_code == 201
+        record = int_session.query(UserIntegration).get(created.json()["id"])
+        assert record.credentials is not None and record.credentials.startswith("enc:")
+
+        with unittest.mock.patch.dict("app.api.integrations._CONNECTION_TESTERS", {"NOTION": mock_test}):
+            response = int_client.post(f"/api/integrations/{created.json()['id']}/test")
+
+        assert response.status_code == 200
+        assert "notion-secret" not in response.text
+        mock_test.assert_called_once_with(_NOTION_DESTINATION["config"], {"api_token": "notion-secret"})
+
 
 @pytest.mark.unit
 class TestIntegrationModel:
@@ -619,6 +644,34 @@ class TestImapPasswordEncryption:
                 verify_session.close()
         finally:
             app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+class TestEvernoteIntegration:
+    def test_create_encrypts_token_and_saved_tester_uses_it(self, int_client, int_session):
+        payload = {
+            "direction": "DESTINATION",
+            "integration_type": "EVERNOTE",
+            "name": "Personal Evernote",
+            "config": {"notebook_guid": "notebook-user", "sandbox": True},
+            "credentials": {"auth_token": "USER-TOKEN"},
+        }
+        created = int_client.post("/api/integrations/", json=payload)
+        assert created.status_code == 201
+        row = int_session.query(UserIntegration).first()
+        assert row.credentials.startswith("enc:")
+        assert json.loads(decrypt_value(row.credentials))["auth_token"] == "USER-TOKEN"
+        assert "USER-TOKEN" not in created.text
+
+        fake_store = unittest.mock.Mock()
+        fake_store.listNotebooks.return_value = [unittest.mock.Mock(guid="notebook-user")]
+        with unittest.mock.patch(
+            "app.tasks.upload_to_evernote._get_note_store", return_value=(fake_store, unittest.mock.Mock())
+        ):
+            response = int_client.post(f"/api/integrations/{created.json()['id']}/test")
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        fake_store.listNotebooks.assert_called_once_with("USER-TOKEN")
 
 
 # ---------------------------------------------------------------------------

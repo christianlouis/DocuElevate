@@ -1,5 +1,6 @@
 # Development and testing dependencies
 -r requirements.txt
+-r requirements-mcp.txt
 
 # Testing
 pytest>=9.1.1

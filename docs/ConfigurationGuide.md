@@ -1428,6 +1428,21 @@ For detailed setup instructions, see the [Google Drive Setup Guide](GoogleDriveS
 | `DEST_EMAIL_SENDER`             | From address for delivered documents (e.g., `"DocuElevate Delivery <docuelevate@example.com>"`). |
 | `DEST_EMAIL_DEFAULT_RECIPIENT`  | Fallback recipient email when none is specified for a delivery task.  |
 
+### Notion and per-user Evernote destinations
+
+Configure [Notion](Notion.md) and [Evernote](Evernote.md) from **Integrations →
+Add destination**. Each connection stores its own encrypted token and settings.
+Notion requires a data source or database ID; PDF attachments are optional.
+Notion document links default to `PUBLIC_BASE_URL`, with an optional per-connection
+HTTPS base URL override. Per-user Evernote does not inherit the global settings below.
+
+### MCP client access
+
+The [read-only MCP adapter](MCP.md) runs as a separate local process. Configure
+`DOCUELEVATE_URL` and `DOCUELEVATE_API_TOKEN` in that process's environment.
+Use HTTPS outside localhost and a dedicated, expiring DocuElevate API token.
+No additional server-side database or storage credentials are required.
+
 ### Evernote
 
 | **Variable**                  | **Description**                                                     |

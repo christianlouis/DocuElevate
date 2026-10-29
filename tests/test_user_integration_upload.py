@@ -303,6 +303,90 @@ class TestUploadToUserIntegration:
         _, _, creds, _ = mock_handler.call_args[0]
         assert creds["access_key_id"] == "AKI..."
 
+    @patch("app.tasks.upload_to_user_integration.log_task_progress")
+    @patch("app.tasks.upload_to_user_integration.decrypt_value")
+    @patch("app.tasks.upload_to_user_integration.SessionLocal")
+    def test_notion_dispatch_uses_decrypted_credentials_and_file_id(
+        self, mock_session_local, mock_decrypt, mock_log_progress, tmp_path
+    ):
+        """Notion is dispatched with runtime-decrypted credentials and a document link ID."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+
+        from app.models import IntegrationType
+        from app.tasks.upload_to_user_integration import _UPLOAD_HANDLERS
+
+        integration = _make_integration(int_id=70, int_type=IntegrationType.NOTION)
+        integration.credentials = "enc:notion-token"
+        mock_decrypt.return_value = json.dumps({"api_token": "notion-secret"})
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = integration
+        mock_handler = MagicMock(return_value={"status": "Completed", "notion_page_id": "page"})
+
+        with patch.dict(_UPLOAD_HANDLERS, {IntegrationType.NOTION: mock_handler}):
+            result = _run_upload_task(str(test_file), integration_id=70, file_id=42)
+
+        assert result["status"] == "Completed"
+        mock_decrypt.assert_called_once_with("enc:notion-token")
+        mock_handler.assert_called_once_with(
+            str(test_file), {}, {"api_token": "notion-secret"}, "test-task-id", file_id=42
+        )
+
+    @patch("app.tasks.upload_to_user_integration.log_task_progress")
+    @patch("app.tasks.upload_to_user_integration.SessionLocal")
+    def test_notion_post_create_recording_failure_is_not_autoretried(
+        self, mock_session_local, mock_log_progress, tmp_path
+    ):
+        """A persistence failure after page creation cannot trigger a duplicate page."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+
+        from app.models import IntegrationType
+        from app.tasks.upload_to_notion import NotionPageCreationUncertain
+        from app.tasks.upload_to_user_integration import _UPLOAD_HANDLERS, upload_to_user_integration
+
+        integration = _make_integration(int_id=71, int_type=IntegrationType.NOTION)
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = integration
+        mock_db.commit.side_effect = RuntimeError("database unavailable")
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_handler = MagicMock(return_value={"status": "Completed", "notion_page_id": "page"})
+
+        with patch.dict(_UPLOAD_HANDLERS, {IntegrationType.NOTION: mock_handler}):
+            with pytest.raises(NotionPageCreationUncertain, match="inspect Notion"):
+                _run_upload_task(str(test_file), integration_id=71)
+
+        assert NotionPageCreationUncertain in upload_to_user_integration.dont_autoretry_for
+        mock_handler.assert_called_once()
+
+    @patch("app.tasks.upload_to_user_integration.log_task_progress")
+    @patch("app.tasks.upload_to_user_integration.SessionLocal")
+    def test_notion_post_create_progress_failure_is_not_autoretried(
+        self, mock_session_local, mock_log_progress, tmp_path
+    ):
+        """A success-progress failure cannot retry an already created Notion page."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+
+        from app.models import IntegrationType
+        from app.tasks.upload_to_notion import NotionPageCreationUncertain
+        from app.tasks.upload_to_user_integration import _UPLOAD_HANDLERS
+
+        integration = _make_integration(int_id=72, int_type=IntegrationType.NOTION)
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = integration
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_handler = MagicMock(return_value={"status": "Completed", "notion_page_id": "page"})
+        # The initial progress record succeeds; both subsequent recording attempts fail.
+        mock_log_progress.side_effect = [None, RuntimeError("progress unavailable")]
+
+        with patch.dict(_UPLOAD_HANDLERS, {IntegrationType.NOTION: mock_handler}):
+            with pytest.raises(NotionPageCreationUncertain, match="inspect Notion"):
+                _run_upload_task(str(test_file), integration_id=72)
+
+        mock_handler.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # Tests for send_to_user_destinations task

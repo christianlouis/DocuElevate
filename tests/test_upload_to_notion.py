@@ -1,0 +1,171 @@
+"""Hermetic tests for the per-user Notion destination."""
+
+import json
+from unittest.mock import Mock, patch
+
+import pytest
+
+from app.tasks.upload_to_notion import NotionPageCreationUncertain, test_notion_connection, upload_to_notion
+
+DS = "00000000-0000-4000-8000-000000000001"
+DATABASE = "00000000-0000-4000-8000-000000000002"
+UPLOAD = "00000000-0000-4000-8000-000000000003"
+PAGE = "00000000-0000-4000-8000-000000000004"
+
+
+def _response(status: int, body: dict):
+    response = Mock()
+    response.status_code = status
+    response.ok = 200 <= status < 300
+    response.json.return_value = body
+    return response
+
+
+def test_connection_discovers_title_property():
+    response = _response(200, {"properties": {"Subject": {"type": "title"}}})
+    with patch("app.tasks.upload_to_notion.requests.request", return_value=response) as request:
+        result = test_notion_connection({"data_source_id": DS}, {"api_token": "secret"})
+    assert result["success"] is True
+    assert "Subject" in result["message"]
+    assert request.call_args.kwargs["allow_redirects"] is False
+    assert request.call_args.kwargs["headers"]["Notion-Version"] == "2026-03-11"
+
+
+def test_upload_maps_metadata_and_private_link(tmp_path):
+    pdf = tmp_path / "invoice.pdf"
+    pdf.write_bytes(b"pdf")
+    (tmp_path / "invoice.json").write_text(
+        json.dumps({"title": "March invoice", "summary": "Paid", "tags": ["finance"], "date": "2026-03-01"}),
+        encoding="utf-8",
+    )
+    schema = _response(200, {"properties": {"Name": {"type": "title"}}})
+    created = _response(200, {"id": PAGE, "url": "https://notion.so/page-1"})
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=[schema, created]) as request:
+        result = upload_to_notion(
+            str(pdf),
+            {"data_source_id": DS, "document_url_base": "https://docs.example"},
+            {"api_token": "secret"},
+            "task-1",
+            file_id=9,
+        )
+    payload = request.call_args_list[1].kwargs["json"]
+    assert payload["parent"] == {"data_source_id": DS}
+    assert payload["properties"]["Name"]["title"][0]["text"]["content"] == "March invoice"
+    text = " ".join(
+        rich_text["text"]["content"] for block in payload["children"] for rich_text in block["paragraph"]["rich_text"]
+    )
+    assert "Paid" in text and "finance" in text and "Document date: 2026-03-01" in text
+    document_link = payload["children"][-1]["paragraph"]["rich_text"][1]["text"]["link"]
+    assert document_link == {"url": "https://docs.example/files/9"}
+    assert result["notion_page_id"] == PAGE
+
+
+def test_upload_does_not_log_or_send_token_on_http_error(tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    schema = _response(403, {})
+    with patch("app.tasks.upload_to_notion.requests.request", return_value=schema) as request:
+        try:
+            upload_to_notion(str(pdf), {"data_source_id": DS}, {"api_token": "secret-token"}, "task-1")
+        except RuntimeError as exc:
+            assert "secret-token" not in str(exc)
+    assert request.call_args.kwargs["headers"]["Authorization"] == "Bearer secret-token"
+
+
+def test_connection_hides_request_and_json_errors():
+    from requests import RequestException
+
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=RequestException("secret-token")):
+        result = test_notion_connection({"data_source_id": DS}, {"api_token": "secret-token"})
+    assert result == {"success": False, "message": "Notion connection could not be verified"}
+
+
+def test_connection_rejects_redirect_and_malformed_json():
+    redirect = _response(302, {})
+    with patch("app.tasks.upload_to_notion.requests.request", return_value=redirect):
+        result = test_notion_connection({"data_source_id": DS}, {"api_token": "secret"})
+    assert not result["success"]
+    malformed = _response(200, {})
+    malformed.json.side_effect = ValueError
+    with patch("app.tasks.upload_to_notion.requests.request", return_value=malformed):
+        result = test_notion_connection({"data_source_id": DS}, {"api_token": "secret"})
+    assert not result["success"]
+
+
+def test_connection_resolves_a_single_database_data_source():
+    database = _response(200, {"data_sources": [{"id": DS}]})
+    schema = _response(200, {"properties": {"Name": {"type": "title"}}})
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=[database, schema]) as request:
+        result = test_notion_connection({"database_id": DATABASE}, {"api_token": "secret"})
+    assert result["success"] is True
+    assert f"/v1/databases/{DATABASE}" in request.call_args_list[0].args[1]
+    assert f"/v1/data_sources/{DS}" in request.call_args_list[1].args[1]
+
+
+def test_connection_rejects_ambiguous_parent_choice():
+    result = test_notion_connection({"data_source_id": DS, "database_id": DATABASE}, {"api_token": "secret"})
+    assert result == {"success": False, "message": "Notion connection could not be verified"}
+
+
+def test_pdf_single_part_upload_is_marked_uploaded_and_attached(tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    responses = [
+        _response(201, {"id": UPLOAD}),
+        _response(200, {"id": UPLOAD, "status": "uploaded"}),
+        _response(200, {"properties": {"Name": {"type": "title"}}}),
+        _response(200, {"id": PAGE, "url": "https://notion.so/page-1"}),
+    ]
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=responses) as request:
+        upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
+    send = request.call_args_list[1]
+    assert "files" in send.kwargs and "Content-Type" not in send.kwargs["headers"]
+    page = request.call_args_list[-1].kwargs["json"]
+    assert page["children"][-1]["file"]["file_upload"]["id"] == UPLOAD
+    assert all("/complete" not in call.args[1] for call in request.call_args_list)
+
+
+def test_pdf_upload_requires_uploaded_status(tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    with patch(
+        "app.tasks.upload_to_notion.requests.request",
+        side_effect=[_response(201, {"id": UPLOAD}), _response(200, {"id": UPLOAD, "status": "pending"})],
+    ):
+        with pytest.raises(RuntimeError, match="marked uploaded"):
+            upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
+
+
+@pytest.mark.parametrize(
+    "page_response",
+    [
+        _response(500, {}),
+        _response(200, {}),
+    ],
+)
+def test_page_creation_ambiguous_responses_are_not_safe_to_retry(tmp_path, page_response):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    schema = _response(200, {"properties": {"Name": {"type": "title"}}})
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=[schema, page_response]):
+        with pytest.raises(NotionPageCreationUncertain, match="inspect Notion"):
+            upload_to_notion(str(pdf), {"data_source_id": DS}, {"api_token": "secret"}, "task")
+
+
+def test_page_creation_transport_error_is_not_safe_to_retry(tmp_path):
+    from requests import RequestException
+
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    schema = _response(200, {"properties": {"Name": {"type": "title"}}})
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=[schema, RequestException("timeout")]):
+        with pytest.raises(NotionPageCreationUncertain, match="inspect Notion"):
+            upload_to_notion(str(pdf), {"data_source_id": DS}, {"api_token": "secret"}, "task")
+
+
+def test_oversized_pdf_fails_before_page_create(tmp_path):
+    pdf = tmp_path / "large.pdf"
+    with open(pdf, "wb") as stream:
+        stream.truncate(20 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="20 MiB"):
+        upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")

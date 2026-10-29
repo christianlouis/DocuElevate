@@ -63,6 +63,8 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import IntegrationType, UserIntegration
 from app.tasks.retry_config import UploadTaskWithRetry
+from app.tasks.upload_to_evernote import upload_to_evernote_integration
+from app.tasks.upload_to_notion import NotionPageCreationUncertain, upload_to_notion
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value
 from app.utils.logging import log_task_progress
@@ -770,7 +772,10 @@ _UPLOAD_HANDLERS = {
     IntegrationType.SHAREPOINT: _upload_sharepoint,
     IntegrationType.ICLOUD: _upload_icloud,
     IntegrationType.VECTOR_DATABASE: _upload_vector_database,
+    IntegrationType.NOTION: upload_to_notion,
 }
+
+_UPLOAD_HANDLERS[IntegrationType.EVERNOTE] = upload_to_evernote_integration
 
 
 # ---------------------------------------------------------------------------
@@ -778,7 +783,7 @@ _UPLOAD_HANDLERS = {
 # ---------------------------------------------------------------------------
 
 
-@celery.task(base=UploadTaskWithRetry, bind=True)
+@celery.task(base=UploadTaskWithRetry, bind=True, dont_autoretry_for=(NotionPageCreationUncertain,))
 def upload_to_user_integration(self, file_path: str, integration_id: int, file_id: int | None = None) -> dict[str, Any]:
     """Upload *file_path* to the destination described by the given UserIntegration record.
 
@@ -865,6 +870,7 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         owner_id,
     )
 
+    notion_page_created = False
     try:
         if itype == IntegrationType.VECTOR_DATABASE:
             result = handler(
@@ -875,6 +881,11 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
                 file_id=file_id,
                 integration_owner_id=owner_id,
             )
+        elif itype == IntegrationType.NOTION:
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
+            notion_page_created = True
+        elif itype == IntegrationType.EVERNOTE:
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
         else:
             result = handler(file_path, cfg, creds, task_id)
 
@@ -918,11 +929,22 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         except Exception as db_exc:  # noqa: BLE001
             logger.warning("[%s] Could not persist last_error for integration %d: %s", task_id, integration_id, db_exc)
 
-        log_task_progress(
-            task_id,
-            f"upload_to_user_integration_{integration_id}",
-            "failure",
-            f"Upload to {itype} '{int_name}' failed: {public_error}",
-            file_id=file_id,
+        creation_outcome_uncertain = itype == IntegrationType.NOTION and (
+            notion_page_created or isinstance(exc, NotionPageCreationUncertain)
         )
+        try:
+            log_task_progress(
+                task_id,
+                f"upload_to_user_integration_{integration_id}",
+                "failure",
+                f"Upload to {itype} '{int_name}' failed: {public_error}",
+                file_id=file_id,
+            )
+        finally:
+            if creation_outcome_uncertain:
+                if isinstance(exc, NotionPageCreationUncertain):
+                    raise exc
+                raise NotionPageCreationUncertain(
+                    "Notion page was created, but DocuElevate could not record the result; inspect Notion before retrying"
+                ) from None
         raise

@@ -938,6 +938,8 @@ class IntegrationType:
     SHAREPOINT = "SHAREPOINT"
     ICLOUD = "ICLOUD"
     VECTOR_DATABASE = "VECTOR_DATABASE"
+    NOTION = "NOTION"
+    EVERNOTE = "EVERNOTE"
 
     ALL = {
         IMAP,
@@ -957,6 +959,8 @@ class IntegrationType:
         SHAREPOINT,
         ICLOUD,
         VECTOR_DATABASE,
+        NOTION,
+        EVERNOTE,
     }
 
 

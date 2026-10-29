@@ -1,0 +1,3 @@
+# Read-only DocuElevate MCP adapter.
+mcp>=2.3.0,<3
+requests>=2.31
