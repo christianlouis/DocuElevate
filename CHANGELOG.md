@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.189.1 (2026-10-29)
+
+### Bug Fixes
+
+- **deps**: Unblock release with patched filelock
+  ([#1286](https://github.com/christianlouis/DocuElevate/pull/1286),
+  [`77d4d0b`](https://github.com/christianlouis/DocuElevate/commit/77d4d0b1c10e1939c7ee16940e7e6faba6d404f0))
+
+
 ## v0.189.0 (2026-10-29)
 
 ### Documentation
