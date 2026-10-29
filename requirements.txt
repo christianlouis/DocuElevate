@@ -50,7 +50,7 @@ apprise>=1.12.0
 
 # AI provider aggregator - enables Anthropic, Gemini, Ollama, and 100+ LLM providers
 # Keep the last LiteLLM line without its filelock<4 cap until the upstream fix ships.
-litellm>=1.103.0,<1.104.0
+litellm>=1.106.4,<1.107.0
 
 # Transitive async HTTP client used by several integrations; pin minimum to patched line
 aiohttp>=3.14.3,<4.0.0
