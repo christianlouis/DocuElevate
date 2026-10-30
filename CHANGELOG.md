@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.190.0 (2026-10-30)
+
+### Features
+
+- **notion**: Add opt-in global destination
+  ([#1288](https://github.com/christianlouis/DocuElevate/pull/1288),
+  [`e37dec1`](https://github.com/christianlouis/DocuElevate/commit/e37dec106679bbe51f3cd90fcb01e655e2c67314))
+
+
 ## v0.189.1 (2026-10-29)
 
 ### Bug Fixes
