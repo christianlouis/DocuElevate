@@ -32,6 +32,7 @@
     </div>
     <div class="body">
       <p>{{ message }}</p>
+      {% if source_url %}<p><a href="{{ source_url }}" style="color:#4f46e5;">View the source document in DocuElevate</a></p>{% endif %}
 
       <div class="attachment-box">
         <div class="label">Attached file</div>
