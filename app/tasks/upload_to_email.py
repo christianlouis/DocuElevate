@@ -199,13 +199,13 @@ def _send_email_with_smtp(msg, filename, recipients):
                     ambiguous_result = {
                         "status": "Partial",
                         "reason": "SMTP refused one or more recipients; delivery may have reached others and will not be retried",
-                        "refused_recipients": list(refused_recipients),
+                        "refused_recipients": len(refused_recipients),
                     }
 
         if ambiguous_result:
             return ambiguous_result
 
-        logger.info(f"Successfully sent {filename} via email to {', '.join(recipients)}")
+        logger.info("Successfully sent %s via email to %d recipients", filename, len(recipients))
         return None
     except socket.gaierror as e:
         if ambiguous_result:
@@ -364,7 +364,7 @@ def upload_to_email(
         return {
             "status": "Completed",
             "file": file_path,
-            "recipients": recipients,
+            "recipients": len(recipients),
             "subject": subject,
             "metadata_included": bool(metadata),
             "logo_included": has_logo,
