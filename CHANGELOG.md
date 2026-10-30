@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.190.2 (2026-10-30)
+
+### Bug Fixes
+
+- **email**: Avoid exposing recipient addresses in results
+  ([`387d0ae`](https://github.com/christianlouis/DocuElevate/commit/387d0ae1b1a3605330672938c83a810e1c8c5602))
+
+
 ## v0.190.1 (2026-10-30)
 
 ### Bug Fixes
