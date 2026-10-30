@@ -2,6 +2,7 @@
 Tests for upload tasks including OneDrive, S3, FTP, SFTP, WebDAV, Google Drive, and Email.
 """
 
+import json
 import os
 from unittest.mock import Mock, patch
 
@@ -374,7 +375,8 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
         mock_settings.external_hostname = "docuelevate.example.com"
 
         # Setup mocks
-        mock_recipients.return_value = (["recipient@example.com"], None)
+        private_recipient = "evernote-import-credential@example.invalid"
+        mock_recipients.return_value = ([private_recipient], None)
         mock_send.return_value = None
         mock_metadata.return_value = {}
         mock_logo.return_value = False
@@ -388,7 +390,8 @@ def test_upload_to_email_accepts_file_id(sample_text_file):
 
         assert result["status"] == "Completed"
         assert result["file"] == sample_text_file
-        assert "recipients" in result
+        assert result["recipients"] == 1
+        assert private_recipient not in json.dumps(result)
 
 
 @pytest.mark.unit

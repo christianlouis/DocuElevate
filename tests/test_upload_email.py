@@ -1,6 +1,7 @@
 """Tests for app/tasks/upload_to_email.py module."""
 
 import json
+import logging
 import smtplib
 import socket
 import ssl
@@ -368,6 +369,30 @@ class TestSendEmailWithSMTP:
         mock_server.login.assert_called_once()
         mock_server.send_message.assert_called_once()
 
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_success_log_and_smtp_message_keep_recipient_private(
+        self, mock_settings, mock_gethostbyname, mock_smtp, caplog
+    ):
+        private_recipient = "evernote-import-credential@example.invalid"
+        caplog.set_level(logging.INFO, logger="app.tasks.upload_to_email")
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_smtp.return_value.__enter__.return_value = mock_server
+        msg = MIMEMultipart()
+        msg["To"] = private_recipient
+
+        result = _send_email_with_smtp(msg, "test.pdf", [private_recipient])
+
+        assert result is None
+        assert private_recipient not in caplog.text
+        assert mock_server.send_message.call_args.args[0]["To"] == private_recipient
+
     @patch("app.tasks.upload_to_email.socket.gethostbyname")
     def test_handles_hostname_resolution_error(self, mock_gethostbyname):
         """Test handles hostname resolution error."""
@@ -518,8 +543,34 @@ class TestSendEmailWithSMTP:
         )
 
         assert result["status"] == "Partial"
-        assert result["refused_recipients"] == ["refused@example.com"]
+        assert result["refused_recipients"] == 1
         mock_server.send_message.assert_called_once()
+
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_partial_result_does_not_serialize_refused_recipient(
+        self, mock_settings, mock_gethostbyname, mock_smtp, caplog
+    ):
+        private_recipient = "evernote-import-credential@example.invalid"
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_server.send_message.return_value = {private_recipient: (550, b"mailbox unavailable")}
+        mock_smtp.return_value.__enter__.return_value = mock_server
+        msg = MIMEMultipart()
+        msg["To"] = private_recipient
+
+        result = _send_email_with_smtp(msg, "test.pdf", [private_recipient])
+
+        assert result["status"] == "Partial"
+        assert result["refused_recipients"] == 1
+        assert private_recipient not in json.dumps(result)
+        assert private_recipient not in caplog.text
+        assert mock_server.send_message.call_args.args[0]["To"] == private_recipient
 
     @pytest.mark.parametrize(
         "quit_error",
