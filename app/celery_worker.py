@@ -55,6 +55,7 @@ from app.tasks.upload_to_ftp import upload_to_ftp  # noqa: F401
 from app.tasks.upload_to_google_drive import upload_to_google_drive  # noqa: F401
 from app.tasks.upload_to_icloud import upload_to_icloud  # noqa: F401
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud  # noqa: F401
+from app.tasks.upload_to_notion import upload_to_notion_global  # noqa: F401
 from app.tasks.upload_to_onedrive import upload_to_onedrive  # noqa: F401
 from app.tasks.upload_to_paperless import upload_to_paperless  # noqa: F401
 from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
