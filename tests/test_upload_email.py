@@ -2,11 +2,13 @@
 
 import json
 import socket
+import ssl
 from email.mime.multipart import MIMEMultipart
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
+from app.tasks.retry_config import UploadTaskWithRetry
 from app.tasks.upload_to_email import (
     _prepare_recipients,
     _send_email_with_smtp,
@@ -361,6 +363,7 @@ class TestSendEmailWithSMTP:
 
         assert result is None
         mock_server.starttls.assert_called_once()
+        assert isinstance(mock_server.starttls.call_args.kwargs["context"], ssl.SSLContext)
         mock_server.login.assert_called_once()
         mock_server.send_message.assert_called_once()
 
@@ -457,6 +460,83 @@ class TestSendEmailWithSMTP:
         assert result["status"] == "Failed"
         assert "Connection error" in result["reason"]
 
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_accepted_send_with_quit_failure_is_not_failed(self, mock_settings, mock_gethostbyname, mock_smtp):
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_smtp.return_value.__enter__.return_value = mock_server
+        mock_smtp.return_value.__exit__.side_effect = ConnectionResetError("QUIT connection closed")
+
+        result = _send_email_with_smtp(MIMEMultipart(), "test.pdf", ["recipient@example.com"])
+
+        assert result is None
+        mock_server.send_message.assert_called_once()
+
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_ambiguous_data_failure_is_not_retryable(self, mock_settings, mock_gethostbyname, mock_smtp):
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_server.send_message.side_effect = ConnectionResetError("connection closed after DATA")
+        mock_smtp.return_value.__enter__.return_value = mock_server
+
+        result = _send_email_with_smtp(MIMEMultipart(), "test.pdf", ["recipient@example.com"])
+
+        assert result["status"] == "Ambiguous"
+        assert "not be retried" in result["reason"]
+        mock_server.send_message.assert_called_once()
+
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_refused_recipient_returns_partial_without_full_success(self, mock_settings, mock_gethostbyname, mock_smtp):
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_server.send_message.return_value = {"refused@example.com": (550, b"mailbox unavailable")}
+        mock_smtp.return_value.__enter__.return_value = mock_server
+
+        result = _send_email_with_smtp(
+            MIMEMultipart(),
+            "test.pdf",
+            ["ok@example.com", "refused@example.com"],
+        )
+
+        assert result["status"] == "Partial"
+        assert result["refused_recipients"] == ["refused@example.com"]
+        mock_server.send_message.assert_called_once()
+
+
+def test_default_email_template_includes_escaped_source_link():
+    template = get_email_template()
+    rendered = template.render(
+        filename="document.pdf",
+        message="Attached",
+        app_name="DocuElevate",
+        app_url=None,
+        source_url="https://docs.example/files/42?x=1&y=2",
+        metadata={},
+        has_metadata=False,
+        has_logo=False,
+        current_year=2026,
+    )
+    assert 'href="https://docs.example/files/42?x=1&amp;y=2"' in rendered
+    assert "View the source document in DocuElevate" in rendered
+
 
 @pytest.mark.unit
 class TestUploadToEmailTask:
@@ -493,6 +573,56 @@ class TestUploadToEmailTask:
 
         assert result["status"] == "Skipped"
         assert "DEST_EMAIL_HOST" in result["reason"]
+
+    @patch("app.tasks.upload_to_email.attach_logo", return_value=False)
+    @patch("app.tasks.upload_to_email.get_email_template")
+    @patch("app.tasks.upload_to_email._send_email_with_smtp", return_value=None)
+    @patch("app.tasks.upload_to_email.log_task_progress", side_effect=[None, RuntimeError("history unavailable")])
+    @patch("app.tasks.upload_to_email.settings")
+    def test_post_send_progress_failure_does_not_retry_or_fail(
+        self, mock_settings, mock_progress, mock_send, mock_template, mock_logo, tmp_path, monkeypatch
+    ):
+        pdf = tmp_path / "document.pdf"
+        pdf.write_bytes(b"%PDF")
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_sender = "sender@example.com"
+        mock_settings.dest_email_username = None
+        mock_settings.external_hostname = "docs.example"
+        mock_template.return_value.render.return_value = "<p>sent</p>"
+        retry = Mock()
+        monkeypatch.setattr(UploadTaskWithRetry, "retry", retry)
+
+        result = upload_to_email.run(str(pdf), recipients=["recipient@example.com"], file_id=42)
+
+        assert result["status"] == "Completed"
+        retry.assert_not_called()
+        assert mock_template.return_value.render.call_args.kwargs["source_url"] == "https://docs.example/files/42"
+
+    @patch("app.tasks.upload_to_email.attach_logo", return_value=False)
+    @patch("app.tasks.upload_to_email.get_email_template")
+    @patch(
+        "app.tasks.upload_to_email._send_email_with_smtp",
+        return_value={"status": "Ambiguous", "reason": "delivery outcome unknown"},
+    )
+    @patch("app.tasks.upload_to_email.log_task_progress", side_effect=[None, RuntimeError("history unavailable")])
+    @patch("app.tasks.upload_to_email.settings")
+    def test_ambiguous_post_send_progress_failure_does_not_retry(
+        self, mock_settings, mock_progress, mock_send, mock_template, mock_logo, tmp_path, monkeypatch
+    ):
+        pdf = tmp_path / "document.pdf"
+        pdf.write_bytes(b"%PDF")
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_sender = "sender@example.com"
+        mock_settings.dest_email_username = None
+        mock_settings.external_hostname = "docs.example"
+        mock_template.return_value.render.return_value = "<p>sent</p>"
+        retry = Mock()
+        monkeypatch.setattr(UploadTaskWithRetry, "retry", retry)
+
+        result = upload_to_email.run(str(pdf), recipients=["recipient@example.com"], file_id=42)
+
+        assert result["status"] == "Ambiguous"
+        retry.assert_not_called()
 
     @patch("app.tasks.upload_to_email.os.path.basename")
     @patch("app.tasks.upload_to_email._prepare_recipients")

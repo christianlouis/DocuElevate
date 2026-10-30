@@ -5,6 +5,7 @@ import logging
 import os
 import smtplib
 import socket
+import ssl
 from datetime import datetime
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
@@ -166,6 +167,8 @@ def _prepare_recipients(recipients):
 
 def _send_email_with_smtp(msg, filename, recipients):
     """Helper function to handle SMTP connection and sending."""
+    send_accepted = False
+    ambiguous_result = None
     try:
         # First try to resolve the hostname
         socket.gethostbyname(settings.dest_email_host)
@@ -174,25 +177,60 @@ def _send_email_with_smtp(msg, filename, recipients):
         with smtplib.SMTP(settings.dest_email_host, settings.dest_email_port, timeout=30) as server:
             # Use TLS if specified
             if settings.dest_email_use_tls:
-                server.starttls()
+                server.starttls(context=ssl.create_default_context())
 
             # Login if credentials are provided
             if settings.dest_email_username and settings.dest_email_password:
                 server.login(settings.dest_email_username, settings.dest_email_password)
 
-            # Send the email
-            server.send_message(msg)
+            # A connection close or SMTP DATA error can happen after the
+            # server has accepted the message. Never retry that case.
+            try:
+                refused_recipients = server.send_message(msg)
+            except (smtplib.SMTPException, ConnectionResetError, BrokenPipeError, TimeoutError, OSError) as exc:
+                ambiguous_result = {
+                    "status": "Ambiguous",
+                    "reason": "SMTP send outcome is unknown; delivery may have started, so it will not be retried",
+                    "error": type(exc).__name__,
+                }
+            else:
+                send_accepted = True
+                if isinstance(refused_recipients, dict) and refused_recipients:
+                    ambiguous_result = {
+                        "status": "Partial",
+                        "reason": "SMTP refused one or more recipients; delivery may have reached others and will not be retried",
+                        "refused_recipients": list(refused_recipients),
+                    }
+
+        if ambiguous_result:
+            return ambiguous_result
 
         logger.info(f"Successfully sent {filename} via email to {', '.join(recipients)}")
         return None
     except socket.gaierror as e:
+        if ambiguous_result:
+            return ambiguous_result
         error_msg = f"Failed to resolve email host: {settings.dest_email_host} - {str(e)}"
         logger.error(error_msg)
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
     except (ConnectionRefusedError, TimeoutError) as e:
+        if ambiguous_result:
+            return ambiguous_result
+        if send_accepted:
+            logger.warning("SMTP QUIT failed after accepted send for %s; treating delivery as complete", filename)
+            return None
         error_msg = f"Connection error to SMTP server {settings.dest_email_host}:{settings.dest_email_port} - {str(e)}"
         logger.error(error_msg)
         return {"status": "Failed", "reason": error_msg, "error": str(e)}
+    except (smtplib.SMTPException, ConnectionResetError, BrokenPipeError, OSError) as e:
+        if ambiguous_result:
+            return ambiguous_result
+        if send_accepted:
+            logger.warning("SMTP QUIT failed after accepted send for %s; treating delivery as complete", filename)
+            return None
+        error_msg = f"SMTP error connecting to {settings.dest_email_host}:{settings.dest_email_port}"
+        logger.error("%s: %s", error_msg, type(e).__name__)
+        return {"status": "Failed", "reason": error_msg, "error": type(e).__name__}
 
 
 @celery.task(base=UploadTaskWithRetry, bind=True)
@@ -285,6 +323,11 @@ def upload_to_email(
             "message": message or f"Attached is the document: {filename}",
             "app_name": "DocuElevate",
             "app_url": f"https://{settings.external_hostname}" if settings.external_hostname else None,
+            "source_url": (
+                f"https://{settings.external_hostname}/files/{file_id}"
+                if file_id is not None and settings.external_hostname
+                else None
+            ),
             "custom_message": message,
             "metadata": metadata,
             "has_metadata": bool(metadata),
@@ -306,11 +349,17 @@ def upload_to_email(
         error_result = _send_email_with_smtp(msg, filename, recipients)
         if error_result:
             logger.error(f"[{task_id}] Failed to send email: {error_result.get('reason')}")
-            log_task_progress(task_id, "upload_to_email", "failure", error_result.get("reason"), file_id=file_id)
+            try:
+                log_task_progress(task_id, "upload_to_email", "failure", error_result.get("reason"), file_id=file_id)
+            except Exception as progress_exc:  # noqa: BLE001
+                logger.warning("[%s] Could not record email outcome: %s", task_id, type(progress_exc).__name__)
             return error_result
 
         logger.info(f"[{task_id}] Successfully sent {filename} via email to {len(recipients)} recipients")
-        log_task_progress(task_id, "upload_to_email", "success", f"Sent via email: {filename}", file_id=file_id)
+        try:
+            log_task_progress(task_id, "upload_to_email", "success", f"Sent via email: {filename}", file_id=file_id)
+        except Exception as progress_exc:  # noqa: BLE001
+            logger.warning("[%s] Could not record email outcome: %s", task_id, type(progress_exc).__name__)
 
         return {
             "status": "Completed",
