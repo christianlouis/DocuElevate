@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.190.1 (2026-10-30)
+
+### Bug Fixes
+
+- **email**: Verify TLS and preserve delivery outcomes
+  ([#1289](https://github.com/christianlouis/DocuElevate/pull/1289),
+  [`0a9fbe1`](https://github.com/christianlouis/DocuElevate/commit/0a9fbe11b256394441796d0f51b90b455b427d53))
+
+
 ## v0.190.0 (2026-10-30)
 
 ### Features
