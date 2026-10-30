@@ -1,6 +1,7 @@
 """Tests for app/tasks/upload_to_email.py module."""
 
 import json
+import smtplib
 import socket
 import ssl
 from email.mime.multipart import MIMEMultipart
@@ -519,6 +520,61 @@ class TestSendEmailWithSMTP:
         assert result["status"] == "Partial"
         assert result["refused_recipients"] == ["refused@example.com"]
         mock_server.send_message.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "quit_error",
+        [socket.gaierror("QUIT failed"), TimeoutError("QUIT timed out"), smtplib.SMTPException("QUIT failed")],
+    )
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_ambiguous_send_outcome_survives_quit_error(self, mock_settings, mock_gethostbyname, mock_smtp, quit_error):
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_server.send_message.side_effect = smtplib.SMTPException("DATA failed")
+        mock_smtp.return_value.__enter__.return_value = mock_server
+        mock_smtp.return_value.__exit__.side_effect = quit_error
+
+        result = _send_email_with_smtp(MIMEMultipart(), "test.pdf", ["recipient@example.com"])
+
+        assert result["status"] == "Ambiguous"
+        assert "not be retried" in result["reason"]
+
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_accepted_send_with_timeout_quit_failure_is_not_failed(self, mock_settings, mock_gethostbyname, mock_smtp):
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_settings.dest_email_use_tls = False
+        mock_settings.dest_email_username = None
+        mock_settings.dest_email_password = None
+        mock_server = MagicMock()
+        mock_smtp.return_value.__enter__.return_value = mock_server
+        mock_smtp.return_value.__exit__.side_effect = TimeoutError("QUIT timed out")
+
+        result = _send_email_with_smtp(MIMEMultipart(), "test.pdf", ["recipient@example.com"])
+
+        assert result is None
+        mock_server.send_message.assert_called_once()
+
+    @patch("app.tasks.upload_to_email.smtplib.SMTP")
+    @patch("app.tasks.upload_to_email.socket.gethostbyname")
+    @patch("app.tasks.upload_to_email.settings")
+    def test_handles_smtp_connection_error_before_send(self, mock_settings, mock_gethostbyname, mock_smtp):
+        mock_settings.dest_email_host = "smtp.example.com"
+        mock_settings.dest_email_port = 587
+        mock_smtp.return_value.__enter__.side_effect = smtplib.SMTPException("connection failed")
+
+        result = _send_email_with_smtp(MIMEMultipart(), "test.pdf", ["recipient@example.com"])
+
+        assert result["status"] == "Failed"
+        assert result["error"] == "SMTPException"
+        assert "SMTP error connecting" in result["reason"]
 
 
 def test_default_email_template_includes_escaped_source_link():
