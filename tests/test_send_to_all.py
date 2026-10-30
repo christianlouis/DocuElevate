@@ -1,5 +1,6 @@
 """Tests for app/tasks/send_to_all.py module."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,6 +13,7 @@ from app.tasks.send_to_all import (
     _should_upload_to_google_drive,
     _should_upload_to_icloud,
     _should_upload_to_nextcloud,
+    _should_upload_to_notion,
     _should_upload_to_onedrive,
     _should_upload_to_paperless,
     _should_upload_to_s3,
@@ -136,6 +138,27 @@ class TestShouldUploadFunctions:
         mock_settings.evernote_auth_token = "token"
 
         assert _should_upload_to_evernote() is True
+
+    @patch("app.tasks.send_to_all.settings")
+    def test_should_upload_to_notion_requires_complete_single_user_config(self, mock_settings):
+        mock_settings.notion_enabled = True
+        mock_settings.notion_api_token = "token"
+        mock_settings.notion_data_source_id = "source"
+        mock_settings.notion_database_id = None
+        mock_settings.multi_user_enabled = False
+        assert _should_upload_to_notion() is True
+
+        mock_settings.multi_user_enabled = True
+        assert _should_upload_to_notion() is False
+
+        mock_settings.multi_user_enabled = False
+        mock_settings.notion_data_source_id = None
+        mock_settings.notion_database_id = None
+        assert _should_upload_to_notion() is False
+
+        mock_settings.notion_data_source_id = "source"
+        mock_settings.notion_database_id = "database"
+        assert _should_upload_to_notion() is False
 
     @patch("app.tasks.send_to_all.settings")
     def test_should_upload_to_onedrive_configured(self, mock_settings):
@@ -923,3 +946,118 @@ class TestSendToAllDestinations:
         result = send_to_all_destinations.apply(args=[str(test_file), False, 1])
 
         assert result.result["status"] == "Queued"
+
+
+def test_dispatch_preserves_existing_globals_when_notion_is_enabled(tmp_path):
+    import importlib
+    from contextlib import ExitStack
+
+    module = importlib.import_module("app.tasks.send_to_all")
+    test_file = tmp_path / "document.pdf"
+    test_file.write_text("pdf")
+    existing = {"dropbox", "nextcloud", "paperless", "google_drive", "onedrive", "s3", "notion"}
+    checks = [
+        "dropbox",
+        "nextcloud",
+        "paperless",
+        "google_drive",
+        "webdav",
+        "ftp",
+        "sftp",
+        "email",
+        "evernote",
+        "onedrive",
+        "s3",
+        "sharepoint",
+        "icloud",
+        "notion",
+    ]
+    uploads = [
+        "upload_to_dropbox",
+        "upload_to_nextcloud",
+        "upload_to_paperless",
+        "upload_to_google_drive",
+        "upload_to_webdav",
+        "upload_to_ftp",
+        "upload_to_sftp",
+        "upload_to_email",
+        "upload_to_evernote",
+        "upload_to_onedrive",
+        "upload_to_s3",
+        "upload_to_sharepoint",
+        "upload_to_icloud",
+        "upload_to_notion_global",
+    ]
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(module, "settings", SimpleNamespace(workdir=str(tmp_path))))
+        stack.enter_context(
+            patch.object(
+                module,
+                "get_configured_services_from_validator",
+                return_value={name: name in existing for name in checks},
+            )
+        )
+        stack.enter_context(patch.object(module, "SessionLocal"))
+        stack.enter_context(patch.object(module, "log_task_progress"))
+        upload_mocks = {}
+        for name in uploads:
+            upload_mocks[name] = stack.enter_context(patch.object(module, name, MagicMock()))
+            upload_mocks[name].delay.return_value = SimpleNamespace(id=f"{name}.task")
+        result = module.send_to_all_destinations.apply(args=[str(test_file), True, 7]).result
+    assert {key[:-8] for key in result["tasks"] if key.endswith("_task_id")} == existing
+    for name, upload_mock in upload_mocks.items():
+        service_name = "notion" if name == "upload_to_notion_global" else name.removeprefix("upload_to_")
+        if service_name in existing:
+            upload_mock.delay.assert_called_once()
+        else:
+            upload_mock.delay.assert_not_called()
+
+
+def test_notion_provider_status_reflects_single_user_opt_in_and_whitespace(monkeypatch):
+    from app.utils.config_validator import providers
+
+    config = SimpleNamespace(
+        notion_api_token=" token ",
+        notion_data_source_id=" source ",
+        notion_database_id=None,
+        notion_enabled=True,
+        notion_attach_pdf=False,
+        multi_user_enabled=False,
+    )
+    monkeypatch.setattr(providers, "settings", config)
+
+    status = providers.get_provider_status()["Notion"]
+    assert status["configured"] is True
+    assert status["enabled"] is True
+
+    config.multi_user_enabled = True
+    assert providers.get_provider_status()["Notion"]["enabled"] is False
+
+    config.multi_user_enabled = False
+    config.notion_api_token = "  "
+    config.notion_data_source_id = "  "
+    assert providers.get_provider_status()["Notion"]["configured"] is False
+
+    config.notion_api_token = "token"
+    config.notion_data_source_id = "source"
+    config.notion_database_id = "database"
+    assert providers.get_provider_status()["Notion"]["configured"] is False
+
+
+def test_notion_validator_and_notification_service_map_are_truthful(monkeypatch):
+    from app.tasks import send_to_all as module
+
+    monkeypatch.setattr(
+        module,
+        "get_provider_status",
+        lambda: {"Notion": {"configured": True, "enabled": True}},
+    )
+    services = module.get_configured_services_from_validator()
+    assert services["notion"] is True
+
+    monkeypatch.setattr(
+        module,
+        "get_provider_status",
+        lambda: {"Notion": {"configured": True, "enabled": False}},
+    )
+    assert module.get_configured_services_from_validator()["notion"] is False

@@ -215,6 +215,18 @@ class Settings(BaseSettings):
     evernote_default_tags: Optional[str] = None
     evernote_include_metadata: bool = True
 
+    # Global Notion destination settings. This is opt-in and single-user-only.
+    notion_enabled: bool = Field(
+        default=False,
+        description="Enable the global Notion destination for single-user deployments only.",
+    )
+    notion_api_token: Optional[str] = None
+    notion_data_source_id: Optional[str] = None
+    notion_database_id: Optional[str] = None
+    notion_title_property: Optional[str] = None
+    notion_attach_pdf: bool = False
+    notion_document_url_base: Optional[str] = None
+
     azure_ai_key: str = ""
     azure_region: str = ""
     azure_endpoint: str = ""
