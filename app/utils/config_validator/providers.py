@@ -189,6 +189,32 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         },
     }
 
+    providers["Notion"] = {
+        "name": "Notion",
+        "icon": "fa-solid fa-book-open",
+        "configured": bool(
+            isinstance(getattr(settings, "notion_api_token", None), str)
+            and getattr(settings, "notion_api_token", "").strip()
+            and sum(
+                isinstance(value, str) and bool(value.strip())
+                for value in (
+                    getattr(settings, "notion_data_source_id", None),
+                    getattr(settings, "notion_database_id", None),
+                )
+            )
+            == 1
+        ),
+        "enabled": getattr(settings, "notion_enabled", False) and not getattr(settings, "multi_user_enabled", False),
+        "description": "Create Notion pages with document metadata and optional PDF attachments (single-user only)",
+        "details": {
+            "api_token": mask_sensitive_value(getattr(settings, "notion_api_token", None)),
+            "data_source_id": getattr(settings, "notion_data_source_id", "Not set"),
+            "database_id": getattr(settings, "notion_database_id", "Not set"),
+            "attach_pdf": getattr(settings, "notion_attach_pdf", False),
+            "multi_user_blocked": getattr(settings, "multi_user_enabled", False),
+        },
+    }
+
     # Add FTP configuration to providers
     providers["FTP Storage"] = {
         "name": "FTP Storage",

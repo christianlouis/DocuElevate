@@ -15,6 +15,7 @@ from app.tasks.upload_to_ftp import upload_to_ftp
 from app.tasks.upload_to_google_drive import upload_to_google_drive
 from app.tasks.upload_to_icloud import upload_to_icloud
 from app.tasks.upload_to_nextcloud import upload_to_nextcloud
+from app.tasks.upload_to_notion import upload_to_notion_global
 from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_s3 import upload_to_s3
@@ -106,6 +107,20 @@ def _should_upload_to_evernote():
     return bool(getattr(settings, "evernote_enabled", True) and isinstance(token, str) and token.strip())
 
 
+def _should_upload_to_notion():
+    """Global Notion is opt-in and must never run in multi-user mode."""
+    token = getattr(settings, "notion_api_token", None)
+    data_source = getattr(settings, "notion_data_source_id", None)
+    database = getattr(settings, "notion_database_id", None)
+    return bool(
+        getattr(settings, "notion_enabled", False)
+        and not getattr(settings, "multi_user_enabled", False)
+        and isinstance(token, str)
+        and token.strip()
+        and sum(isinstance(value, str) and bool(value.strip()) for value in (data_source, database)) == 1
+    )
+
+
 def _should_upload_to_onedrive():
     return bool(
         getattr(settings, "onedrive_enabled", True)
@@ -158,6 +173,7 @@ def get_configured_services_from_validator():
         "SFTP Storage": "sftp",
         "Email": "email",
         "Evernote": "evernote",
+        "Notion": "notion",
         "OneDrive": "onedrive",
         "S3 Storage": "s3",
         "SharePoint": "sharepoint",
@@ -265,6 +281,11 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
             "name": "evernote",
             "should_upload": _should_upload_to_evernote,
             "upload_func": upload_to_evernote,
+        },
+        {
+            "name": "notion",
+            "should_upload": _should_upload_to_notion,
+            "upload_func": upload_to_notion_global,
         },
         {
             "name": "onedrive",

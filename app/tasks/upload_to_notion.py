@@ -10,7 +10,10 @@ from urllib.parse import urlsplit
 
 import requests
 
+from app.celery_app import celery
 from app.config import settings
+from app.tasks.retry_config import UploadTaskWithRetry
+from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
 NOTION_API_URL = "https://api.notion.com"
@@ -263,3 +266,63 @@ def upload_to_notion(
             "Notion page creation outcome is unknown; inspect Notion before retrying"
         ) from exc
     return {"status": "Completed", "notion_page_id": page_id, "notion_url": body.get("url")}
+
+
+@celery.task(base=UploadTaskWithRetry, bind=True, dont_autoretry_for=(NotionPageCreationUncertain,))
+def upload_to_notion_global(self, file_path: str, file_id: int | None = None):
+    """Queue the existing provider implementation for the global destination."""
+    task_id = self.request.id
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    if not getattr(settings, "notion_enabled", False) or getattr(settings, "multi_user_enabled", False):
+        raise ValueError("Global Notion is disabled for this deployment")
+    token = getattr(settings, "notion_api_token", None)
+    if not isinstance(token, str) or not token.strip():
+        raise ValueError("Notion API token is not configured")
+    parent_ids = [
+        value.strip()
+        for value in (
+            getattr(settings, "notion_data_source_id", None),
+            getattr(settings, "notion_database_id", None),
+        )
+        if isinstance(value, str) and value.strip()
+    ]
+    if len(parent_ids) != 1:
+        raise ValueError("Exactly one Notion data source or database must be configured")
+    cfg = {
+        "data_source_id": parent_ids[0]
+        if isinstance(getattr(settings, "notion_data_source_id", None), str)
+        and getattr(settings, "notion_data_source_id", "").strip()
+        else None,
+        "database_id": parent_ids[0]
+        if isinstance(getattr(settings, "notion_database_id", None), str)
+        and getattr(settings, "notion_database_id", "").strip()
+        else None,
+        "title_property": getattr(settings, "notion_title_property", None),
+        "attach_pdf": getattr(settings, "notion_attach_pdf", False),
+        "document_url_base": getattr(settings, "notion_document_url_base", None),
+    }
+    log_task_progress(
+        task_id,
+        "upload_to_notion",
+        "in_progress",
+        f"Uploading to Notion: {os.path.basename(file_path)}",
+        file_id=file_id,
+    )
+    try:
+        result = upload_to_notion(file_path, cfg, {"api_token": token}, task_id, file_id=file_id)
+    except NotionPageCreationUncertain:
+        log_task_progress(
+            task_id,
+            "upload_to_notion",
+            "failure",
+            "Notion page creation outcome is uncertain; inspect Notion before retrying",
+            file_id=file_id,
+        )
+        raise
+    except Exception as exc:
+        logger.warning("[%s] Notion upload failed (%s)", task_id, type(exc).__name__)
+        log_task_progress(task_id, "upload_to_notion", "failure", "Notion upload failed", file_id=file_id)
+        raise
+    log_task_progress(task_id, "upload_to_notion", "success", "Uploaded to Notion", file_id=file_id)
+    return {"status": "Completed", "file_path": file_path, **result}

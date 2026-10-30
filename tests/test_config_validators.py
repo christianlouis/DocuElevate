@@ -553,8 +553,44 @@ class TestValidateStorageConfigsEdgeCases:
             mock_settings.nextcloud_username = "user"
             mock_settings.nextcloud_password = "pass"
             mock_settings.uptime_kuma_url = "https://kuma.example.com"
+            mock_settings.notion_api_token = "token"
+            mock_settings.notion_data_source_id = "source"
+            mock_settings.notion_database_id = None
 
             result = validate_storage_configs()
             # Check that all providers have empty issue lists
             for provider, issues in result.items():
                 assert len(issues) == 0, f"{provider} should have no issues"
+
+    def test_notion_activation_preserves_incomplete_errors(self):
+        settings = SimpleNamespace(
+            debug=False,
+            auth_enabled=False,
+            notification_urls=[],
+            notion_enabled=True,
+            multi_user_enabled=False,
+            notion_api_token="",
+            notion_data_source_id="",
+            notion_database_id=None,
+        )
+        with patch("app.utils.config_validator.validators.settings", settings):
+            result = check_all_configs(configured_only=True)
+
+            assert "NOTION_API_TOKEN is not configured" in result["storage"]["notion"]
+            assert result["storage"]["notion"]
+
+    def test_disabled_incomplete_notion_is_skipped(self):
+        settings = SimpleNamespace(
+            debug=False,
+            auth_enabled=False,
+            notification_urls=[],
+            notion_enabled=False,
+            multi_user_enabled=False,
+            notion_api_token="",
+            notion_data_source_id="",
+            notion_database_id=None,
+        )
+        with patch("app.utils.config_validator.validators.settings", settings):
+            result = check_all_configs(configured_only=True)
+
+            assert result["storage"]["notion"] == []

@@ -156,6 +156,17 @@ def validate_storage_configs() -> dict[str, list[str]]:
         evernote_issues.append("EVERNOTE_AUTH_TOKEN is not configured")
     issues["evernote"] = evernote_issues
 
+    notion_issues = []
+    if not (isinstance(getattr(settings, "notion_api_token", None), str) and settings.notion_api_token.strip()):
+        notion_issues.append("NOTION_API_TOKEN is not configured")
+    notion_parent_count = sum(
+        isinstance(value, str) and bool(value.strip())
+        for value in (getattr(settings, "notion_data_source_id", None), getattr(settings, "notion_database_id", None))
+    )
+    if notion_parent_count != 1:
+        notion_issues.append("Exactly one of NOTION_DATA_SOURCE_ID or NOTION_DATABASE_ID must be configured")
+    issues["notion"] = notion_issues
+
     # Validate S3
     s3_issues = []
     if not getattr(settings, "s3_bucket_name", None):
@@ -301,6 +312,7 @@ def check_all_configs(*, configured_only: bool = False) -> dict[str, list[str] |
             "sftp": ("sftp_host", "sftp_private_key", "sftp_password"),
             "email": ("dest_email_host", "dest_email_default_recipient"),
             "evernote": ("evernote_auth_token",),
+            "notion": ("notion_api_token", "notion_data_source_id", "notion_database_id"),
             "s3": ("s3_bucket_name", "aws_access_key_id", "aws_secret_access_key"),
             "ftp": ("ftp_host", "ftp_username", "ftp_password"),
             "webdav": ("webdav_url", "webdav_username", "webdav_password"),
@@ -310,6 +322,9 @@ def check_all_configs(*, configured_only: bool = False) -> dict[str, list[str] |
             "uptime_kuma": ("uptime_kuma_url",),
         }
         provider_configured = {provider: _has_any_setting(*provider_settings[provider]) for provider in storage_issues}
+        provider_configured["notion"] = not getattr(settings, "multi_user_enabled", False) and getattr(
+            settings, "notion_enabled", False
+        )
         storage_issues = {
             provider: issues if provider_configured[provider] else [] for provider, issues in storage_issues.items()
         }
