@@ -5,6 +5,7 @@ import os
 import socket
 
 from app.config import settings
+from app.utils.s3_config import is_valid_s3_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,7 @@ def validate_storage_configs() -> dict[str, list[str]]:
     secondary_issues = []
     secondary_endpoint = getattr(settings, "s3_secondary_endpoint", None)
     if getattr(settings, "s3_secondary_enabled", False) is True:
-        if not isinstance(secondary_endpoint, str) or not secondary_endpoint.startswith("https://"):
+        if not is_valid_s3_endpoint(secondary_endpoint):
             secondary_issues.append("S3_SECONDARY_ENDPOINT must be an HTTPS URL")
         for name, label in (
             ("s3_secondary_bucket", "S3_SECONDARY_BUCKET"),

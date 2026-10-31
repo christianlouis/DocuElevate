@@ -4,6 +4,7 @@ Module for handling provider status information
 
 from app.config import settings
 from app.utils.config_validator.masking import mask_sensitive_value
+from app.utils.s3_config import is_valid_s3_endpoint
 
 
 def get_provider_status() -> dict[str, dict[str, object]]:
@@ -389,8 +390,7 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             getattr(settings, "s3_secondary_bucket", None)
             and getattr(settings, "s3_secondary_access_key", None)
             and getattr(settings, "s3_secondary_secret_key", None)
-            and isinstance(secondary_endpoint, str)
-            and secondary_endpoint.startswith("https://")
+            and is_valid_s3_endpoint(secondary_endpoint)
         ),
         "enabled": getattr(settings, "s3_secondary_enabled", False),
         "description": "Optional secondary S3-compatible document destination",

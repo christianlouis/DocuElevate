@@ -12,6 +12,7 @@ from app.tasks.upload_to_s3_secondary import upload_to_s3_secondary
 
 def _settings(**overrides):
     values = {
+        "s3_secondary_enabled": True,
         "s3_secondary_endpoint": "https://s3.example.test",
         "s3_secondary_bucket": "secondary-bucket",
         "s3_secondary_access_key": "access",
@@ -44,7 +45,10 @@ def test_secondary_upload_uses_https_endpoint_and_prefix(tmp_path: Path):
     assert upload.call_args.kwargs["prefix"] == "archive"
 
 
-@pytest.mark.parametrize("endpoint", [None, "http://s3.example.test"])
+@pytest.mark.parametrize(
+    "endpoint",
+    [None, "http://s3.example.test", "https://", "https://user:pass@s3.example.test", "https://s3.example.test?x=1"],
+)
 def test_secondary_upload_rejects_missing_or_insecure_endpoint(tmp_path: Path, endpoint):
     file_path = tmp_path / "document.pdf"
     file_path.write_bytes(b"pdf")
@@ -53,8 +57,38 @@ def test_secondary_upload_rejects_missing_or_insecure_endpoint(tmp_path: Path, e
             upload_to_s3_secondary.apply(args=[str(file_path)]).get()
 
 
+def test_secondary_upload_returns_skipped_when_disabled(tmp_path: Path):
+    with (
+        patch("app.tasks.upload_to_s3_secondary.settings", _settings(s3_secondary_enabled=False)),
+        patch("app.tasks.upload_to_s3_secondary.log_task_progress") as progress,
+    ):
+        result = upload_to_s3_secondary.apply(args=[str(tmp_path / "missing.pdf")]).get()
+
+    assert result["status"] == "Skipped"
+    assert result["reason"] == "Secondary S3 is disabled"
+    assert progress.call_args.args[2] == "skipped"
+
+
+def test_secondary_upload_records_missing_file_failure(tmp_path: Path):
+    with (
+        patch("app.tasks.upload_to_s3_secondary.settings", _settings()),
+        patch("app.tasks.upload_to_s3_secondary.log_task_progress") as progress,
+    ):
+        with pytest.raises(FileNotFoundError):
+            upload_to_s3_secondary.apply(args=[str(tmp_path / "missing.pdf")]).get()
+
+    assert progress.call_args.args[2] == "failure"
+    assert progress.call_args.args[3] == "File not found"
+
+
 def test_secondary_destination_is_disabled_by_default():
     with patch("app.tasks.send_to_all.settings", _settings(s3_secondary_enabled=False)):
+        assert _should_upload_to_s3_secondary() is False
+
+
+@pytest.mark.parametrize("endpoint", ["https://", "https://user:pass@s3.example.test", "https://s3.example.test#fragment"])
+def test_dispatch_rejects_malformed_endpoint(endpoint):
+    with patch("app.tasks.send_to_all.settings", _settings(s3_secondary_endpoint=endpoint)):
         assert _should_upload_to_s3_secondary() is False
 
 

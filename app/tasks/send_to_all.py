@@ -25,6 +25,7 @@ from app.tasks.upload_to_sharepoint import upload_to_sharepoint
 from app.tasks.upload_to_webdav import upload_to_webdav
 from app.utils.config_validator import get_provider_status
 from app.utils.logging import log_task_progress
+from app.utils.s3_config import is_valid_s3_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +145,7 @@ def _should_upload_to_s3_secondary():
     endpoint = getattr(settings, "s3_secondary_endpoint", None)
     return bool(
         getattr(settings, "s3_secondary_enabled", False)
-        and endpoint
-        and endpoint.startswith("https://")
+        and is_valid_s3_endpoint(endpoint)
         and settings.s3_secondary_bucket
         and settings.s3_secondary_access_key
         and settings.s3_secondary_secret_key
