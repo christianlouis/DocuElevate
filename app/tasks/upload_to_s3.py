@@ -2,6 +2,7 @@
 
 import logging
 import os
+from urllib.parse import quote
 
 import boto3
 from botocore.exceptions import ClientError
@@ -44,7 +45,8 @@ def upload_file_to_s3(
         extra_args["ACL"] = acl
     s3_client.upload_file(file_path, bucket, s3_key, ExtraArgs=extra_args)
     if endpoint_url:
-        s3_url = f"{endpoint_url.rstrip('/')}/{s3_key}"
+        encoded_key = quote(s3_key, safe="/")
+        s3_url = f"{endpoint_url.rstrip('/')}/{bucket}/{encoded_key}"
     else:
         s3_url = f"https://{bucket}.s3.{region}.amazonaws.com/{s3_key}"
     return {"s3_bucket": bucket, "s3_key": s3_key, "s3_url": s3_url}

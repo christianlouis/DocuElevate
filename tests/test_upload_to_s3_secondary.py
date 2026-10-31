@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.tasks.send_to_all import _should_upload_to_s3_secondary, send_to_all_destinations
+from app.tasks.upload_to_s3 import upload_file_to_s3
 from app.tasks.upload_to_s3_secondary import upload_to_s3_secondary
 
 
@@ -43,6 +44,28 @@ def test_secondary_upload_uses_https_endpoint_and_prefix(tmp_path: Path):
     assert result["s3_key"] == "archive/document.pdf"
     assert upload.call_args.kwargs["endpoint_url"] == "https://s3.example.test"
     assert upload.call_args.kwargs["prefix"] == "archive"
+
+
+def test_custom_endpoint_url_includes_bucket_and_encodes_key(tmp_path: Path):
+    file_path = tmp_path / "document with space.pdf"
+    file_path.write_bytes(b"pdf")
+    client = MagicMock()
+    with patch("app.tasks.upload_to_s3.boto3.client", return_value=client):
+        result = upload_file_to_s3(
+            str(file_path),
+            bucket="secondary-bucket",
+            region="eu-central",
+            access_key="access",
+            secret_key="secret",
+            prefix="archive",
+            storage_class="STANDARD",
+            acl=None,
+            endpoint_url="https://s3.example.test",
+        )
+
+    assert result["s3_url"] == (
+        "https://s3.example.test/secondary-bucket/archive/document%20with%20space.pdf"
+    )
 
 
 @pytest.mark.parametrize(
