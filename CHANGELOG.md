@@ -10,6 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.191.0 (2026-10-31)
+
+### Bug Fixes
+
+- **storage**: Build valid secondary S3 source URLs
+  ([`ff88a5d`](https://github.com/christianlouis/DocuElevate/commit/ff88a5dbdc825d3997719d9dd28eb0fbcfcff13f))
+
+- **storage**: Harden secondary S3 task validation
+  ([`40d0b13`](https://github.com/christianlouis/DocuElevate/commit/40d0b131ae4b67eae84d626b85c4af0b311dd464))
+
+### Code Style
+
+- Apply ruff auto-fix
+  ([`5ab448e`](https://github.com/christianlouis/DocuElevate/commit/5ab448e1dde9f6e4a8beb6148973a25ee668144c))
+
+- Apply ruff auto-fix
+  ([`ba97655`](https://github.com/christianlouis/DocuElevate/commit/ba97655d4a5756f0ab2624437c39726b5e7dfa90))
+
+- Apply ruff auto-fix
+  ([`e10ee83`](https://github.com/christianlouis/DocuElevate/commit/e10ee831577792256155ab6ccb21e7741441f0de))
+
+### Features
+
+- **storage**: Add optional secondary S3 destination
+  ([`a42fdf4`](https://github.com/christianlouis/DocuElevate/commit/a42fdf480befbaa6014e3d074e67e474236473bd))
+
+
 ## v0.190.2 (2026-10-30)
 
 ### Bug Fixes
