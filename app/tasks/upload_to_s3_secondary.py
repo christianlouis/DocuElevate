@@ -22,7 +22,9 @@ def _valid_endpoint(endpoint: str | None) -> bool:
 def upload_to_s3_secondary(self, file_path: str, file_id: int = None, folder_override: str = None):
     task_id = self.request.id
     step_name = "upload_to_s3_secondary"
-    log_task_progress(task_id, step_name, "in_progress", f"Uploading to secondary S3: {os.path.basename(file_path)}", file_id=file_id)
+    log_task_progress(
+        task_id, step_name, "in_progress", f"Uploading to secondary S3: {os.path.basename(file_path)}", file_id=file_id
+    )
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File not found: {file_path}")
     endpoint = getattr(settings, "s3_secondary_endpoint", None)
@@ -48,7 +50,9 @@ def upload_to_s3_secondary(self, file_path: str, file_id: int = None, folder_ove
             acl=settings.s3_secondary_acl,
             endpoint_url=endpoint,
         )
-        log_task_progress(task_id, step_name, "success", f"Uploaded to secondary S3: {os.path.basename(file_path)}", file_id=file_id)
+        log_task_progress(
+            task_id, step_name, "success", f"Uploaded to secondary S3: {os.path.basename(file_path)}", file_id=file_id
+        )
         return {"status": "Completed", "file": file_path, **result}
     except Exception as exc:
         error_msg = f"Error uploading to secondary S3 ({type(exc).__name__})"
