@@ -19,11 +19,13 @@ from app.tasks.upload_to_notion import upload_to_notion_global
 from app.tasks.upload_to_onedrive import upload_to_onedrive
 from app.tasks.upload_to_paperless import upload_to_paperless
 from app.tasks.upload_to_s3 import upload_to_s3
+from app.tasks.upload_to_s3_secondary import upload_to_s3_secondary
 from app.tasks.upload_to_sftp import upload_to_sftp
 from app.tasks.upload_to_sharepoint import upload_to_sharepoint
 from app.tasks.upload_to_webdav import upload_to_webdav
 from app.utils.config_validator import get_provider_status
 from app.utils.logging import log_task_progress
+from app.utils.s3_config import is_valid_s3_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +141,17 @@ def _should_upload_to_s3():
     )
 
 
+def _should_upload_to_s3_secondary():
+    endpoint = getattr(settings, "s3_secondary_endpoint", None)
+    return bool(
+        getattr(settings, "s3_secondary_enabled", False)
+        and is_valid_s3_endpoint(endpoint)
+        and settings.s3_secondary_bucket
+        and settings.s3_secondary_access_key
+        and settings.s3_secondary_secret_key
+    )
+
+
 def _should_upload_to_icloud():
     return bool(getattr(settings, "icloud_enabled", True) and settings.icloud_username and settings.icloud_password)
 
@@ -176,6 +189,7 @@ def get_configured_services_from_validator():
         "Notion": "notion",
         "OneDrive": "onedrive",
         "S3 Storage": "s3",
+        "S3 Secondary Storage": "s3_secondary",
         "SharePoint": "sharepoint",
         "iCloud Drive": "icloud",
     }
@@ -296,6 +310,11 @@ def send_to_all_destinations(self, file_path: str, use_validator=True, file_id: 
             "name": "s3",
             "should_upload": _should_upload_to_s3,
             "upload_func": upload_to_s3,
+        },
+        {
+            "name": "s3_secondary",
+            "should_upload": _should_upload_to_s3_secondary,
+            "upload_func": upload_to_s3_secondary,
         },
         {
             "name": "sharepoint",

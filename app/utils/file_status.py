@@ -102,6 +102,7 @@ def get_files_processing_status(db: Session, file_ids: List[int]) -> Dict[int, D
         "upload_to_paperless_ngx",
         "upload_to_email",
         "upload_to_s3",
+        "upload_to_s3_secondary",
     }
 
     # Add check_for_duplicates if deduplication is enabled

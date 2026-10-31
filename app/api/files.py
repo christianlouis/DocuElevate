@@ -1530,6 +1530,7 @@ def retry_subtask(
         from app.tasks.upload_to_onedrive import upload_to_onedrive
         from app.tasks.upload_to_paperless import upload_to_paperless
         from app.tasks.upload_to_s3 import upload_to_s3
+        from app.tasks.upload_to_s3_secondary import upload_to_s3_secondary
         from app.tasks.upload_to_sftp import upload_to_sftp
         from app.tasks.upload_to_webdav import upload_to_webdav
 
@@ -1540,6 +1541,7 @@ def retry_subtask(
             "upload_to_google_drive": upload_to_google_drive,
             "upload_to_onedrive": upload_to_onedrive,
             "upload_to_s3": upload_to_s3,
+            "upload_to_s3_secondary": upload_to_s3_secondary,
             "upload_to_webdav": upload_to_webdav,
             "upload_to_ftp": upload_to_ftp,
             "upload_to_sftp": upload_to_sftp,

@@ -171,6 +171,17 @@ def get_settings_for_display(show_values: bool = False) -> dict[str, list[dict[s
             "s3_storage_class",
             "s3_acl",
         ],
+        "S3 Secondary": [
+            "s3_secondary_enabled",
+            "s3_secondary_endpoint",
+            "s3_secondary_access_key",
+            "s3_secondary_secret_key",
+            "s3_secondary_region",
+            "s3_secondary_bucket",
+            "s3_secondary_prefix",
+            "s3_secondary_storage_class",
+            "s3_secondary_acl",
+        ],
         "AI Services": [
             "ai_provider",
             "ai_model",

@@ -5,6 +5,7 @@ import os
 import socket
 
 from app.config import settings
+from app.utils.s3_config import is_valid_s3_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,20 @@ def validate_storage_configs() -> dict[str, list[str]]:
         s3_issues.append("AWS credentials are not configured")
     issues["s3"] = s3_issues
 
+    secondary_issues = []
+    secondary_endpoint = getattr(settings, "s3_secondary_endpoint", None)
+    if getattr(settings, "s3_secondary_enabled", False) is True:
+        if not is_valid_s3_endpoint(secondary_endpoint):
+            secondary_issues.append("S3_SECONDARY_ENDPOINT must be an HTTPS URL")
+        for name, label in (
+            ("s3_secondary_bucket", "S3_SECONDARY_BUCKET"),
+            ("s3_secondary_access_key", "S3_SECONDARY_ACCESS_KEY"),
+            ("s3_secondary_secret_key", "S3_SECONDARY_SECRET_KEY"),
+        ):
+            if not getattr(settings, name, None):
+                secondary_issues.append(f"{label} is not configured")
+    issues["s3_secondary"] = secondary_issues
+
     # Validate FTP
     ftp_issues = []
     if not getattr(settings, "ftp_host", None):
@@ -314,6 +329,12 @@ def check_all_configs(*, configured_only: bool = False) -> dict[str, list[str] |
             "evernote": ("evernote_auth_token",),
             "notion": ("notion_api_token", "notion_data_source_id", "notion_database_id"),
             "s3": ("s3_bucket_name", "aws_access_key_id", "aws_secret_access_key"),
+            "s3_secondary": (
+                "s3_secondary_endpoint",
+                "s3_secondary_bucket",
+                "s3_secondary_access_key",
+                "s3_secondary_secret_key",
+            ),
             "ftp": ("ftp_host", "ftp_username", "ftp_password"),
             "webdav": ("webdav_url", "webdav_username", "webdav_password"),
             "google_drive": ("google_drive_credentials_json", "google_drive_folder_id"),

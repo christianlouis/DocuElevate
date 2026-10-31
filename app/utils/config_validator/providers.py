@@ -4,6 +4,7 @@ Module for handling provider status information
 
 from app.config import settings
 from app.utils.config_validator.masking import mask_sensitive_value
+from app.utils.s3_config import is_valid_s3_endpoint
 
 
 def get_provider_status() -> dict[str, dict[str, object]]:
@@ -378,6 +379,30 @@ def get_provider_status() -> dict[str, dict[str, object]]:
             "folder_prefix": getattr(settings, "s3_folder_prefix", "Not set"),
             "storage_class": getattr(settings, "s3_storage_class", "Not set"),
             "acl": getattr(settings, "s3_acl", "Not set"),
+        },
+    }
+
+    secondary_endpoint = getattr(settings, "s3_secondary_endpoint", None)
+    providers["S3 Secondary Storage"] = {
+        "name": "S3 Secondary Storage",
+        "icon": "fa-solid fa-database",
+        "configured": bool(
+            getattr(settings, "s3_secondary_bucket", None)
+            and getattr(settings, "s3_secondary_access_key", None)
+            and getattr(settings, "s3_secondary_secret_key", None)
+            and is_valid_s3_endpoint(secondary_endpoint)
+        ),
+        "enabled": getattr(settings, "s3_secondary_enabled", False),
+        "description": "Optional secondary S3-compatible document destination",
+        "details": {
+            "endpoint": secondary_endpoint or "Not set",
+            "bucket": getattr(settings, "s3_secondary_bucket", "Not set"),
+            "region": getattr(settings, "s3_secondary_region", "Not set"),
+            "access_key": mask_sensitive_value(getattr(settings, "s3_secondary_access_key", None)),
+            "secret_key": mask_sensitive_value(getattr(settings, "s3_secondary_secret_key", None)),
+            "prefix": getattr(settings, "s3_secondary_prefix", "Not set"),
+            "storage_class": getattr(settings, "s3_secondary_storage_class", "Not set"),
+            "acl": getattr(settings, "s3_secondary_acl", "Not set"),
         },
     }
 
