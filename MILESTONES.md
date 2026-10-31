@@ -1,384 +1,108 @@
 # DocuElevate Milestones
 
-**Last Updated:** 2026-07-19
-
-This document outlines the release milestones, versioning strategy, and detailed feature breakdown for DocuElevate.
-
-## Versioning Strategy
-
-DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
-- **MAJOR.MINOR.PATCH** (e.g., 1.2.3)
-- **MAJOR:** Breaking changes or major architectural shifts
-- **MINOR:** New features, backward-compatible
-- **PATCH:** Bug fixes, security patches, backward-compatible
-
-### Release Cadence
-- **Patch releases:** As needed for critical bugs/security
-- **Minor releases:** Every 6-8 weeks
-- **Major releases:** Every 12-18 months
-
----
-
-## Current State (Continuous Releases)
-
-DocuElevate ships continuously via automated semantic versioning. Use **GitHub Releases** for the latest build artifacts and **GitHub Milestones** (below) for roadmap tracking.
-
-**Current stable release at this review:** `v0.188.2` (2026-07-19). The release
-number is not a claim that the future named milestone outcomes are complete.
-
-The production deployment has its own manually approved release boundary and can
-remain pinned to an older Evergreen image while newer builds are exercised in
-Preprod and disposable Canary environments.
-
-### Last Completed Named Milestone Anchor: v0.5.0 (Released February 8, 2026)
-- Database-backed settings management with encryption
-- Setup wizard for first-time configuration
-- Admin UI for runtime configuration
-- Release automation via semantic-release
-
-The current build number is managed by semantic-release and may be ahead of the planning anchors below. Check `VERSION` and GitHub Releases for the exact current release stream.
-
-Clarity, Conductor, and Signal are **planning tracks**, not predictions of the
-next semantic-release tag. Their old `0.6.x`–`0.8.x` labels were retired because
-those versions already exist in release history. Future `1.0+` entries remain
-version anchors. Scope and due dates are tracked in GitHub. Delivery follows the
-dependency order in [ROADMAP.md](ROADMAP.md).
-
-### Important Note on Versioning
-As of February 2026, DocuElevate uses **automated semantic versioning**:
-- Version management handled by `python-semantic-release`
-- Releases automated via GitHub Actions on merge to main
-- Version bumps determined by conventional commit messages
-- `VERSION` and generated release notes are automatically updated; `CHANGELOG.md` is release automation output and is not edited manually
-- GitHub Releases created automatically with release notes
-
----
-
-## Previous Releases
-
-### v0.3.3 (February 2026)
-- Drag-and-drop file upload on Files page
-- Enhanced upload UI and functionality
-
-### v0.3.2 (February 2026)
-- Security hardening (Authlib/Starlette updates)
-- Testing infrastructure implementation
-- CI/CD improvements
-
----
-
-## Completed Milestones
-
-### v0.5.0 - Settings Management & Configuration (February 2026)
-**Release Date:** February 8, 2026
-**Status:** ✅ Released
-**Theme:** Configuration Management, Security, User Experience
-
-#### Goals
-- [x] **Implement database-backed settings management**
-- [x] **Add encryption for sensitive configuration**
-- [x] **Create setup wizard for first-time installation**
-- [x] Complete settings UI with admin access
-- [x] Integrate with existing authentication system
-
-#### Deliverables
-- [x] **Settings management UI at /settings**
-- [x] **Setup wizard at /setup**
-- [x] **Fernet encryption for sensitive settings**
-- [x] **Source indicators (DB/ENV/DEFAULT)**
-- [x] **Complete settings documentation**
-- [x] **Framework analysis (FRAMEWORK_ANALYSIS.md)**
-- [x] REST API for settings management
-- [x] Admin authentication and authorization
-- [x] Comprehensive test coverage
-
-#### New Features
-- **Settings Management System**: Web-based admin UI for viewing and editing 102 application settings across 10 categories
-- **Encryption**: Fernet symmetric encryption for sensitive values (passwords, API keys, tokens) with key derived from SESSION_SECRET
-- **Setup Wizard**: 3-step wizard for first-time configuration (Infrastructure → Security → AI Services)
-- **Precedence System**: Settings resolved in order: Database > Environment Variables > Defaults
-- **Source Indicators**: Visual badges showing where each setting value originates (🟢 DB, 🔵 ENV, ⚪ DEFAULT)
-- **Admin Access Control**: OAuth admin group support and proper decorator pattern for authorization
-
----
-
-### v0.3.3 - Drag-and-Drop Upload (February 2026)
-**Release Date:** February 8, 2026
-**Status:** ✅ Released
-**Theme:** User Experience Enhancement
-
-#### Goals
-- [x] Add drag-and-drop file upload to Files view
-- [x] Refactor upload logic for maintainability
-- [x] Improve visual feedback during file interactions
-
-#### Deliverables
-- [x] Drag-and-drop upload functionality in Files view
-- [x] Reusable `upload.js` module for code DRYness
-- [x] Visual drop overlay and progress modal
-- [x] Enhanced upload error handling
-
----
-
-### v0.3.2 - Security & Testing Hardening (February 2026)
-**Release Date:** February 6, 2026
-**Status:** ✅ Released
-**Theme:** Security, Quality, Testing
-
-#### Goals
-- [x] Fix critical security vulnerabilities (authlib, starlette)
-- [x] Implement comprehensive test suite
-- [x] Add security scanning (CodeQL, Bandit)
-- [x] Improve CI/CD pipeline
-
-#### Deliverables
-- [x] SECURITY_AUDIT.md documentation
-- [x] pytest configuration and fixtures
-- [x] API integration tests
-- [x] Configuration validation tests
-- [x] Updated CI/CD workflows
-- [x] Pre-commit hooks configuration
-
----
-
-## Upcoming Planning Anchors
-
-### Clarity: Enhanced Search & UI (Planning track)
-**Target Date:** October 31, 2026
-**Status:** 🚧 In progress — hybrid ranking and relevance evaluation remain
-**Theme:** Search, Discovery, Modern UX
-**Epic:** #863
-
-#### Goals
-- Hybrid discovery: keyword + semantic search, fast filtering, saved searches
-- Preview-first UX (open, skim, and act quickly)
-- Modern UX polish (accessibility, responsiveness, performance)
-
-#### Deliverables
-- Semantic search foundation (vectorization + ranking signals)
-- Saved searches / smart views
-- In-browser preview + “quick actions” (tag, route, export)
-- Bulk operations and pagination improvements
-- UX polish (dark mode/accessibility where applicable)
-
-#### Breaking Changes
-- Potential pagination/search response changes (must be versioned and documented)
-
-#### Migration Path
-- Version endpoints where needed and keep previous versions working for at least 2 minor milestones
-
----
-
-### Conductor: Workflow Automation & Integrations (Planning track)
-**Target Date:** January 31, 2027
-**Status:** 🚧 In progress — builder, scheduling, templates, and bidirectional sync remain
-**Theme:** Automation, Integration, Webhooks
-**Epic:** #864
-
-#### Goals
-- First-class workflow model (steps, state, retries) that matches what the system actually executes
-- Workflow-aware UI status, retries, and observability
-- Webhooks + event-driven automation foundations
-
-#### Deliverables
-- Workflow object model and storage
-- Workflow-aware file detail view + status dashboard
-- Scheduling primitives (recurring jobs / delayed runs)
-- Webhook system (outbound events + inbound triggers)
-- Integration templates and documentation
-
----
-
-### Signal: AI Quality, RAG, and Multi-language (Planning track)
-**Target Date:** April 30, 2027
-**Status:** 🚧 In progress — retrieval exists, but quality evaluation and review UX remain
-**Theme:** AI Quality, Retrieval, Internationalization
-**Epic:** #865
-
-#### Goals
-- “Chat with Library” foundations (retrieval + UI)
-- Local AI options for privacy-sensitive setups
-- Measurable AI quality (confidence + human review loop)
-- Expand multilingual capability across OCR + UI
-
-#### Deliverables
-- Vector DB integration and embeddings pipeline
-- Chat UI foundations and retrieval API
-- Confidence scoring + human review/edit loop for extracted fields
-- Multi-language OCR configuration improvements
-- Expanded i18n coverage + localized docs
-
----
-
-### v1.0.0 - Summit: Enterprise Edition (Planning anchor)
-**Target Date:** September 30, 2027
-**Status:** 🚧 Foundation in progress — full tenant administration, RBAC, and scale acceptance remain
-**Theme:** Enterprise Features, Scalability, Multi-tenancy
-**Epic:** #866
-
-This is our first major release, marking production-ready enterprise capabilities.
-
-#### Goals
-- Multi-tenancy and organization management
-- Role-based access control (RBAC)
-- Horizontal scaling support
-- Comprehensive audit logging
-- SLA monitoring and alerting
-- Professional support offerings
-
-#### Deliverables
-- **Multi-tenancy**
-  - Organization/team management UI
-  - Per-tenant configuration and branding
-  - Resource quotas and billing integration
-  - Tenant isolation at database level
-
-- **Access Control**
-  - RBAC with customizable roles
-  - Permission management UI
-  - API key management per organization
-  - SSO integration (SAML, LDAP)
-
-- **Scalability**
-  - Horizontal scaling documentation
-  - Load balancer configuration
-  - Distributed caching
-  - Database replication support
-  - Message queue clustering
-
----
-
-### v2.0.0 - Horizon: Platform Expansion (Planning anchor)
-**Target Date:** March 31, 2028
-**Status:** 📋 Planned
-**Theme:** Ecosystem, Platform, Distribution
-**Epic:** #867
-
-#### Goals
-- Make DocuElevate extensible by design (plugins + templates)
-- Expand integrations and developer experience
-- Harden multi-surface experiences (web, mobile, extension, CLI) as a cohesive product
-
-#### Deliverables
-- Plugin system foundations and public extension points
-- Template library for pipelines/workflows + “starter kits”
-- Integration hub patterns (webhooks, events, connectors)
-- SDK + documentation for extensions
-
----
-
-### v2.1.0 - Sentinel: Governance & Policy (Planning anchor)
-**Target Date:** September 30, 2028
-**Status:** 📋 Planned
-**Theme:** Governance, Compliance, Policy-driven Automation
-**Epic:** #868
-
-#### Goals
-- Make governance first-class (retention, legal hold, PII workflows)
-- Provide tamper-evident auditing and admin controls
-- Introduce policy-driven approvals for sensitive automation
-
-#### Deliverables
-- Retention policies + legal hold primitives
-- PII detection + redaction workflows
-- Tamper-evident audit trails + admin activity feed
-- Policy-as-code concepts for workflows (with approval gates)
-
----
-
-### v3.0.0 - Constellation: Integration Hub & Agent Platform (Planning anchor)
-**Target Date:** March 31, 2029
-**Status:** 📋 Planned
-**Theme:** Ecosystem, Agents, Interoperability
-**Epic:** #869
-
-#### Goals
-- Make DocuElevate the “system of record” for document intelligence in an organization
-- Support external automation ecosystems (Zapier/Make/n8n) and agent runtimes
-- Provide a clean interoperability layer for modern AI tools
-
-#### Deliverables
-- DocuElevate MCP server (search, retrieve, summarize, route) and documentation
-- Connector marketplace concepts (curated + community)
-- Event stream + webhooks at scale (delivery guarantees, retries, signing)
-
-## Release Process
-
-### Automated Semantic Versioning (v0.6.0+)
-Starting with v0.6.0, releases are fully automated using `python-semantic-release`:
-
-1. **Commit with Conventional Format**: Use conventional commit messages (feat, fix, etc.)
-2. **Merge to Main**: PR merges trigger semantic-release workflow
-3. **Automated Analysis**: semantic-release determines version from commits
-4. **Automatic Updates**:
-   - Updates `VERSION` file
-   - Generates release notes and updates generated changelog state where configured
-   - Creates Git tag (e.g., `v0.173.1`)
-   - Creates GitHub Release with notes
-   - Triggers Docker image builds
-5. **No Manual Steps**: VERSION and generated changelog state are never edited manually
-
-### Version Bump Rules
-- `feat:` commits → Minor version (e.g., 0.173.1 → 0.174.0)
-- `fix:`, `perf:` → Patch version (e.g., 0.173.1 → 0.173.2)
-- `feat!:`, `BREAKING CHANGE:` → Major version (e.g., 0.173.1 → 1.0.0)
-- Other types (docs, chore, etc.) → No version bump
-
-### Pre-release Checklist (Automated)
-- [ ] All tests passing
-- [ ] Security scan passed
-- [ ] Code review completed
-- [ ] Documentation updated
-- [ ] Release notes generated
-- [ ] Migration guide (if breaking changes)
-- [ ] Docker images built and tested
-
-### Release Artifacts
-- Source code (GitHub)
-- Docker images (Docker Hub)
-- PyPI package (future)
-- Helm charts (future)
-- Documentation site update
-
----
-
-## Version History and Planning Anchors
-
-| Anchor | Release Date | Theme | Status |
-|---------|-------------|-------|--------|
-| v0.1.0 | 2024-Q1 | Initial Release | Released |
-| v0.2.0 | 2024-Q3 | Multi-provider Support | Released |
-| v0.3.0 | 2025-Q4 | UI & Authentication | Released |
-| v0.3.1 | 2026-01-15 | OAuth2 Integration | Released |
-| v0.3.2 | 2026-02-06 | Security Updates | Released |
-| v0.3.3 | 2026-02-08 | Drag-and-Drop Upload | Released |
-| v0.5.0 | 2026-02-08 | **Settings & Encryption** | **Released** |
-| Planning track | 2026-10-31 | **Clarity:** Search & UX | Planned |
-| Planning track | 2027-01-31 | **Conductor:** Workflows & Integrations | Planned |
-| Planning track | 2027-04-30 | **Signal:** AI Quality, RAG, Multi-language | Planned |
-| v1.0.0 | 2027-09-30 | **Summit:** Enterprise | Planned |
-| v2.0.0 | 2028-03-31 | **Horizon:** Platform Expansion | Future |
-| v2.1.0 | 2028-09-30 | **Sentinel:** Governance & Policy | Future |
-| v3.0.0 | 2029-03-31 | **Constellation:** Integration Hub & Agents | Future |
-
----
+**Last updated:** 2026-10-30
+
+This document summarizes planning anchors and their acceptance focus. GitHub milestone descriptions, issues, and current evidence are authoritative for executable scope and status. Issue closure or code availability alone does not establish that a product outcome is complete.
+
+## Release and planning versioning
+
+DocuElevate uses automated semantic versioning. The repository version verified for this update is **0.189.1**. Continuous release numbers are independent of named planning tracks and do not imply milestone completion or determine the next release version. The future `1.0.0` and later labels below are planning anchors, not guaranteed semantic-release tags.
+
+The dates are the existing GitHub milestone targets, retained as planning targets rather than delivery promises. Clarity is due 2026-10-31; open relevance acceptance ([#871](https://github.com/christianlouis/DocuElevate/issues/871)) remains, so the target date is not a completion claim.
+
+## Completed historical anchors
+
+- **v0.3.2 (2026-02-06):** security and testing hardening.
+- **v0.3.3 (2026-02-08):** drag-and-drop upload.
+- **v0.5.0 (2026-02-08):** database-backed settings, encryption, and setup wizard.
+
+These historical anchors do not describe the current release stream. Refer to GitHub Releases and generated release notes for the release history.
+
+## Release process and compatibility
+
+The historical release cadence is patch releases as needed for critical bugs/security, minor releases approximately every 6–8 weeks, and major releases approximately every 12–18 months. Automated semantic-release may vary this cadence according to merged changes; these intervals are planning guidance, not a schedule commitment.
+
+Conventional commits drive automated versioning on merge to `main`: `feat` produces a minor bump and `fix`/`perf` a patch bump. Breaking-change handling follows [pyproject.toml](pyproject.toml); the current `major_on_zero = false` configuration means a breaking change during `0.x` does not automatically produce `1.0.0`. Other commit types without breaking changes do not bump the version. Automation updates `VERSION`, tags, release notes, GitHub Releases, and image builds. Do not edit `VERSION` or generated changelog output manually.
+
+For breaking API or behavior changes, document the migration path and compatibility window. The existing planning guidance is to retain prior endpoint behavior for at least two minor milestones where applicable. Production promotion remains a separate explicitly approved action; merge, release, and pre-production acceptance do not constitute that approval.
+
+Release readiness continues to require passing tests and security scans, completed code review, updated documentation and release notes, migration guidance for breaking changes, and built/tested Docker images. Published artifacts include source, Docker images, and documentation updates; PyPI distribution and Helm charts remain future distribution goals.
+
+## Planning anchors
+
+### Clarity — Enhanced Search & UI
+
+- **Target:** 2026-10-31; **epic:** [#863](https://github.com/christianlouis/DocuElevate/issues/863); **recorded milestone state:** 14 closed, 2 open (including the epic).
+- **Delivered foundations:** semantic/vector and hybrid search ([#477](https://github.com/christianlouis/DocuElevate/issues/477), [#480](https://github.com/christianlouis/DocuElevate/issues/480)); saved searches ([#870](https://github.com/christianlouis/DocuElevate/issues/870)); preview ([#872](https://github.com/christianlouis/DocuElevate/issues/872)); bulk operations ([#873](https://github.com/christianlouis/DocuElevate/issues/873)); ranking explanations and metadata fallback exist in code.
+- **Remaining outcome:** tune and accept relevance/configuration and UX ([#871](https://github.com/christianlouis/DocuElevate/issues/871)), with reproducible evidence. Do not describe hybrid search as greenfield work or mark Clarity complete based on issue count.
+- **Acceptance:** representative queries meet documented relevance and latency criteria; ranking explanations are understandable; search, filters, saved searches, previews, and bulk actions work together in the supported UI; coverage limitations are visible.
+
+### Conductor — Workflow Automation
+
+- **Target:** 2027-01-31; **epic:** [#864](https://github.com/christianlouis/DocuElevate/issues/864); **recorded milestone state:** 14 closed, 5 open.
+- **Remaining outcome:** editable/versioned workflows and rollback ([#875](https://github.com/christianlouis/DocuElevate/issues/875)), general recurring/delayed scheduling ([#876](https://github.com/christianlouis/DocuElevate/issues/876)), reusable starter templates ([#877](https://github.com/christianlouis/DocuElevate/issues/877), [#885](https://github.com/christianlouis/DocuElevate/issues/885)), and bidirectional sync ([#481](https://github.com/christianlouis/DocuElevate/issues/481)). Existing service polling schedules do not satisfy general workflow scheduling.
+- **Acceptance:** users can author, validate, publish, inspect, roll back, and safely retry workflows; scheduling and connector behavior is documented and tested for idempotency, failures, and recovery.
+
+### Signal — AI Quality & Multi-language
+
+- **Target:** 2027-04-30; **epic:** [#865](https://github.com/christianlouis/DocuElevate/issues/865); **recorded milestone state:** 5 closed, 8 open.
+- **Delivered foundations:** semantic and lexical retrieval, search/chat/research APIs with citations and coverage; extraction evaluation harness and documentation ([#880](https://github.com/christianlouis/DocuElevate/issues/880)); LiteLLM/Ollama extraction option. Chat, evaluation, and local AI must not be described as wholly absent.
+- **Remaining outcome:** retrieval and chat outcome acceptance ([#478](https://github.com/christianlouis/DocuElevate/issues/478), [#871](https://github.com/christianlouis/DocuElevate/issues/871)), representative extraction fixtures and CI quality reports/calibration/regression criteria ([#880](https://github.com/christianlouis/DocuElevate/issues/880)), review/feedback workflows, private local embedding/query acceptance ([#479](https://github.com/christianlouis/DocuElevate/issues/479)), multilingual expansion ([#198](https://github.com/christianlouis/DocuElevate/issues/198), [#881](https://github.com/christianlouis/DocuElevate/issues/881), [#1189](https://github.com/christianlouis/DocuElevate/issues/1189)), and large-document support ([#1066](https://github.com/christianlouis/DocuElevate/issues/1066), [#1090](https://github.com/christianlouis/DocuElevate/issues/1090), [#1091](https://github.com/christianlouis/DocuElevate/issues/1091)).
+- **Acceptance:** reproducible evaluation sets report relevance, citation quality, coverage, latency, and extraction results against recorded criteria; regressions are gated; review/correction is usable; end-to-end local embedding and query behavior is proven before claiming private local RAG.
+
+### Summit — Enterprise Edition (planning anchor `v1.0.0`)
+
+- **Target:** 2027-09-30; **epic:** [#866](https://github.com/christianlouis/DocuElevate/issues/866); **recorded milestone state:** 12 closed, 16 open.
+- **Delivered foundations:** tenant/Tribe fields, personal Tribes, quarantine, scoped SQL/Qdrant, optional shared Tribe onboarding, and per-file privacy enforcement ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155), [#1168](https://github.com/christianlouis/DocuElevate/pull/1168), [#1147](https://github.com/christianlouis/DocuElevate/issues/1147)). These are not full organization administration or RBAC.
+- **Remaining outcome:** complete shared Family/Tribe flow ([#1142](https://github.com/christianlouis/DocuElevate/issues/1142)–[#1147](https://github.com/christianlouis/DocuElevate/issues/1147)), organization/team administration ([#199](https://github.com/christianlouis/DocuElevate/issues/199)), RBAC ([#200](https://github.com/christianlouis/DocuElevate/issues/200)), scale ([#201](https://github.com/christianlouis/DocuElevate/issues/201)), SLA ([#211](https://github.com/christianlouis/DocuElevate/issues/211)), admin activity feed ([#882](https://github.com/christianlouis/DocuElevate/issues/882)), SSO ([#883](https://github.com/christianlouis/DocuElevate/issues/883)), and organization quotas ([#884](https://github.com/christianlouis/DocuElevate/issues/884)).
+- **Acceptance:** tenant and member permissions are tested across isolation boundaries; administrators can manage organizations, identities, roles, quotas, and SSO; supported scale and recovery behavior have operational evidence.
+
+### Horizon — Platform Expansion (planning anchor `v2.0.0`)
+
+- **Target:** 2028-03-31; **epic:** [#867](https://github.com/christianlouis/DocuElevate/issues/867); **recorded milestone state:** 6 closed, 6 open.
+- **Remaining outcome:** plugin foundations ([#220](https://github.com/christianlouis/DocuElevate/issues/220)), SDK ([#886](https://github.com/christianlouis/DocuElevate/issues/886)), marketplace ([#887](https://github.com/christianlouis/DocuElevate/issues/887)), desktop application ([#214](https://github.com/christianlouis/DocuElevate/issues/214)), connector templates, and mature multi-surface support.
+- **Acceptance:** documented extension contracts have compatibility and security boundaries; a third-party sample extension installs, runs, upgrades, and is removed through supported flows.
+
+### Sentinel — Governance & Policy (planning anchor `v2.1.0`)
+
+- **Target:** 2028-09-30; **epic:** [#868](https://github.com/christianlouis/DocuElevate/issues/868); **recorded milestone state:** 0 closed, 7 open.
+- **Remaining outcome:** retention ([#218](https://github.com/christianlouis/DocuElevate/issues/218)), legal hold ([#888](https://github.com/christianlouis/DocuElevate/issues/888)), PII controls ([#889](https://github.com/christianlouis/DocuElevate/issues/889)), tamper-evident audit ([#890](https://github.com/christianlouis/DocuElevate/issues/890)), KMS ([#891](https://github.com/christianlouis/DocuElevate/issues/891)), and policy management ([#892](https://github.com/christianlouis/DocuElevate/issues/892)).
+- **Acceptance:** retention and holds are enforced and recoverably audited; PII policy behavior is validated; privileged changes are tamper-evident; key management and policy failures have documented safe behavior.
+
+### Constellation — Integration Hub & Agent Platform (planning anchor `v3.0.0`)
+
+- **Target:** 2029-03-31; **epic:** [#869](https://github.com/christianlouis/DocuElevate/issues/869); **recorded milestone state:** 0 closed, 5 open.
+- **Delivered foundation:** PR [#1281](https://github.com/christianlouis/DocuElevate/pull/1281) added per-user Notion and Evernote destinations and a read-only MCP stdio adapter (`search_documents`, `get_document`) under contract v1.0 ([docs/MCP.md](docs/MCP.md)). MCP requires an enabled and healthy semantic index; code availability does not prove live acceptance.
+- **Remaining outcome:** broader MCP interoperability ([#893](https://github.com/christianlouis/DocuElevate/issues/893)), including read-only API token scopes, summaries/actions/shared HTTP; durable signed webhooks ([#894](https://github.com/christianlouis/DocuElevate/issues/894)); audited permissioned actions ([#896](https://github.com/christianlouis/DocuElevate/issues/896)); and connector ecosystem work. Meetily remains deferred.
+- **Acceptance:** live connector setup and delivery are verified per provider; MCP scope and authorization are documented and tested; action permissions are least-privilege and auditable; signed event delivery has retry, replay, and recovery evidence.
+
+## Operational acceptance across tracks
+
+Operational work cuts across all milestones. Monitor retry timing and transient database recovery were improved ([#1276](https://github.com/christianlouis/DocuElevate/pull/1276)); bounded OCR/IMAP resources and telemetry privacy were improved ([#1280](https://github.com/christianlouis/DocuElevate/pull/1280)). Remaining tracked areas include host-loss resilience ([#902](https://github.com/christianlouis/DocuElevate/issues/902)), atomic credential state ([#1190](https://github.com/christianlouis/DocuElevate/issues/1190)), archive integrity and partial archive accounting ([#1191](https://github.com/christianlouis/DocuElevate/issues/1191), [#1192](https://github.com/christianlouis/DocuElevate/issues/1192)), backup capacity ([#1193](https://github.com/christianlouis/DocuElevate/issues/1193)), monitor recovery ([#1121](https://github.com/christianlouis/DocuElevate/issues/1121)), credential rotation ([#1162](https://github.com/christianlouis/DocuElevate/issues/1162)), and explicit production approval ([#1201](https://github.com/christianlouis/DocuElevate/issues/1201)). Verify current evidence before treating any as complete.
+
+Production deployment requires its own explicit approval. This document makes no assertion about the current production image, configuration, or live provider acceptance.
+
+## References
+
+- [ROADMAP.md](ROADMAP.md) — product sequencing and outcome acceptance.
+- [TODO.md](TODO.md) — short prioritized view; GitHub remains the detailed work queue.
+- [GitHub milestones](https://github.com/christianlouis/DocuElevate/milestones) — current scope, dates, and live issue state.
 
 ## Support & EOL Policy
 
 ### Active Support
+
 - Current stable release: Full support (bug fixes, security patches, features)
 - Previous minor release: Security patches only
 - Older versions: Community support only
 
 ### End of Life (EOL)
+
 - Minor versions: EOL when 2 newer minor versions released
 - Major versions: EOL 18 months after next major version
 
 ### Security Patches
+
 - Critical vulnerabilities: Patched within 48 hours
 - High severity: Patched within 1 week
 - Medium/Low: Included in next regular release
-
----
-
-*This milestone document is updated regularly. For real-time status, check our [GitHub Projects](https://github.com/christianlouis/DocuElevate/projects) board.*

@@ -1,27 +1,24 @@
 # DocuElevate Work Queue
 
-**Last Updated:** 2026-07-11
+**Last updated:** 2026-10-30
 
-GitHub issues and milestones are the single source of truth for actionable work.
-This file intentionally does not duplicate issue checklists, which previously
-drifted behind the implementation and release stream.
+GitHub issues and milestones are authoritative for executable work, ownership, and status. This page is a concise dependency-led index; it does not duplicate the backlog or infer completion from issue state. Confirm the current issue and implementation evidence before taking up a follow-up.
 
-## Current order
+## Priority order
 
-1. **Correctness and resilience:** #1007, #388, #902
-2. **Search UX:** #870, #872, #873
-3. **Retrieval foundation:** #477, #480, #871
-4. **Workflow authoring:** #875, #876, #877 (after #388)
-5. **AI quality:** #880, then #878 and #879
+Credential exposure, tenant/privacy failures, and recovery risks are cross-cutting gates for this queue. Address them before or alongside feature work as described in [ROADMAP.md](ROADMAP.md#cross-cutting-security-and-recovery-gate); item 4 is not a reason to defer an active security or data-loss risk.
 
-See [ROADMAP.md](ROADMAP.md) for the dependency-led product sequence and
-[MILESTONES.md](MILESTONES.md) for the named planning anchors. Check `VERSION` or
-GitHub Releases for the current semantic-release version.
+1. **Useful fresh installation:** finish setup through first processed/retrievable document, integration test/skip/resume, optional AI choice, second-user isolation, recovery, and browser E2E ([#1134](https://github.com/christianlouis/DocuElevate/issues/1134), [#1151](https://github.com/christianlouis/DocuElevate/issues/1151)).
+2. **Family/Tribe shared intake:** complete membership/invitations/consent, recipient profiles and explainable classification, authorized per-member routing, review/history handling, delegated administration, and multi-identity browser acceptance ([#1142](https://github.com/christianlouis/DocuElevate/issues/1142)–[#1147](https://github.com/christianlouis/DocuElevate/issues/1147)). Existing tenant/privacy foundations are documented in [ROADMAP.md](ROADMAP.md).
+3. **Retrieval and AI acceptance:** measure/tune hybrid relevance and explanations ([#871](https://github.com/christianlouis/DocuElevate/issues/871)), accept cited chat quality and latency ([#478](https://github.com/christianlouis/DocuElevate/issues/478)), and improve the existing extraction evaluator with representative fixtures, CI reports, calibration, and regression criteria ([#880](https://github.com/christianlouis/DocuElevate/issues/880)). Add per-field confidence and extraction review ([#878](https://github.com/christianlouis/DocuElevate/issues/878), [#879](https://github.com/christianlouis/DocuElevate/issues/879)), stabilize the versioned tenant-scoped consumer contract ([#1082](https://github.com/christianlouis/DocuElevate/issues/1082)), and track private local embedding/query separately ([#479](https://github.com/christianlouis/DocuElevate/issues/479)).
+4. **Reliability and security evidence:** advance host-loss resilience ([#902](https://github.com/christianlouis/DocuElevate/issues/902)), atomic credential state ([#1190](https://github.com/christianlouis/DocuElevate/issues/1190)), archive integrity/accounting ([#1191](https://github.com/christianlouis/DocuElevate/issues/1191), [#1192](https://github.com/christianlouis/DocuElevate/issues/1192)), backup capacity ([#1193](https://github.com/christianlouis/DocuElevate/issues/1193)), monitor recovery ([#1121](https://github.com/christianlouis/DocuElevate/issues/1121)), credential rotation ([#1162](https://github.com/christianlouis/DocuElevate/issues/1162)), and explicit production approval ([#1201](https://github.com/christianlouis/DocuElevate/issues/1201)). Account for completed monitor recovery ([#1276](https://github.com/christianlouis/DocuElevate/pull/1276)) and resource/privacy fixes ([#1280](https://github.com/christianlouis/DocuElevate/pull/1280)) when triaging.
+5. **Workflow authoring and integrations:** versioned builder/rollback ([#875](https://github.com/christianlouis/DocuElevate/issues/875)), recurring/delayed workflow schedules ([#876](https://github.com/christianlouis/DocuElevate/issues/876)), starter templates ([#877](https://github.com/christianlouis/DocuElevate/issues/877), [#885](https://github.com/christianlouis/DocuElevate/issues/885)), and bidirectional sync ([#481](https://github.com/christianlouis/DocuElevate/issues/481)).
+6. **Later enterprise and governance:** organization admin/RBAC/scale/SLA/activity feed/SSO/org quotas ([#199](https://github.com/christianlouis/DocuElevate/issues/199)–[#201](https://github.com/christianlouis/DocuElevate/issues/201), [#211](https://github.com/christianlouis/DocuElevate/issues/211), [#882](https://github.com/christianlouis/DocuElevate/issues/882)–[#884](https://github.com/christianlouis/DocuElevate/issues/884)); retention/hold/PII/tamper audit/KMS/policy ([#218](https://github.com/christianlouis/DocuElevate/issues/218), [#888](https://github.com/christianlouis/DocuElevate/issues/888)–[#892](https://github.com/christianlouis/DocuElevate/issues/892)).
+7. **Later ecosystem:** broader MCP interoperability ([#893](https://github.com/christianlouis/DocuElevate/issues/893)), signed webhooks ([#894](https://github.com/christianlouis/DocuElevate/issues/894)), governed actions ([#896](https://github.com/christianlouis/DocuElevate/issues/896)), plugins/SDK/marketplace/desktop application ([#220](https://github.com/christianlouis/DocuElevate/issues/220), [#886](https://github.com/christianlouis/DocuElevate/issues/886), [#887](https://github.com/christianlouis/DocuElevate/issues/887), [#214](https://github.com/christianlouis/DocuElevate/issues/214)). Read-only MCP search and retrieval already exist in contract v1.0 ([#1281](https://github.com/christianlouis/DocuElevate/pull/1281)).
 
-## Maintenance rule
+## Maintenance
 
-- Put new executable work in a GitHub issue with acceptance criteria, an area
-  label, one priority label, and a milestone when it belongs to a named track.
-- Keep architectural intent in the roadmap and detailed implementation work in
-  issues.
+- Create or update GitHub issues with acceptance criteria, area and priority labels, and a milestone when applicable.
+- Keep product intent and outcome criteria in [ROADMAP.md](ROADMAP.md), with milestone targets and verified foundations in [MILESTONES.md](MILESTONES.md).
+- Separate implementation status from user acceptance and live verification; record evidence before closing work.
 - Do not manually edit `VERSION` or generated changelog output.
