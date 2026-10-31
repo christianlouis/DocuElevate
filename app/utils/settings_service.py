@@ -1802,6 +1802,33 @@ SETTING_METADATA = {
             "bucket-owner-full-control",
         ],
     },
+    "s3_secondary_enabled": {
+        "category": "Storage Providers", "description": "Enable the optional secondary S3-compatible destination", "type": "boolean", "sensitive": False, "required": False, "restart_required": False
+    },
+    "s3_secondary_endpoint": {
+        "category": "Storage Providers", "description": "HTTPS endpoint for the secondary S3-compatible destination", "type": "string", "sensitive": False, "required": False, "restart_required": False
+    },
+    "s3_secondary_access_key": {
+        "category": "Storage Providers", "description": "Access key for the secondary S3-compatible destination", "type": "string", "sensitive": True, "required": False, "restart_required": False
+    },
+    "s3_secondary_secret_key": {
+        "category": "Storage Providers", "description": "Secret key for the secondary S3-compatible destination", "type": "string", "sensitive": True, "required": False, "restart_required": False
+    },
+    "s3_secondary_region": {
+        "category": "Storage Providers", "description": "Region for the secondary S3-compatible destination", "type": "string", "sensitive": False, "required": False, "restart_required": False
+    },
+    "s3_secondary_bucket": {
+        "category": "Storage Providers", "description": "Bucket for the secondary S3-compatible destination", "type": "string", "sensitive": False, "required": False, "restart_required": False
+    },
+    "s3_secondary_prefix": {
+        "category": "Storage Providers", "description": "Optional key prefix for the secondary S3-compatible destination", "type": "string", "sensitive": False, "required": False, "restart_required": False
+    },
+    "s3_secondary_storage_class": {
+        "category": "Storage Providers", "description": "Storage class for the secondary S3-compatible destination", "type": "string", "sensitive": False, "required": False, "restart_required": False
+    },
+    "s3_secondary_acl": {
+        "category": "Storage Providers", "description": "Optional ACL for secondary S3 objects", "type": "string", "sensitive": False, "required": False, "restart_required": False
+    },
     # Email Settings
     "email_host": {
         "category": "Email",

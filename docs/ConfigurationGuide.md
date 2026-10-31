@@ -1498,6 +1498,22 @@ SharePoint uses the same Microsoft Graph API as OneDrive. See the [OneDrive Setu
 
 For detailed setup instructions, see the [Amazon S3 Setup Guide](AmazonS3Setup.md).
 
+### Secondary S3-compatible destination
+
+The optional secondary destination can copy every globally delivered document to a
+separate S3-compatible service (for example, Hetzner Object Storage). It is
+disabled by default and is queued independently from the existing AWS S3 upload.
+The endpoint is mandatory and must use `https://`; when disabled or incomplete,
+no secondary task is queued and the AWS destination is unchanged.
+
+| Setting | Description | Default |
+| `S3_SECONDARY_ENABLED` | Enable the independent secondary upload | `false` |
+| `S3_SECONDARY_ENDPOINT` | HTTPS S3-compatible endpoint | *(empty)* |
+| `S3_SECONDARY_ACCESS_KEY` / `S3_SECONDARY_SECRET_KEY` | Secondary credentials | *(empty)* |
+| `S3_SECONDARY_REGION` / `S3_SECONDARY_BUCKET` | Target region and bucket | `us-east-1` / *(empty)* |
+| `S3_SECONDARY_PREFIX` | Optional object-key prefix | *(empty)* |
+| `S3_SECONDARY_STORAGE_CLASS` / `S3_SECONDARY_ACL` | Optional object metadata | `STANDARD` / *(empty)* |
+
 ### iCloud Drive (Apple)
 
 | **Variable**                    | **Description**                                       |

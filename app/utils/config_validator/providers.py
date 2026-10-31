@@ -381,6 +381,31 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         },
     }
 
+    secondary_endpoint = getattr(settings, "s3_secondary_endpoint", None)
+    providers["S3 Secondary Storage"] = {
+        "name": "S3 Secondary Storage",
+        "icon": "fa-solid fa-database",
+        "configured": bool(
+            getattr(settings, "s3_secondary_bucket", None)
+            and getattr(settings, "s3_secondary_access_key", None)
+            and getattr(settings, "s3_secondary_secret_key", None)
+            and isinstance(secondary_endpoint, str)
+            and secondary_endpoint.startswith("https://")
+        ),
+        "enabled": getattr(settings, "s3_secondary_enabled", False),
+        "description": "Optional secondary S3-compatible document destination",
+        "details": {
+            "endpoint": secondary_endpoint or "Not set",
+            "bucket": getattr(settings, "s3_secondary_bucket", "Not set"),
+            "region": getattr(settings, "s3_secondary_region", "Not set"),
+            "access_key": mask_sensitive_value(getattr(settings, "s3_secondary_access_key", None)),
+            "secret_key": mask_sensitive_value(getattr(settings, "s3_secondary_secret_key", None)),
+            "prefix": getattr(settings, "s3_secondary_prefix", "Not set"),
+            "storage_class": getattr(settings, "s3_secondary_storage_class", "Not set"),
+            "acl": getattr(settings, "s3_secondary_acl", "Not set"),
+        },
+    }
+
     # Check SFTP configuration
     providers["SFTP Storage"] = {
         "name": "SFTP Storage",

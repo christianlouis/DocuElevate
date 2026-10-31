@@ -59,6 +59,7 @@ from app.tasks.upload_to_notion import upload_to_notion_global  # noqa: F401
 from app.tasks.upload_to_onedrive import upload_to_onedrive  # noqa: F401
 from app.tasks.upload_to_paperless import upload_to_paperless  # noqa: F401
 from app.tasks.upload_to_s3 import upload_to_s3  # noqa: F401
+from app.tasks.upload_to_s3_secondary import upload_to_s3_secondary  # noqa: F401
 from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_sharepoint import upload_to_sharepoint  # noqa: F401
 from app.tasks.upload_to_user_integration import upload_to_user_integration  # noqa: F401

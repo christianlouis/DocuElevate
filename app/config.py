@@ -846,6 +846,17 @@ class Settings(BaseSettings):
     s3_storage_class: Optional[str] = "STANDARD"  # Default storage class
     s3_acl: Optional[str] = "private"  # Default ACL
 
+    # Optional secondary S3-compatible destination (disabled by default)
+    s3_secondary_enabled: bool = False
+    s3_secondary_endpoint: Optional[str] = None
+    s3_secondary_access_key: Optional[str] = None
+    s3_secondary_secret_key: Optional[str] = None
+    s3_secondary_region: Optional[str] = "us-east-1"
+    s3_secondary_bucket: Optional[str] = None
+    s3_secondary_prefix: Optional[str] = ""
+    s3_secondary_storage_class: Optional[str] = "STANDARD"
+    s3_secondary_acl: Optional[str] = None
+
     # iCloud Drive settings
     icloud_enabled: bool = Field(
         default=True,
