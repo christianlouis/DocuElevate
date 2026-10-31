@@ -86,7 +86,9 @@ def test_secondary_destination_is_disabled_by_default():
         assert _should_upload_to_s3_secondary() is False
 
 
-@pytest.mark.parametrize("endpoint", ["https://", "https://user:pass@s3.example.test", "https://s3.example.test#fragment"])
+@pytest.mark.parametrize(
+    "endpoint", ["https://", "https://user:pass@s3.example.test", "https://s3.example.test#fragment"]
+)
 def test_dispatch_rejects_malformed_endpoint(endpoint):
     with patch("app.tasks.send_to_all.settings", _settings(s3_secondary_endpoint=endpoint)):
         assert _should_upload_to_s3_secondary() is False
