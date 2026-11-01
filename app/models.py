@@ -275,6 +275,9 @@ class UploadItem(Base):
     mime_type = Column(String(255), nullable=True)
     size = Column(BigInteger, nullable=False)
     state = Column(String(20), nullable=False, default="pending", server_default="pending", index=True)
+    # Capacity is released exactly once, independently of the visible result
+    # state (failed documents must remain visibly failed).
+    capacity_released = Column(Boolean, nullable=False, default=False, server_default="0", index=True)
     error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

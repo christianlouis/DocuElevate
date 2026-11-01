@@ -27,6 +27,21 @@ from celery import Task
 
 logger = logging.getLogger(__name__)
 
+
+def mark_bulk_terminal_failure(file_id: int | None, error: str) -> None:
+    """Persist a terminal bulk failure; the reconciler releases capacity."""
+    if file_id is None:
+        return
+    from app.database import SessionLocal
+    from app.models import UploadItem
+
+    with SessionLocal() as db:
+        db.query(UploadItem).filter(
+            UploadItem.file_id == file_id,
+            UploadItem.state.in_(("accepted", "queued", "processing")),
+        ).update({"state": "failed", "error": str(error)[:1000]}, synchronize_session=False)
+        db.commit()
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -126,6 +141,27 @@ class BaseTaskWithRetry(Task):
 
     #: Apply ±20 % random jitter to prevent thundering-herd problems.
     retry_jitter: bool = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        """Persist a durable terminal signal after Celery exhausts retries.
+
+        ``log_task_progress`` records individual attempts and therefore cannot
+        distinguish a retryable failure from an exhausted task.  The Celery
+        lifecycle callback is only called for the final failure, so marking
+        the accepted upload here lets the capacity reconciler release it
+        without prematurely releasing pending retries.
+        """
+        try:
+            file_id = (kwargs or {}).get("file_id")
+            if file_id is None and args:
+                # File-id is keyword-only in the bulk pipeline; retain a
+                # conservative fallback for tasks whose first argument is it.
+                file_id = (kwargs or {}).get("file_id")
+            if file_id is not None:
+                mark_bulk_terminal_failure(file_id, f"{self.name}: {str(exc)[:1000]}")
+        except Exception:
+            logger.warning("Could not persist terminal bulk-upload failure for %s", task_id, exc_info=True)
+        return super().on_failure(exc, task_id, args, kwargs, einfo)
 
     # ------------------------------------------------------------------
     # Public API

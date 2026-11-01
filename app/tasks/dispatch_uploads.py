@@ -166,11 +166,18 @@ def reconcile_upload_states(limit: int = 100) -> int:
             .subquery()
         )
         candidates = (
-            db.query(UploadItem.id, UploadItem.size, terminal.c.succeeded)
+            db.query(UploadItem.id, UploadItem.size, UploadItem.state, terminal.c.succeeded)
             .outerjoin(terminal, UploadItem.file_id == terminal.c.file_id)
             .outerjoin(FileRecord, UploadItem.file_id == FileRecord.id)
-            .filter(UploadItem.state.in_(("accepted", "queued", "processing")))
-            .filter((terminal.c.file_id.isnot(None)) | (FileRecord.id.is_(None)))
+            .filter(UploadItem.capacity_released.is_(False))
+            .filter(
+                UploadItem.state.in_(("accepted", "queued", "processing", "failed"))
+            )
+            .filter(
+                (UploadItem.state == "failed")
+                | (terminal.c.file_id.isnot(None))
+                | (FileRecord.id.is_(None))
+            )
             .order_by(UploadItem.id.asc())
             .limit(min(max(1, int(limit)), 500))
             .all()
@@ -181,13 +188,16 @@ def reconcile_upload_states(limit: int = 100) -> int:
             logger.error("bulk capacity ledger is missing; leaving items reserved")
             return 0
         released_files = released_bytes = 0
-        for item_id, size, succeeded in candidates:
+        for item_id, size, current_state, succeeded in candidates:
             # Conditional transition is the winner election on SQLite and
             # protects against overlapping reconcilers on every backend.
             result = db.execute(
                 update(UploadItem)
-                .where(UploadItem.id == item_id, UploadItem.state.in_(("accepted", "queued", "processing")))
-                .values(state="complete" if succeeded else "failed")
+                .where(UploadItem.id == item_id, UploadItem.capacity_released.is_(False))
+                .values(
+                    capacity_released=True,
+                    state=("failed" if current_state == "failed" else ("complete" if succeeded else "failed")),
+                )
             )
             if result.rowcount:
                 released_files += 1

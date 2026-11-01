@@ -30,7 +30,7 @@ from app.database import SessionLocal, get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
-from app.utils.bulk_upload import extension_mime, safe_path, sniff_mime, stream_to_file
+from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file
 from app.utils.filename_utils import sanitize_filename
 from app.utils.tribe_scope import ensure_document_scope
 
@@ -248,9 +248,10 @@ def upload_file(
         except QuotaExceeded as exc:
             raise HTTPException(402, str(exc)) from exc
     filename = sanitize_filename(file.filename or "document") or "document"
-    ext, supplied = os.path.splitext(filename)[1].lower(), (file.content_type or "").split(";", 1)[0].lower()
+    ext, supplied = os.path.splitext(filename)[1].lower(), normalize_mime(file.content_type)
     allowed_mimes = {value.lower() for value in ALLOWED_MIME_TYPES}
-    if ext not in ALLOWED_EXTENSIONS or (supplied and supplied not in allowed_mimes):
+    generic_mime = supplied in {"", "application/octet-stream"}
+    if ext not in ALLOWED_EXTENSIONS or (not generic_mime and supplied not in allowed_mimes):
         raise HTTPException(415, "unsupported document type")
     # Do not hold a database transaction while bytes are streaming.  The
     # request body is already spooled by Starlette; a random staging name
@@ -271,10 +272,15 @@ def upload_file(
         expected_mime = extension_mime(filename)
         if ext in {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"} and not header.startswith(b"PK\x03\x04"):
             raise ValueError("OOXML ZIP signature is missing")
-        if supplied in {"", "application/octet-stream"}:
+        if generic_mime:
             supplied = expected_mime or supplied
         if expected_mime and supplied not in {"", "application/octet-stream", expected_mime}:
             raise ValueError("declared MIME is incompatible with extension")
+        # sniff_mime may intentionally preserve a non-generic browser value;
+        # canonicalize aliases before the allow-list check and persisted value.
+        mime = normalize_mime(mime)
+        if mime in {"", "application/octet-stream"} and expected_mime:
+            mime = expected_mime
         if mime.lower() not in allowed_mimes:
             raise ValueError("unsupported content type")
         duplicate = (

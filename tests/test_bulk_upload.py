@@ -46,6 +46,22 @@ def test_accept_is_durable_and_idempotent(client, db_session, monkeypatch, tmp_p
     assert conflict.status_code == 409
 
 
+def test_idempotent_replay_is_returned_even_after_capacity_is_exhausted(client, db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, "queue-owner:quota-replay")
+    content = b"%PDF-1.4 replay"
+    sha = hashlib.sha256(content).hexdigest()
+    fields = {"batch_id": batch_id, "client_id": "replay", "sha256": sha}
+    first = client.post("/api/uploads/files", data=fields, files={"file": ("replay.pdf", content, "application/pdf")})
+    assert first.status_code == 202
+    ledger = db_session.get(UploadCapacity, 1)
+    ledger.reserved_files = 1000
+    db_session.commit()
+    replay = client.post("/api/uploads/files", data=fields, files={"file": ("replay.pdf", content, "application/pdf")})
+    assert replay.status_code == 202
+    assert replay.json()["file_id"] == first.json()["file_id"]
+
+
 def test_preflight_and_snapshot_are_bounded(client, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "workdir", str(tmp_path))
     batch_id = _batch(client, "queue-owner:page")
@@ -72,6 +88,46 @@ def test_rejects_mime_mismatch_before_writing(client, monkeypatch, tmp_path):
         files={"file": ("bad.pdf", content, "application/pdf")},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("filename", "content_type", "content", "expected"),
+    [
+        ("generic.pdf", "application/octet-stream", b"%PDF-1.7 generic", "application/pdf"),
+        ("missing.pdf", None, b"%PDF-1.7 missing", "application/pdf"),
+        ("photo.jpg", "image/jpg", b"\xff\xd8\xff\xe0jpeg", "image/jpeg"),
+    ],
+)
+def test_accepts_generic_or_aliased_mime_for_real_file_signatures(
+    client, db_session, monkeypatch, tmp_path, filename, content_type, content, expected
+):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, f"queue-owner:mime-{filename}")
+    fields = {"batch_id": batch_id, "client_id": filename, "sha256": hashlib.sha256(content).hexdigest()}
+    uploaded = client.post(
+        "/api/uploads/files",
+        data=fields,
+        files={"file": (filename, content, content_type)},
+    )
+    assert uploaded.status_code == 202, uploaded.text
+    assert uploaded.json()["file_id"]
+    assert db_session.get(FileRecord, uploaded.json()["file_id"]).mime_type == expected
+    assert client.get(f"/api/uploads/batches/{batch_id}").json()["items"][0]["state"] == "accepted"
+
+
+def test_accepts_generic_mime_for_signed_docx(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    content = io.BytesIO()
+    with zipfile.ZipFile(content, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+    payload = content.getvalue()
+    batch_id = _batch(client, "queue-owner:mime-docx")
+    response = client.post(
+        "/api/uploads/files",
+        data={"batch_id": batch_id, "client_id": "docx", "sha256": hashlib.sha256(payload).hexdigest()},
+        files={"file": ("report.docx", payload, "application/octet-stream")},
+    )
+    assert response.status_code == 202, response.text
 
 
 def test_ooxml_signature_and_generic_browser_mime_are_compatible(tmp_path):
@@ -223,12 +279,36 @@ def test_reconcile_uses_terminal_step_and_atomic_ledger_decrement(db_session, mo
     ledger = db_session.get(UploadCapacity, 1)
     assert item.state == "complete"
     assert (ledger.reserved_files, ledger.reserved_bytes) == (0, 0)
+    assert dispatch_uploads.reconcile_upload_states.run() == 0
+
+
+def test_reconcile_releases_exhausted_failure_and_deleted_file(db_session, monkeypatch):
+    batch = UploadBatch(id="failed", principal_id="p", client_batch_id="failed", total_files=2, total_bytes=20)
+    record = FileRecord(filehash="f" * 64, local_filename="/tmp/f", file_size=10, mime_type="application/pdf")
+    db_session.add_all((batch, record, UploadCapacity(id=1, reserved_files=2, reserved_bytes=20)))
+    db_session.flush()
+    failed = UploadItem(batch_id=batch.id, client_id="failed", principal_id="p", file_id=record.id,
+                        sha256="f" * 64, filename="f.pdf", size=10, state="failed", error="retries exhausted")
+    deleted = UploadItem(batch_id=batch.id, client_id="deleted", principal_id="p", file_id=None,
+                         sha256="d" * 64, filename="d.pdf", size=10, state="queued")
+    db_session.add_all((failed, deleted))
+    db_session.commit()
+    monkeypatch.setattr(dispatch_uploads, "SessionLocal", lambda: nullcontext(db_session))
+    assert dispatch_uploads.reconcile_upload_states.run() == 2
+    assert db_session.get(UploadCapacity, 1).reserved_files == 0
+    assert failed.capacity_released is True and failed.state == "failed"
+    assert deleted.capacity_released is True and deleted.state == "failed"
 
 
 def test_websocket_capacity_uses_browser_origin_and_session_auth(client, db_session, monkeypatch):
     from app.api import bulk_upload
 
-    monkeypatch.setattr(bulk_upload, "SessionLocal", lambda: db_session)
+    closed = []
+    class SessionProxy:
+        def __init__(self): self._db = db_session
+        def __getattr__(self, name): return getattr(self._db, name)
+        def close(self): closed.append(True)
+    monkeypatch.setattr(bulk_upload, "SessionLocal", SessionProxy)
     batch_id = _batch(client, "queue-owner:websocket")
     with client.websocket_connect(
         f"ws://localhost/api/uploads/events?batch_id={batch_id}", headers={"origin": "http://localhost"}
@@ -239,6 +319,7 @@ def test_websocket_capacity_uses_browser_origin_and_session_auth(client, db_sess
         assert socket.receive_json()["type"] == "snapshot"
         socket.send_text("capacity")
         assert socket.receive_json()["type"] == "capacity"
+    assert len(closed) >= 2
 
 
 def test_batches_are_scoped_to_authenticated_principal(client, monkeypatch):

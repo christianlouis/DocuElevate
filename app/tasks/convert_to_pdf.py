@@ -11,6 +11,7 @@ from celery import shared_task
 
 from app.config import settings
 from app.tasks.process_document import process_document
+from app.tasks.retry_config import mark_bulk_terminal_failure
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,8 @@ def convert_to_pdf(
     def progress(step: str, status: str, message: str, **kwargs: Any) -> None:
         """Attach conversion history to the original user-visible record."""
         log_task_progress(task_id, step, status, message, file_id=file_id, **kwargs)
+        if status == "failure":
+            mark_bulk_terminal_failure(file_id, f"{step}: {message}")
 
     progress("convert_to_pdf", "in_progress", f"Converting file: {os.path.basename(file_path)}")
 

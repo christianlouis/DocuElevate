@@ -25,6 +25,11 @@ _EXTENSION_MIME = {
     ".png": "image/png",
 }
 
+_MIME_ALIASES = {
+    "image/jpg": "image/jpeg",
+    "text/rtf": "application/rtf",
+}
+
 
 def _sync_directory(path: Path) -> None:
     directory_fd = os.open(str(path), os.O_RDONLY)
@@ -80,7 +85,7 @@ def stream_to_file(upload: Any, target: Path, expected_sha256: str, max_size: in
 
 
 def sniff_mime(filename: str, supplied: str | None, header: bytes = b"") -> str:
-    supplied = (supplied or "").split(";", 1)[0].strip().lower()
+    supplied = normalize_mime(supplied)
     filename = filename.lower()
     if header.startswith(b"%PDF-"):
         return "application/pdf"
@@ -101,3 +106,9 @@ def sniff_mime(filename: str, supplied: str | None, header: bytes = b"") -> str:
 
 def extension_mime(filename: str) -> str | None:
     return _EXTENSION_MIME.get(Path(filename).suffix.lower())
+
+
+def normalize_mime(value: str | None) -> str:
+    """Normalize browser MIME variants without treating generic MIME as a claim."""
+    value = (value or "").split(";", 1)[0].strip().lower()
+    return _MIME_ALIASES.get(value, value)
