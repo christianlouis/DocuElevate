@@ -215,6 +215,10 @@ def test_auth_capabilities_are_public_and_expose_current_legal_versions(la_clien
     assert data["email_verification_required"] is True
     assert data["terms_version"] == CURRENT_TERMS_VERSION
     assert data["privacy_version"] == CURRENT_PRIVACY_VERSION
+    # Public native clients use this token for the subsequent cookie-backed
+    # signup request; the capability response must never be cached.
+    assert "csrf_token" in data
+    assert resp.headers.get("cache-control") == "no-store"
 
 
 @pytest.mark.integration
