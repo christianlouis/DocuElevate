@@ -450,7 +450,7 @@ class TestUploadToWebDAV:
             mock_put.return_value = mock_response
 
             with pytest.raises(Exception):
-                upload_to_webdav.apply(args=[sample_text_file], kwargs={"file_id": 42}).get()
+                upload_to_webdav.__wrapped__(sample_text_file, file_id=42)
 
             # Check for failure log
             failure_calls = [call for call in mock_log.call_args_list if call[0][2] == "failure"]

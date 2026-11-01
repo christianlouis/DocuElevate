@@ -125,7 +125,7 @@ def db_session():
 
 
 @pytest.fixture(autouse=True)
-def _central_session_factory(db_session):
+def _central_session_factory(db_session, request):
     """Keep direct ``SessionLocal`` users on the test database.
 
     Request middleware and background helpers deliberately open their own
@@ -141,6 +141,22 @@ def _central_session_factory(db_session):
         bind=db_session.get_bind(),
     )
     with patch.object(database, "SessionLocal", test_session_factory):
+        # Upload task unit tests execute the Celery wrapper with synthetic IDs.
+        # Give those IDs real, shared-space records so the lifecycle fence is
+        # exercised without weakening its missing-file fail-closed behavior.
+        module_name = request.node.path.name
+        if module_name.startswith("test_upload_") or module_name == "test_send_to_all.py":
+            synthetic_ids = set(range(1, 51)) | {88, 99, 100, 123, 200, 300, 400, 456, 500}
+            for file_id in synthetic_ids:
+                db_session.add(
+                    FileRecord(
+                        id=file_id,
+                        filehash=f"test-file-{file_id}",
+                        local_filename=f"/tmp/test-file-{file_id}",
+                        file_size=0,
+                    )
+                )
+            db_session.flush()
         yield
 
 
