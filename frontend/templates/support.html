@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}DocuElevate – Support{% endblock %}
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-4xl">
+  <h1 class="text-4xl font-bold mb-4">Support</h1>
+  <p class="text-gray-700 mb-8">We help with account access, document processing and storage connections.</p>
+  <section class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-3">Contact</h2>
+    <p class="text-gray-700">For support, security reports, provider connection problems or data requests, email <a class="text-blue-600 hover:underline" href="mailto:docuelevate@christian-louis.de">docuelevate@christian-louis.de</a>. Please do not send document contents or passwords by email.</p>
+  </section>
+  <section class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-3">OAuth and storage connections</h2>
+    <p class="text-gray-700 mb-3">DocuElevate requests access only after you choose a provider connection. You can review the selected provider and requested access in its consent dialog. Provider tokens are stored encrypted and used for the operations you configure.</p>
+    <p class="text-gray-700">Google Drive, Dropbox and OneDrive are supported through their respective APIs. Apple Sign in and native iCloud document features are preparation items and are not represented as available features until their production flows are released.</p>
+  </section>
+  <section class="bg-amber-50 border border-amber-200 rounded-lg p-6">
+    <h2 class="text-2xl font-semibold mb-3">Account deletion</h2>
+    <p class="text-gray-700">Use the <a class="text-blue-600 hover:underline" href="/account/delete">account deletion page</a> for the current request process. Self-service deletion, including provider-token revocation, is still being completed.</p>
+  </section>
+</div>
+{% endblock %}

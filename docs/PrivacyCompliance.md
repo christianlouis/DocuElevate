@@ -1,21 +1,25 @@
 # Privacy & GDPR Compliance Guide
 
+> **Status note (1 November 2026):** This document describes intended controls and an internal operating model. It is not a legal opinion or certification that every jurisdictional requirement is currently met. Provider-specific OAuth and App Store evidence gates are tracked in [OAuth provider submissions](OAuthProviderSubmissionGuide.md); public policy text must be reconciled with the deployed instance before launch.
+
 This document details DocuElevate's privacy and data-protection compliance strategy for all supported markets.
 It is intended as an internal reference for developers, legal reviewers, and compliance officers.
 
 ## Supported Markets
 
+The market labels below describe the intended review scope, not a completed external certification. A deployment owner must confirm the applicable jurisdictions, processors, contracts and public notice before enabling production access.
+
 | Market | Primary Law(s) | Status |
 |---|---|---|
-| European Union (EU) / EEA | GDPR (Regulation 2016/679), ePrivacy Directive | ✅ Implemented |
-| Germany | GDPR + BDSG (Federal Data Protection Act) | ✅ Implemented |
-| United Kingdom | UK GDPR + Data Protection Act 2018 | ✅ Implemented |
-| Switzerland | nFADP (revised Federal Act on Data Protection, in force Sep 2023) | ✅ Implemented |
-| Ukraine | Law of Ukraine "On Personal Data Protection" No. 2297-VI | ✅ Implemented |
-| United States | CCPA/CPRA (California), VCDPA, CPA, CTDPA, UCPA (other states) | ✅ Implemented |
-| Canada | PIPEDA + Québec Law 25 (Bill 64) | ✅ Implemented |
-| Latin America | Brazil LGPD, Argentina PDPA, Mexico LFPDPPP, Colombia Ley 1581 | ✅ Implemented |
-| Asia-Pacific & Japan | Japan APPI, Australia Privacy Act 1988, South Korea PIPA, Singapore PDPA, India DPDP Act | ✅ Implemented |
+| European Union (EU) / EEA | GDPR (Regulation 2016/679), ePrivacy Directive | Controls documented; deployment evidence required |
+| Germany | GDPR + BDSG (Federal Data Protection Act) | Controls documented; deployment evidence required |
+| United Kingdom | UK GDPR + Data Protection Act 2018 | Controls documented; deployment evidence required |
+| Switzerland | nFADP (revised Federal Act on Data Protection, in force Sep 2023) | Controls documented; deployment evidence required |
+| Ukraine | Law of Ukraine "On Personal Data Protection" No. 2297-VI | Controls documented; deployment evidence required |
+| United States | CCPA/CPRA (California), VCDPA, CPA, CTDPA, UCPA (other states) | Controls documented; deployment evidence required |
+| Canada | PIPEDA + Québec Law 25 (Bill 64) | Controls documented; deployment evidence required |
+| Latin America | Brazil LGPD, Argentina PDPA, Mexico LFPDPPP, Colombia Ley 1581 | Controls documented; deployment evidence required |
+| Asia-Pacific & Japan | Japan APPI, Australia Privacy Act 1988, South Korea PIPA, Singapore PDPA, India DPDP Act | Controls documented; deployment evidence required |
 
 > **Out of scope:** Countries subject to German export control embargoes, China, and Russia are explicitly excluded.
 

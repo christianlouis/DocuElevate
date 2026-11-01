@@ -4,7 +4,7 @@
 {% block content %}
 <div class="container mx-auto px-4 py-8 max-w-4xl">
   <h1 class="text-4xl font-bold mb-6">{{ _("privacy.heading") }}</h1>
-  <p class="text-sm text-gray-500 mb-8">{{ _("privacy.last_updated") }} {{ build_date|default(current_date|default('April 7, 2024')) }}</p>
+  <p class="text-sm text-gray-500 mb-8">{{ _("privacy.last_updated") }} {{ policy_revision|default('November 1, 2026') }}</p>
 
   <!-- Table of Contents -->
   <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -114,6 +114,11 @@
     <p class="text-gray-700 mb-3">
       <strong>{{ _("privacy.s6_storage_label") }}</strong>
       {{ _("privacy.s6_storage_body") }}
+    </p>
+    <p class="text-gray-700 mb-3">
+      <strong>{{ _("privacy.s6_google_limited_use_label") }}</strong>
+      {{ _("privacy.s6_google_limited_use_body") }}
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" class="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>.
     </p>
     <p class="text-gray-700 mb-3">
       <strong>{{ _("privacy.s6_ai_label") }}</strong> {{ _("privacy.s6_ai_body") }}

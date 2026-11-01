@@ -25,6 +25,32 @@ class TestGeneralViews:
         response = client.get("/privacy")
         assert response.status_code == 200
 
+    def test_privacy_page_has_explicit_revision_and_oauth_disclosures(self, client):
+        """The public policy identifies its revision and describes provider limits."""
+        response = client.get("/privacy")
+        assert response.status_code == 200
+        content = response.content.lower()
+        assert b"november 1, 2026" in content
+        assert b"general-purpose ai" in content
+        assert b"apple sign in" in content
+        assert b"limited use" in content
+        assert b"developers.google.com/terms/api-services-user-data-policy" in content
+
+    def test_support_page_is_public_and_links_deletion(self, client):
+        """Provider review and support information must be reachable without login."""
+        response = client.get("/support")
+        assert response.status_code == 200
+        assert b"docuelevate@christian-louis.de" in response.content
+        assert b"/account/delete" in response.content
+
+    def test_account_deletion_page_is_honest_about_transition(self, client):
+        """The interim deletion page must not claim automated deletion exists."""
+        response = client.get("/account/delete")
+        assert response.status_code == 200
+        content = response.content.lower()
+        assert b"self-service deletion flow is not available yet" in content
+        assert b"self-service deletion is not available in the app yet" in content
+
     def test_privacy_page_contains_gdpr_rights(self, client):
         """Test the privacy page includes GDPR rights section."""
         response = client.get("/privacy")

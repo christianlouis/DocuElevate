@@ -2,7 +2,7 @@
 
 This document details the findings from a comprehensive audit of the DocuElevate mobile app against Apple's App Store Review Guidelines, Human Interface Guidelines (HIG), and privacy requirements. It covers all areas of compliance, risks for rejection, and recommendations.
 
-> **Last Audited:** March 2026
+> **Last Audited:** March 2026 (historical implementation review; not a current App Store approval)
 > **App Version:** 1.0.0
 > **Expo SDK:** 54.0.0
 > **Bundle ID:** `org.docuelevate.mobile`
@@ -11,14 +11,14 @@ This document details the findings from a comprehensive audit of the DocuElevate
 
 ## Executive Summary
 
-The DocuElevate mobile app is broadly compliant with Apple's App Store requirements. The following issues were identified and resolved as part of this audit:
+This is a historical implementation review. It is not evidence of current App Store readiness or an Apple approval. Current OAuth, account-deletion, native Apple Sign-In and iCloud status is tracked in the [OAuth provider submission guide](OAuthProviderSubmissionGuide.md). The following table records what the older audit claimed; each item must be revalidated against the current build and deployed server:
 
 | Issue | Severity | Status |
 |-------|----------|--------|
 | Unused `fetch` background mode declared | High | ✅ Fixed |
 | Missing privacy manifest for required reason APIs | High | ✅ Fixed |
-| No account deletion option (Guideline 5.1.1(v)) | Critical | ✅ Fixed |
-| No Privacy Policy / Terms of Service links in-app | High | ✅ Fixed |
+| No account deletion option (Guideline 5.1.1(v)) | Critical | Revalidate current deployed route |
+| No Privacy Policy / Terms of Service links in-app | High | Revalidate current build |
 | Emoji used as UI icons instead of platform-native icons | Medium | ✅ Fixed |
 | Missing app version display | Low | ✅ Fixed |
 | Unused `Switch` import in ProfileScreen | Low | ✅ Fixed |
@@ -102,12 +102,12 @@ Starting in Spring 2024, Apple requires a privacy manifest (`PrivacyInfo.xcpriva
 
 The privacy manifest is configured via `expo-build-properties` plugin in `app.json`, which ensures it is included in the generated Xcode project during EAS Build.
 
-### 2.5 Tracking & Analytics ✅
+### 2.5 Tracking & Analytics (historical observation; data-flow review required)
 
-- `NSPrivacyTracking: false` — the app does **not** track users.
-- `NSPrivacyCollectedDataTypes: []` — no data types are collected for tracking.
+- `NSPrivacyTracking: false` indicates that the declared tracking flag is false; it does not mean that the app collects no data.
+- `NSPrivacyCollectedDataTypes: []` is a declaration about the current manifest and must not be used as proof that server URL, account, document, OCR, cloud-storage or push data are absent. Reconcile the manifest with the deployed data flow before submission.
 - No analytics SDKs (Firebase Analytics, Amplitude, Mixpanel, etc.) are included.
-- No App Tracking Transparency (ATT) prompt is needed.
+- An App Tracking Transparency prompt is not indicated by the current SDK inventory, but the final decision requires a release-build data-flow inventory.
 
 ### 2.6 Encryption Declaration ✅
 
@@ -135,25 +135,25 @@ The privacy manifest is configured via `expo-build-properties` plugin in `app.js
 - The app does not display user-generated content publicly (documents are private to each user).
 - No copyrighted content is bundled with the app.
 
-### 3.3 Business (Guideline 3.1.x) ✅
+### 3.3 Business (Guideline 3.1.x) (revalidate for the submitted build)
 
 - The app does not include in-app purchases, subscriptions, or payment processing.
 - No physical goods or services are sold through the app.
-- Authentication is handled via self-hosted or enterprise SSO — no Apple Sign-In requirement applies (Apple Sign-In is required only when third-party social login options like Google/Facebook are offered as the primary login method; enterprise SSO to a self-hosted server is exempt).
+- Authentication and any social-login options must be evaluated against the submitted build. The repository currently contains optional Google, Microsoft, Apple and Dropbox OAuth clients, while the mobile client does not yet demonstrate native Apple Sign-In. Do not rely on the historical enterprise-SSO exception without documenting which login methods are enabled for the review build.
 
-### 3.4 Safety & Privacy (Guideline 5.x) ✅
+### 3.4 Safety & Privacy (Guideline 5.x) (release gates remain)
 
-- **5.1.1 Data Collection and Storage:** The app collects only what is necessary for its functionality (server URL, auth token, push token).
-- **5.1.1(v) Account Deletion:** ✅ Fixed. Users can now initiate account deletion from the Profile screen, which opens the server's account deletion page in the browser.
-- **5.1.2 Data Use and Sharing:** No data is shared with third parties or used for advertising.
+- **5.1.1 Data Collection and Storage:** The mobile app handles server configuration, authentication/session data, push tokens and user-selected document content; the server may process document content, OCR metadata and configured cloud-storage transfers. The final privacy labels must reflect the actual deployed configuration and data recipients.
+- **5.1.1(v) Account Deletion:** The mobile client opens the configured server's account-deletion URL. The current repository audit did not establish a complete user-facing deletion workflow at that URL; this remains a release gate. See the [OAuth provider submission guide](OAuthProviderSubmissionGuide.md).
+- **5.1.2 Data Use and Sharing:** The product has no advertising purpose in the reviewed configuration, but user-initiated document processing can transfer content to configured OCR, AI and storage providers. Provider names, purposes, retention and consent text must be reconciled before submission.
 
-### 3.5 Privacy Policy ✅ (Fixed)
+### 3.5 Privacy Policy (historical links; revalidate before submission)
 
 - **Requirement:** Apple requires all apps to have an accessible privacy policy.
-- **Fix:** Privacy Policy and Terms of Service links are now accessible from the Profile screen, opening the server's hosted policy pages.
+- **Status:** The historical audit observed policy links in the Profile screen. Reconfirm the exact deployed URLs and content before submission.
 - **App Store Connect:** The privacy policy URL must also be provided in App Store Connect during submission.
 
-### 3.6 Login & Authentication ✅
+### 3.6 Login & Authentication (historical implementation notes)
 
 - Two login methods are available: SSO (browser-based OAuth) and QR code scanning.
 - Both methods provide clear error messages on failure.
@@ -265,15 +265,15 @@ The app declares `supportsTablet: true`. Ensure:
 | Human Interface Guidelines | ✅ Pass | Ionicons used for platform-consistent iconography |
 | App Icons & Visual Assets | ✅ Pass | All required assets provided |
 | Device Data Usage | ✅ Pass | Camera, photos, notifications properly handled |
-| Privacy Disclosures | ✅ Pass | Info.plist keys and privacy manifest configured |
+| Privacy Disclosures | Revalidate | Info.plist keys and privacy manifest require a release-build data-flow inventory |
 | Background Modes | ✅ Pass | Only `remote-notification` declared |
 | Restricted APIs | ✅ Pass | No private or deprecated APIs used |
 | Content Standards | ✅ Pass | No misleading or inappropriate content |
-| Functionality | ✅ Pass | Complete, functional app experience |
-| Business Model | ✅ Pass | No IAP conflicts |
-| Safety & Privacy | ✅ Pass | Account deletion available, privacy policy linked |
+| Functionality | Revalidate | Historical audit only; review current build and deployed server |
+| Business Model | Revalidate | Login methods and product configuration must match submitted build |
+| Safety & Privacy | Release gates open | Account deletion and provider data flows require evidence |
 | Onboarding | ✅ Pass | Clear, permission-respectful first-run experience |
-| Privacy Manifest | ✅ Pass | Required reason APIs declared |
+| Privacy Manifest | Revalidate | Declarations must match actual collected data and release build |
 
 ---
 

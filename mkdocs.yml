@@ -71,3 +71,4 @@ nav:
   - Compliance:
       - Licensing: LicensingCompliance.md
       - Privacy & GDPR: PrivacyCompliance.md
+      - OAuth provider submissions: OAuthProviderSubmissionGuide.md
