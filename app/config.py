@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     ai_provider: str = "openai"
     # Override model for any provider; falls back to openai_model when not set
     ai_model: Optional[str] = None
+
+    # Optional distributed upstream admission control.  Zero means unlimited;
+    # when enabled, Redis outages fail closed so workers cannot amplify a 429.
+    provider_limits_enabled: bool = False
+    provider_limits_rpm: int = Field(default=0, ge=0, description="Requests per minute per provider/model/credential.")
+    provider_limits_tpm: int = Field(default=0, ge=0, description="Estimated input tokens per minute per provider/model/credential.")
+    provider_limits_pages_per_minute: int = Field(default=0, ge=0, description="Document pages per minute for OCR providers.")
+    provider_limits_concurrency: int = Field(default=0, ge=0, description="Concurrent in-flight calls per provider/model/credential.")
+    provider_limits_lease_seconds: int = Field(default=300, ge=10, le=3600)
     # Independent model for document-grounded RAG answers. This remains
     # separate from metadata/OCR model selection and is live-reloadable from
     # the database-backed settings service.

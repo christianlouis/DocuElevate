@@ -13,9 +13,11 @@ See the Configuration Guide for full details on each provider's settings.
 import logging
 import re
 from abc import ABC, abstractmethod
+from functools import wraps
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
+from app.utils.provider_limits import ProviderRateLimited, acquire, release, retry_after_from_exception
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,33 @@ class AIProvider(ABC):
     plain string.  The interface intentionally mirrors the OpenAI Chat
     Completions API so that callers need no provider-specific knowledge.
     """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Wrap every concrete call with the optional distributed limiter."""
+        super().__init_subclass__(**kwargs)
+        method = cls.__dict__.get("chat_completion")
+        if method is None or getattr(method, "_provider_limited", False):
+            return
+
+        @wraps(method)
+        def limited(self: "AIProvider", messages: List[Dict[str, str]], model: str, *args: Any, **call_kwargs: Any) -> str:
+            estimated_tokens = max(1, sum(len(str(item.get("content", ""))) for item in messages) // 3)
+            credential = getattr(self, "_api_key", None) or settings.openai_api_key
+            lease = acquire(cls.__name__.removesuffix("Provider").lower(), model, credential=credential, tokens=estimated_tokens)
+            try:
+                return method(self, messages, model, *args, **call_kwargs)
+            except Exception as exc:
+                status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+                if status == 429:
+                    raise ProviderRateLimited(
+                        f"Upstream rate limit for {cls.__name__}", retry_after_from_exception(exc)
+                    ) from exc
+                raise
+            finally:
+                release(lease, tokens=estimated_tokens)
+
+        limited._provider_limited = True
+        cls.chat_completion = limited  # type: ignore[assignment]
 
     @abstractmethod
     def chat_completion(

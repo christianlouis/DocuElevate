@@ -148,7 +148,8 @@ class BaseTaskWithRetry(Task):
         :attr:`retry_delays` and :attr:`retry_jitter` settings.
         """
         if countdown is None and eta is None:
-            countdown = compute_countdown(
+            hinted = getattr(exc, "retry_after", None) if exc is not None else None
+            countdown = max(1, int(float(hinted))) if hinted is not None else compute_countdown(
                 retries=self.request.retries,
                 base_delays=self._effective_retry_delays(),
                 jitter=self.retry_jitter,
