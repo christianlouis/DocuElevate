@@ -245,6 +245,7 @@ def convert_to_pdfa(self, file_id: int) -> dict:
 
         original_path = file_record.original_file_path
         processed_path = file_record.processed_file_path
+        owner_id = file_record.owner_id
 
     pdfa_format = settings.pdfa_format
     timestamp_enabled = settings.pdfa_timestamp_enabled
@@ -394,7 +395,7 @@ def convert_to_pdfa(self, file_id: int) -> dict:
     folder_overrides = _compute_pdfa_folder_overrides()
 
     if settings.pdfa_upload_original and "original_pdfa_path" in results:
-        from app.tasks.send_to_all import send_to_all_destinations
+        from app.tasks.send_to_all import dispatch_document_destinations
 
         logger.info(f"[{task_id}] Uploading original PDF/A to storage providers")
         log_task_progress(
@@ -404,10 +405,10 @@ def convert_to_pdfa(self, file_id: int) -> dict:
             "Uploading original PDF/A to storage providers",
             file_id=file_id,
         )
-        send_to_all_destinations.delay(
+        dispatch_document_destinations(
             results["original_pdfa_path"],
-            True,
-            file_id,
+            owner_id=owner_id,
+            file_id=file_id,
             folder_overrides=folder_overrides if folder_overrides else None,
         )
         log_task_progress(
@@ -419,7 +420,7 @@ def convert_to_pdfa(self, file_id: int) -> dict:
         )
 
     if settings.pdfa_upload_processed and "processed_pdfa_path" in results:
-        from app.tasks.send_to_all import send_to_all_destinations
+        from app.tasks.send_to_all import dispatch_document_destinations
 
         logger.info(f"[{task_id}] Uploading processed PDF/A to storage providers")
         log_task_progress(
@@ -429,10 +430,10 @@ def convert_to_pdfa(self, file_id: int) -> dict:
             "Uploading processed PDF/A to storage providers",
             file_id=file_id,
         )
-        send_to_all_destinations.delay(
+        dispatch_document_destinations(
             results["processed_pdfa_path"],
-            True,
-            file_id,
+            owner_id=owner_id,
+            file_id=file_id,
             folder_overrides=folder_overrides if folder_overrides else None,
         )
         log_task_progress(

@@ -38,9 +38,9 @@ FTP         credentials = {"password"}
 SFTP        credentials = {"password"} or {"private_key"}
             config      = {"host", "username", "port", "folder"}
 
-EMAIL       credentials = {"password"}
+EMAIL       credentials = {"username", "password"}
             config      = {"host", "username", "port", "recipient",
-                           "use_tls", "sender_name"}
+                           "use_tls", "sender", "sender_name"}
 
 PAPERLESS   credentials = {"api_token"}
             config      = {"host"}
@@ -170,6 +170,8 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
 
+    from app.tasks.upload_to_google_drive import extract_metadata_from_file, truncate_property_value
+
     folder_id = cfg.get("folder_id") or ""
     filename = os.path.basename(file_path)
 
@@ -207,8 +209,27 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     if folder_id:
         file_metadata["parents"] = [folder_id]
 
+    if cfg.get("include_metadata", True):
+        metadata = extract_metadata_from_file(file_path)
+        if metadata:
+            properties = {}
+            for key, value in metadata.items():
+                if not isinstance(value, (dict, list)):
+                    properties[key] = truncate_property_value(key, value)
+            file_metadata["properties"] = properties
+            file_metadata["appProperties"] = {"docuelevate": "true"}
+            file_metadata["description"] = "Document Metadata:\n\n```json\n" + json.dumps(metadata, indent=2) + "\n```"
+
     media = MediaFileUpload(file_path, mimetype="application/pdf", resumable=True)
-    file_obj = service.files().create(body=file_metadata, media_body=media, fields="id,name,webViewLink").execute()
+    file_obj = (
+        service.files()
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id,name,webViewLink,properties,appProperties,description",
+        )
+        .execute()
+    )
 
     gdrive_id = file_obj.get("id")
     web_link = file_obj.get("webViewLink")
@@ -386,20 +407,34 @@ def _upload_sftp(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], tas
     folder = cfg.get("folder") or ""
     password = creds.get("password") or ""
     private_key_text = creds.get("private_key") or ""
+    private_key_passphrase = creds.get("private_key_passphrase") or ""
     filename = os.path.basename(file_path)
 
     if not host:
         raise ValueError("SFTP integration is missing host in config")
 
     ssh = paramiko.SSHClient()
-    ssh.load_system_host_keys()
+    known_hosts_file = getattr(settings, "sftp_known_hosts_file", None) or cfg.get("known_hosts_file")
+    if known_hosts_file:
+        ssh.load_host_keys(known_hosts_file)
+    else:
+        ssh.load_system_host_keys()
     ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
 
     connect_kwargs: dict[str, Any] = {"hostname": host, "port": port, "username": username}
     if private_key_text:
         import io
 
-        pkey = paramiko.RSAKey.from_private_key(io.StringIO(private_key_text))
+        key_kwargs = {"password": private_key_passphrase} if private_key_passphrase else {}
+        pkey = None
+        for key_type in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey):
+            try:
+                pkey = key_type.from_private_key(io.StringIO(private_key_text), **key_kwargs)
+                break
+            except (paramiko.SSHException, ValueError):
+                continue
+        if pkey is None:
+            raise ValueError("SFTP private_key could not be parsed")
         connect_kwargs["pkey"] = pkey
     elif password:
         connect_kwargs["password"] = password
@@ -427,6 +462,8 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
 
     import requests as _requests
 
+    from app.tasks.upload_to_paperless import normalize_metadata_value
+
     host = (cfg.get("host") or "").rstrip("/")
     api_token = creds.get("api_token") or ""
     filename = os.path.basename(file_path)
@@ -439,6 +476,12 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     headers = {"Authorization": f"Token {api_token}"}
     post_url = f"{host}/api/documents/post_document/"
 
+    metadata = {}
+    metadata_path = os.path.splitext(file_path)[0] + ".json"
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r", encoding="utf-8") as fh:
+            metadata = json.load(fh)
+
     with open(file_path, "rb") as fh:
         resp = _requests.post(
             post_url,
@@ -450,7 +493,8 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     resp.raise_for_status()
     raw_task_id = resp.text.strip().strip('"').strip("'")
 
-    # Poll for completion (up to 30 s)
+    # Poll for completion (up to 30 s). A timeout is a failed upload, never a
+    # successful personal destination delivery.
     task_url = f"{host}/api/tasks/"
     doc_id = None
     for _ in range(10):
@@ -474,34 +518,90 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
         except Exception as poll_exc:
             logger.warning("[%s] Paperless poll error: %s", task_id, poll_exc)
 
+    if doc_id is None:
+        raise TimeoutError(f"Paperless task {raw_task_id} did not complete")
+
+    custom_fields = {}
+    mapping = cfg.get("custom_fields_mapping")
+    if isinstance(mapping, str):
+        mapping = json.loads(mapping)
+    if mapping:
+        for metadata_key, paperless_field in mapping.items():
+            value = normalize_metadata_value(metadata.get(metadata_key))
+            if value:
+                custom_fields[paperless_field] = value
+    legacy_field = cfg.get("custom_field_absender")
+    if legacy_field and legacy_field not in custom_fields:
+        value = normalize_metadata_value(metadata.get("absender"))
+        if value:
+            custom_fields[legacy_field] = value
+    if custom_fields:
+        fields = []
+        field_resp = _requests.get(f"{host}/api/custom_fields/", headers=headers, timeout=30)
+        field_resp.raise_for_status()
+        raw_fields = field_resp.json()
+        for field_name, value in custom_fields.items():
+            available = raw_fields.get("results", []) if isinstance(raw_fields, dict) else raw_fields
+            match = next((item for item in available if item.get("name") == field_name), None)
+            if match:
+                fields.append({"field": match["id"], "value": value})
+        if fields:
+            patch_resp = _requests.patch(
+                f"{host}/api/documents/{doc_id}/",
+                headers=headers,
+                json={"custom_fields": fields},
+                timeout=30,
+            )
+            patch_resp.raise_for_status()
+
     logger.info("[%s] Paperless upload complete: doc_id=%s", task_id, doc_id)
     return {"status": "Completed", "paperless_host": host, "paperless_document_id": doc_id}
 
 
-def _upload_email(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
+def _upload_email(
+    file_path: str,
+    cfg: dict[str, Any],
+    creds: dict[str, Any],
+    task_id: str,
+    *,
+    file_id: int | None = None,
+) -> dict[str, Any]:
     """Send *file_path* as an email attachment using per-user SMTP credentials."""
     import smtplib
     from email.mime.application import MIMEApplication
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+    from email.utils import parseaddr
 
     host = cfg.get("host") or ""
     port = int(cfg.get("port") or 587)
-    username = cfg.get("username") or ""
+    username = creds.get("username") or cfg.get("username") or ""
     recipient = cfg.get("recipient") or ""
     use_tls = cfg.get("use_tls", True)
     sender_name = cfg.get("sender_name") or "DocuElevate"
+    sender = cfg.get("sender") or ""
     password = creds.get("password") or ""
     filename = os.path.basename(file_path)
 
     if not (host and recipient):
         raise ValueError("Email integration is missing host or recipient in config")
 
+    # Postmark and similar SMTP providers use a token as the login username.
+    # Never put that credential in the message headers; use an explicit sender
+    # address, with a legacy username fallback only when it is an email.
+    sender = sender.strip() or username.strip()
+    parsed_sender = parseaddr(sender)[1]
+    if not parsed_sender or parsed_sender != sender or "@" not in parsed_sender:
+        raise ValueError("Email integration requires a valid sender address in config")
+
     msg = MIMEMultipart()
-    msg["From"] = f"{sender_name} <{username}>" if username else sender_name
+    msg["From"] = f"{sender_name} <{sender}>" if sender_name else sender
     msg["To"] = recipient
     msg["Subject"] = f"Document: {filename}"
-    msg.attach(MIMEText(f"Please find the attached document: {filename}", "plain"))
+    body = f"Please find the attached document: {filename}"
+    if file_id is not None:
+        body += f"\n\nView it in DocuElevate: https://app.docuelevate.org/files/{file_id}"
+    msg.attach(MIMEText(body, "plain"))
 
     with open(file_path, "rb") as fh:
         part = MIMEApplication(fh.read(), Name=filename)
@@ -885,6 +985,8 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
             result = handler(file_path, cfg, creds, task_id, file_id=file_id)
             notion_page_created = True
         elif itype == IntegrationType.EVERNOTE:
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
+        elif itype == IntegrationType.EMAIL:
             result = handler(file_path, cfg, creds, task_id, file_id=file_id)
         else:
             result = handler(file_path, cfg, creds, task_id)

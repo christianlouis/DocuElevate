@@ -368,6 +368,15 @@ class Settings(BaseSettings):
             "Requires auth_enabled=True. Default: False (auth-free compatibility fallback)."
         ),
     )
+    strict_user_destination_routing: bool = Field(
+        default=False,
+        description=(
+            "Route owned documents only to the owner's active destinations. "
+            "When enabled, destination lookup failures and missing personal destinations "
+            "are retried instead of falling back to global destinations. Default: False "
+            "for backward-compatible rollout."
+        ),
+    )
     default_daily_upload_limit: int = Field(
         default=0,
         description=(
@@ -787,6 +796,7 @@ class Settings(BaseSettings):
     sftp_folder: Optional[str] = None
     sftp_private_key: Optional[str] = None
     sftp_private_key_passphrase: Optional[str] = None
+    sftp_known_hosts_file: Optional[str] = None
     # Security: Host key verification is enabled by default for security
     # In development/testing, set to True to disable verification (not recommended)
     sftp_disable_host_key_verification: bool = False  # Default enforces host key verification

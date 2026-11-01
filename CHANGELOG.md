@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+
+## v0.192.0 (2026-11-01)
+
+### Documentation
+
+- Define user-specific integration acceptance
+  ([`8f4564d`](https://github.com/christianlouis/DocuElevate/commit/8f4564ddc0043cfcc469a0c27a5aa403cea08e0f))
+
+- **changelog**: Update changelog [skip ci]
+  ([`fe4a5a4`](https://github.com/christianlouis/DocuElevate/commit/fe4a5a42521960306655edf67a0537c2bb6f8056))
+
+### Features
+
+- Route documents through personal source profiles and destinations
+  ([`acd0efa`](https://github.com/christianlouis/DocuElevate/commit/acd0efa2624a4b6a9c017abdc1693d36e857dde8))
+
+
+## Unreleased
+
 ### Documentation
 
 - Define user-specific integration acceptance

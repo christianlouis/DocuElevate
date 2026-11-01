@@ -473,8 +473,31 @@ def file_detail_page(request: Request, file_id: int, db: Session = Depends(get_d
         # Resolve the pipeline assigned to this file (explicit or inferred default)
         pipeline_info = _resolve_pipeline(db, file_record)
 
+        # Resolve active personal destinations for safe, human-readable branch labels.
+        destination_labels = {}
+        if file_record.owner_id:
+            from app.models import IntegrationDirection, UserIntegration
+
+            integrations = (
+                db.query(UserIntegration)
+                .filter(
+                    UserIntegration.owner_id == file_record.owner_id,
+                    UserIntegration.direction == IntegrationDirection.DESTINATION,
+                    UserIntegration.is_active.is_(True),
+                )
+                .all()
+            )
+            destination_labels = {
+                f"upload_to_user_integration_{integration.id}": integration.name or integration.integration_type
+                for integration in integrations
+            }
+
         # Compute processing flow for visualization — filter to pipeline steps when available
-        flow_data = _compute_processing_flow(logs, pipeline_steps=pipeline_info["steps"] if pipeline_info else None)
+        flow_data = _compute_processing_flow(
+            logs,
+            pipeline_steps=pipeline_info["steps"] if pipeline_info else None,
+            destination_labels=destination_labels,
+        )
 
         from app.utils.pdf_security import ENCRYPTED_PDF_ERROR_CODE
 
@@ -693,7 +716,7 @@ def _resolve_pipeline(db: Session, file_record) -> dict | None:
     }
 
 
-def _compute_processing_flow(logs, pipeline_steps=None):
+def _compute_processing_flow(logs, pipeline_steps=None, destination_labels=None):
     """
     Compute the processing flow structure from logs for visualization.
 
@@ -706,6 +729,8 @@ def _compute_processing_flow(logs, pipeline_steps=None):
             When provided, the set of stages shown is filtered to only those that
             correspond to the pipeline's enabled steps (plus bookkeeping stages like
             ``create_file_record`` and any stage that actually ran in the logs).
+        destination_labels: optional mapping of user-integration upload task
+            names to safe display labels, populated by the owning file view.
     """
     from app.utils.pdf_security import ENCRYPTED_PDF_ERROR_CODE
 
@@ -909,8 +934,9 @@ def _compute_processing_flow(logs, pipeline_steps=None):
                 branch_status = latest_upload["status"]
                 if latest_upload["is_queue"] and branch_status in {"success", "pending"}:
                     branch_status = "queued"
-                upload_name = upload_tasks.get(
-                    upload_key, upload_key.removeprefix("upload_to_").replace("_", " ").title()
+                upload_name = (destination_labels or {}).get(
+                    upload_key,
+                    upload_tasks.get(upload_key, upload_key.removeprefix("upload_to_").replace("_", " ").title()),
                 )
 
                 branches.append(
