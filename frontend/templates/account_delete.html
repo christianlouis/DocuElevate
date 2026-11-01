@@ -1,20 +1,14 @@
 {% extends "base.html" %}
 {% block title %}DocuElevate – Delete account{% endblock %}
 {% block content %}
-<div class="container mx-auto px-4 py-8 max-w-3xl">
-  <h1 class="text-4xl font-bold mb-4">Delete your DocuElevate account</h1>
-  <div class="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-6">
-    <p class="font-semibold text-gray-900 mb-2">The self-service deletion flow is not available yet.</p>
-    <p class="text-gray-700">Until it is released, request deletion by emailing <a class="text-blue-600 hover:underline" href="mailto:docuelevate@christian-louis.de?subject=DocuElevate%20account%20deletion">docuelevate@christian-louis.de</a>. Include the account email address, but never include a password or document content.</p>
-  </div>
-  <section class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 class="text-2xl font-semibold mb-3">What will be handled</h2>
-    <p class="text-gray-700">The deletion request covers the DocuElevate account, account profile, stored source documents, OCR output, document metadata and configured integration credentials. Copies already written to a connected provider are managed under that provider's controls and may need separate removal there. We will review connected grants and queued processing as part of the completed deletion procedure.</p>
-  </section>
-  <section class="bg-white shadow rounded-lg p-6">
-    <h2 class="text-2xl font-semibold mb-3">Current process</h2>
-    <p class="text-gray-700">This is an interim, manual process. We will confirm the request and handle deletion under the privacy notice; self-service deletion is not available in the app yet.</p>
-    <p class="mt-4"><a class="text-blue-600 hover:underline" href="/privacy">Read the privacy notice</a> · <a class="text-blue-600 hover:underline" href="/support">Contact support</a></p>
-  </section>
-</div>
+<main x-data="accountDeletion" class="max-w-2xl mx-auto px-4 py-10">
+<h1 class="text-3xl font-bold mb-4">Delete your DocuElevate account</h1>
+<p class="mb-4">This permanently deletes your account and DocuElevate data, including documents, processing records, shares and device tokens.</p>
+<p class="text-sm text-gray-600 mb-6">Copies exported or shared with other services, provider data and legally required backups may remain outside DocuElevate.</p>
+<div x-show="error" x-cloak role="alert" x-text="error"></div><div x-show="success" x-cloak role="status" x-text="success"></div>
+<form @submit.prevent="submit"><label for="delete-confirmation">Type <strong>DELETE MY ACCOUNT</strong> to confirm</label><input id="delete-confirmation" x-model="confirmation" autocomplete="off" required><p>This action cannot be undone.</p><button type="submit" :disabled="loading || confirmation !== 'DELETE MY ACCOUNT'"><span x-show="!loading">Delete account permanently</span><span x-show="loading" x-cloak>Deleting…</span></button></form>
+</main>
+<script>
+document.addEventListener('alpine:init', () => Alpine.data('accountDeletion', () => ({confirmation:'',loading:false,error:'',success:'',async submit(){if(this.confirmation!=='DELETE MY ACCOUNT')return;this.loading=true;this.error='';try{const r=await fetch('/api/account',{method:'DELETE',headers:{'Content-Type':'application/json','X-CSRF-Token':'{{ csrf_token }}'},body:JSON.stringify({confirmation:this.confirmation})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'Account deletion failed.');this.success='Your account and DocuElevate data were deleted. External copies and backups may remain.';this.confirmation='';}catch(e){this.error=e.message||'Account deletion failed.'}finally{this.loading=false}}})));
+</script>
 {% endblock %}

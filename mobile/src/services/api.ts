@@ -210,6 +210,11 @@ class DocuElevateAPI {
     return this.request<WhoAmIResponse>("GET", "/api/mobile/whoami");
   }
 
+  /** Permanently delete the authenticated account and owned DocuElevate data. */
+  async deleteAccount(confirmation: string): Promise<{ status: string; files_deleted?: number }> {
+    return this.request("DELETE", "/api/account", { body: { confirmation } });
+  }
+
   /** Sync the user's preferred UI language to the server. */
   async setServerLanguage(lang: string): Promise<void> {
     await this.request("POST", "/api/i18n/language", { body: { language: lang } });

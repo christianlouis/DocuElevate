@@ -46,6 +46,14 @@
                                aria-required="true"
                                style="min-height:44px">
                     </div>
+                    <label class="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="checkbox" required x-model="terms_accepted" class="mt-1" aria-required="true">
+                        <span>I accept the <a href="/terms" target="_blank" rel="noopener" class="text-blue-600 underline">Terms of Service</a>.</span>
+                    </label>
+                    <label class="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="checkbox" required x-model="privacy_accepted" class="mt-1" aria-required="true">
+                        <span>I have read the <a href="/privacy" target="_blank" rel="noopener" class="text-blue-600 underline">Privacy Policy</a>.</span>
+                    </label>
                     <div>
                         <label for="username" class="block text-sm font-medium text-gray-700">{{ _("auth.username_label") }} <span aria-hidden="true" class="text-red-500">*</span></label>
                         <input type="text"
@@ -132,6 +140,8 @@
                     display_name: '',
                     password: '',
                     password_confirm: '',
+                    terms_accepted: false,
+                    privacy_accepted: false,
                     loading: false,
                     error: '',
                     i18n: {
@@ -168,7 +178,9 @@
                                     username: this.username,
                                     display_name: this.display_name || null,
                                     password: this.password,
-                                    password_confirm: this.password_confirm
+                                    password_confirm: this.password_confirm,
+                                    terms_accepted: this.terms_accepted,
+                                    privacy_accepted: this.privacy_accepted
                                 })
                             });
                             if (resp.ok) {
