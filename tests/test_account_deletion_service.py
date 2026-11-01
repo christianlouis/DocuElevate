@@ -355,3 +355,38 @@ def test_foreign_routing_rule_blocks_before_fence_or_file_deletion(deletion_db):
     assert path.read_bytes() == b"data"
     assert db.query(AccountDeletionTombstone).count() == 0
     assert db.query(FileRecord).filter_by(owner_id="alice").count() == 1
+
+
+def test_never_used_index_mode_skips_only_disabled_indexes(monkeypatch):
+    from app.config import settings
+    from app.services.account_deletion import _delete_external_indexes
+
+    monkeypatch.setattr(settings, "meilisearch_deletion_mode", "never_used")
+    monkeypatch.setattr(settings, "vector_index_deletion_mode", "never_used")
+    monkeypatch.setattr(settings, "enable_search", False)
+    monkeypatch.setattr(settings, "vector_index_enabled", False)
+    monkeypatch.setattr(settings, "meilisearch_url", "")
+    monkeypatch.setattr(settings, "vector_index_url", "")
+    _delete_external_indexes("alice", [1])
+
+
+def test_never_used_mode_rejects_enabled_index(monkeypatch):
+    from app.config import settings
+    from app.services.account_deletion import _delete_external_indexes
+
+    monkeypatch.setattr(settings, "meilisearch_deletion_mode", "never_used")
+    monkeypatch.setattr(settings, "enable_search", True)
+    with pytest.raises(RuntimeError, match="never_used"):
+        _delete_external_indexes("alice", [1])
+
+
+def test_managed_disabled_index_still_requires_cleanup(monkeypatch):
+    from app.config import settings
+    from app.services.account_deletion import _delete_external_indexes
+
+    monkeypatch.setattr(settings, "meilisearch_deletion_mode", "managed")
+    monkeypatch.setattr(settings, "meilisearch_url", "")
+    monkeypatch.setattr(settings, "vector_index_deletion_mode", "never_used")
+    monkeypatch.setattr(settings, "vector_index_enabled", False)
+    with pytest.raises(RuntimeError, match="Meilisearch"):
+        _delete_external_indexes("alice", [1])

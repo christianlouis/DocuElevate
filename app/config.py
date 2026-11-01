@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any, List, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -879,6 +879,10 @@ class Settings(BaseSettings):
     meilisearch_api_key: Optional[str] = None  # Master or API key (optional for local dev)
     meilisearch_index_name: str = "documents"
     enable_search: bool = True  # Enable Meilisearch full-text search integration
+    meilisearch_deletion_mode: Literal["managed", "never_used"] = Field(
+        default="managed",
+        description="Account deletion index contract. Use never_used only with an operator attestation that no historical data exists.",
+    )
 
     # HTTP request settings
     http_request_timeout: int = 120  # Default timeout for HTTP requests in seconds (handles large file operations)
@@ -1298,6 +1302,10 @@ class Settings(BaseSettings):
             "Export token-sized OCR text chunks to an external Qdrant index. "
             "Disabled by default so existing installations keep their current behaviour."
         ),
+    )
+    vector_index_deletion_mode: Literal["managed", "never_used"] = Field(
+        default="managed",
+        description="Account deletion vector-index contract. Use never_used only with an operator attestation that no historical data exists.",
     )
     vector_index_url: str = Field(
         default="http://qdrant:6333",

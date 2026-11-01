@@ -127,13 +127,18 @@ def _safe_paths_for_sharing(file: FileRecord, workdir: str | Path) -> list[Path]
 def _delete_external_indexes(owner_id: str, file_ids: list[int]) -> None:
     if not file_ids:
         return
-    if not settings.meilisearch_url or not settings.vector_index_url:
-        raise RuntimeError("Search or vector endpoint is missing; historical index cleanup cannot be verified")
-    import meilisearch
+    meili_mode = getattr(settings, "meilisearch_deletion_mode", "managed")
+    vector_mode = getattr(settings, "vector_index_deletion_mode", "managed")
+    if meili_mode == "never_used" and settings.enable_search:
+        raise RuntimeError("Meilisearch deletion mode never_used contradicts enabled search")
+    if vector_mode == "never_used" and settings.vector_index_enabled:
+        raise RuntimeError("Qdrant deletion mode never_used contradicts enabled vector indexing")
 
-    from app.utils.vector_index import QdrantVectorIndex
+    if meili_mode == "managed":
+        if not settings.meilisearch_url:
+            raise RuntimeError("Managed Meilisearch cleanup requires an endpoint")
+        import meilisearch
 
-    if settings.meilisearch_url:
         client = meilisearch.Client(url=settings.meilisearch_url, api_key=settings.meilisearch_api_key or None)
         try:
             index = client.get_index(settings.meilisearch_index_name)
@@ -150,7 +155,11 @@ def _delete_external_indexes(owner_id: str, file_ids: list[int]) -> None:
                 status = result.status if hasattr(result, "status") else result.get("status")
                 if status != "succeeded":
                     raise RuntimeError("Meilisearch deletion was not confirmed")
-    if settings.vector_index_url:
+    if vector_mode == "managed":
+        if not settings.vector_index_url:
+            raise RuntimeError("Managed Qdrant cleanup requires an endpoint")
+        from app.utils.vector_index import QdrantVectorIndex
+
         QdrantVectorIndex().delete_documents(file_ids, owner_id=owner_id)
 
 
