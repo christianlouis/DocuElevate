@@ -227,7 +227,7 @@ def files_page(
                 "mime_types": mime_types,
                 "upload_concurrency": settings.upload_concurrency,
                 "upload_queue_owner": hashlib.sha256(
-                    (get_current_owner_id(request) or "single-user").encode()
+                    (get_current_owner_id(request) or "single-user").encode(), usedforsecurity=False
                 ).hexdigest(),
                 "upload_max_file_size": settings.max_upload_size,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
@@ -246,7 +246,7 @@ def files_page(
                 "error": str(e),
                 "upload_concurrency": settings.upload_concurrency,
                 "upload_queue_owner": hashlib.sha256(
-                    (get_current_owner_id(request) or "single-user").encode()
+                    (get_current_owner_id(request) or "single-user").encode(), usedforsecurity=False
                 ).hexdigest(),
                 "upload_max_file_size": settings.max_upload_size,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,

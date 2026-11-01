@@ -93,7 +93,8 @@ def _client() -> redis.Redis:
 
 
 def _fingerprint(value: str | None) -> str:
-    return hashlib.sha256((value or "shared").encode()).hexdigest()[:16]
+    # This is a bounded, non-secret Redis key suffix, not password hashing.
+    return hashlib.sha256((value or "shared").encode(), usedforsecurity=False).hexdigest()[:16]
 
 
 def _limits(provider: str, model: str) -> tuple[int, int, int, int]:

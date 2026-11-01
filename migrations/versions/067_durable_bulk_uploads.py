@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "065_durable_bulk_uploads"
-down_revision = "064_scope_automation_hooks"
+revision = "067_durable_bulk_uploads"
+down_revision = "066_signup_consent"
 branch_labels = None
 depends_on = None
 
