@@ -80,15 +80,16 @@
     for (const item of items) {
       delete item.duplicateOf;
       if (!item.sha256 || item.state === 'failed') continue;
-      const candidates = seen.get(item.sha256) || [];
-      candidates.push(item);
+      const candidates = seen.get(item.sha256);
+      if (candidates) candidates.push(item); else seen.set(item.sha256, [item]);
+    }
+    for (const candidates of seen.values()) {
       // Prefer an admitted item, then a currently transferable item. A
       // needs_files entry must never suppress a reselected copy.
       const leader = candidates.find(candidate => candidate.fileId) || candidates.find(candidate => candidate.file);
-      seen.set(item.sha256, candidates);
       if (!leader) continue;
       for (const candidate of candidates) {
-        if (candidate.key === leader.key) { delete candidate.duplicateOf; continue; }
+        if (candidate.key === leader.key) continue;
         candidate.duplicateOf = leader.key;
         if (leader.fileId) { candidate.state = 'duplicate'; candidate.fileId = leader.fileId; }
       }

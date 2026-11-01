@@ -75,6 +75,23 @@ test('local SHA map marks later content duplicates before upload', () => {
   assert.equal(result[1].fileId, 77);
 });
 
+test('deduplicates 40000 identical files linearly with admitted leader preference', () => {
+  const { deduplicate } = helpers();
+  const items = Array.from({ length: 40000 }, (_, index) => ({
+    key: `client-${index}`, sha256: 'same-content', state: 'queued',
+    ...(index === 0 ? { state: 'needs_files' } : {}),
+    ...(index === 1 ? { file: {} } : {}),
+    ...(index === 2 ? { fileId: 9042 } : {})
+  }));
+  const result = deduplicate(items);
+  assert.equal(result[0].state, 'duplicate');
+  assert.equal(result[0].duplicateOf, 'client-2');
+  assert.equal(result[1].duplicateOf, 'client-2');
+  assert.equal(result[2].state, 'queued');
+  assert.equal(result[2].fileId, 9042);
+  assert.equal(result[39999].duplicateOf, 'client-2');
+});
+
 test('capacity zero pauses and a WebSocket-style update resumes bounded work', () => {
   const { selectReady } = helpers();
   const queue = [{ key: 'accepted', file: {size: 5}, fileId: 77, sha256: 'old', state: 'queued' }, { key: 'a', file: {size: 5}, sha256: 'a', state: 'queued' }, { key: 'b', file: {size: 5}, sha256: 'b', state: 'queued' }];
