@@ -63,9 +63,7 @@ def test_custom_endpoint_url_includes_bucket_and_encodes_key(tmp_path: Path):
             endpoint_url="https://s3.example.test",
         )
 
-    assert result["s3_url"] == (
-        "https://s3.example.test/secondary-bucket/archive/document%20with%20space.pdf"
-    )
+    assert result["s3_url"] == ("https://s3.example.test/secondary-bucket/archive/document%20with%20space.pdf")
 
 
 @pytest.mark.parametrize(
