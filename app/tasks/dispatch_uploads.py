@@ -170,14 +170,8 @@ def reconcile_upload_states(limit: int = 100) -> int:
             .outerjoin(terminal, UploadItem.file_id == terminal.c.file_id)
             .outerjoin(FileRecord, UploadItem.file_id == FileRecord.id)
             .filter(UploadItem.capacity_released.is_(False))
-            .filter(
-                UploadItem.state.in_(("accepted", "queued", "processing", "failed"))
-            )
-            .filter(
-                (UploadItem.state == "failed")
-                | (terminal.c.file_id.isnot(None))
-                | (FileRecord.id.is_(None))
-            )
+            .filter(UploadItem.state.in_(("accepted", "queued", "processing", "failed")))
+            .filter((UploadItem.state == "failed") | (terminal.c.file_id.isnot(None)) | (FileRecord.id.is_(None)))
             .order_by(UploadItem.id.asc())
             .limit(min(max(1, int(limit)), 500))
             .all()

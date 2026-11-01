@@ -55,7 +55,9 @@ execution. Upload replay prevents extra file records, but does not establish
 exactly-once downstream processing.
 
 Admission reservations are released when the existing pipeline records its
-terminal delivery-handoff step, or failure. Completion here does not certify
+terminal delivery-handoff step, or an exhausted/non-retryable failure. A durable
+one-time release marker prevents overlapping recovery jobs from releasing the
+same reservation twice. Completion here does not certify
 that every external destination has finished delivery; destination tasks retain
 their existing retry and status handling.
 

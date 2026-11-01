@@ -134,7 +134,10 @@ def test_ooxml_signature_and_generic_browser_mime_are_compatible(tmp_path):
     content = io.BytesIO()
     with zipfile.ZipFile(content, "w") as archive:
         archive.writestr("[Content_Types].xml", "<Types/>")
-    assert sniff_mime("report.docx", "application/octet-stream", b"PK\x03\x04") == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert (
+        sniff_mime("report.docx", "application/octet-stream", b"PK\x03\x04")
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
     assert sniff_mime("report.docx", "application/octet-stream", b"not-zip") == "application/octet-stream"
 
 
@@ -143,7 +146,9 @@ def test_stream_to_file_is_atomic_and_rejects_bad_hash(tmp_path):
 
     payload = b"durable bytes"
     target = tmp_path / "upload.pdf"
-    size, digest = stream_to_file(SimpleNamespace(file=io.BytesIO(payload)), target, hashlib.sha256(payload).hexdigest(), 100)
+    size, digest = stream_to_file(
+        SimpleNamespace(file=io.BytesIO(payload)), target, hashlib.sha256(payload).hexdigest(), 100
+    )
     assert (size, digest) == (len(payload), hashlib.sha256(payload).hexdigest())
     assert target.read_bytes() == payload
     with pytest.raises(ValueError, match="sha256"):
@@ -287,10 +292,27 @@ def test_reconcile_releases_exhausted_failure_and_deleted_file(db_session, monke
     record = FileRecord(filehash="f" * 64, local_filename="/tmp/f", file_size=10, mime_type="application/pdf")
     db_session.add_all((batch, record, UploadCapacity(id=1, reserved_files=2, reserved_bytes=20)))
     db_session.flush()
-    failed = UploadItem(batch_id=batch.id, client_id="failed", principal_id="p", file_id=record.id,
-                        sha256="f" * 64, filename="f.pdf", size=10, state="failed", error="retries exhausted")
-    deleted = UploadItem(batch_id=batch.id, client_id="deleted", principal_id="p", file_id=None,
-                         sha256="d" * 64, filename="d.pdf", size=10, state="queued")
+    failed = UploadItem(
+        batch_id=batch.id,
+        client_id="failed",
+        principal_id="p",
+        file_id=record.id,
+        sha256="f" * 64,
+        filename="f.pdf",
+        size=10,
+        state="failed",
+        error="retries exhausted",
+    )
+    deleted = UploadItem(
+        batch_id=batch.id,
+        client_id="deleted",
+        principal_id="p",
+        file_id=None,
+        sha256="d" * 64,
+        filename="d.pdf",
+        size=10,
+        state="queued",
+    )
     db_session.add_all((failed, deleted))
     db_session.commit()
     monkeypatch.setattr(dispatch_uploads, "SessionLocal", lambda: nullcontext(db_session))
@@ -304,10 +326,17 @@ def test_websocket_capacity_uses_browser_origin_and_session_auth(client, db_sess
     from app.api import bulk_upload
 
     closed = []
+
     class SessionProxy:
-        def __init__(self): self._db = db_session
-        def __getattr__(self, name): return getattr(self._db, name)
-        def close(self): closed.append(True)
+        def __init__(self):
+            self._db = db_session
+
+        def __getattr__(self, name):
+            return getattr(self._db, name)
+
+        def close(self):
+            closed.append(True)
+
     monkeypatch.setattr(bulk_upload, "SessionLocal", SessionProxy)
     batch_id = _batch(client, "queue-owner:websocket")
     with client.websocket_connect(
