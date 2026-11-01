@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+from typing import Any
 
 from app.config import settings
 
@@ -32,7 +33,7 @@ def safe_path(batch_id: str, item_id: str | int, filename: str) -> Path:
     return folder / f"{item_id}{suffix}"
 
 
-def stream_to_file(upload, target: Path, expected_sha256: str, max_size: int) -> tuple[int, str]:
+def stream_to_file(upload: Any, target: Path, expected_sha256: str, max_size: int) -> tuple[int, str]:
     """Write an upload atomically, verifying the client hash while streaming."""
     temporary = target.with_suffix(target.suffix + ".part")
     digest = hashlib.sha256()
