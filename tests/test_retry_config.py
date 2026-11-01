@@ -142,6 +142,15 @@ class TestBaseTaskWithRetryAttributes:
         """countdown must NOT be in retry_kwargs so our retry() override controls it."""
         assert "countdown" not in BaseTaskWithRetry.retry_kwargs
 
+    def test_subclass_retry_kwargs_are_isolated(self):
+        """A quota-specific subclass must not rewrite the base retry policy."""
+        subclass = type("QuotaTask", (BaseTaskWithRetry,), {})
+
+        subclass.retry_kwargs["max_retries"] = 20
+
+        assert BaseTaskWithRetry.retry_kwargs["max_retries"] == 3
+        assert subclass.retry_kwargs["max_retries"] == 20
+
 
 # ---------------------------------------------------------------------------
 # OcrTaskWithRetry class attributes
