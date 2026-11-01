@@ -7,9 +7,12 @@ OCR, metadata extraction and delivery happen afterwards.
 
 ## Browser queue
 
-`upload-bulk.js` streams a selection through bounded preflight windows. A Web
-Worker reads each file in 1 MiB chunks, calculates SHA-256 and probes common magic
-headers. Matching content within the selection shares an upload. A scoped server
+`upload-bulk.js` is the page adapter for one `upload-controller-worker.js`.
+The controller owns queue execution, bounded preflight windows, HTTP transfers,
+capacity updates and retries. It reads each file in 1 MiB chunks, calculates
+SHA-256 and probes common magic headers. Matching content shares an upload.
+Every new drop appends to the existing queue immediately and creates a separate
+server batch, so small imports can overtake a large import in processing. A scoped server
 preflight can also identify existing documents before bytes are transmitted.
 The server independently verifies hashes and allowed content.
 
@@ -44,9 +47,11 @@ queues and worker prefetch of one let mail and small imports overtake bulk work
 between pipeline tasks. Bulk provenance is carried through descendant tasks;
 old documents receive higher priority when subsequent tasks are published.
 The outbox dispatcher runs every five seconds and publishes at most ten items
-per run. Admission caps outstanding work at 1,000 documents and the smaller of
-10 GiB or ten times the configured per-file upload limit. These bounds limit
-backlog growth independently of the provider budgets.
+per run. Admission uses available staging-volume space with a safety reserve and atomic
+reservations. Processing backlog and the legacy per-user upload request limit do
+not throttle bulk acceptance. A storage-capacity 429 pauses the client according
+to `Retry-After`; it does not exhaust a fixed retry count. Provider budgets and
+the bounded outbox dispatcher control subsequent processing independently.
 
 The transactional outbox provides at-least-once publication. A crash after
 publishing a Celery task but before recording publication can execute processing
