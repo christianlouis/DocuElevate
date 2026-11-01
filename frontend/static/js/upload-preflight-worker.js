@@ -45,6 +45,9 @@ async function inspect(data) {
     self.postMessage({id:data.id, sha256:hash.digest(), mime:sniff(first,data.name||file.name,data.mime||file.type), size:file.size});
   } catch (error) { self.postMessage({id:data.id,error:String(error)}); }
 }
+// Shared by the controller worker; importing this file there does not create
+// another worker, it only reuses the bounded hash/MIME implementation.
+self.inspectUploadFile = inspect;
 // One worker instance serves the whole page lifetime. Serializing inspections
 // keeps the worker a scheduler rather than accidentally creating a hidden pool.
 let inspectionTail = Promise.resolve();

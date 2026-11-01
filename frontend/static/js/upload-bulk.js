@@ -1,6 +1,47 @@
 /* HTTP carries bytes; the websocket only advertises capacity and status.
  * IndexedDB stores metadata, never a second copy of the selected corpus. */
 (function () {
+  if (typeof Worker !== 'undefined' && !window.uploadQueueTestMode) {
+    const worker = new Worker('/static/js/upload-controller-worker.js');
+    let registration;
+    const owner = crypto.randomUUID();
+    const csrf = () => typeof getCsrfToken === 'function' ? getCsrfToken() : '';
+    function postSW(message) {
+      return new Promise((resolve, reject) => {
+        const controller = navigator.serviceWorker?.controller || registration?.active;
+        if (!controller) return reject(new Error('Persistent upload queue is unavailable'));
+        const channel = new MessageChannel();
+        const timer = setTimeout(() => { channel.port1.close(); reject(new Error('Queue acknowledgement timed out')); }, 10000);
+        channel.port1.onmessage = event => { clearTimeout(timer); channel.port1.close(); event.data?.ok ? resolve(event.data.result) : reject(new Error(event.data?.error || 'Queue error')); };
+        controller.postMessage({ ...message, principal: window.uploadConfig?.queueOwner || 'single-user' }, [channel.port2]);
+      });
+    }
+    function render(payload) {
+      const container = document.getElementById('uploadProgress');
+      const status = document.getElementById('statusMessage');
+      if (status) status.textContent = payload.message || '';
+      if (!container || !payload.queue) return;
+      container.replaceChildren();
+      const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'Duplikat', processing: 'in Verarbeitung', complete: 'verarbeitet', needs_files: 'Datei erneut auswählen', failed: 'fehlgeschlagen' };
+      for (const item of payload.queue.slice(0, 100)) { const row = document.createElement('div'); row.className = 'text-xs mb-1'; row.textContent = `${item.name} — ${states[item.state] || item.state}`; container.appendChild(row); }
+      const accepted = payload.queue.filter(item => item.fileId).length;
+      if (status) status.textContent = `${accepted} von ${payload.queue.length} Dateien sicher angenommen. ${payload.message || ''}`;
+    }
+    worker.onmessage = event => {
+      const message = event.data || {};
+      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
+      if (message.type === 'status') render(message);
+      if (message.type === 'accepted') window.onDocuElevateUploadQueued?.(message);
+    };
+    async function start() {
+      if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
+      registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready;
+      worker.postMessage({ type: 'init', principal: window.uploadConfig?.queueOwner || 'single-user', owner, csrf: csrf(), config: window.uploadConfig || {} });
+    }
+    window.processFiles = async files => { worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
+    window.addEventListener('DOMContentLoaded', () => { void start().catch(error => render({ message: String(error), queue: [] })); });
+    return;
+  }
   const WINDOW = 200, HASH_WORKERS = 2, MAX_RETRIES = 5;
   const principal = window.uploadConfig?.queueOwner || 'single-user';
   const owner = crypto.randomUUID(); // Each tab has its own lease identity.
