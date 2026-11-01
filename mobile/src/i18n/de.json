@@ -115,6 +115,7 @@
     "imprint": "Impressum"
   },
   "signup": {"title":"Konto erstellen","email":"E-Mail","username":"Benutzername","display_name":"Anzeigename (optional)","password":"Passwort","confirm":"Passwort bestätigen","consent":"Ich akzeptiere Nutzungsbedingungen und Datenschutzrichtlinie","submit":"Konto erstellen","invalid":"Bitte füllen Sie alle Felder aus, verwenden Sie mindestens 8 Zeichen und akzeptieren Sie die Richtlinien.","failed":"Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.","verify_title":"E-Mail prüfen","verify_msg":"Ein Bestätigungslink wurde an {email} gesendet.","resend":"Bestätigungs-E-Mail erneut senden","resend_done":"Bestätigungs-E-Mail gesendet.","back_login":"Zur Anmeldung"},
+  "onboarding": {"title":"Konto einrichten","intro":"Ergänzen Sie Ihr Profil. Cloud-Verbindungen sind optional und können später eingerichtet werden.","name":"Anzeigename","email":"Kontakt-E-Mail","cloud_optional":"Cloud-Speicher kann übersprungen und später in der App verbunden werden.","finish":"Einrichtung abschließen","failed":"Einrichtung konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."},
   "tabs": {
     "upload": "Hochladen",
     "files": "Dateien",

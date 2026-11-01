@@ -25,6 +25,7 @@ import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ShareProvider, useShare } from "../src/context/ShareContext";
 import { LocaleProvider, useLocale, isLanguageSupported } from "../src/i18n";
 import { mimeTypeFromFilename } from "../src/utils/mimeTypes";
+import api from "../src/services/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,6 +94,7 @@ function AuthGuard() {
   const { setLang } = useLocale();
   const segments = useSegments();
   const router = useRouter();
+  const [checkingOnboarding, setCheckingOnboarding] = React.useState(false);
 
   // Apply the server-side language preference whenever the user profile is
   // loaded (on login or app resume).  This syncs the language set on the
@@ -133,6 +135,12 @@ function AuthGuard() {
       router.replace("/(tabs)/");
     }
   }, [isAuthenticated, isLoading, segments, router]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isLoading || segments[0] === "onboarding" || checkingOnboarding) return;
+    setCheckingOnboarding(true);
+    api.onboardingStatus().then((status) => { if (!status.completed) router.replace("/onboarding"); }).catch(() => {}).finally(() => setCheckingOnboarding(false));
+  }, [isAuthenticated, isLoading, segments, router, checkingOnboarding]);
 
   if (isLoading) {
     return (

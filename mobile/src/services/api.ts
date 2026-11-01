@@ -29,6 +29,7 @@ export interface WhoAmIResponse {
   preferred_language: string | null;
 }
 export interface SignupResponse { email_verification_required: boolean; message: string }
+export interface OnboardingStatus { completed: boolean; step: number; profile?: { display_name?: string | null; contact_email?: string | null } | null }
 
 export interface GenerateTokenResponse {
   token: string;
@@ -206,6 +207,10 @@ class DocuElevateAPI {
   async resendVerification(email: string): Promise<void> {
     await this.request("POST", "/api/auth/resend-verification", { body: { email } });
   }
+
+  async onboardingStatus(): Promise<OnboardingStatus> { return this.request("GET", "/api/onboarding/status"); }
+  async saveOnboardingProfile(data: { display_name?: string; contact_email?: string; space_mode: "personal" | "shared" }): Promise<void> { await this.request("POST", "/api/onboarding/profile", { body: data }); }
+  async completeOnboarding(): Promise<void> { await this.request("POST", "/api/onboarding/complete"); }
 
   /** Claim a QR login challenge and receive an API token. */
   async claimQRChallenge(challengeToken: string, deviceName: string): Promise<QRClaimResponse> {
