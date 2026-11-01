@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @celery.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def dispatch_upload_item(self, outbox_id: int) -> dict[str, object]:
-    with SessionLocal() as db:
+        with SessionLocal() as db:
         outbox = db.query(UploadOutbox).filter(UploadOutbox.id == outbox_id).one_or_none()
         if outbox is None or outbox.dispatched_at is not None:
             return {"status": "already_dispatched"}
@@ -28,11 +28,21 @@ def dispatch_upload_item(self, outbox_id: int) -> dict[str, object]:
         outbox.attempts += 1
         db.commit()
         extension = record.original_filename.rsplit(".", 1)[-1].lower() if "." in record.original_filename else ""
+        # Bulk work is deliberately lower priority than mail/small interactive
+        # batches.  The broker/header contract lets the shared task router age
+        # long-running bulk items so they cannot starve indefinitely.
+        with SessionLocal() as priority_db:
+            from app.models import UploadBatch
+
+            batch = priority_db.query(UploadBatch).filter(UploadBatch.id == item.batch_id).one_or_none()
+            priority = 2 if batch and batch.total_files <= 100 else 6
+            accepted_at = batch.created_at.isoformat() if batch and batch.created_at else None
+        headers = {"bulk_upload": True, "bulk_accepted_at": accepted_at, "bulk_batch_id": item.batch_id}
         try:
             if record.mime_type == "application/pdf" or extension == "pdf":
-                task = process_document.delay(record.original_file_path or record.local_filename, original_filename=record.original_filename, file_id=record.id, owner_id=owner_id)
+                task = process_document.apply_async(args=[record.original_file_path or record.local_filename], kwargs={"original_filename": record.original_filename, "file_id": record.id, "owner_id": owner_id}, priority=priority, headers=headers)
             else:
-                task = convert_to_pdf.delay(record.original_file_path or record.local_filename, original_filename=record.original_filename, file_id=record.id, owner_id=owner_id)
+                task = convert_to_pdf.apply_async(args=[record.original_file_path or record.local_filename], kwargs={"original_filename": record.original_filename, "file_id": record.id, "owner_id": owner_id}, priority=priority, headers=headers)
         except Exception as exc:
             with SessionLocal() as retry_db:
                 failed = retry_db.query(UploadOutbox).filter(UploadOutbox.id == outbox_id).one_or_none()
