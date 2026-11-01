@@ -234,7 +234,12 @@ def upload_file(
     if existing:
         if existing.sha256 != sha256:
             raise HTTPException(409, "client_id was already used for different content")
-        return {"file_id": existing.file_id, "state": existing.state, "duplicate": existing.state == "duplicate", "client_id": client_id}
+        return {
+            "file_id": existing.file_id,
+            "state": existing.state,
+            "duplicate": existing.state == "duplicate",
+            "client_id": client_id,
+        }
     if settings.multi_user_enabled and owner:
         from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
 
@@ -272,7 +277,11 @@ def upload_file(
             raise ValueError("declared MIME is incompatible with extension")
         if mime.lower() not in allowed_mimes:
             raise ValueError("unsupported content type")
-        duplicate = _owner_file_query(db, owner, actual).order_by(FileRecord.id.asc()).first() if settings.enable_deduplication else None
+        duplicate = (
+            _owner_file_query(db, owner, actual).order_by(FileRecord.id.asc()).first()
+            if settings.enable_deduplication
+            else None
+        )
         if not duplicate and not _reserve_capacity(db, size):
             raise HTTPException(429, "upload capacity exhausted", headers={"Retry-After": "5"})
         tenant_id, tribe_id = ensure_document_scope(db, owner)
@@ -371,7 +380,7 @@ async def events(websocket: WebSocket):
         return
     db = SessionLocal()
     try:
-        batch = _batch(db, batch_id, principal)
+        _batch(db, batch_id, principal)
         # Do not retain the SQLAlchemy transaction/connection while awaiting
         # the browser heartbeat.  This endpoint may have thousands of tabs.
         db.rollback()
@@ -380,13 +389,17 @@ async def events(websocket: WebSocket):
         db = SessionLocal()
         current = _batch(db, batch_id, principal)
         ledger = _capacity(db)
-        initial_capacity = {"type": "capacity", "batch_id": batch_id,
+        initial_capacity = {
+            "type": "capacity",
+            "batch_id": batch_id,
             "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
             "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
             "used_bytes": ledger.reserved_bytes,
-            "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0}
+            "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0,
+        }
         initial_snapshot = _snapshot(db, current, None, 100)
-        db.rollback(); db.close()
+        db.rollback()
+        db.close()
         await websocket.send_json(initial_capacity)
         await websocket.send_json({"type": "snapshot", **initial_snapshot})
         while True:
@@ -404,7 +417,8 @@ async def events(websocket: WebSocket):
             current = _batch(db, batch_id, principal)
             ledger = _capacity(db)
             capacity_payload = {
-                "type": "capacity", "batch_id": batch_id,
+                "type": "capacity",
+                "batch_id": batch_id,
                 "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
                 "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
                 "used_bytes": ledger.reserved_bytes,

@@ -10,6 +10,7 @@
   </script>
   <script>
     window.uploadConfig = {
+      enableDeduplication: {{ upload_enable_deduplication | default(true) | tojson }},
       concurrency: {{ upload_concurrency }},
       queueDelayMs: {{ upload_queue_delay_ms }},
       queueOwner: {{ upload_queue_owner | tojson }},

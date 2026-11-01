@@ -98,7 +98,9 @@ def dispatch_upload_item(self, outbox_id: int, claim_token: str) -> dict[str, ob
                 done.claim_expires_at = None
                 # A reconciler may have completed the item while broker
                 # acknowledgement was delayed. Never resurrect terminal work.
-                done_db.query(UploadItem).filter(UploadItem.id == item.id, UploadItem.state == "accepted").update({"state": "queued"})
+                done_db.query(UploadItem).filter(UploadItem.id == item.id, UploadItem.state == "accepted").update(
+                    {"state": "queued"}
+                )
                 done_db.commit()
         return {"status": "queued", "file_id": item.file_id, "task_id": task.id}
 

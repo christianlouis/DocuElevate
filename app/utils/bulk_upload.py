@@ -10,11 +10,19 @@ from typing import Any
 from app.config import settings
 
 _EXTENSION_MIME = {
-    ".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".docm": "application/vnd.ms-word.document.macroenabled.12", ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ".xlsm": "application/vnd.ms-excel.sheet.macroenabled.12", ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ".pptm": "application/vnd.ms-powerpoint.presentation.macroenabled.12", ".txt": "text/plain", ".csv": "text/csv",
-    ".rtf": "application/rtf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".docm": "application/vnd.ms-word.document.macroenabled.12",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroenabled.12",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".pptm": "application/vnd.ms-powerpoint.presentation.macroenabled.12",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".rtf": "application/rtf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
 }
 
 
@@ -79,9 +87,14 @@ def sniff_mime(filename: str, supplied: str | None, header: bytes = b"") -> str:
     if filename.endswith((".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm")):
         # OOXML macro and non-macro documents must be ZIP containers. Never
         # trust a declared MIME type when the signature is absent.
-        return supplied if header.startswith(b"PK\x03\x04") and supplied not in {"", "application/octet-stream"} else (
-            _EXTENSION_MIME.get("." + filename.rsplit(".", 1)[-1], "application/octet-stream")
-            if header.startswith(b"PK\x03\x04") else "application/octet-stream"
+        return (
+            supplied
+            if header.startswith(b"PK\x03\x04") and supplied not in {"", "application/octet-stream"}
+            else (
+                _EXTENSION_MIME.get("." + filename.rsplit(".", 1)[-1], "application/octet-stream")
+                if header.startswith(b"PK\x03\x04")
+                else "application/octet-stream"
+            )
         )
     return supplied or _EXTENSION_MIME.get("." + filename.rsplit(".", 1)[-1], "application/octet-stream")
 
