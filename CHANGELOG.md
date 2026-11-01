@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.194.0 (2026-11-01)
+
+### Features
+
+- Add durable bulk uploads with capacity control and provider budgets
+  ([#1302](https://github.com/christianlouis/DocuElevate/pull/1302),
+  [`692ce94`](https://github.com/christianlouis/DocuElevate/commit/692ce942434cf3d5ede2c01bf057b8edfee0eab2))
+
+
 ## v0.193.0 (2026-11-01)
 
 ### Documentation
