@@ -42,8 +42,9 @@ function sniff(bytes, name, declared) {
 async function inspect(data) {
   try { const file=data.file; const hash=new Sha256(); let first=new Uint8Array(0);
     for(let offset=0; offset<file.size; offset+=CHUNK_SIZE) { const chunk=new Uint8Array(await file.slice(offset,offset+CHUNK_SIZE).arrayBuffer()); if(!first.length) first=chunk.slice(0,512); hash.update(chunk); }
-    self.postMessage({id:data.id, sha256:hash.digest(), mime:sniff(first,data.name||file.name,data.mime||file.type), size:file.size});
-  } catch (error) { self.postMessage({id:data.id,error:String(error)}); }
+    const result={id:data.id, sha256:hash.digest(), mime:sniff(first,data.name||file.name,data.mime||file.type), size:file.size};
+    self.postMessage(result); return result;
+  } catch (error) { const result={id:data.id,error:String(error)}; self.postMessage(result); throw error; }
 }
 // Shared by the controller worker; importing this file there does not create
 // another worker, it only reuses the bounded hash/MIME implementation.
@@ -52,6 +53,6 @@ self.inspectUploadFile = inspect;
 // keeps the worker a scheduler rather than accidentally creating a hidden pool.
 let inspectionTail = Promise.resolve();
 self.onmessage = ({ data }) => {
-  inspectionTail = inspectionTail.then(() => inspect(data));
+  inspectionTail = inspectionTail.then(() => inspect(data)).catch(() => {});
   return inspectionTail;
 };
