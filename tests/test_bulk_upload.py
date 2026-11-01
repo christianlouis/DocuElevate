@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import io
+import zipfile
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +13,7 @@ import pytest
 from app.config import settings
 from app.models import FileProcessingStep, FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.tasks import dispatch_uploads
+from app.utils.bulk_upload import sniff_mime, stream_to_file
 
 
 def _batch(client, key: str = "queue-owner:batch") -> str:
@@ -69,6 +72,27 @@ def test_rejects_mime_mismatch_before_writing(client, monkeypatch, tmp_path):
         files={"file": ("bad.pdf", content, "application/pdf")},
     )
     assert response.status_code == 422
+
+
+def test_ooxml_signature_and_generic_browser_mime_are_compatible(tmp_path):
+    content = io.BytesIO()
+    with zipfile.ZipFile(content, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+    assert sniff_mime("report.docx", "application/octet-stream", b"PK\x03\x04") == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    assert sniff_mime("report.docx", "application/octet-stream", b"not-zip") == "application/octet-stream"
+
+
+def test_stream_to_file_is_atomic_and_rejects_bad_hash(tmp_path):
+    from types import SimpleNamespace
+
+    payload = b"durable bytes"
+    target = tmp_path / "upload.pdf"
+    size, digest = stream_to_file(SimpleNamespace(file=io.BytesIO(payload)), target, hashlib.sha256(payload).hexdigest(), 100)
+    assert (size, digest) == (len(payload), hashlib.sha256(payload).hexdigest())
+    assert target.read_bytes() == payload
+    with pytest.raises(ValueError, match="sha256"):
+        stream_to_file(SimpleNamespace(file=io.BytesIO(payload)), tmp_path / "bad.pdf", "0" * 64, 100)
+    assert not (tmp_path / "bad.pdf").exists()
 
 
 def test_dispatch_claims_aged_work_before_new_small_batch(db_session, monkeypatch):

@@ -55,6 +55,10 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
     op.create_index("ix_upload_outbox_claim_expires_at", "upload_outbox", ["claim_expires_at"])
+    op.create_index("ix_upload_items_state", "upload_items", ["state"])
+    op.create_index("ix_upload_items_file_id", "upload_items", ["file_id"])
+    op.create_index("ix_upload_items_batch_state", "upload_items", ["batch_id", "state"])
+    op.create_index("ix_upload_items_principal_state", "upload_items", ["principal_id", "state"])
     op.create_table(
         "upload_capacity",
         sa.Column("id", sa.Integer(), primary_key=True),
@@ -67,6 +71,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("upload_capacity")
+    op.drop_index("ix_upload_items_principal_state", table_name="upload_items")
+    op.drop_index("ix_upload_items_batch_state", table_name="upload_items")
+    op.drop_index("ix_upload_items_file_id", table_name="upload_items")
+    op.drop_index("ix_upload_items_state", table_name="upload_items")
     op.drop_table("upload_outbox")
     op.drop_table("upload_items")
     op.drop_table("upload_batches")

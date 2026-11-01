@@ -30,7 +30,7 @@ from app.database import SessionLocal, get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
-from app.utils.bulk_upload import safe_path, sniff_mime, stream_to_file
+from app.utils.bulk_upload import extension_mime, safe_path, sniff_mime, stream_to_file
 from app.utils.filename_utils import sanitize_filename
 from app.utils.tribe_scope import ensure_document_scope
 
@@ -123,6 +123,8 @@ def _reserve_capacity(db: Session, size: int) -> bool:
 
 def _owner_file_query(db: Session, owner: str | None, sha256: str):
     query = db.query(FileRecord).filter(FileRecord.filehash == sha256, FileRecord.is_duplicate.is_(False))
+    if not settings.enable_deduplication:
+        query = query.filter(False)
     return query.filter(FileRecord.owner_id == owner) if settings.multi_user_enabled else query
 
 
@@ -224,13 +226,6 @@ def upload_file(
 ):
     principal, owner = _principal(request, x_docuelevate_intake_secret)
     batch, sha256 = _batch(db, batch_id, principal), sha256.lower().strip()
-    if settings.multi_user_enabled and owner:
-        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
-
-        try:
-            check_upload_allowed(db, owner, get_user_tier_id(db, owner))
-        except QuotaExceeded as exc:
-            raise HTTPException(402, str(exc)) from exc
     if not client_id or len(sha256) != 64 or any(char not in "0123456789abcdef" for char in sha256):
         raise HTTPException(422, "client_id and sha256 are required")
     existing = (
@@ -239,15 +234,18 @@ def upload_file(
     if existing:
         if existing.sha256 != sha256:
             raise HTTPException(409, "client_id was already used for different content")
-        return {
-            "file_id": existing.file_id,
-            "state": existing.state,
-            "duplicate": existing.state == "duplicate",
-            "client_id": client_id,
-        }
+        return {"file_id": existing.file_id, "state": existing.state, "duplicate": existing.state == "duplicate", "client_id": client_id}
+    if settings.multi_user_enabled and owner:
+        from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
+
+        try:
+            check_upload_allowed(db, owner, get_user_tier_id(db, owner))
+        except QuotaExceeded as exc:
+            raise HTTPException(402, str(exc)) from exc
     filename = sanitize_filename(file.filename or "document") or "document"
     ext, supplied = os.path.splitext(filename)[1].lower(), (file.content_type or "").split(";", 1)[0].lower()
-    if ext not in ALLOWED_EXTENSIONS or (supplied and supplied not in ALLOWED_MIME_TYPES):
+    allowed_mimes = {value.lower() for value in ALLOWED_MIME_TYPES}
+    if ext not in ALLOWED_EXTENSIONS or (supplied and supplied not in allowed_mimes):
         raise HTTPException(415, "unsupported document type")
     # Do not hold a database transaction while bytes are streaming.  The
     # request body is already spooled by Starlette; a random staging name
@@ -265,9 +263,16 @@ def upload_file(
         # signature before their declared content type is retained.
         if ext == ".pdf" and not header.startswith(b"%PDF-"):
             raise ValueError("PDF signature is missing")
-        if mime not in ALLOWED_MIME_TYPES:
+        expected_mime = extension_mime(filename)
+        if ext in {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"} and not header.startswith(b"PK\x03\x04"):
+            raise ValueError("OOXML ZIP signature is missing")
+        if supplied in {"", "application/octet-stream"}:
+            supplied = expected_mime or supplied
+        if expected_mime and supplied not in {"", "application/octet-stream", expected_mime}:
+            raise ValueError("declared MIME is incompatible with extension")
+        if mime.lower() not in allowed_mimes:
             raise ValueError("unsupported content type")
-        duplicate = _owner_file_query(db, owner, actual).order_by(FileRecord.id.asc()).first()
+        duplicate = _owner_file_query(db, owner, actual).order_by(FileRecord.id.asc()).first() if settings.enable_deduplication else None
         if not duplicate and not _reserve_capacity(db, size):
             raise HTTPException(429, "upload capacity exhausted", headers={"Retry-After": "5"})
         tenant_id, tribe_id = ensure_document_scope(db, owner)
@@ -357,30 +362,59 @@ async def events(websocket: WebSocket):
     if not batch_id:
         await websocket.close(code=1008)
         return
+    intake_secret = websocket.headers.get("x-docuelevate-intake-secret")
+    request_scope = {**websocket.scope, "type": "http"}
     try:
-        principal, _ = _principal(Request({**websocket.scope, "type": "http"}))
+        principal, _ = _principal(Request(request_scope), intake_secret)
     except HTTPException:
         await websocket.close(code=1008)
         return
     db = SessionLocal()
     try:
         batch = _batch(db, batch_id, principal)
+        # Do not retain the SQLAlchemy transaction/connection while awaiting
+        # the browser heartbeat.  This endpoint may have thousands of tabs.
+        db.rollback()
+        db.close()
         await websocket.accept()
+        db = SessionLocal()
+        current = _batch(db, batch_id, principal)
+        ledger = _capacity(db)
+        initial_capacity = {"type": "capacity", "batch_id": batch_id,
+            "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
+            "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
+            "used_bytes": ledger.reserved_bytes,
+            "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0}
+        initial_snapshot = _snapshot(db, current, None, 100)
+        db.rollback(); db.close()
+        await websocket.send_json(initial_capacity)
+        await websocket.send_json({"type": "snapshot", **initial_snapshot})
         while True:
-            ledger = _capacity(db)
-            await websocket.send_json(
-                {
-                    "type": "capacity",
-                    "batch_id": batch_id,
-                    "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
-                    "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
-                    "used_bytes": ledger.reserved_bytes,
-                    "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0,
-                }
-            )
-            await websocket.send_json({"type": "snapshot", **_snapshot(db, batch, None, 100)})
             await websocket.receive_text()
-            db.expire_all()
+            # Re-authenticate on every heartbeat so revoked sessions or intake
+            # credentials cannot keep a status channel alive indefinitely.
+            try:
+                principal, _ = _principal(Request(request_scope), intake_secret)
+            except HTTPException:
+                await websocket.close(code=1008)
+                return
+            # Fresh session/read transaction for every status response so
+            # capacity changes are visible under MySQL repeatable-read too.
+            db = SessionLocal()
+            current = _batch(db, batch_id, principal)
+            ledger = _capacity(db)
+            capacity_payload = {
+                "type": "capacity", "batch_id": batch_id,
+                "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
+                "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
+                "used_bytes": ledger.reserved_bytes,
+                "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0,
+            }
+            snapshot = _snapshot(db, current, None, 100)
+            db.rollback()
+            db.close()
+            await websocket.send_json(capacity_payload)
+            await websocket.send_json({"type": "snapshot", **snapshot})
     except (WebSocketDisconnect, HTTPException):
         return
     finally:

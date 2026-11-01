@@ -269,7 +269,9 @@ class UploadItem(Base):
     batch_id = Column(String(36), ForeignKey("upload_batches.id", ondelete="CASCADE"), nullable=False, index=True)
     client_id = Column(String(255), nullable=False)
     principal_id = Column(String, nullable=False, index=True)
-    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True, index=True)
+    file_id = Column(
+        Integer, ForeignKey(_FILES_ID_FK, ondelete="SET NULL"), nullable=True, index=True
+    )
     sha256 = Column(String(64), nullable=False, index=True)
     filename = Column(String(255), nullable=False)
     mime_type = Column(String(255), nullable=True)

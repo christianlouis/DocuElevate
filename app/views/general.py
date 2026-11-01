@@ -190,6 +190,7 @@ async def serve_upload(request: Request):
                 str(get_current_owner_id(request) or "single-user").encode(), usedforsecurity=False
             ).hexdigest(),
             "upload_max_file_size": settings.max_upload_size,
+            "upload_enable_deduplication": settings.enable_deduplication,
         },
     )
 

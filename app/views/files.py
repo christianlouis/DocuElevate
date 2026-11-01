@@ -231,6 +231,7 @@ def files_page(
                 ).hexdigest(),
                 "upload_max_file_size": settings.max_upload_size,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
+                "upload_enable_deduplication": settings.enable_deduplication,
             },
         )
     except Exception as e:
@@ -250,6 +251,7 @@ def files_page(
                 ).hexdigest(),
                 "upload_max_file_size": settings.max_upload_size,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
+                "upload_enable_deduplication": settings.enable_deduplication,
             },
         )
 

@@ -96,7 +96,9 @@ def dispatch_upload_item(self, outbox_id: int, claim_token: str) -> dict[str, ob
                 done.dispatched_at = datetime.now(timezone.utc)
                 done.claim_token = None
                 done.claim_expires_at = None
-                done_db.query(UploadItem).filter(UploadItem.id == item.id).update({"state": "queued"})
+                # A reconciler may have completed the item while broker
+                # acknowledgement was delayed. Never resurrect terminal work.
+                done_db.query(UploadItem).filter(UploadItem.id == item.id, UploadItem.state == "accepted").update({"state": "queued"})
                 done_db.commit()
         return {"status": "queued", "file_id": item.file_id, "task_id": task.id}
 
@@ -161,23 +163,36 @@ def reconcile_upload_states(limit: int = 100) -> int:
             .group_by(FileProcessingStep.file_id)
             .subquery()
         )
-        rows = (
-            db.query(UploadItem, terminal.c.succeeded)
-            .join(terminal, UploadItem.file_id == terminal.c.file_id)
+        candidates = (
+            db.query(UploadItem.id, UploadItem.size, terminal.c.succeeded)
+            .outerjoin(terminal, UploadItem.file_id == terminal.c.file_id)
+            .outerjoin(FileRecord, UploadItem.file_id == FileRecord.id)
             .filter(UploadItem.state.in_(("accepted", "queued", "processing")))
-            .with_for_update(skip_locked=True)
+            .filter((terminal.c.file_id.isnot(None)) | (FileRecord.id.is_(None)))
+            .order_by(UploadItem.id.asc())
             .limit(min(max(1, int(limit)), 500))
             .all()
         )
-        if not rows:
+        if not candidates:
             return 0
         if db.get(UploadCapacity, 1) is None:
             logger.error("bulk capacity ledger is missing; leaving items reserved")
             return 0
-        released_files = len(rows)
-        released_bytes = sum(int(item.size) for item, _ in rows)
-        for item, succeeded in rows:
-            item.state = "complete" if succeeded else "failed"
+        released_files = released_bytes = 0
+        for item_id, size, succeeded in candidates:
+            # Conditional transition is the winner election on SQLite and
+            # protects against overlapping reconcilers on every backend.
+            result = db.execute(
+                update(UploadItem)
+                .where(UploadItem.id == item_id, UploadItem.state.in_(("accepted", "queued", "processing")))
+                .values(state="complete" if succeeded else "failed")
+            )
+            if result.rowcount:
+                released_files += 1
+                released_bytes += int(size)
+        if not released_files:
+            db.rollback()
+            return 0
         # Do not read-modify-write the singleton: concurrent reconcilers may
         # complete independent rows.  This conditional SQL decrement is atomic.
         db.execute(
