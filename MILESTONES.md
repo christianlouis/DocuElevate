@@ -188,6 +188,43 @@ operator-runtime matrix also distinguishes optional system SMTP notifications
 from per-user EMAIL delivery and per-user IMAP sources; do not call setup
 app-key-free until the provider-specific path and live E2E evidence are proven.
 
+### Tribe-owned mailboxes and sources (follow-on acceptance)
+**Target:** after the personal owner-to-sink E2E gate
+
+**Status:** 📋 Planned contract; no runtime Tribe mailbox implementation or live
+mailbox acceptance is claimed
+
+Personal mailboxes/sources and Tribe-owned mailboxes/sources must remain
+first-class, separate configuration types. The Tribe source has its own
+identity, access grant, authorized managers, member/recipient/pipeline rules,
+checkpoint, dedupe namespace, disable switch, and rollback boundary.
+
+#### Acceptance gates
+
+- **P0 — identity and access:** bind an IMAP/mailbox source to exactly one
+  Tribe, encrypt and revoke its credential, and require an explicit manager
+  grant for administration. Membership alone is not mailbox administration.
+- **P0 — policy separation:** evaluate Tribe member/recipient/pipeline rules in
+  a Tribe namespace, separate from personal owner rules. A missing or
+  conflicting rule goes to review rather than a global destination.
+- **P1 — review and opt-in fan-out:** ambiguous sender/recipient/topic/object
+  matches retain proposed classification and rule evidence for an authorized
+  reviewer. Personal copies and a Tribe-owner copy require separate explicit
+  opt-in rules and audit entries.
+- **P0 — independent operations:** each Tribe source has an independent
+  checkpoint and dedupe key space. Disable, replay, and rollback must not
+  change personal checkpoints or stop personal polling; scheduling must enforce
+  one active poller per source and prevent doubled polling.
+- **P1 — generic public fixtures:** prove a synthetic personal mailbox routes
+  only to its owner, a synthetic Tribe mailbox routes only to its authorized
+  Tribe destination, ambiguous input is held for review, and replay/rollback
+  does not duplicate or cross-route documents. Do not place private names,
+  addresses, mailbox identifiers, or credentials in the repository.
+
+This track is deliberately sequenced after the personal E2E acceptance. Its
+checkpoints, deduplication, disable, and rollback evidence must be independent
+of the personal source evidence before a Tribe mailbox can be enabled.
+
 ### Clarity: Enhanced Search & UI (Planning track)
 **Target Date:** October 31, 2026
 **Status:** 🚧 In progress — hybrid ranking and relevance evaluation remain

@@ -149,6 +149,57 @@ therefore “central OAuth app required” must not be generalized to every GDri
 configuration. Current SFTP host-key verification similarly may depend on central
 known-hosts trust, even though endpoint credentials remain personal.
 
+### Tribe-owned mailboxes and sources (separate acceptance track)
+
+Personal mailboxes and Tribe-owned mailboxes are different source classes. A
+Tribe mailbox is not a personal mailbox with several recipients: it has its own
+Tribe identity, access grant, lifecycle, checkpoints, deduplication namespace,
+and routing policy. Runtime implementation is not claimed by this roadmap
+entry; it defines the contract that must be accepted before enabling it.
+
+- **Identity and access:** bind each mailbox/IMAP source to one Tribe, record
+  the provider account and consent scope, and encrypt/revoke its credentials.
+  A Tribe manager may administer the source only when explicitly authorized;
+  ordinary members must not inherit mailbox administration rights.
+- **Routing policy:** define authorized managers, member/recipient targets,
+  permitted pipelines, and destination ownership in the Tribe configuration.
+  Personal owner rules and Tribe rules are evaluated in separate namespaces.
+- **Ambiguity review:** if sender, recipient, topic, or object rules do not
+  yield one authorized route, hold the document for review with the proposed
+  classification and policy evidence. Do not fall back to a global sink.
+- **Opt-in copies:** a personal owner copy or Tribe-owner copy is created only
+  by an explicit rule and is recorded in the audit trail. Membership alone does
+  not authorize fan-out.
+- **Operational isolation:** maintain an independent source checkpoint and
+  dedupe key space for each Tribe mailbox. Disabling or rolling back the Tribe
+  source must not stop personal polling, replay personal documents, or mutate
+  personal checkpoints. A scheduler must guarantee one active poller per source
+  so personal and Tribe paths do not double-poll the same mailbox.
+
+#### Generic public acceptance cases
+
+These cases intentionally use synthetic identities and mailboxes; they are
+test fixtures, not live household or production data:
+
+1. A document arriving in **PersonA's personal mailbox** is classified to
+   PersonA's profile and reaches only PersonA's active personal destination.
+2. A document arriving in **TribeAlpha's shared mailbox** matches an explicit
+   Tribe pipeline rule and reaches the authorized Tribe destination; no
+   personal destination is selected merely because a member is mentioned.
+3. A shared document addressed to PersonA and PersonB is held or routed to
+   both only when the configured recipient rule permits it. An explicit
+   Tribe-owner copy is tested separately from personal copies.
+4. An ambiguous sender/topic/object match enters review with no delivery.
+   Approving a route records the manager and rule version and cannot broaden
+   access beyond the approved targets.
+5. A replay of the same source message is deduplicated within its source's
+   namespace. Disabling and rolling back TribeAlpha resumes from its own
+   checkpoint without duplicating PersonA's personal intake or starting a
+   second poller.
+
+The Tribe mailbox track is a planned contract and test scope, not evidence that
+runtime Tribe polling or live mailbox E2E is already implemented.
+
 ## Preprod Pilot: DearConcierge Knowledge Bridge
 
 The first agent-facing document retrieval pilot is deliberately isolated in the
