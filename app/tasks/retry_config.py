@@ -156,6 +156,11 @@ class BaseTaskWithRetry(Task):
     #: (our retry() method injects the countdown instead).
     retry_kwargs: dict = {"max_retries": 3}
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Keep Celery task-specific retry options from mutating the base."""
+        super().__init_subclass__(**kwargs)
+        cls.retry_kwargs = dict(cls.retry_kwargs)
+
     #: Per-retry countdown values (seconds).  ``None`` → settings / DEFAULT.
     retry_delays: list[int] | None = None
 
