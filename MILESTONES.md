@@ -180,10 +180,13 @@ Focused tests cover strict no-fallback behavior and personal-handler isolation
 ([tests/test_user_destination_routing.py](tests/test_user_destination_routing.py),
 [tests/test_upload_handlers.py](tests/test_upload_handlers.py)). These are code
 and unit-test foundations, not provider-account or production acceptance. In
-particular, Google Drive still requires global `google_drive_client_id` and
-`google_drive_client_secret` for its OAuth start/callback, while OneDrive may
-reuse or accept per-integration client credentials. See the provider matrix in
-the roadmap before calling setup app-key-free.
+particular, Google Drive's personal OAuth start/callback still uses global
+`google_drive_client_id` and `google_drive_client_secret`, but its destination
+handler also supports explicitly owner-scoped service-account `credentials_json`.
+OneDrive may reuse or accept per-integration client credentials. The roadmap's
+operator-runtime matrix also distinguishes optional system SMTP notifications
+from per-user EMAIL delivery and per-user IMAP sources; do not call setup
+app-key-free until the provider-specific path and live E2E evidence are proven.
 
 ### Clarity: Enhanced Search & UI (Planning track)
 **Target Date:** October 31, 2026
