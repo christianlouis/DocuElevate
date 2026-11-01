@@ -28,7 +28,7 @@ function controller(overrides = {}) {
     ...contextOverrides
   };
   vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'upload-controller-worker.js'), 'utf8'), context);
-  return { api: context.self.__uploadControllerTest, messages };
+  return { api: context.self.__uploadControllerTest, messages, worker: context.self };
 }
 
 test('preflight windows cover every item without an oversized request', () => {
@@ -130,6 +130,62 @@ test('controller import executes the shared preflight inspector and receives its
   const result = await api.inspect({ id: 'hash', file, name: file.name, mime: file.type });
   assert.equal(result.sha256, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   assert.equal(result.mime, 'text/plain');
+});
+
+test('controller accepts a second drop while the first batch upload is pending', async () => {
+  class Body { constructor() { this.values = {}; } append(key, value) { this.values[key] = value; } }
+  const uploads = [];
+  let releaseFirst;
+  const response = (fileId) => ({ ok: true, status: 202, json: async () => ({ file_id: fileId, state: 'accepted' }) });
+  const { api, worker, messages } = controller({
+    FormData: Body,
+    swResults: { listBatches: [], putMany: true, lease: true, release: true },
+    fetch: async (url, options = {}) => {
+      if (url === '/api/uploads/batches') return { ok: true, status: 201, json: async () => ({ batch_id: `batch-${uploads.length + 1}` }) };
+      if (url === '/api/uploads/preflight') {
+        const files = JSON.parse(options.body).files;
+        return { ok: true, status: 200, json: async () => ({ files: files.map(file => ({ client_id: file.client_id, state: 'new' })) }) };
+      }
+      if (url.startsWith('/api/uploads/capacity')) return { ok: true, status: 200, json: async () => ({ slots: 1, max_bytes: 100 }) };
+      if (url === '/api/uploads/files') {
+        const name = options.body.values.file.name; uploads.push(name);
+        if (name === 'first.pdf') {
+          return new Promise(resolve => { releaseFirst = () => resolve(response(1)); });
+        }
+        return response(2);
+      }
+      throw new Error(`Unexpected request ${url}`);
+    }
+  });
+  const file = name => {
+    const bytes = new TextEncoder().encode(`%PDF-${name}`);
+    return { name, type: 'application/pdf', size: bytes.length, lastModified: 1, slice(start, end) { return { arrayBuffer: async () => bytes.slice(start, end).buffer }; } };
+  };
+  async function waitFor(condition) {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (condition()) return;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.fail(`controller did not reach expected state: ${messages.map(message => message.message).filter(Boolean).join('; ')}`);
+  }
+  try {
+    worker.onmessage({ data: { type: 'init', config: { concurrency: 2 }, owner: 'test-owner' } });
+    await new Promise(resolve => setImmediate(resolve));
+    worker.onmessage({ data: { type: 'add', files: [file('first.pdf')] } });
+    await waitFor(() => releaseFirst);
+    worker.onmessage({ data: { type: 'add', files: [file('second.pdf')] } });
+    await waitFor(() => uploads.includes('second.pdf'));
+    assert.deepEqual(uploads, ['first.pdf', 'second.pdf']);
+    assert.equal(api.state().queue.length, 2);
+    assert.equal(api.state().queue.find(item => item.name === 'second.pdf').fileId, 2);
+    assert.equal(api.state().queue.find(item => item.name === 'first.pdf').fileId, undefined);
+    releaseFirst();
+    for (let attempt = 0; attempt < 20 && api.state().queue.some(item => !item.fileId); attempt++) await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(Array.from(api.state().queue, item => [item.name, item.fileId]), [['first.pdf', 1], ['second.pdf', 2]]);
+  } finally {
+    releaseFirst?.();
+    await new Promise(resolve => setImmediate(resolve));
+  }
 });
 
 test('controller reselects only unaccepted recovered entries and retains duplicate signatures', () => {
