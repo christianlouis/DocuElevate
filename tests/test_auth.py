@@ -1177,3 +1177,13 @@ async def test_fenced_login_cannot_create_profile_session_or_mobile_token(deleti
         assert db.query(ApiToken).count() == 0
     db.close()
     engine.dispose()
+
+
+def test_login_audit_failure_rolls_back_session():
+    from app.auth import _record_login_event
+
+    db = MagicMock()
+    request = MagicMock(spec=Request)
+    with patch("app.utils.audit_service.record_event", side_effect=RuntimeError("write failed")):
+        _record_login_event(db, request, "alice", success=True)
+    db.rollback.assert_called_once()

@@ -824,6 +824,7 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
                 )
                 request.session["_session_token"] = user_session.session_token
         except Exception:
+            db.rollback()
             logger.debug("[AUTH] Failed to create server-side session for social user", exc_info=True)
 
         provider_name = SOCIAL_PROVIDERS[provider]["name"]
@@ -1032,6 +1033,7 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
                 )
                 request.session["_session_token"] = user_session.session_token
         except Exception:
+            db.rollback()
             logger.debug("[AUTH] Failed to create server-side session for OAuth user", exc_info=True)
 
         # Log the successful authentication
@@ -1118,6 +1120,7 @@ def _record_login_event(
             severity="info" if success else "warning",
         )
     except Exception:
+        db.rollback()
         logger.debug("Failed to write login audit event for user=%s", username, exc_info=True)
 
 
@@ -1301,6 +1304,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                 )
                 request.session["_session_token"] = user_session.session_token
             except Exception:
+                db.rollback()
                 logger.debug("[AUTH] Failed to create server-side session", exc_info=True)
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
             _record_login_event(db, request, local_user.email, success=True)
@@ -1384,6 +1388,7 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             )
             request.session["_session_token"] = user_session.session_token
         except Exception:
+            db.rollback()
             logger.debug("[AUTH] Failed to create server-side session for admin", exc_info=True)
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
         _record_login_event(db, request, username, success=True)
