@@ -5,6 +5,7 @@ These tests verify OCR processing logic with mocked external AI/ML services
 (OpenAI, Azure Document Intelligence). Tests cover typical and edge cases.
 """
 
+from contextlib import nullcontext
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import pytest
@@ -410,7 +411,7 @@ class TestRefineTextWithGPT:
     """Tests for AI provider text refinement task."""
 
     @patch("app.tasks.refine_text_with_gpt.log_task_progress")
-    def test_successful_text_refinement(self, mock_log):
+    def test_successful_text_refinement(self, mock_log, db_session):
         """Test successful text refinement with AI provider."""
         raw_text = "This is s0me text with OCR err0rs"
         filename = "test.pdf"
@@ -424,9 +425,11 @@ class TestRefineTextWithGPT:
 
         with (
             patch("app.tasks.refine_text_with_gpt.get_ai_provider", return_value=mock_provider),
+            patch("app.tasks.refine_text_with_gpt.SessionLocal", return_value=nullcontext(db_session)),
             patch.object(metadata_module, "extract_metadata_with_gpt") as mock_extract,
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.openai_model = "gpt-4"
             mock_settings.ai_model = None
             mock_extract.delay = MagicMock()
@@ -447,7 +450,7 @@ class TestRefineTextWithGPT:
             mock_extract.delay.assert_called_once_with(filename, cleaned)
 
     @patch("app.tasks.refine_text_with_gpt.log_task_progress")
-    def test_openai_api_error(self, mock_log):
+    def test_openai_api_error(self, mock_log, db_session):
         """Test error handling when AI provider call fails."""
         raw_text = "Test text"
         filename = "test.pdf"
@@ -457,8 +460,10 @@ class TestRefineTextWithGPT:
 
         with (
             patch("app.tasks.refine_text_with_gpt.get_ai_provider", return_value=mock_provider),
+            patch("app.tasks.refine_text_with_gpt.SessionLocal", return_value=nullcontext(db_session)),
             patch("app.tasks.refine_text_with_gpt.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.openai_model = "gpt-4"
             mock_settings.ai_model = None
 

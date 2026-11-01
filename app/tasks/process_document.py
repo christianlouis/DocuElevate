@@ -16,6 +16,7 @@ from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
 from app.models import DocumentIntake, DropboxImportObject, FileRecord, Pipeline, PipelineStep
+from app.services.account_deletion import DeletionBlocked, assert_account_active
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
 from app.tasks.retry_config import BaseTaskWithRetry
@@ -377,6 +378,14 @@ def process_document(
     default_owner_id = settings.default_owner_id
     if owner_id is None and isinstance(default_owner_id, str) and default_owner_id.strip():
         owner_id = default_owner_id
+
+    if owner_id:
+        with SessionLocal() as guard_db:
+            try:
+                assert_account_active(guard_db, owner_id)
+            except DeletionBlocked:
+                logger.info("[%s] ignoring queued work for deleting owner %s", self.request.id, owner_id)
+                return {"status": "skipped", "reason": "account_deletion"}
 
     if index_only and not settings.vector_index_enabled:
         logger.warning("Index-first processing requested while vector indexing is disabled; using full pipeline")

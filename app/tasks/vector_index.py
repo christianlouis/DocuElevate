@@ -43,6 +43,10 @@ def index_document_vectors(self, file_id: int, source_task_id: str | None = None
             _set_source_state(db, source_task_id, "failed", "File not found")
             db.commit()
             return {"status": "skipped", "detail": "File not found"}
+        from app.services.account_deletion import deletion_blocked
+
+        if file_record.owner_id and deletion_blocked(db, file_record.owner_id):
+            return {"status": "skipped", "detail": "Account deletion"}
         if not file_record.ocr_text or not file_record.ocr_text.strip():
             _set_source_state(db, source_task_id, "needs_ocr", "No OCR text available")
             db.commit()
@@ -69,6 +73,10 @@ def index_document_vectors(self, file_id: int, source_task_id: str | None = None
             _set_source_state(db, source_task_id, state, type(exc).__name__)
             db.commit()
             raise
+        db.expire_all()
+        if file_record.owner_id and deletion_blocked(db, file_record.owner_id):
+            QdrantVectorIndex().delete_documents([file_id], owner_id=file_record.owner_id)
+            return {"status": "skipped", "detail": "Account deletion"}
         _set_source_state(db, source_task_id, "indexed")
         db.commit()
         if privacy_changed:

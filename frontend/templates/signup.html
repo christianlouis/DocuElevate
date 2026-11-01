@@ -46,6 +46,14 @@
                                aria-required="true"
                                style="min-height:44px">
                     </div>
+                    <label class="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="checkbox" required x-model="terms_accepted" class="mt-1" aria-required="true">
+                        <span>{{ _("onboarding.legal_accept") }} <a :href="capabilities?.terms_url" target="_blank" rel="noopener" class="text-blue-600 underline">{{ _("onboarding.legal_terms") }}</a>.</span>
+                    </label>
+                    <label class="flex items-start gap-2 text-sm text-gray-700">
+                        <input type="checkbox" required x-model="privacy_accepted" class="mt-1" aria-required="true">
+                        <span>{{ _("auth.privacy_acknowledge") }} <a :href="capabilities?.privacy_url" target="_blank" rel="noopener" class="text-blue-600 underline">{{ _("onboarding.legal_privacy") }}</a>.</span>
+                    </label>
                     <div>
                         <label for="username" class="block text-sm font-medium text-gray-700">{{ _("auth.username_label") }} <span aria-hidden="true" class="text-red-500">*</span></label>
                         <input type="text"
@@ -106,7 +114,7 @@
                                style="min-height:44px">
                     </div>
                     <button type="submit"
-                            :disabled="loading"
+                            :disabled="loading || !capabilities?.local_signup || !capabilities?.smtp_configured || !terms_accepted || !privacy_accepted"
                             class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                             style="min-height:44px">
                         <span x-show="!loading">{{ _("auth.create_account") }}</span>
@@ -132,6 +140,9 @@
                     display_name: '',
                     password: '',
                     password_confirm: '',
+                    terms_accepted: false,
+                    privacy_accepted: false,
+                    capabilities: null,
                     loading: false,
                     error: '',
                     i18n: {
@@ -141,8 +152,17 @@
                         registrationFailed: {{ _('auth.signup_registration_failed') | tojson }},
                         networkError: {{ _('auth.signup_network_error') | tojson }}
                     },
+                    async init() {
+                        try {
+                            const response = await fetch('/api/auth/capabilities');
+                            if (!response.ok) throw new Error('Capabilities unavailable');
+                            this.capabilities = await response.json();
+                            if (!this.capabilities.local_signup || !this.capabilities.smtp_configured) this.error = {{ _('auth.signup_unavailable') | tojson }};
+                        } catch (_) { this.error = {{ _('auth.signup_capabilities_failed') | tojson }}; }
+                    },
                     async submit() {
                         this.error = '';
+                        if (!this.capabilities?.local_signup || !this.capabilities?.smtp_configured || !this.terms_accepted || !this.privacy_accepted) return;
                         if (this.username.length < 3 || this.username.length > 64) {
                             this.error = this.i18n.usernameLength;
                             return;
@@ -168,7 +188,11 @@
                                     username: this.username,
                                     display_name: this.display_name || null,
                                     password: this.password,
-                                    password_confirm: this.password_confirm
+                                    password_confirm: this.password_confirm,
+                                    accept_terms: this.terms_accepted,
+                                    accept_privacy: this.privacy_accepted,
+                                    terms_version: this.capabilities.terms_version,
+                                    privacy_version: this.capabilities.privacy_version
                                 })
                             });
                             if (resp.ok) {

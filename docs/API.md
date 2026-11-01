@@ -14,6 +14,14 @@ DocuElevate provides a powerful REST API for programmatic access to all its feat
 
 ## Interactive API Documentation
 
+### Public registration and first-run setup
+
+`GET /api/auth/capabilities` returns registration availability, whether email verification is required, and the current terms/privacy versions and public URLs. Clients must obtain these values before displaying the registration or setup confirmation. Cookie-based clients retain the session cookie and send the returned `csrf_token` as `X-CSRF-Token` on subsequent mutations; capabilities responses use `Cache-Control: no-store`.
+
+`POST /api/auth/signup` accepts `email`, `username`, `display_name`, `password`, `password_confirm`, `accept_terms`, `accept_privacy`, `terms_version` and `privacy_version`. Both acknowledgements must be explicit and versions must match the capabilities response. Public registration requires SMTP; the account remains inactive until the verification link is used. Missing consent returns `422`; unavailable email delivery returns `503`.
+
+The existing `/api/onboarding/status`, `/profile`, `/plan`, `/storage` and `/progress` endpoints support authenticated browser sessions and bearer tokens. `POST /api/onboarding/complete` additionally requires `accept_terms`, `accept_privacy`, `terms_version` and `privacy_version` in its JSON body, including for external sign-in accounts. Consent versions and timestamps are recorded on the user's profile. See [signup review readiness](SignupReviewReadiness.md) for deployment and review checks.
+
 The most up-to-date and interactive API documentation is available at:
 
 `http://<your-docuelevate-instance>/docs`
@@ -3541,3 +3549,7 @@ Returns who a document is shared with.  Accessible to any user with at least `vi
   }
 ]
 ```
+
+## Account deletion
+
+`DELETE /api/account` requires authentication and the JSON body `{"confirmation":"DELETE MY ACCOUNT"}`. Browser requests require the session CSRF token; mobile clients use bearer authentication. The target is always the authenticated account. `GET /api/account` returns its lifecycle status. Legal holds or unsafe paths return `409`; cleanup errors return `503` and can be retried through the same endpoint. Successful completion returns `status: deleted`. See [AccountDeletion.md](AccountDeletion.md) for ownership, index cleanup and retention boundaries.

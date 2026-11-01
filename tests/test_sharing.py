@@ -834,5 +834,8 @@ class TestDeleteFileOwnerOnly:
 
         response = client.delete(f"/api/files/{f.id}")
 
-        assert response.status_code == 403
+        # Owner filtering intentionally returns 404 before role checks, so an
+        # administrator cannot use this endpoint to enumerate another owner's
+        # document.  Administrative status never bypasses that fence.
+        assert response.status_code == 404
         assert db_session.get(FileRecord, f.id) is not None

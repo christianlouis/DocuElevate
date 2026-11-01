@@ -390,7 +390,7 @@ class TestOAuthCallback:
                 assert "error=OAuth+not+configured" in result.headers["location"]
 
     @pytest.mark.asyncio
-    async def test_oauth_callback_successful_authentication(self):
+    async def test_oauth_callback_successful_authentication(self, db_session):
         """Test OAuth callback with successful authentication."""
         with patch("app.auth.AUTH_ENABLED", True):
             with patch("app.auth.OAUTH_CONFIGURED", True):
@@ -415,7 +415,7 @@ class TestOAuthCallback:
                         mock_request = MagicMock()
                         mock_request.session = {}
 
-                        result = await oauth_callback(mock_request)
+                        result = await oauth_callback(mock_request, db_session)
 
                         # Verify user was added to session
                         assert "user" in mock_request.session
@@ -426,7 +426,7 @@ class TestOAuthCallback:
                         assert isinstance(result, RedirectResponse)
 
     @pytest.mark.asyncio
-    async def test_oauth_callback_non_admin_user(self):
+    async def test_oauth_callback_non_admin_user(self, db_session):
         """Test OAuth callback for non-admin user."""
         with patch("app.auth.AUTH_ENABLED", True):
             with patch("app.auth.OAUTH_CONFIGURED", True):
@@ -451,13 +451,13 @@ class TestOAuthCallback:
                         mock_request = MagicMock()
                         mock_request.session = {}
 
-                        result = await oauth_callback(mock_request)
+                        result = await oauth_callback(mock_request, db_session)
 
                         # Verify user is not admin
                         assert mock_request.session["user"]["is_admin"] is False
 
     @pytest.mark.asyncio
-    async def test_oauth_callback_adds_gravatar_when_no_picture(self):
+    async def test_oauth_callback_adds_gravatar_when_no_picture(self, db_session):
         """Test OAuth callback adds Gravatar when no picture provided."""
         with patch("app.auth.AUTH_ENABLED", True):
             with patch("app.auth.OAUTH_CONFIGURED", True):
@@ -482,7 +482,7 @@ class TestOAuthCallback:
                         mock_request = MagicMock()
                         mock_request.session = {}
 
-                        result = await oauth_callback(mock_request)
+                        result = await oauth_callback(mock_request, db_session)
 
                         # Verify Gravatar was added
                         assert "picture" in mock_request.session["user"]

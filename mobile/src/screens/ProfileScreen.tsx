@@ -4,14 +4,17 @@
 
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
-import React from "react";
+import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +30,10 @@ export default function ProfileScreen() {
   const effectiveBaseUrl = baseUrl || DEFAULT_SERVER_URL;
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
   const languages = getSupportedLanguages();
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function handleLanguageSelect(code: string) {
     await setLang(code);
@@ -49,22 +56,20 @@ export default function ProfileScreen() {
   }
 
   function handleDeleteAccount() {
-    Alert.alert(
-      t("profile.delete_account_title"),
-      t("profile.delete_account_msg"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("profile.delete_account"),
-          style: "destructive",
-          onPress: () => {
-            Linking.openURL(`${effectiveBaseUrl}/account/delete`).catch(() => {
-              Alert.alert(t("common.error"), t("profile.could_not_open", { page: t("profile.delete_account") }));
-            });
-          },
-        },
-      ]
-    );
+    setDeleteError(""); setDeleteConfirmation(""); setDeleteModalVisible(true);
+  }
+
+  async function confirmDeleteAccount() {
+    if (deleteConfirmation !== "DELETE MY ACCOUNT") return;
+    setDeleting(true); setDeleteError("");
+    try {
+      await api.deleteAccount(deleteConfirmation);
+      setDeleteModalVisible(false);
+      await signOut();
+      Alert.alert(t("profile.delete_account_title"), t("profile.delete_account_done"));
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : t("profile.delete_account_failed"));
+    } finally { setDeleting(false); }
   }
 
   function openPrivacyPolicy() {
@@ -94,6 +99,7 @@ export default function ProfileScreen() {
   }
 
   return (
+    <>
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {/* Avatar + name */}
       <View style={styles.profileCard}>
@@ -221,6 +227,17 @@ export default function ProfileScreen() {
       {/* App version */}
       <Text style={styles.versionText}>DocuElevate v{appVersion}</Text>
     </ScrollView>
+    <Modal visible={deleteModalVisible} transparent animationType="fade" onRequestClose={() => !deleting && setDeleteModalVisible(false)}>
+      <View style={styles.modalBackdrop}><View style={styles.modalCard}>
+        <Text style={styles.modalTitle}>{t("profile.delete_account_title")}</Text>
+        <Text style={styles.modalText}>{t("profile.delete_account_msg")}</Text>
+        <TextInput style={styles.confirmInput} value={deleteConfirmation} onChangeText={setDeleteConfirmation} autoCapitalize="characters" autoCorrect={false} editable={!deleting} placeholder="DELETE MY ACCOUNT" accessibilityLabel={t("profile.delete_account_confirmation")} />
+        {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
+        <Pressable style={[styles.deleteAccountButton, (deleting || deleteConfirmation !== "DELETE MY ACCOUNT") && styles.disabledButton]} disabled={deleting || deleteConfirmation !== "DELETE MY ACCOUNT"} onPress={confirmDeleteAccount}>{deleting ? <ActivityIndicator color="#dc2626" /> : <Text style={styles.deleteAccountText}>{t("profile.delete_account_confirm")}</Text>}</Pressable>
+        <Pressable style={styles.cancelButton} disabled={deleting} onPress={() => setDeleteModalVisible(false)}><Text>{t("common.cancel")}</Text></Pressable>
+      </View></View>
+    </Modal>
+    </>
   );
 }
 
@@ -360,6 +377,14 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
+  disabledButton: { opacity: 0.5 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 24 },
+  modalCard: { backgroundColor: "#fff", borderRadius: 14, padding: 20 },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#111827", marginBottom: 10 },
+  modalText: { color: "#374151", lineHeight: 20, marginBottom: 14 },
+  confirmInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 12, marginBottom: 8, minHeight: 48 },
+  errorText: { color: "#b91c1c", marginBottom: 10 },
+  cancelButton: { alignItems: "center", padding: 14, marginTop: 4 },
   versionText: {
     fontSize: 12,
     color: "#9ca3af",

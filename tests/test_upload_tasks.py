@@ -135,7 +135,7 @@ def test_upload_to_onedrive_file_not_found(mock_settings):
     """Test that upload_to_onedrive raises error for missing file."""
     with patch("app.tasks.upload_to_onedrive.log_task_progress"):
         with pytest.raises(FileNotFoundError):
-            upload_to_onedrive.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
+            upload_to_onedrive.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
 
 @pytest.mark.unit
@@ -143,7 +143,7 @@ def test_upload_to_s3_file_not_found(mock_settings):
     """Test that upload_to_s3 raises error for missing file."""
     with patch("app.tasks.upload_to_s3.log_task_progress"):
         with pytest.raises(FileNotFoundError):
-            upload_to_s3.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
+            upload_to_s3.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
 
 @pytest.mark.unit
@@ -401,7 +401,7 @@ def test_upload_to_ftp_file_not_found():
         mock_settings.ftp_host = "ftp.example.com"
 
         with pytest.raises(FileNotFoundError):
-            upload_to_ftp.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
+            upload_to_ftp.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
 
 @pytest.mark.unit
@@ -416,7 +416,7 @@ def test_upload_to_sftp_file_not_found():
         mock_settings.sftp_username = "test_user"
 
         with pytest.raises(FileNotFoundError):
-            upload_to_sftp.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
+            upload_to_sftp.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
 
 @pytest.mark.unit
@@ -429,7 +429,7 @@ def test_upload_to_webdav_file_not_found():
         mock_settings.webdav_url = "https://webdav.example.com/"
 
         with pytest.raises(FileNotFoundError):
-            upload_to_webdav.apply(args=["/nonexistent/file.pdf"], kwargs={"file_id": 1}).get()
+            upload_to_webdav.__wrapped__("/nonexistent/file.pdf", file_id=1)
 
 
 @pytest.mark.unit

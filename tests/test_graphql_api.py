@@ -272,12 +272,14 @@ class TestDocumentsQuery:
 class TestPipelinesQuery:
     """Tests for the pipelines and pipeline queries."""
 
-    def test_list_pipelines_empty(self, client: TestClient):
+    def test_list_pipelines_empty(self, client: TestClient, db_session):
+        system_ids = {pipeline.id for pipeline in db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).all()}
         result = gql(client, "{ pipelines { id name } }")
         assert "errors" not in result
-        assert result["data"]["pipelines"] == []
+        assert {pipeline["id"] for pipeline in result["data"]["pipelines"]} == system_ids
 
-    def test_list_pipelines_with_steps(self, client: TestClient, pipeline_record: Pipeline):
+    def test_list_pipelines_with_steps(self, client: TestClient, db_session, pipeline_record: Pipeline):
+        system_ids = {pipeline.id for pipeline in db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).all()}
         result = gql(
             client,
             """
@@ -291,10 +293,11 @@ class TestPipelinesQuery:
         )
         assert "errors" not in result
         pipelines = result["data"]["pipelines"]
-        assert len(pipelines) == 1
-        assert pipelines[0]["name"] == "Test Pipeline"
-        assert len(pipelines[0]["steps"]) == 1
-        assert pipelines[0]["steps"][0]["stepType"] == "ocr"
+        assert {pipeline["id"] for pipeline in pipelines} == system_ids | {pipeline_record.id}
+        test_pipeline = next(pipeline for pipeline in pipelines if pipeline["id"] == pipeline_record.id)
+        assert test_pipeline["name"] == "Test Pipeline"
+        assert len(test_pipeline["steps"]) == 1
+        assert test_pipeline["steps"][0]["stepType"] == "ocr"
 
     def test_get_single_pipeline(self, client: TestClient, pipeline_record: Pipeline):
         result = gql(
@@ -531,6 +534,7 @@ class TestGraphQLTenantAndPrivacyIsolation:
         other = Pipeline(owner_id="alice", name="Alice pipeline")
         db_session.add_all([own, system, other])
         db_session.commit()
+        system_ids = {pipeline.id for pipeline in db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).all()}
 
         with (
             patch("app.api.graphql_api.get_current_user", return_value={"id": "admin", "is_admin": True}),
@@ -540,7 +544,7 @@ class TestGraphQLTenantAndPrivacyIsolation:
             list_result = gql(client, "{ pipelines(limit: 100) { id name } }")
             single_result = gql(client, f"{{ pipeline(id: {other.id}) {{ id name }} }}")
 
-        assert {item["id"] for item in list_result["data"]["pipelines"]} == {own.id, system.id}
+        assert {item["id"] for item in list_result["data"]["pipelines"]} == {own.id} | system_ids
         assert single_result["data"]["pipeline"] is None
 
     def test_platform_admin_user_directory_is_limited_to_tribe_peers(self, client, db_session):

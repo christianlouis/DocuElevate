@@ -41,7 +41,7 @@ class TestUploadToS3Coverage:
             ms.aws_secret_access_key = _TEST_CRED
 
             with pytest.raises(ValueError, match="bucket name"):
-                upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+                upload_to_s3.__wrapped__(str(f), file_id=1)
 
     @pytest.mark.unit
     def test_no_aws_credentials_raises(self, tmp_path):
@@ -58,7 +58,7 @@ class TestUploadToS3Coverage:
             ms.aws_secret_access_key = ""
 
             with pytest.raises(ValueError, match="credentials"):
-                upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+                upload_to_s3.__wrapped__(str(f), file_id=1)
 
     @pytest.mark.unit
     def test_folder_prefix_appends_slash(self, tmp_path):
@@ -81,7 +81,7 @@ class TestUploadToS3Coverage:
             ms.s3_acl = ""
             mock_boto3.client.return_value = mock_s3
 
-            result = upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+            result = upload_to_s3.__wrapped__(str(f), file_id=1)
 
         uploaded_key = mock_s3.upload_file.call_args[0][2]
         assert uploaded_key == "docs/test.pdf"
@@ -108,7 +108,7 @@ class TestUploadToS3Coverage:
             ms.s3_acl = ""
             mock_boto3.client.return_value = mock_s3
 
-            result = upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+            result = upload_to_s3.__wrapped__(str(f), file_id=1)
 
         assert mock_s3.upload_file.call_args[0][2] == "test.pdf"
         assert result["s3_key"] == "test.pdf"
@@ -166,7 +166,7 @@ class TestUploadToS3Coverage:
             mock_boto3.client.return_value = mock_s3
 
             with pytest.raises(Exception, match="Failed to upload"):
-                upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+                upload_to_s3.__wrapped__(str(f), file_id=1)
 
     @pytest.mark.unit
     def test_generic_exception_handler(self, tmp_path):
@@ -192,7 +192,7 @@ class TestUploadToS3Coverage:
             mock_boto3.client.return_value = mock_s3
 
             with pytest.raises(Exception, match="Error uploading"):
-                upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+                upload_to_s3.__wrapped__(str(f), file_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +339,7 @@ class TestUploadToSftpCoverage:
             mock_paramiko.SSHClient.return_value = mock_ssh
 
             with pytest.raises(Exception, match="Failed to upload"):
-                upload_to_sftp.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+                upload_to_sftp.__wrapped__(str(f), file_id=1)
 
     @pytest.mark.unit
     def test_remote_path_slash_prepended(self, tmp_path):
@@ -450,7 +450,7 @@ class TestUploadToSftpCoverage:
             mock_paramiko.SSHClient.return_value = mock_ssh
 
             with pytest.raises(Exception, match="Failed to upload"):
-                upload_to_sftp.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+                upload_to_sftp.__wrapped__(str(f), file_id=1)
 
         mock_ssh.close.assert_called()
 

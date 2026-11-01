@@ -19,12 +19,13 @@
 import * as Linking from "expo-linking";
 import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
 import { ShareProvider, useShare } from "../src/context/ShareContext";
-import { LocaleProvider, useLocale, isLanguageSupported } from "../src/i18n";
+import { LocaleProvider, useLocale, isLanguageSupported, t } from "../src/i18n";
 import { mimeTypeFromFilename } from "../src/utils/mimeTypes";
+import api from "../src/services/api";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,11 +89,16 @@ function makeUrlHandler(addPendingFile: (f: { uri: string; filename: string; mim
 // ---------------------------------------------------------------------------
 
 function AuthGuard() {
-  const { isLoading, isAuthenticated, user } = useAuth();
+  const { isLoading, isAuthenticated, user, signOut } = useAuth();
   const { addPendingFile } = useShare();
   const { setLang } = useLocale();
   const segments = useSegments();
   const router = useRouter();
+  const [onboarding, setOnboarding] = React.useState<"checking" | "complete" | "incomplete" | "error">("checking");
+  const [retry, setRetry] = React.useState(0);
+  const [checkedRoute, setCheckedRoute] = React.useState<boolean | null>(null);
+  const [checkedOwner, setCheckedOwner] = React.useState<string | null>(null);
+  const onOnboarding = segments[0] === "onboarding";
 
   // Apply the server-side language preference whenever the user profile is
   // loaded (on login or app resume).  This syncs the language set on the
@@ -121,36 +127,50 @@ function AuthGuard() {
   }, [addPendingFile]);
 
   useEffect(() => {
+    if (isLoading || !isAuthenticated) {
+      setOnboarding("checking");
+      return;
+    }
+    let active = true;
+    setOnboarding("checking");
+    api.onboardingStatus().then((status) => {
+      if (active) { setCheckedRoute(onOnboarding); setCheckedOwner(user?.owner_id || null); setOnboarding(status.completed ? "complete" : "incomplete"); }
+    }).catch(() => { if (active) setOnboarding("error"); });
+    return () => { active = false; };
+  }, [isLoading, isAuthenticated, user?.owner_id, onOnboarding, retry]);
+
+  useEffect(() => {
     if (isLoading) return;
-
     const inAuthGroup = segments[0] === "(auth)";
-
-    if (!isAuthenticated && !inAuthGroup) {
-      // Unauthenticated visitor outside the auth group → send to welcome
-      router.replace("/(auth)/");
-    } else if (isAuthenticated && inAuthGroup) {
-      // Authenticated user on auth screens → send to main app
+    if (!isAuthenticated) {
+      if (!inAuthGroup) router.replace("/(auth)/");
+    } else if ((checkedRoute !== onOnboarding || checkedOwner !== (user?.owner_id || null))) {
+      return;
+    } else if (onboarding === "incomplete") {
+      if (!onOnboarding) router.replace("/onboarding");
+    } else if (onboarding === "complete" && (inAuthGroup || onOnboarding)) {
       router.replace("/(tabs)/");
     }
-  }, [isAuthenticated, isLoading, segments, router]);
-
-  if (isLoading) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#1e40af" />
-        <Text style={styles.loadingText}>Loading…</Text>
-      </View>
-    );
-  }
+  }, [isAuthenticated, isLoading, segments, onOnboarding, onboarding, checkedRoute, checkedOwner, user?.owner_id, router]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-      {/* +not-found handles unmatched routes such as iOS "Open In…" file paths */}
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      {(isLoading || (isAuthenticated && (onboarding === "checking" || onboarding === "error" || checkedRoute !== onOnboarding || checkedOwner !== (user?.owner_id || null)))) && (
+        <View style={[styles.loading, StyleSheet.absoluteFillObject]}>
+          {onboarding === "error" && !isLoading ? <>
+            <Text style={styles.loadingText}>{t("onboarding.status_failed")}</Text>
+            <Pressable onPress={() => setRetry((value) => value + 1)}><Text style={styles.loadingText}>{t("common.retry")}</Text></Pressable>
+            <Pressable onPress={() => void signOut()}><Text style={styles.loadingText}>{t("signup.back_login")}</Text></Pressable>
+          </> : <><ActivityIndicator size="large" color="#1e40af" /><Text style={styles.loadingText}>Loading…</Text></>}
+        </View>
+      )}
+    </View>
   );
 }
 

@@ -513,9 +513,16 @@ class TestFileDetailView:
         assert b"Dropbox" in response.content or b"dropbox" in response.content
 
     def test_file_detail_distinguishes_skipped_steps_from_success(
-        self, client: TestClient, db_session, sample_pdf_path
+        self, client: TestClient, db_session, sample_pdf_path, monkeypatch
     ):
         """A keyless install reports limitations instead of claiming every step succeeded."""
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "multi_user_enabled", False)
+        # This fixture models a legacy unassigned file without a selected
+        # pipeline.  Ignore the startup-seeded system pipeline so the summary
+        # reflects only the recorded steps below.
+        monkeypatch.setattr("app.views.files._resolve_pipeline", lambda _db, _file: None)
         file_record = FileRecord(
             filehash="skipped-summary",
             original_filename="keyless.pdf",

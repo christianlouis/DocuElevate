@@ -29,6 +29,7 @@ import json
 import logging
 import os
 from collections.abc import Mapping
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -44,8 +45,30 @@ from app.models import (
     SettingsAuditLog,
     SharedLink,
 )
+from app.services.account_deletion import DeletionBlocked, assert_account_active
+from app.services.account_lifecycle_lock import account_lifecycle_lock
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _current_file(candidate):
+    """Re-read a candidate while its owner's deletion lock is held."""
+    owner = candidate.owner_id
+    if not owner and settings.multi_user_enabled:
+        yield None
+        return
+    with SessionLocal() as db, ExitStack() as locks:
+        if owner:
+            locks.enter_context(account_lifecycle_lock(db, owner, exclusive=False))
+            db.expire_all()
+            try:
+                assert_account_active(db, owner)
+            except DeletionBlocked:
+                yield None
+                return
+        yield db.query(FileRecord).filter(FileRecord.id == candidate.id, FileRecord.owner_id == owner).first()
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -120,22 +143,26 @@ def process_new_documents() -> dict:
 
         queued = 0
         skipped = 0
-        for record in candidates:
-            if not record.local_filename or not os.path.exists(record.local_filename):
-                logger.warning(
-                    "[batch] Skipping file_id=%s — local file not found: %s",
-                    record.id,
+        for candidate in candidates:
+            with _current_file(candidate) as record:
+                if record is None:
+                    skipped += 1
+                    continue
+                if not record.local_filename or not os.path.exists(record.local_filename):
+                    logger.warning(
+                        "[batch] Skipping file_id=%s — local file not found: %s",
+                        record.id,
+                        record.local_filename,
+                    )
+                    skipped += 1
+                    continue
+                process_document.delay(
                     record.local_filename,
+                    original_filename=record.original_filename,
+                    file_id=record.id,
+                    owner_id=record.owner_id,
                 )
-                skipped += 1
-                continue
-            process_document.delay(
-                record.local_filename,
-                original_filename=record.original_filename,
-                file_id=record.id,
-                owner_id=record.owner_id,
-            )
-            queued += 1
+                queued += 1
 
         detail = f"Queued {queued} document(s) for processing; skipped {skipped} (file not on disk)."
         logger.info("[batch] process_new_documents: %s", detail)
@@ -199,22 +226,26 @@ def reprocess_failed_documents() -> dict:
 
         queued = 0
         skipped = 0
-        for record in candidates:
-            if not record.local_filename or not os.path.exists(record.local_filename):
-                logger.warning(
-                    "[batch] Skipping file_id=%s — local file not found: %s",
-                    record.id,
+        for candidate in candidates:
+            with _current_file(candidate) as record:
+                if record is None:
+                    skipped += 1
+                    continue
+                if not record.local_filename or not os.path.exists(record.local_filename):
+                    logger.warning(
+                        "[batch] Skipping file_id=%s — local file not found: %s",
+                        record.id,
+                        record.local_filename,
+                    )
+                    skipped += 1
+                    continue
+                process_document.delay(
                     record.local_filename,
+                    original_filename=record.original_filename,
+                    file_id=record.id,
+                    owner_id=record.owner_id,
                 )
-                skipped += 1
-                continue
-            process_document.delay(
-                record.local_filename,
-                original_filename=record.original_filename,
-                file_id=record.id,
-                owner_id=record.owner_id,
-            )
-            queued += 1
+                queued += 1
 
         detail = f"Re-queued {queued} failed document(s); skipped {skipped} (file not on disk)."
         logger.info("[batch] reprocess_failed_documents: %s", detail)
@@ -551,14 +582,17 @@ def backfill_missing_metadata(batch_size: int = _METADATA_BACKFILL_BATCH_SIZE) -
             )
 
         queued = 0
-        for record in candidates:
-            filename = record.local_filename or record.original_filename or f"file_{record.id}"
-            extract_metadata_with_gpt.delay(
-                filename,
-                record.ocr_text,
-                file_id=record.id,
-            )
-            queued += 1
+        for candidate in candidates:
+            with _current_file(candidate) as record:
+                if record is None:
+                    continue
+                filename = record.local_filename or record.original_filename or f"file_{record.id}"
+                extract_metadata_with_gpt.delay(
+                    filename,
+                    record.ocr_text,
+                    file_id=record.id,
+                )
+                queued += 1
 
         detail = f"Queued {queued} document(s) for AI metadata backfill."
         logger.info("[batch] backfill_missing_metadata: %s", detail)
@@ -704,41 +738,64 @@ def sync_search_index(batch_size: int = _SEARCH_SYNC_BATCH_SIZE, continue_until_
             missing_count = missing_query.count()
             candidates = missing_query.order_by(FileRecord.id.asc()).limit(batch_size).all()
 
-        batches: list[list[tuple[FileRecord, str, dict]]] = []
-        current_batch: list[tuple[FileRecord, str, dict]] = []
-        current_batch_characters = 0
+        # Only retain identity before acquiring the owner locks. Content and
+        # metadata are read from the current rows while those locks are held.
+        batches = [
+            candidates[i : i + _SEARCH_INDEX_CHUNK_SIZE] for i in range(0, len(candidates), _SEARCH_INDEX_CHUNK_SIZE)
+        ]
         skipped = 0
-        for record in candidates:
-            metadata: dict = {}
-            if record.ai_metadata:
-                try:
-                    metadata = json.loads(record.ai_metadata)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
-            text = record.ocr_text or ""
-            if current_batch and current_batch_characters + len(text) > _SEARCH_INDEX_CHUNK_CHAR_LIMIT:
-                batches.append(current_batch)
-                current_batch = []
-                current_batch_characters = 0
-            current_batch.append((record, text, metadata))
-            current_batch_characters += len(text)
-            if len(current_batch) == _SEARCH_INDEX_CHUNK_SIZE:
-                batches.append(current_batch)
-                current_batch = []
-                current_batch_characters = 0
-        if current_batch:
-            batches.append(current_batch)
-
         indexed = 0
-        for documents in batches:
-            committed = index_documents(documents)
-            indexed += committed
-            if committed != len(documents):
-                skipped += len(documents) - committed
-                # Do not continue after a failed chunk. The next run can safely
-                # resume from the IDs already committed before the failure.
-                break
+        for candidates_batch in batches:
+            with SessionLocal() as db, ExitStack() as locks:
+                owners = sorted({record.owner_id for record in candidates_batch if record.owner_id})
+                blocked = set()
+                for owner in owners:
+                    locks.enter_context(account_lifecycle_lock(db, owner, exclusive=False))
+                    db.expire_all()
+                    try:
+                        assert_account_active(db, owner)
+                    except DeletionBlocked:
+                        blocked.add(owner)
+                live_documents = []
+                for candidate in candidates_batch:
+                    owner = candidate.owner_id
+                    if owner in blocked or (not owner and settings.multi_user_enabled):
+                        skipped += 1
+                        continue
+                    record = (
+                        db.query(FileRecord).filter(FileRecord.id == candidate.id, FileRecord.owner_id == owner).first()
+                    )
+                    if not record or record.is_duplicate or not (record.ocr_text or record.ai_metadata):
+                        skipped += 1
+                        continue
+                    try:
+                        metadata = json.loads(record.ai_metadata) if record.ai_metadata else {}
+                    except (json.JSONDecodeError, ValueError):
+                        metadata = {}
+                    live_documents.append((record, record.ocr_text or "", metadata))
+
+                chunks = []
+                chunk = []
+                characters = 0
+                for document in live_documents:
+                    if chunk and characters + len(document[1]) > _SEARCH_INDEX_CHUNK_CHAR_LIMIT:
+                        chunks.append(chunk)
+                        chunk = []
+                        characters = 0
+                    chunk.append(document)
+                    characters += len(document[1])
+                if chunk:
+                    chunks.append(chunk)
+                failed = False
+                for chunk in chunks:
+                    committed = index_documents(chunk)
+                    indexed += committed
+                    if committed != len(chunk):
+                        skipped += len(chunk) - committed
+                        failed = True
+                        break
+                if failed:
+                    break
 
         remaining = max(missing_count - indexed, 0)
         continued = False

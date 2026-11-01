@@ -20,6 +20,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `CELERY_RESULT_BACKEND` | Optional dedicated Celery result-backend URL; must resolve to a writable primary and falls back to `REDIS_URL`. | unset |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
+| `MEILISEARCH_DELETION_MODE` | Operator-only deletion contract: `managed` (default, fail-closed cleanup) or `never_used` (only with an explicit no-data attestation). | `managed` |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
 | `DEPLOYMENT_LABEL`     | Optional label shown during onboarding so users can distinguish installations. | *(empty)* |
@@ -44,6 +45,7 @@ secret manager; do not store them in `.env` files committed to source control.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VECTOR_INDEX_ENABLED` | Enable chunk indexing and the knowledge search API. | `false` |
+| `VECTOR_INDEX_DELETION_MODE` | Operator-only deletion contract: `managed` (default, fail-closed cleanup) or `never_used` (only with an explicit no-data attestation; rejected while indexing is enabled). | `managed` |
 | `VECTOR_INDEX_URL` | Internal Qdrant base URL. | `http://qdrant:6333` |
 | `VECTOR_INDEX_API_KEY` | Qdrant API key sent only to the internal service. | unset |
 | `VECTOR_INDEX_COLLECTION` | Qdrant collection for document chunks. | `docuelevate_documents` |
@@ -71,6 +73,7 @@ Example preproduction service configuration (secret values omitted):
 
 ```dotenv
 VECTOR_INDEX_ENABLED=true
+VECTOR_INDEX_DELETION_MODE=managed
 VECTOR_INDEX_URL=http://docuelevate-qdrant:6333
 VECTOR_INDEX_COLLECTION=docuelevate_documents
 VECTOR_CHUNK_TOKENS=600
@@ -472,6 +475,8 @@ Credentials are encrypted at rest using Fernet encryption.
 - The polling loop runs every minute and processes all active IMAP sources (system-level and per-user) in sequence.
 
 ### Authentication
+
+Public self-registration requires `MULTI_USER_ENABLED=true`, `ALLOW_LOCAL_SIGNUP=true`, and working SMTP delivery. Check `/api/auth/capabilities` on the deployed server before enabling the signup entry point. Registration no longer activates accounts when SMTP is absent. Configure a public HTTPS base URL so verification links return to the correct installation, and test actual message delivery, verification, reset and resend before inviting users. Policy version changes must be deployed together with the corresponding legal pages. See [signup review readiness](SignupReviewReadiness.md).
 
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|

@@ -1006,6 +1006,7 @@ class TestSyncSearchIndex:
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1042,6 +1043,7 @@ class TestSyncSearchIndex:
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1080,6 +1082,7 @@ class TestSyncSearchIndex:
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1106,6 +1109,7 @@ class TestSyncSearchIndex:
             patch("app.tasks.batch_tasks._update_job_status") as mock_update,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             result = sync_search_index()
 
@@ -1135,6 +1139,7 @@ class TestSyncSearchIndex:
             patch("app.tasks.batch_tasks.settings") as mock_settings,
             patch.object(sync_search_index, "apply_async") as apply_async,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1495,6 +1500,7 @@ class TestSyncSearchIndexAdditional:
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1535,6 +1541,7 @@ class TestSyncSearchIndexAdditional:
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1589,6 +1596,7 @@ class TestSyncSearchIndexAdditional:
             patch("app.tasks.batch_tasks.settings") as mock_settings,
             patch("app.tasks.batch_tasks._SEARCH_INDEX_CHUNK_CHAR_LIMIT", 5),
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1620,6 +1628,7 @@ class TestSyncSearchIndexAdditional:
             patch("app.tasks.batch_tasks.SessionLocal") as mock_sl,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             real_session = sessionmaker(bind=sj_engine)()
             mock_sl.return_value.__enter__ = MagicMock(return_value=real_session)
@@ -1777,6 +1786,7 @@ class TestSyncSearchIndexOuterException:
             patch("app.tasks.batch_tasks._update_job_status") as mock_update,
             patch("app.tasks.batch_tasks.settings") as mock_settings,
         ):
+            mock_settings.multi_user_enabled = False
             mock_settings.meilisearch_index_name = "documents"
             # Make the DB query raise.
             mock_sl.return_value.__enter__ = MagicMock(side_effect=RuntimeError("DB down"))

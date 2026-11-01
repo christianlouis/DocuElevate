@@ -394,4 +394,4 @@ class TestUploadToOnedrive:
         mock_token.side_effect = ValueError("Token error")
 
         with pytest.raises(Exception, match="Failed to upload"):
-            upload_to_onedrive.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_onedrive.__wrapped__(str(test_file), file_id=1)

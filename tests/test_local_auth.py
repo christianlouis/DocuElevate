@@ -25,6 +25,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.local_auth import CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION
 from app.config import settings
 from app.database import Base, get_db
 from app.models import LocalUser, UserProfile
@@ -41,6 +42,21 @@ from app.utils.local_auth import (
 # ---------------------------------------------------------------------------
 
 _TEST_DB_URL = "sqlite:///:memory:"
+
+
+def _signup_payload(**overrides):
+    payload = {
+        "email": "a@example.com",
+        "username": "auser",
+        "password": "password1",
+        "password_confirm": "password1",
+        "accept_terms": True,
+        "accept_privacy": True,
+        "terms_version": CURRENT_TERMS_VERSION,
+        "privacy_version": CURRENT_PRIVACY_VERSION,
+    }
+    payload.update(overrides)
+    return payload
 
 
 @pytest.fixture()
@@ -192,6 +208,31 @@ def test_build_session_user():
 
 
 @pytest.mark.integration
+def test_auth_capabilities_are_public_and_expose_current_legal_versions(la_client):
+    resp = la_client.get("/api/auth/capabilities")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["email_verification_required"] is True
+    assert data["terms_version"] == CURRENT_TERMS_VERSION
+    assert data["privacy_version"] == CURRENT_PRIVACY_VERSION
+    # Public native clients use this token for the subsequent cookie-backed
+    # signup request; the capability response must never be cached.
+    assert "csrf_token" in data
+    assert resp.headers.get("cache-control") == "no-store"
+
+
+@pytest.mark.integration
+def test_signup_rejects_missing_current_consent(la_client):
+    with patch("app.api.local_auth.settings") as mock_settings:
+        mock_settings.allow_local_signup = True
+        mock_settings.multi_user_enabled = True
+        mock_settings.email_host = "smtp.example.com"
+        resp = la_client.post("/api/auth/signup", json=_signup_payload(accept_privacy=False))
+    assert resp.status_code == 422
+    assert "privacy" in resp.json()["detail"].lower()
+
+
+@pytest.mark.integration
 def test_signup_disabled(la_client):
     """POST /api/auth/signup returns 403 when allow_local_signup is False."""
     with patch("app.api.local_auth.settings") as mock_settings:
@@ -211,24 +252,17 @@ def test_signup_disabled(la_client):
 
 @pytest.mark.integration
 def test_signup_smtp_not_configured(la_client):
-    """POST /api/auth/signup succeeds without SMTP and activates the account immediately."""
+    """POST /api/auth/signup fails closed when SMTP is unavailable."""
     with patch("app.api.local_auth.settings") as mock_settings:
         mock_settings.allow_local_signup = True
         mock_settings.multi_user_enabled = True
         mock_settings.email_host = None
         resp = la_client.post(
             "/api/auth/signup",
-            json={
-                "email": "a@example.com",
-                "username": "auser",
-                "password": "password1",
-                "password_confirm": "password1",
-            },
+            json=_signup_payload(),
         )
-    assert resp.status_code == 201
-    data = resp.json()
-    assert data["email_verification_required"] is False
-    assert "now log in" in data["message"]
+    assert resp.status_code == 503
+    assert "email verification" in resp.json()["detail"]
 
 
 @pytest.mark.integration
@@ -268,6 +302,10 @@ def test_signup_success(la_client):
                 "username": "newuser",
                 "password": "password1",
                 "password_confirm": "password1",
+                "accept_terms": True,
+                "accept_privacy": True,
+                "terms_version": CURRENT_TERMS_VERSION,
+                "privacy_version": CURRENT_PRIVACY_VERSION,
             },
         )
     assert resp.status_code == 201
@@ -293,6 +331,10 @@ def test_signup_duplicate_email(la_client, active_user):
                 "username": "otheruser",
                 "password": "password1",
                 "password_confirm": "password1",
+                "accept_terms": True,
+                "accept_privacy": True,
+                "terms_version": CURRENT_TERMS_VERSION,
+                "privacy_version": CURRENT_PRIVACY_VERSION,
             },
         )
     assert resp.status_code == 409
@@ -316,6 +358,10 @@ def test_signup_duplicate_username(la_client, active_user):
                 "username": "activeuser",
                 "password": "password1",
                 "password_confirm": "password1",
+                "accept_terms": True,
+                "accept_privacy": True,
+                "terms_version": CURRENT_TERMS_VERSION,
+                "privacy_version": CURRENT_PRIVACY_VERSION,
             },
         )
     assert resp.status_code == 409
@@ -368,6 +414,10 @@ def test_signup_smtp_failure_cleans_up(la_client, la_session):
                 "username": "failuser",
                 "password": "password1",
                 "password_confirm": "password1",
+                "accept_terms": True,
+                "accept_privacy": True,
+                "terms_version": CURRENT_TERMS_VERSION,
+                "privacy_version": CURRENT_PRIVACY_VERSION,
             },
         )
     assert resp.status_code == 503
@@ -868,7 +918,9 @@ async def test_admin_login_username_case_insensitive():
         mock_settings.admin_password = "adminpass"
         mock_settings.multi_user_enabled = False
 
-        result = await auth(mock_request, db=MagicMock())
+        mock_db = MagicMock()
+        mock_db.get_bind.return_value.dialect.name = "sqlite"
+        result = await auth(mock_request, db=mock_db)
 
     assert result.status_code == 302
     assert "user" in mock_request.session
@@ -1350,3 +1402,20 @@ def test_build_session_user_no_display_name_falls_back_to_username():
     assert result["name"] == "uname"
     assert result["is_admin"] is True
     assert result["auth_method"] == "local"
+
+
+@pytest.mark.integration
+def test_signup_cannot_recreate_deleted_account(la_client, la_session):
+    from app.models import AccountDeletionTombstone
+    from app.services.account_deletion import tombstone_key
+
+    la_session.add(AccountDeletionTombstone(owner_id=tombstone_key("a@example.com"), status="deleted"))
+    la_session.commit()
+    with patch("app.api.local_auth.settings") as config, patch("app.api.local_auth.send_verification_email") as send:
+        config.multi_user_enabled = config.allow_local_signup = True
+        config.email_host = "smtp.example.com"
+        response = la_client.post("/api/auth/signup", json=_signup_payload())
+    assert response.status_code == 409
+    assert la_session.query(LocalUser).filter_by(email="a@example.com").first() is None
+    assert la_session.query(UserProfile).filter_by(user_id="a@example.com").first() is None
+    send.assert_not_called()

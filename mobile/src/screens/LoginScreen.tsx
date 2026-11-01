@@ -140,6 +140,12 @@ export default function LoginScreen() {
         <Text style={styles.hint}>{t("login.hint")}</Text>
 
         <Pressable
+          onPress={() => router.push("/(auth)/signup")}
+          accessibilityRole="button"
+          style={styles.backLink}
+        ><Text style={styles.backLinkText}>{t("login.create_account")}</Text></Pressable>
+
+        <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel={t("login.back")}
