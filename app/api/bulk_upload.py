@@ -27,16 +27,14 @@ from sqlalchemy.orm import Session
 from app.api.intake import _authenticate_intake
 from app.config import settings
 from app.database import SessionLocal, get_db
-from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
-from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file
+from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file, upload_root
 from app.utils.filename_utils import sanitize_filename
 from app.utils.tribe_scope import ensure_document_scope
 
 router = APIRouter(prefix="/uploads", tags=["bulk-uploads"])
 Db = Annotated[Session, Depends(get_db)]
-MAX_ACTIVE_FILES = 1000
 MAX_PREFLIGHT_FILES = 200
 
 
@@ -45,7 +43,29 @@ def _principal(request: Request, secret: str | None = None) -> tuple[str, str | 
 
 
 def _capacity_limit() -> int:
-    return min(int(settings.max_upload_size) * 10, 10 * 1024 * 1024 * 1024)
+    usage = shutil.disk_usage(upload_root())
+    reserve = min(usage.total // 10, 1024 * 1024 * 1024)
+    return max(0, usage.total - reserve)
+
+
+def _disk_reserve() -> int:
+    usage = shutil.disk_usage(upload_root())
+    return min(usage.total // 10, 1024 * 1024 * 1024)
+
+
+def _upload_size(upload: UploadFile) -> int | None:
+    try:
+        upload.file.seek(0, os.SEEK_END)
+        size = int(upload.file.tell())
+        upload.file.seek(0)
+        return size
+    except (OSError, AttributeError):
+        return None
+
+
+def _available_capacity(ledger: UploadCapacity) -> int:
+    usage = shutil.disk_usage(upload_root())
+    return max(0, min(_capacity_limit() - ledger.reserved_bytes, usage.free - _disk_reserve()))
 
 
 def _batch(db: Session, batch_id: str, principal: str) -> UploadBatch:
@@ -104,21 +124,30 @@ def _capacity(db: Session) -> UploadCapacity:
 
 
 def _reserve_capacity(db: Session, size: int) -> bool:
-    """Atomically reserve global backlog capacity in the acceptance transaction."""
+    """Atomically reserve real local staging capacity in the acceptance transaction."""
+    usage = shutil.disk_usage(upload_root())
+    if usage.free < size + _disk_reserve():
+        return False
     _capacity(db)
     result = db.execute(
         update(UploadCapacity)
         .where(
             UploadCapacity.id == 1,
-            UploadCapacity.reserved_files < MAX_ACTIVE_FILES,
             UploadCapacity.reserved_bytes <= _capacity_limit() - size,
         )
         .values(
-            reserved_files=UploadCapacity.reserved_files + 1,
             reserved_bytes=UploadCapacity.reserved_bytes + size,
         )
     )
     return result.rowcount == 1
+
+
+def _release_capacity(db: Session, size: int) -> None:
+    db.execute(
+        update(UploadCapacity)
+        .where(UploadCapacity.id == 1)
+        .values(reserved_bytes=func.max(0, UploadCapacity.reserved_bytes - max(0, size)))
+    )
 
 
 def _owner_file_query(db: Session, owner: str | None, sha256: str):
@@ -203,18 +232,18 @@ def preflight(
 @router.get("/capacity")
 def capacity(request: Request, db: Db, batch_id: str, x_docuelevate_intake_secret: str | None = Header(default=None)):
     principal, _ = _principal(request, x_docuelevate_intake_secret)
-    batch, ledger, limit = _batch(db, batch_id, principal), _capacity(db), _capacity_limit()
-    exhausted = ledger.reserved_files >= MAX_ACTIVE_FILES or ledger.reserved_bytes >= limit
+    batch, ledger = _batch(db, batch_id, principal), _capacity(db)
+    available = _available_capacity(ledger)
     return {
         "batch_id": batch.id,
-        "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
-        "max_bytes": max(0, limit - ledger.reserved_bytes),
+        "slots": 1 if available else 0,
+        "max_bytes": available,
         "used_bytes": ledger.reserved_bytes,
-        "retry_after": 5 if exhausted else 0,
+        "retry_after": 30 if not available else 0,
     }
 
 
-@router.post("/files", status_code=202, dependencies=[Depends(require_upload_rate_limit)])
+@router.post("/files", status_code=202)
 def upload_file(
     request: Request,
     db: Db,
@@ -253,14 +282,21 @@ def upload_file(
     generic_mime = supplied in {"", "application/octet-stream"}
     if ext not in ALLOWED_EXTENSIONS or (not generic_mime and supplied not in allowed_mimes):
         raise HTTPException(415, "unsupported document type")
+    size_hint = _upload_size(file)
+    if size_hint is None or size_hint > settings.max_upload_size:
+        raise HTTPException(413, "file exceeds configured upload limit")
+    if not _reserve_capacity(db, size_hint):
+        raise HTTPException(429, "local upload storage is at capacity", headers={"Retry-After": "30"})
     # Do not hold a database transaction while bytes are streaming.  The
     # request body is already spooled by Starlette; a random staging name
     # avoids serialising large concurrent uploads merely to obtain an item id.
     target = safe_path(batch.id, str(uuid.uuid4()), filename)
     try:
         size, actual = stream_to_file(file, target, sha256, settings.max_upload_size)
-        if shutil.disk_usage(target.parent).free < size:
+        if size > size_hint:
             raise OSError("insufficient free disk space")
+        if size < size_hint:
+            _release_capacity(db, size_hint - size)
         with target.open("rb") as probe:
             header = probe.read(16)
             mime = sniff_mime(filename, supplied, header)
@@ -288,8 +324,6 @@ def upload_file(
             if settings.enable_deduplication
             else None
         )
-        if not duplicate and not _reserve_capacity(db, size):
-            raise HTTPException(429, "upload capacity exhausted", headers={"Retry-After": "5"})
         tenant_id, tribe_id = ensure_document_scope(db, owner)
         item = UploadItem(
             batch_id=batch.id,
@@ -320,6 +354,8 @@ def upload_file(
         item.file_id = record.id
         if not duplicate:
             db.add(UploadOutbox(item_id=item.id))
+        else:
+            _release_capacity(db, size)
         db.commit()
     except HTTPException:
         db.rollback()
@@ -395,13 +431,14 @@ async def events(websocket: WebSocket):
         db = SessionLocal()
         current = _batch(db, batch_id, principal)
         ledger = _capacity(db)
+        available = _available_capacity(ledger)
         initial_capacity = {
             "type": "capacity",
             "batch_id": batch_id,
-            "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
-            "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
+            "slots": 1 if available else 0,
+            "max_bytes": available,
             "used_bytes": ledger.reserved_bytes,
-            "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0,
+            "retry_after": 30 if not available else 0,
         }
         initial_snapshot = _snapshot(db, current, None, 100)
         db.rollback()
@@ -422,13 +459,14 @@ async def events(websocket: WebSocket):
             db = SessionLocal()
             current = _batch(db, batch_id, principal)
             ledger = _capacity(db)
+            available = _available_capacity(ledger)
             capacity_payload = {
                 "type": "capacity",
                 "batch_id": batch_id,
-                "slots": max(0, MAX_ACTIVE_FILES - ledger.reserved_files),
-                "max_bytes": max(0, _capacity_limit() - ledger.reserved_bytes),
+                "slots": 1 if available else 0,
+                "max_bytes": available,
                 "used_bytes": ledger.reserved_bytes,
-                "retry_after": 5 if ledger.reserved_files >= MAX_ACTIVE_FILES else 0,
+                "retry_after": 30 if not available else 0,
             }
             snapshot = _snapshot(db, current, None, 100)
             db.rollback()
