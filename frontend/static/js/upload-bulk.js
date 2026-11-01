@@ -24,8 +24,8 @@
       container.replaceChildren();
       const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'Duplikat', processing: 'in Verarbeitung', complete: 'verarbeitet', needs_files: 'Datei erneut auswählen', failed: 'fehlgeschlagen' };
       for (const item of payload.queue.slice(0, 100)) { const row = document.createElement('div'); row.className = 'text-xs mb-1'; row.textContent = `${item.name} — ${states[item.state] || item.state}`; container.appendChild(row); }
-      const accepted = payload.queue.filter(item => item.fileId).length;
-      if (status) status.textContent = `${accepted} von ${payload.queue.length} Dateien sicher angenommen. ${payload.message || ''}`;
+      const accepted = payload.accepted ?? payload.queue.filter(item => item.fileId).length;
+      if (status) status.textContent = `${accepted} von ${payload.total ?? payload.queue.length} Dateien sicher angenommen. ${payload.message || ''}`;
     }
     worker.onmessage = event => {
       const message = event.data || {};
@@ -36,10 +36,16 @@
     async function start() {
       if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
       registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready;
+      if (navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
       worker.postMessage({ type: 'init', principal: window.uploadConfig?.queueOwner || 'single-user', owner, csrf: csrf(), config: window.uploadConfig || {} });
     }
-    window.processFiles = async files => { worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
-    window.addEventListener('DOMContentLoaded', () => { void start().catch(error => render({ message: String(error), queue: [] })); });
+    let startPromise;
+    function ensureStarted() {
+      if (!startPromise) startPromise = start().catch(error => { render({ message: String(error), queue: [] }); throw error; });
+      return startPromise;
+    }
+    window.processFiles = async files => { await ensureStarted(); worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
+    window.addEventListener('DOMContentLoaded', () => { void ensureStarted().catch(() => {}); });
     return;
   }
   const WINDOW = 200, HASH_WORKERS = 2, MAX_RETRIES = 5;

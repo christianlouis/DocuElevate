@@ -10,12 +10,75 @@ function helpers(overrides = {}) {
   return { ...context.window.uploadQueueTestHelpers, Queue: context.window.PersistentBulkUploadQueue };
 }
 
+function controller(overrides = {}) {
+  const messages = [];
+  const { swResults = {}, ...contextOverrides } = overrides;
+  const context = {
+    self: { UPLOAD_CONTROLLER_TEST: true, postMessage(value) {
+      messages.push(value);
+      if (value.type === 'sw') queueMicrotask(() => context.self.onmessage({ data: {
+        type: 'swResponse', id: value.id, ok: true, result: swResults[value.op] ?? true
+      } }));
+    } },
+    crypto: { randomUUID: (() => { let n = 0; return () => `id-${++n}`; })() },
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }),
+    setTimeout, clearTimeout, setInterval, clearInterval, WebSocket: undefined,
+    location: { protocol: 'http:', host: 'localhost' },
+    importScripts(file) { vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, file.replace('/static/js/', '')), 'utf8'), context); },
+    ...contextOverrides
+  };
+  vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'upload-controller-worker.js'), 'utf8'), context);
+  return { api: context.self.__uploadControllerTest, messages };
+}
+
 test('preflight windows cover every item without an oversized request', () => {
   const { windows } = helpers();
   const items = Array.from({ length: 405 }, (_, i) => i);
   const result = windows(items);
   assert.deepEqual(Array.from(result, (w) => w.length), [200, 200, 5]);
   assert.deepEqual(Array.from(result.flat()), items);
+});
+
+test('controller status sends only visible rows plus aggregates', () => {
+  const { api, messages } = controller();
+  api.state().queue.push(...Array.from({ length: 150 }, (_, index) => ({ key: String(index), state: index < 10 ? 'accepted' : 'queued', fileId: index < 10 ? index : undefined })));
+  api.status('running');
+  const update = messages.at(-1);
+  assert.equal(update.queue.length, 100);
+  assert.equal(update.total, 150);
+  assert.equal(update.accepted, 10);
+});
+
+test('controller dedup prefers an admitted leader and handles 429 retry-after', async () => {
+  let attempts = 0;
+  const responses = [
+    { ok: false, status: 429, headers: { get: () => '0' } },
+    { ok: true, status: 200, json: async () => ({ ok: true }) }
+  ];
+  const { api } = controller({ fetch: async () => { attempts += 1; return responses.shift(); } });
+  const items = [{ key: 'needs', sha256: 'same', state: 'queued' }, { key: 'accepted', sha256: 'same', state: 'accepted', fileId: 7 }];
+  api.dedup(items);
+  assert.equal(items[0].duplicateOf, 'accepted');
+  await api.api('/api/test');
+  assert.equal(attempts, 2);
+});
+
+test('controller restore reconciles accepted server files before marking missing bytes', async () => {
+  const { api } = controller({
+    swResults: {
+      listBatches: ['batch-1'],
+      snapshot: [{ key: 'client-1', batchId: 'batch-1', name: 'invoice.pdf', size: 12, state: 'queued' }],
+      putMany: true
+    },
+    fetch: async url => {
+      assert.match(url, /\/api\/uploads\/batches\/batch-1/);
+      return { ok: true, status: 200, json: async () => ({ items: [{ client_id: 'client-1', file_id: 91, state: 'accepted' }], next_cursor: null }) };
+    }
+  });
+  await api.restore();
+  const item = api.state().queue[0];
+  assert.equal(item.fileId, 91);
+  assert.equal(item.state, 'accepted');
 });
 
 test('zero server capacity is preserved as a pause signal', () => {
