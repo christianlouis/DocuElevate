@@ -2,7 +2,9 @@
 
 Status: product proposal and MVP boundary
 
-Evidence baseline: branch `user-config-hardening-20261101` / PR #1294, reviewed 2026-11-01
+Evidence baseline: current product tree reviewed 2026-11-01; implementation context includes PR #1294
+
+Roadmap owner: [#1297](https://github.com/christianlouis/DocuElevate/issues/1297). The roadmap track and this document are intentionally updated together.
 
 ## Executive decision
 
@@ -12,7 +14,7 @@ DocuElevate is commercially plausible as a hosted document-intake and processing
 
 The hosted product should initially sell convenience, reliability, and secure connector management. It should not promise enterprise organization administration, arbitrary workflow automation, or compliance certifications until the existing enterprise work is delivered and independently accepted.
 
-This document is intentionally a product boundary, not a new feature backlog. Existing issues own the implementation work; no duplicate issue is proposed here.
+This document is intentionally a product boundary, not a replacement feature backlog. Existing issues own the implementation work; the single umbrella issue [#1297](https://github.com/christianlouis/DocuElevate/issues/1297) owns cross-cutting hosted-service productization, and no duplicate implementation issue is proposed here.
 
 ## What already exists
 
@@ -124,4 +126,4 @@ Recommended sequencing is: complete the fresh-install/customer journey and isola
 
 ## Decision
 
-Proceed with a hosted Personal/Team MVP built on the existing personal-integration and tenant/Tribe foundations. Treat organization-grade isolation, quotas, onboarding, OAuth parity, retrieval contracts, and auditability as release gates, not marketing copy. Keep the current PR #1294 focused on personal destination safety; this document is a separate product boundary and roadmap-alignment PR.
+Proceed with a hosted Personal/Team MVP built on the existing personal-integration and tenant/Tribe foundations. Treat organization-grade isolation, quotas, onboarding, OAuth parity, retrieval contracts, and auditability as release gates, not marketing copy. Keep the current PR #1294 focused on personal destination safety; this document and the corresponding roadmap track are maintained together under PR #1295 and issue #1297.
