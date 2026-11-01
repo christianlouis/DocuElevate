@@ -242,6 +242,56 @@ class DocumentIntake(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class UploadBatch(Base):
+    """Durable client upload batch; keeps large uploads resumable across reloads."""
+
+    __tablename__ = "upload_batches"
+    __table_args__ = (UniqueConstraint("principal_id", "client_batch_id", name="uq_upload_batch_principal_client"),)
+
+    id = Column(String(36), primary_key=True)
+    principal_id = Column(String, nullable=False, index=True)
+    owner_id = Column(String, nullable=True, index=True)
+    client_batch_id = Column(String(255), nullable=False)
+    total_files = Column(Integer, nullable=False, default=0, server_default="0")
+    total_bytes = Column(BigInteger, nullable=False, default=0, server_default="0")
+    state = Column(String(20), nullable=False, default="open", server_default="open", index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UploadItem(Base):
+    """One idempotent file in an upload batch."""
+
+    __tablename__ = "upload_items"
+    __table_args__ = (UniqueConstraint("batch_id", "client_id", name="uq_upload_item_batch_client"),)
+
+    id = Column(Integer, primary_key=True)
+    batch_id = Column(String(36), ForeignKey("upload_batches.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = Column(String(255), nullable=False)
+    principal_id = Column(String, nullable=False, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK), nullable=True, index=True)
+    sha256 = Column(String(64), nullable=False, index=True)
+    filename = Column(String(255), nullable=False)
+    mime_type = Column(String(255), nullable=True)
+    size = Column(BigInteger, nullable=False)
+    state = Column(String(20), nullable=False, default="pending", server_default="pending", index=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UploadOutbox(Base):
+    """Transactional handoff from durable acceptance to Celery."""
+
+    __tablename__ = "upload_outbox"
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("upload_items.id", ondelete="CASCADE"), nullable=False, unique=True)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    dispatched_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class DropboxImportJob(Base):
     """Progress ledger for a resumable recursive Dropbox corpus import."""
 
