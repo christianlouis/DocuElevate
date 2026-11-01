@@ -1,4 +1,5 @@
 """Add durable account-deletion fencing state."""
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -23,12 +24,14 @@ def upgrade() -> None:
     )
     op.create_index("ix_account_deletion_tombstones_owner_id", "account_deletion_tombstones", ["owner_id"])
     op.create_index("ix_account_deletion_tombstones_status", "account_deletion_tombstones", ["status"])
-    op.create_table("provider_grants",
+    op.create_table(
+        "provider_grants",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("owner_id", sa.String(255), nullable=False),
         sa.Column("provider", sa.String(40), nullable=False),
         sa.Column("encrypted_token", sa.Text(), nullable=False),
-        sa.UniqueConstraint("owner_id", "provider", name="uq_provider_grant_owner_provider"))
+        sa.UniqueConstraint("owner_id", "provider", name="uq_provider_grant_owner_provider"),
+    )
     op.create_index("ix_provider_grants_owner_id", "provider_grants", ["owner_id"])
 
 

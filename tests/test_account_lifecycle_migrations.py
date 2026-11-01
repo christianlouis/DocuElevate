@@ -9,7 +9,6 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy.exc import IntegrityError
 
-
 MIGRATIONS = Path(__file__).parents[1] / "migrations" / "versions"
 
 
@@ -43,21 +42,49 @@ def test_account_lifecycle_upgrade_and_downgrade_preserves_existing_rows():
 
         local_columns = {column["name"] for column in sa.inspect(connection).get_columns("local_users")}
         profile_columns = {column["name"] for column in sa.inspect(connection).get_columns("user_profiles")}
-        assert {"terms_accepted_version", "terms_accepted_at", "privacy_accepted_version", "privacy_accepted_at"} <= local_columns
-        assert {"terms_accepted_version", "terms_accepted_at", "privacy_accepted_version", "privacy_accepted_at"} <= profile_columns
-        assert connection.execute(sa.text("SELECT email FROM local_users WHERE id = 1")).scalar_one() == "existing@example.test"
+        assert {
+            "terms_accepted_version",
+            "terms_accepted_at",
+            "privacy_accepted_version",
+            "privacy_accepted_at",
+        } <= local_columns
+        assert {
+            "terms_accepted_version",
+            "terms_accepted_at",
+            "privacy_accepted_version",
+            "privacy_accepted_at",
+        } <= profile_columns
+        assert (
+            connection.execute(sa.text("SELECT email FROM local_users WHERE id = 1")).scalar_one()
+            == "existing@example.test"
+        )
 
         connection.execute(sa.text("INSERT INTO account_deletion_tombstones (owner_id) VALUES ('owner-1')"))
         with pytest.raises(IntegrityError):
             connection.execute(sa.text("INSERT INTO account_deletion_tombstones (owner_id) VALUES ('owner-1')"))
-        connection.execute(sa.text("INSERT INTO provider_grants (owner_id, provider, encrypted_token) VALUES ('owner-1', 'apple', 'ciphertext')"))
+        connection.execute(
+            sa.text(
+                "INSERT INTO provider_grants (owner_id, provider, encrypted_token) VALUES ('owner-1', 'apple', 'ciphertext')"
+            )
+        )
         with pytest.raises(IntegrityError):
-            connection.execute(sa.text("INSERT INTO provider_grants (owner_id, provider, encrypted_token) VALUES ('owner-1', 'apple', 'other')"))
+            connection.execute(
+                sa.text(
+                    "INSERT INTO provider_grants (owner_id, provider, encrypted_token) VALUES ('owner-1', 'apple', 'other')"
+                )
+            )
 
         _run(connection, migration_066, "downgrade")
-        assert "terms_accepted_version" not in {column["name"] for column in sa.inspect(connection).get_columns("local_users")}
-        assert "privacy_accepted_at" not in {column["name"] for column in sa.inspect(connection).get_columns("user_profiles")}
+        assert "terms_accepted_version" not in {
+            column["name"] for column in sa.inspect(connection).get_columns("local_users")
+        }
+        assert "privacy_accepted_at" not in {
+            column["name"] for column in sa.inspect(connection).get_columns("user_profiles")
+        }
         _run(connection, migration_065, "downgrade")
         assert not sa.inspect(connection).has_table("account_deletion_tombstones")
         assert not sa.inspect(connection).has_table("provider_grants")
-        assert connection.execute(sa.text("SELECT email FROM local_users WHERE id = 1")).scalar_one() == "existing@example.test"
+        assert (
+            connection.execute(sa.text("SELECT email FROM local_users WHERE id = 1")).scalar_one()
+            == "existing@example.test"
+        )
