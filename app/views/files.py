@@ -736,6 +736,23 @@ def _compute_processing_flow(logs, pipeline_steps=None):
     # Filter out deduplication step if not enabled or if not showing it
     from app.config import settings
 
+    def _email_destination_label() -> str:
+        """Describe email delivery without exposing the configured recipient."""
+        from email.utils import parseaddr
+
+        configured = getattr(settings, "dest_email_default_recipient", None)
+        if not isinstance(configured, str) or not configured.strip():
+            return "Email"
+
+        recipients = [part.strip() for part in configured.replace(";", ",").split(",") if part.strip()]
+        evernote_domains = []
+        for recipient in recipients:
+            _, address = parseaddr(recipient)
+            domain = address.rsplit("@", 1)[-1].strip().lower().rstrip(".") if "@" in address else ""
+            evernote_domains.append(domain == "evernote.com" or domain.endswith(".evernote.com"))
+
+        return "Evernote" if evernote_domains and all(evernote_domains) else "Email"
+
     if not settings.enable_deduplication or not settings.show_deduplication_step:
         stages.pop("check_for_duplicates", None)
         # Update the next pointer for create_file_record
@@ -766,8 +783,11 @@ def _compute_processing_flow(logs, pipeline_steps=None):
         "upload_to_webdav": "WebDAV",
         "upload_to_ftp": "FTP Storage",
         "upload_to_sftp": "SFTP Storage",
-        "upload_to_email": "Email",
+        "upload_to_email": _email_destination_label(),
         "upload_to_evernote": "Evernote",
+        "upload_to_notion": "Notion",
+        "upload_to_sharepoint": "SharePoint",
+        "upload_to_icloud": "iCloud Drive",
         "queue_dropbox": "Dropbox",
         "queue_nextcloud": "Nextcloud",
         "queue_paperless": "Paperless-ngx",
@@ -778,8 +798,11 @@ def _compute_processing_flow(logs, pipeline_steps=None):
         "queue_webdav": "WebDAV",
         "queue_ftp": "FTP Storage",
         "queue_sftp": "SFTP Storage",
-        "queue_email": "Email",
+        "queue_email": _email_destination_label(),
         "queue_evernote": "Evernote",
+        "queue_notion": "Notion",
+        "queue_sharepoint": "SharePoint",
+        "queue_icloud": "iCloud Drive",
     }
 
     # Create a map of step names to their log entries
@@ -789,14 +812,21 @@ def _compute_processing_flow(logs, pipeline_steps=None):
     for log in logs:
         step_name = log.step_name
 
-        # Check if this is an upload sub-task
-        if step_name in upload_tasks:
+        # Keep newly-added destinations visible even before their friendly label
+        # is added to the catalogue. This also covers per-user integration IDs.
+        if step_name in upload_tasks or step_name.startswith(("upload_to_", "queue_")):
             # Extract the actual upload task name (remove queue_ prefix if present)
             upload_key = step_name.replace("queue_", "upload_to_")
             if upload_key not in upload_branches:
                 upload_branches[upload_key] = []
             upload_branches[upload_key].append(
-                {"status": log.status, "message": log.message, "timestamp": log.timestamp, "task_id": log.task_id}
+                {
+                    "status": log.status,
+                    "message": log.message,
+                    "timestamp": log.timestamp,
+                    "task_id": log.task_id,
+                    "is_queue": log.step_name.startswith("queue_"),
+                }
             )
         else:
             # Normalize legacy OCR step name for backward compatibility with old log entries
@@ -852,18 +882,46 @@ def _compute_processing_flow(logs, pipeline_steps=None):
         if stage_info.get("has_branches") and upload_branches:
             branches = []
             for upload_key, upload_logs in upload_branches.items():
-                latest_upload = upload_logs[-1]
-                upload_name = upload_tasks.get(upload_key, upload_key.replace("upload_to_", "").title())
+                # Queue completion only means that a delivery task was handed
+                # off. Keep a terminal delivery result visible, except when a
+                # later queue record has a new dispatcher task id (a retry).
+                terminal_indexes = [index for index, entry in enumerate(upload_logs) if not entry["is_queue"]]
+                queue_indexes = [index for index, entry in enumerate(upload_logs) if entry["is_queue"]]
+                if not terminal_indexes:
+                    latest_upload = upload_logs[-1]
+                else:
+                    latest_terminal_index = terminal_indexes[-1]
+                    latest_queue_index = queue_indexes[-1] if queue_indexes else -1
+                    if latest_queue_index <= latest_terminal_index:
+                        latest_upload = upload_logs[latest_terminal_index]
+                    else:
+                        latest_queue_id = upload_logs[latest_queue_index]["task_id"]
+                        prior_queue_ids = {
+                            entry["task_id"]
+                            for entry in upload_logs[: latest_terminal_index + 1]
+                            if entry["is_queue"] and entry["task_id"] is not None
+                        }
+                        is_new_attempt = latest_queue_id is not None and latest_queue_id not in prior_queue_ids
+                        latest_upload = (
+                            upload_logs[latest_queue_index] if is_new_attempt else upload_logs[latest_terminal_index]
+                        )
+
+                branch_status = latest_upload["status"]
+                if latest_upload["is_queue"] and branch_status in {"success", "pending"}:
+                    branch_status = "queued"
+                upload_name = upload_tasks.get(
+                    upload_key, upload_key.removeprefix("upload_to_").replace("_", " ").title()
+                )
 
                 branches.append(
                     {
                         "key": upload_key,
                         "label": upload_name,
-                        "status": latest_upload["status"],
+                        "status": branch_status,
                         "message": latest_upload["message"],
                         "timestamp": latest_upload["timestamp"],
                         "task_id": latest_upload["task_id"],
-                        "can_retry": latest_upload["status"] == "failure",
+                        "can_retry": branch_status == "failure",
                     }
                 )
             stage_data["branches"] = branches

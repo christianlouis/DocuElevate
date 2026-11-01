@@ -616,6 +616,153 @@ class TestProcessingFlowComputation:
         assert branches["upload_to_s3"]["status"] == "failure"
         assert branches["upload_to_s3"]["can_retry"] is True
 
+    def test_flow_includes_all_global_destination_statuses(self, monkeypatch):
+        """Every dispatcher destination, including Notion and Evernote, is visible."""
+        from app.config import settings
+        from app.views.files import _compute_processing_flow
+
+        monkeypatch.setattr(settings, "dest_email_default_recipient", "evernote@m.evernote.com")
+
+        class MockLog:
+            def __init__(self, step_name, status, message):
+                self.step_name = step_name
+                self.status = status
+                self.message = message
+                self.timestamp = None
+                self.task_id = f"task-{step_name}"
+
+        logs = [
+            MockLog("queue_notion", "in_progress", "Queueing upload to notion"),
+            MockLog("queue_notion", "success", "Queued for notion"),
+            MockLog("upload_to_notion", "success", "Uploaded to Notion"),
+            MockLog("queue_evernote", "success", "Queued for evernote"),
+            MockLog("upload_to_evernote", "failure", "Evernote upload failed"),
+            # A queue log arriving later must not hide the terminal failure.
+            MockLog("queue_email", "success", "Queued for email"),
+            MockLog("upload_to_email", "failure", "Email delivery failed"),
+            MockLog("queue_email", "success", "Queued for email"),
+            MockLog("queue_sharepoint", "success", "Queued for sharepoint"),
+            MockLog("queue_icloud", "success", "Queued for icloud"),
+        ]
+
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branches = {branch["key"]: branch for branch in upload_stage["branches"]}
+
+        assert branches["upload_to_notion"]["label"] == "Notion"
+        assert branches["upload_to_notion"]["status"] == "success"
+        assert branches["upload_to_evernote"]["label"] == "Evernote"
+        assert branches["upload_to_evernote"]["status"] == "failure"
+        assert branches["upload_to_email"]["label"] == "Evernote"
+        assert branches["upload_to_email"]["status"] == "failure"
+        assert branches["upload_to_sharepoint"]["label"] == "SharePoint"
+        assert branches["upload_to_icloud"]["label"] == "iCloud Drive"
+
+    def test_flow_keeps_unknown_future_upload_destination_visible(self):
+        """An unlisted upload task remains visible with a safe fallback label."""
+        from app.views.files import _compute_processing_flow
+
+        log = type(
+            "Log",
+            (),
+            {
+                "step_name": "upload_to_future_archive",
+                "status": "success",
+                "message": "Uploaded",
+                "timestamp": None,
+                "task_id": "future-task",
+            },
+        )()
+
+        upload_stage = next(stage for stage in _compute_processing_flow([log]) if stage.get("is_branch_parent"))
+        branch = upload_stage["branches"][0]
+
+        assert branch["label"] == "Future Archive"
+        assert branch["status"] == "success"
+
+    def test_flow_marks_queue_only_success_as_queued(self):
+        """A dispatcher success is not a completed upload without delivery logs."""
+        from app.views.files import _compute_processing_flow
+
+        def log(step_name, status, task_id):
+            return type(
+                "Log",
+                (),
+                {
+                    "step_name": step_name,
+                    "status": status,
+                    "message": status.title(),
+                    "timestamp": None,
+                    "task_id": task_id,
+                },
+            )()
+
+        logs = [
+            log("queue_notion", "success", "dispatch-1"),
+            log("queue_s3", "in_progress", "dispatch-2"),
+        ]
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branches = {branch["key"]: branch for branch in upload_stage["branches"]}
+
+        assert branches["upload_to_notion"]["status"] == "queued"
+        assert branches["upload_to_notion"]["can_retry"] is False
+        assert branches["upload_to_s3"]["status"] == "in_progress"
+
+    def test_flow_keeps_terminal_result_for_same_attempt_late_queue(self):
+        """A late queue update from the same dispatcher attempt cannot mask failure."""
+        from app.views.files import _compute_processing_flow
+
+        def log(step_name, status, task_id):
+            return type(
+                "Log",
+                (),
+                {
+                    "step_name": step_name,
+                    "status": status,
+                    "message": status.title(),
+                    "timestamp": None,
+                    "task_id": task_id,
+                },
+            )()
+
+        logs = [
+            log("queue_email", "success", "dispatch-1"),
+            log("upload_to_email", "failure", "upload-1"),
+            log("queue_email", "success", "dispatch-1"),
+        ]
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branch = next(branch for branch in upload_stage["branches"] if branch["key"] == "upload_to_email")
+
+        assert branch["status"] == "failure"
+        assert branch["task_id"] == "upload-1"
+
+    def test_flow_shows_new_retry_queue_after_previous_terminal_result(self):
+        """A queue with a new dispatcher id represents a newer retry attempt."""
+        from app.views.files import _compute_processing_flow
+
+        def log(step_name, status, task_id):
+            return type(
+                "Log",
+                (),
+                {
+                    "step_name": step_name,
+                    "status": status,
+                    "message": status.title(),
+                    "timestamp": None,
+                    "task_id": task_id,
+                },
+            )()
+
+        logs = [
+            log("queue_notion", "success", "dispatch-1"),
+            log("upload_to_notion", "failure", "upload-1"),
+            log("queue_notion", "success", "dispatch-2"),
+        ]
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branch = next(branch for branch in upload_stage["branches"] if branch["key"] == "upload_to_notion")
+
+        assert branch["status"] == "queued"
+        assert branch["task_id"] == "dispatch-2"
+
 
 @pytest.mark.unit
 class TestStepSummary:
