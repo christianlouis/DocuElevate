@@ -882,11 +882,37 @@ def _compute_processing_flow(logs, pipeline_steps=None):
         if stage_info.get("has_branches") and upload_branches:
             branches = []
             for upload_key, upload_logs in upload_branches.items():
-                # Queue completion is not terminal delivery. Prefer the actual
-                # upload task whenever it has emitted a status, so a late queue
-                # log cannot mask a delivery success or failure.
-                terminal_logs = [entry for entry in upload_logs if not entry["is_queue"]]
-                latest_upload = (terminal_logs or upload_logs)[-1]
+                # Queue completion only means that a delivery task was handed
+                # off. Keep a terminal delivery result visible, except when a
+                # later queue record has a new dispatcher task id (a retry).
+                terminal_indexes = [
+                    index for index, entry in enumerate(upload_logs) if not entry["is_queue"]
+                ]
+                queue_indexes = [index for index, entry in enumerate(upload_logs) if entry["is_queue"]]
+                if not terminal_indexes:
+                    latest_upload = upload_logs[-1]
+                else:
+                    latest_terminal_index = terminal_indexes[-1]
+                    latest_queue_index = queue_indexes[-1] if queue_indexes else -1
+                    if latest_queue_index <= latest_terminal_index:
+                        latest_upload = upload_logs[latest_terminal_index]
+                    else:
+                        latest_queue_id = upload_logs[latest_queue_index]["task_id"]
+                        prior_queue_ids = {
+                            entry["task_id"]
+                            for entry in upload_logs[: latest_terminal_index + 1]
+                            if entry["is_queue"] and entry["task_id"] is not None
+                        }
+                        is_new_attempt = latest_queue_id is not None and latest_queue_id not in prior_queue_ids
+                        latest_upload = (
+                            upload_logs[latest_queue_index]
+                            if is_new_attempt
+                            else upload_logs[latest_terminal_index]
+                        )
+
+                branch_status = latest_upload["status"]
+                if latest_upload["is_queue"] and branch_status in {"success", "pending"}:
+                    branch_status = "queued"
                 upload_name = upload_tasks.get(
                     upload_key, upload_key.removeprefix("upload_to_").replace("_", " ").title()
                 )
@@ -895,11 +921,11 @@ def _compute_processing_flow(logs, pipeline_steps=None):
                     {
                         "key": upload_key,
                         "label": upload_name,
-                        "status": latest_upload["status"],
+                        "status": branch_status,
                         "message": latest_upload["message"],
                         "timestamp": latest_upload["timestamp"],
                         "task_id": latest_upload["task_id"],
-                        "can_retry": latest_upload["status"] == "failure",
+                        "can_retry": branch_status == "failure",
                     }
                 )
             stage_data["branches"] = branches

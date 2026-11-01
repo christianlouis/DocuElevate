@@ -618,8 +618,8 @@ class TestProcessingFlowComputation:
 
     def test_flow_includes_all_global_destination_statuses(self, monkeypatch):
         """Every dispatcher destination, including Notion and Evernote, is visible."""
-        from app.views.files import _compute_processing_flow
         from app.config import settings
+        from app.views.files import _compute_processing_flow
 
         monkeypatch.setattr(settings, "dest_email_default_recipient", "evernote@m.evernote.com")
 
@@ -678,6 +678,90 @@ class TestProcessingFlowComputation:
 
         assert branch["label"] == "Future Archive"
         assert branch["status"] == "success"
+
+    def test_flow_marks_queue_only_success_as_queued(self):
+        """A dispatcher success is not a completed upload without delivery logs."""
+        from app.views.files import _compute_processing_flow
+
+        def log(step_name, status, task_id):
+            return type(
+                "Log",
+                (),
+                {
+                    "step_name": step_name,
+                    "status": status,
+                    "message": status.title(),
+                    "timestamp": None,
+                    "task_id": task_id,
+                },
+            )()
+
+        logs = [
+            log("queue_notion", "success", "dispatch-1"),
+            log("queue_s3", "in_progress", "dispatch-2"),
+        ]
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branches = {branch["key"]: branch for branch in upload_stage["branches"]}
+
+        assert branches["upload_to_notion"]["status"] == "queued"
+        assert branches["upload_to_notion"]["can_retry"] is False
+        assert branches["upload_to_s3"]["status"] == "in_progress"
+
+    def test_flow_keeps_terminal_result_for_same_attempt_late_queue(self):
+        """A late queue update from the same dispatcher attempt cannot mask failure."""
+        from app.views.files import _compute_processing_flow
+
+        def log(step_name, status, task_id):
+            return type(
+                "Log",
+                (),
+                {
+                    "step_name": step_name,
+                    "status": status,
+                    "message": status.title(),
+                    "timestamp": None,
+                    "task_id": task_id,
+                },
+            )()
+
+        logs = [
+            log("queue_email", "success", "dispatch-1"),
+            log("upload_to_email", "failure", "upload-1"),
+            log("queue_email", "success", "dispatch-1"),
+        ]
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branch = next(branch for branch in upload_stage["branches"] if branch["key"] == "upload_to_email")
+
+        assert branch["status"] == "failure"
+        assert branch["task_id"] == "upload-1"
+
+    def test_flow_shows_new_retry_queue_after_previous_terminal_result(self):
+        """A queue with a new dispatcher id represents a newer retry attempt."""
+        from app.views.files import _compute_processing_flow
+
+        def log(step_name, status, task_id):
+            return type(
+                "Log",
+                (),
+                {
+                    "step_name": step_name,
+                    "status": status,
+                    "message": status.title(),
+                    "timestamp": None,
+                    "task_id": task_id,
+                },
+            )()
+
+        logs = [
+            log("queue_notion", "success", "dispatch-1"),
+            log("upload_to_notion", "failure", "upload-1"),
+            log("queue_notion", "success", "dispatch-2"),
+        ]
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branch = next(branch for branch in upload_stage["branches"] if branch["key"] == "upload_to_notion")
+
+        assert branch["status"] == "queued"
+        assert branch["task_id"] == "dispatch-2"
 
 
 @pytest.mark.unit
