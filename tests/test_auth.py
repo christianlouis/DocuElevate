@@ -18,7 +18,9 @@ _TEST_CREDENTIAL = "test"  # noqa: S105
 def deletion_fence_database(monkeypatch):
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
+
     from app.models import AccountDeletionTombstone
+
     engine = create_engine("sqlite:///:memory:")
     AccountDeletionTombstone.__table__.create(engine)
     monkeypatch.setattr("app.database.SessionLocal", sessionmaker(bind=engine))

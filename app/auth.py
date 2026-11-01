@@ -314,18 +314,25 @@ def _deletion_fenced(request: Request, user, db=None) -> bool:
     if request.url.path.rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
         return False
     from app.utils.user_scope import _owner_id_from_user
+
     owner = _owner_id_from_user(user)
     if not owner:
         return False
     from app.database import SessionLocal
     from app.models import AccountDeletionTombstone
     from app.services.account_deletion import tombstone_key
+
     session = db or SessionLocal()
     try:
-        return session.query(AccountDeletionTombstone).filter(
-            AccountDeletionTombstone.owner_id == tombstone_key(owner),
-            AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
-        ).first() is not None
+        return (
+            session.query(AccountDeletionTombstone)
+            .filter(
+                AccountDeletionTombstone.owner_id == tombstone_key(owner),
+                AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
+            )
+            .first()
+            is not None
+        )
     except Exception:
         logger.warning("Could not verify account deletion fence", exc_info=True)
         return True
@@ -765,8 +772,10 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
             # Keep the refresh grant encrypted so account deletion can revoke it.
             from app.models import ProviderGrant
             from app.utils.encryption import encrypt_value
+
             grant_token = token.get("refresh_token")
             from app.utils.user_scope import _owner_id_from_user
+
             owner = _owner_id_from_user(user_data)
             grant = db.query(ProviderGrant).filter_by(owner_id=owner, provider="apple").first()
             if grant_token:

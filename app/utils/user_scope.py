@@ -72,6 +72,7 @@ def get_current_owner_id(request: Request) -> str | None:
     api_user = getattr(request.state, "api_token_user", None)
     if isinstance(api_user, dict):
         from app.auth import _deletion_fenced
+
         if not _deletion_fenced(request, api_user):
             return _owner_id_from_user(api_user)
 

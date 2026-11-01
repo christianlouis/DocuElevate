@@ -1,4 +1,5 @@
 """Authenticated account lifecycle endpoints."""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -8,9 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth import require_login
-from app.utils.user_scope import get_current_owner_id
 from app.database import get_db
-from app.services.account_deletion import AccountDeletionError, CONFIRMATION, delete_account
+from app.services.account_deletion import CONFIRMATION, AccountDeletionError, delete_account
+from app.utils.user_scope import get_current_owner_id
 
 router = APIRouter(prefix="/account", tags=["account"])
 DbSession = Annotated[Session, Depends(get_db)]
@@ -45,8 +46,11 @@ async def delete_my_account(request: Request, payload: AccountDeletionRequest, d
 async def account_deletion_status(request: Request, db: DbSession):
     from app.models import AccountDeletionTombstone
     from app.services.account_deletion import tombstone_key
+
     owner_id = get_current_owner_id(request)
     if not owner_id or owner_id == "anonymous":
         raise HTTPException(status_code=401, detail="Authentication required")
-    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == tombstone_key(owner_id)).first()
+    row = (
+        db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == tombstone_key(owner_id)).first()
+    )
     return {"status": row.status if row else "active"}
