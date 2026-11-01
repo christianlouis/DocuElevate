@@ -168,7 +168,12 @@ class BaseTaskWithRetry(Task):
                 db.expire_all()
                 if deletion_blocked(db, owner):
                     return {"status": "skipped", "reason": "account_deletion"}
-                if file_id and not db.query(FileRecord.id).filter(FileRecord.id == file_id, FileRecord.owner_id == owner).first():
+                if (
+                    file_id
+                    and not db.query(FileRecord.id)
+                    .filter(FileRecord.id == file_id, FileRecord.owner_id == owner)
+                    .first()
+                ):
                     return {"status": "skipped", "reason": "file_not_found"}
                 return super().__call__(*args, **kwargs)
 

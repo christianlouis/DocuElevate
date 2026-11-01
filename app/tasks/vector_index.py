@@ -44,6 +44,7 @@ def index_document_vectors(self, file_id: int, source_task_id: str | None = None
             db.commit()
             return {"status": "skipped", "detail": "File not found"}
         from app.services.account_deletion import deletion_blocked
+
         if file_record.owner_id and deletion_blocked(db, file_record.owner_id):
             return {"status": "skipped", "detail": "Account deletion"}
         if not file_record.ocr_text or not file_record.ocr_text.strip():

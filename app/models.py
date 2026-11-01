@@ -653,6 +653,7 @@ class AccountDeletionTombstone(Base):
 
 class ProviderGrant(Base):
     """Encrypted OAuth grant retained only for provider revocation."""
+
     __tablename__ = "provider_grants"
     __table_args__ = (UniqueConstraint("owner_id", "provider", name="uq_provider_grant_owner_provider"),)
     id = Column(Integer, primary_key=True)

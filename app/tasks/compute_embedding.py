@@ -79,6 +79,7 @@ def compute_document_embedding(self, file_id: int) -> dict:
             return {"status": "skipped", "detail": "File not found"}
 
         from app.services.account_deletion import deletion_blocked
+
         if file_record.owner_id and deletion_blocked(db, file_record.owner_id):
             return {"status": "skipped", "detail": "Account deletion"}
 
