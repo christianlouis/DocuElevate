@@ -6,11 +6,11 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import case, or_
+from sqlalchemy import case, func, or_, update
 
 from app.celery_app import celery
 from app.database import SessionLocal
-from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
+from app.models import FileProcessingStep, FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 
@@ -105,12 +105,14 @@ def dispatch_upload_item(self, outbox_id: int, claim_token: str) -> dict[str, ob
 def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
     """Claim and submit a bounded fair slice; safe across multiple beat pods."""
     limit = min(max(1, int(limit)), MAX_DISPATCH_PER_TICK)
-    now, stale_before = datetime.now(timezone.utc), datetime.now(timezone.utc) - timedelta(seconds=CLAIM_SECONDS)
+    now = datetime.now(timezone.utc)
     age_before = now - timedelta(seconds=AGING_SECONDS)
     with SessionLocal() as db:
         order = case(
-            (UploadBatch.total_files <= SMALL_BATCH_FILES, 0),
-            (UploadBatch.created_at <= age_before, 1),
+            # Aged work comes first.  Without this order, a continual stream
+            # of small batches can starve a large batch forever.
+            (UploadBatch.created_at <= age_before, 0),
+            (UploadBatch.total_files <= SMALL_BATCH_FILES, 1),
             else_=2,
         )
         rows = (
@@ -118,7 +120,8 @@ def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
             .join(UploadItem, UploadOutbox.item_id == UploadItem.id)
             .join(UploadBatch, UploadItem.batch_id == UploadBatch.id)
             .filter(UploadOutbox.dispatched_at.is_(None))
-            .filter(or_(UploadOutbox.claim_expires_at.is_(None), UploadOutbox.claim_expires_at < stale_before))
+            # A lease is stale at its expiry, not after another lease window.
+            .filter(or_(UploadOutbox.claim_expires_at.is_(None), UploadOutbox.claim_expires_at < now))
             .order_by(order, UploadOutbox.created_at.asc())
             .with_for_update(skip_locked=True)
             .limit(limit)
@@ -138,34 +141,58 @@ def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
 
 @celery.task
 def reconcile_upload_states(limit: int = 100) -> int:
-    """Release accepted-work capacity once the normal pipeline stored output.
+    """Release capacity only at the pipeline's declared terminal stage.
 
-    The processing pipeline predates bulk intake and has no callback hook.
-    Its durable ``processed_file_path`` is the conservative success marker;
-    keeping the reservation until then intentionally applies backpressure to
-    slow upstream providers instead of admitting an unbounded backlog.
+    ``processed_file_path`` is written by metadata embedding *before*
+    ``finalize_document_storage`` queues destinations, so it is not terminal.
+    The existing status model defines ``send_to_all_destinations`` (including
+    its user-destination alias) as the terminal stage.  A success or failure
+    there is a completed attempt; individual provider retries remain governed
+    by their own durable retry/outbox policy.
     """
     with SessionLocal() as db:
+        terminal = (
+            db.query(
+                FileProcessingStep.file_id.label("file_id"),
+                func.max(case((FileProcessingStep.status == "success", 1), else_=0)).label("succeeded"),
+            )
+            .filter(FileProcessingStep.step_name.in_(("send_to_all_destinations", "send_to_user_destinations")))
+            .filter(FileProcessingStep.status.in_(("success", "failure")))
+            .group_by(FileProcessingStep.file_id)
+            .subquery()
+        )
         rows = (
-            db.query(UploadItem)
-            .join(FileRecord, UploadItem.file_id == FileRecord.id)
+            db.query(UploadItem, terminal.c.succeeded)
+            .join(terminal, UploadItem.file_id == terminal.c.file_id)
             .filter(UploadItem.state.in_(("accepted", "queued", "processing")))
-            .filter(FileRecord.processed_file_path.isnot(None))
             .with_for_update(skip_locked=True)
             .limit(min(max(1, int(limit)), 500))
             .all()
         )
         if not rows:
             return 0
-        ledger = db.get(UploadCapacity, 1)
-        if ledger is None:
+        if db.get(UploadCapacity, 1) is None:
             logger.error("bulk capacity ledger is missing; leaving items reserved")
             return 0
         released_files = len(rows)
-        released_bytes = sum(int(row.size) for row in rows)
-        for row in rows:
-            row.state = "complete"
-        ledger.reserved_files = max(0, ledger.reserved_files - released_files)
-        ledger.reserved_bytes = max(0, ledger.reserved_bytes - released_bytes)
+        released_bytes = sum(int(item.size) for item, _ in rows)
+        for item, succeeded in rows:
+            item.state = "complete" if succeeded else "failed"
+        # Do not read-modify-write the singleton: concurrent reconcilers may
+        # complete independent rows.  This conditional SQL decrement is atomic.
+        db.execute(
+            update(UploadCapacity)
+            .where(UploadCapacity.id == 1)
+            .values(
+                reserved_files=case(
+                    (UploadCapacity.reserved_files >= released_files, UploadCapacity.reserved_files - released_files),
+                    else_=0,
+                ),
+                reserved_bytes=case(
+                    (UploadCapacity.reserved_bytes >= released_bytes, UploadCapacity.reserved_bytes - released_bytes),
+                    else_=0,
+                ),
+            )
+        )
         db.commit()
         return released_files
