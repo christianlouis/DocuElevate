@@ -26,6 +26,7 @@
     "sign_in_sso": "Mit SSO anmelden",
     "scan_qr": "📱 QR-Code scannen zum Anmelden",
     "hint": "Melden Sie sich per SSO an oder scannen Sie einen QR-Code aus der Web-App.",
+    "create_account": "Konto erstellen",
     "back": "← Zurück",
     "or": "oder",
     "server_url_required": "Server-URL erforderlich",
@@ -113,6 +114,7 @@
     "terms": "AGB",
     "imprint": "Impressum"
   },
+  "signup": {"title":"Konto erstellen","email":"E-Mail","username":"Benutzername","display_name":"Anzeigename (optional)","password":"Passwort","confirm":"Passwort bestätigen","consent":"Ich akzeptiere Nutzungsbedingungen und Datenschutzrichtlinie","submit":"Konto erstellen","invalid":"Bitte füllen Sie alle Felder aus, verwenden Sie mindestens 8 Zeichen und akzeptieren Sie die Richtlinien.","failed":"Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.","verify_title":"E-Mail prüfen","verify_msg":"Ein Bestätigungslink wurde an {email} gesendet.","resend":"Bestätigungs-E-Mail erneut senden","resend_done":"Bestätigungs-E-Mail gesendet.","back_login":"Zur Anmeldung"},
   "tabs": {
     "upload": "Hochladen",
     "files": "Dateien",

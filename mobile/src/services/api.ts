@@ -28,6 +28,7 @@ export interface WhoAmIResponse {
   is_admin: boolean;
   preferred_language: string | null;
 }
+export interface SignupResponse { email_verification_required: boolean; message: string }
 
 export interface GenerateTokenResponse {
   token: string;
@@ -196,6 +197,14 @@ class DocuElevateAPI {
     return this.request<GenerateTokenResponse>("POST", "/api/mobile/generate-token", {
       body: { device_name: deviceName },
     });
+  }
+
+  async signup(data: { email: string; username: string; display_name?: string; password: string; password_confirm: string; terms_accepted: boolean; privacy_accepted: boolean }): Promise<SignupResponse> {
+    return this.request<SignupResponse>("POST", "/api/auth/signup", { body: data });
+  }
+
+  async resendVerification(email: string): Promise<void> {
+    await this.request("POST", "/api/auth/resend-verification", { body: { email } });
   }
 
   /** Claim a QR login challenge and receive an API token. */
