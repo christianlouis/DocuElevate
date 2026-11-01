@@ -87,7 +87,13 @@ _RELEASE_SCRIPT = """redis.call('ZREM', KEYS[1], ARGV[1]); return 1"""
 def _client() -> redis.Redis:
     global _redis_client
     if _redis_client is None:
-        _redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        _redis_client = redis.Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+            health_check_interval=30,
+        )
     _redis_client.ping()
     return _redis_client
 

@@ -12,7 +12,13 @@ from app.config import settings
 from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
-from app.utils.provider_limits import acquire, record_cooldown, release, retry_after_from_exception
+from app.utils.provider_limits import (
+    ProviderRateLimited,
+    acquire,
+    record_cooldown,
+    release,
+    retry_after_from_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -224,12 +230,14 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
     except Exception as e:
         status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
         if status == 429:
+            retry_after = retry_after_from_exception(e)
             record_cooldown(
                 "azure_ocr",
                 "prebuilt-read",
                 credential=settings.azure_ai_key,
-                retry_after=retry_after_from_exception(e),
+                retry_after=retry_after,
             )
+            raise ProviderRateLimited("Azure OCR upstream rate limit", retry_after) from e
         logger.error(f"[{task_id}] Error processing {filename} with Azure Document Intelligence: {e}")
         log_task_progress(
             task_id,

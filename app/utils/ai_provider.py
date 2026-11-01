@@ -123,10 +123,11 @@ class AIProvider(ABC):
             self: "AIProvider", messages: List[Dict[str, str]], model: str, *args: Any, **call_kwargs: Any
         ) -> str:
             estimated_tokens = max(1, sum(len(str(item.get("content", ""))) for item in messages) // 3)
-            credential = getattr(self, "_api_key", None) or settings.openai_api_key
-            lease = acquire(
-                cls.__name__.removesuffix("Provider").lower(), model, credential=credential, tokens=estimated_tokens
+            provider_name = (
+                "azure" if cls.__name__ == "AzureOpenAIProvider" else cls.__name__.removesuffix("Provider").lower()
             )
+            credential = getattr(self, "_api_key", None) or settings.openai_api_key
+            lease = acquire(provider_name, model, credential=credential, tokens=estimated_tokens)
             try:
                 return method(self, messages, model, *args, **call_kwargs)
             except Exception as exc:
@@ -136,7 +137,7 @@ class AIProvider(ABC):
                 if status == 429:
                     retry_after = retry_after_from_exception(exc)
                     record_cooldown(
-                        cls.__name__.removesuffix("Provider").lower(),
+                        provider_name,
                         model,
                         credential=credential,
                         retry_after=retry_after,

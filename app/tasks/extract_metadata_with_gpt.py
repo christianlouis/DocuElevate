@@ -265,6 +265,12 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         # makes a provider 429 look like a successful document.
         status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
         network_failure = isinstance(e, (TimeoutError, ConnectionError, OSError))
+        try:
+            import openai
+
+            network_failure = network_failure or isinstance(e, openai.APIConnectionError)
+        except (ImportError, AttributeError):
+            pass
         if (
             isinstance(e, ProviderQuotaError)
             or network_failure

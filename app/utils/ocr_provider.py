@@ -51,7 +51,13 @@ from contextlib import closing
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from app.config import settings
-from app.utils.provider_limits import acquire, record_cooldown, release, retry_after_from_exception
+from app.utils.provider_limits import (
+    ProviderRateLimited,
+    acquire,
+    record_cooldown,
+    release,
+    retry_after_from_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -415,12 +421,14 @@ class AzureOCRProvider(OCRProvider):
         except Exception as exc:
             status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
             if status == 429:
+                retry_after = retry_after_from_exception(exc)
                 record_cooldown(
                     "azure_ocr",
                     "prebuilt-read",
                     credential=settings.azure_ai_key,
-                    retry_after=retry_after_from_exception(exc),
+                    retry_after=retry_after,
                 )
+                raise ProviderRateLimited("Azure OCR upstream rate limit", retry_after) from exc
             raise
         finally:
             release(locals().get("lease"))
