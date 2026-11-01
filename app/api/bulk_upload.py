@@ -6,7 +6,7 @@ import json
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,16 +36,21 @@ def _batch(db: Session, batch_id: str, principal: str) -> UploadBatch:
     return row
 
 
-def _snapshot(db: Session, batch: UploadBatch) -> dict[str, Any]:
-    items = db.query(UploadItem).filter(UploadItem.batch_id == batch.id).order_by(UploadItem.id.asc()).all()
+def _snapshot(db: Session, batch: UploadBatch, offset: int = 0, limit: int = 100) -> dict[str, Any]:
+    limit = min(max(limit, 1), 200)
+    items = db.query(UploadItem).filter(UploadItem.batch_id == batch.id).order_by(UploadItem.id.asc()).offset(max(offset, 0)).limit(limit).all()
+    accepted = db.query(UploadItem).filter(UploadItem.batch_id == batch.id, UploadItem.state.in_({"accepted", "duplicate", "queued", "processing", "complete"})).count()
     return {"batch_id": batch.id, "state": batch.state, "total_files": batch.total_files, "total_bytes": batch.total_bytes,
-            "accepted": sum(i.state in {"accepted", "duplicate", "queued", "processing", "complete"} for i in items),
+            "accepted": accepted,
             "items": [{"client_id": i.client_id, "file_id": i.file_id, "state": i.state, "sha256": i.sha256, "size": i.size, "filename": i.filename} for i in items]}
 
 
 @router.post("/batches", status_code=201)
-def create_batch(request: Request, db: Db, client_batch_id: str = Form(...), total_files: int = Form(0), total_bytes: int = Form(0), x_docuelevate_intake_secret: str | None = Header(default=None)):
+def create_batch(request: Request, db: Db, payload: dict[str, Any] = Body(...), x_docuelevate_intake_secret: str | None = Header(default=None)):
     principal, owner = _principal(request, x_docuelevate_intake_secret)
+    client_batch_id = str(payload.get("client_batch_id", ""))
+    total_files = int(payload.get("total_files", 0))
+    total_bytes = int(payload.get("total_bytes", 0))
     if total_files < 0 or total_bytes < 0 or total_files > 100_000:
         raise HTTPException(422, "invalid batch totals")
     existing = db.query(UploadBatch).filter(UploadBatch.principal_id == principal, UploadBatch.client_batch_id == client_batch_id).one_or_none()
@@ -100,6 +105,11 @@ def upload_file(request: Request, db: Db, file: UploadFile = File(...), batch_id
         raise HTTPException(415, "unsupported document type")
     if len(sha256) != 64:
         raise HTTPException(422, "sha256 is required")
+    active_count = db.query(UploadItem).filter(UploadItem.principal_id == principal, UploadItem.state.in_(["accepted", "queued", "processing"])).count()
+    active_bytes = db.query(UploadItem).filter(UploadItem.principal_id == principal, UploadItem.state.in_(["accepted", "queued", "processing"])).with_entities(__import__("sqlalchemy").func.coalesce(__import__("sqlalchemy").func.sum(UploadItem.size), 0)).scalar() or 0
+    max_bytes = min(int(settings.max_upload_size) * 10, 10 * 1024 * 1024 * 1024)
+    if active_count >= 1000 or int(active_bytes) >= max_bytes:
+        raise HTTPException(429, "upload capacity exhausted", headers={"Retry-After": "5"})
     item = UploadItem(batch_id=batch.id, client_id=client_id, principal_id=principal, sha256=sha256, filename=filename, mime_type=supplied, size=0)
     db.add(item)
     db.flush()
@@ -125,18 +135,13 @@ def upload_file(request: Request, db: Db, file: UploadFile = File(...), batch_id
         db.rollback()
         target.unlink(missing_ok=True)
         raise HTTPException(422, "upload failed validation")
-    if not duplicate:
-        try:
-            dispatch_upload_item.delay(db.query(UploadOutbox).filter(UploadOutbox.item_id == item.id).one().id)
-        except Exception:
-            pass
     return {"file_id": record.id, "state": item.state, "duplicate": bool(duplicate), "client_id": client_id}
 
 
 @router.get("/batches/{batch_id}")
-def get_batch(request: Request, db: Db, batch_id: str, x_docuelevate_intake_secret: str | None = Header(default=None)):
+def get_batch(request: Request, db: Db, batch_id: str, offset: int = 0, limit: int = 100, x_docuelevate_intake_secret: str | None = Header(default=None)):
     principal, _ = _principal(request, x_docuelevate_intake_secret)
-    return _snapshot(db, _batch(db, batch_id, principal))
+    return _snapshot(db, _batch(db, batch_id, principal), offset, limit)
 
 
 @router.websocket("/events")

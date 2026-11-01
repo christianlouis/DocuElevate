@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @celery.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
 def dispatch_upload_item(self, outbox_id: int) -> dict[str, object]:
-        with SessionLocal() as db:
+    with SessionLocal() as db:
         outbox = db.query(UploadOutbox).filter(UploadOutbox.id == outbox_id).one_or_none()
         if outbox is None or outbox.dispatched_at is not None:
             return {"status": "already_dispatched"}
