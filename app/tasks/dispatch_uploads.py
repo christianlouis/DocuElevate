@@ -205,10 +205,6 @@ def reconcile_upload_states(limit: int = 100) -> int:
             update(UploadCapacity)
             .where(UploadCapacity.id == 1)
             .values(
-                reserved_files=case(
-                    (UploadCapacity.reserved_files >= released_files, UploadCapacity.reserved_files - released_files),
-                    else_=0,
-                ),
                 reserved_bytes=case(
                     (UploadCapacity.reserved_bytes >= released_bytes, UploadCapacity.reserved_bytes - released_bytes),
                     else_=0,

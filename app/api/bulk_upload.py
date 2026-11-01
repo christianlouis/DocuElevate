@@ -20,7 +20,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from sqlalchemy import func, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -66,6 +66,14 @@ def _upload_size(upload: UploadFile) -> int | None:
 def _available_capacity(ledger: UploadCapacity) -> int:
     usage = shutil.disk_usage(upload_root())
     return max(0, min(_capacity_limit() - ledger.reserved_bytes, usage.free - _disk_reserve()))
+
+
+def _capacity_slots(available: int) -> int:
+    if not available:
+        return 0
+    usage = shutil.disk_usage(upload_root())
+    slot_bytes = max(1, min(int(settings.max_upload_size), usage.total // 100))
+    return max(1, available // slot_bytes)
 
 
 def _batch(db: Session, batch_id: str, principal: str) -> UploadBatch:
@@ -124,29 +132,29 @@ def _capacity(db: Session) -> UploadCapacity:
 
 
 def _reserve_capacity(db: Session, size: int) -> bool:
-    """Atomically reserve real local staging capacity in the acceptance transaction."""
+    """Reserve headroom while holding the singleton row lock across the write."""
+    _capacity(db)
+    ledger = db.execute(select(UploadCapacity).where(UploadCapacity.id == 1).with_for_update()).scalar_one()
     usage = shutil.disk_usage(upload_root())
     if usage.free < size + _disk_reserve():
         return False
-    _capacity(db)
-    result = db.execute(
-        update(UploadCapacity)
-        .where(
-            UploadCapacity.id == 1,
-            UploadCapacity.reserved_bytes <= _capacity_limit() - size,
-        )
-        .values(
-            reserved_bytes=UploadCapacity.reserved_bytes + size,
-        )
-    )
-    return result.rowcount == 1
+    if ledger.reserved_bytes + size > _capacity_limit():
+        return False
+    ledger.reserved_bytes += size
+    db.flush()
+    return True
 
 
 def _release_capacity(db: Session, size: int) -> None:
     db.execute(
         update(UploadCapacity)
         .where(UploadCapacity.id == 1)
-        .values(reserved_bytes=func.max(0, UploadCapacity.reserved_bytes - max(0, size)))
+        .values(
+            reserved_bytes=case(
+                (UploadCapacity.reserved_bytes >= max(0, size), UploadCapacity.reserved_bytes - max(0, size)),
+                else_=0,
+            )
+        )
     )
 
 
@@ -236,7 +244,7 @@ def capacity(request: Request, db: Db, batch_id: str, x_docuelevate_intake_secre
     available = _available_capacity(ledger)
     return {
         "batch_id": batch.id,
-        "slots": 1 if available else 0,
+        "slots": _capacity_slots(available),
         "max_bytes": available,
         "used_bytes": ledger.reserved_bytes,
         "retry_after": 30 if not available else 0,
@@ -287,9 +295,9 @@ def upload_file(
         raise HTTPException(413, "file exceeds configured upload limit")
     if not _reserve_capacity(db, size_hint):
         raise HTTPException(429, "local upload storage is at capacity", headers={"Retry-After": "30"})
-    # Do not hold a database transaction while bytes are streaming.  The
-    # request body is already spooled by Starlette; a random staging name
-    # avoids serialising large concurrent uploads merely to obtain an item id.
+    # The request body is already spooled by Starlette.  The singleton ledger
+    # row lock is intentionally held through the atomic rename so concurrent
+    # admissions cannot all observe the same free-space headroom.
     target = safe_path(batch.id, str(uuid.uuid4()), filename)
     try:
         size, actual = stream_to_file(file, target, sha256, settings.max_upload_size)
@@ -435,7 +443,7 @@ async def events(websocket: WebSocket):
         initial_capacity = {
             "type": "capacity",
             "batch_id": batch_id,
-            "slots": 1 if available else 0,
+            "slots": _capacity_slots(available),
             "max_bytes": available,
             "used_bytes": ledger.reserved_bytes,
             "retry_after": 30 if not available else 0,
@@ -463,7 +471,7 @@ async def events(websocket: WebSocket):
             capacity_payload = {
                 "type": "capacity",
                 "batch_id": batch_id,
-                "slots": 1 if available else 0,
+                "slots": _capacity_slots(available),
                 "max_bytes": available,
                 "used_bytes": ledger.reserved_bytes,
                 "retry_after": 30 if not available else 0,

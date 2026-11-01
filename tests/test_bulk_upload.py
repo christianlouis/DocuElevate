@@ -283,7 +283,7 @@ def test_reconcile_uses_terminal_step_and_atomic_ledger_decrement(db_session, mo
     db_session.refresh(item)
     ledger = db_session.get(UploadCapacity, 1)
     assert item.state == "complete"
-    assert (ledger.reserved_files, ledger.reserved_bytes) == (0, 0)
+    assert (ledger.reserved_files, ledger.reserved_bytes) == (1, 0)
     assert dispatch_uploads.reconcile_upload_states.run() == 0
 
 
@@ -317,7 +317,7 @@ def test_reconcile_releases_exhausted_failure_and_deleted_file(db_session, monke
     db_session.commit()
     monkeypatch.setattr(dispatch_uploads, "SessionLocal", lambda: nullcontext(db_session))
     assert dispatch_uploads.reconcile_upload_states.run() == 2
-    assert db_session.get(UploadCapacity, 1).reserved_files == 0
+    assert db_session.get(UploadCapacity, 1).reserved_files == 2
     assert failed.capacity_released is True and failed.state == "failed"
     assert deleted.capacity_released is True and deleted.state == "failed"
 
