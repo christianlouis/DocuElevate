@@ -598,7 +598,7 @@ class TestFinalizeDocumentStorageUserRouting:
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
-    def test_falls_back_to_global_when_count_lookup_fails(
+    def test_retries_when_count_lookup_fails(
         self,
         mock_session_local,
         mock_log_progress,
@@ -608,7 +608,7 @@ class TestFinalizeDocumentStorageUserRouting:
         mock_send_user,
         mock_notify,
     ):
-        """When get_user_destination_count raises, fall back to global routing gracefully."""
+        """A destination lookup failure must retry instead of leaking to global sinks."""
         mock_get_services.return_value = {"s3": True}
         mock_get_dest_count.side_effect = Exception("DB connection error")
 
@@ -622,16 +622,16 @@ class TestFinalizeDocumentStorageUserRouting:
                 with patch("app.tasks.finalize_document_storage.os.path.basename", return_value="file.pdf"):
                     finalize_document_storage.request.id = "test-task-id"
 
-                    result = finalize_document_storage.__wrapped__(
-                        original_file="/tmp/original.pdf",
-                        processed_file="/workdir/processed/file.pdf",
-                        metadata={"filename": "file.pdf"},
-                        file_id=400,
-                    )
+                    with pytest.raises(Exception, match="DB connection error"):
+                        finalize_document_storage.__wrapped__(
+                            original_file="/tmp/original.pdf",
+                            processed_file="/workdir/processed/file.pdf",
+                            metadata={"filename": "file.pdf"},
+                            file_id=400,
+                        )
 
-        mock_send_all.delay.assert_called_once_with("/workdir/processed/file.pdf", True, 400)
+        mock_send_all.delay.assert_not_called()
         mock_send_user.delay.assert_not_called()
-        assert result["status"] == "Completed"
 
 
 @pytest.mark.unit

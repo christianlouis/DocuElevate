@@ -847,7 +847,7 @@ class TestUploadEmail:
 
         parsed = message_from_string(message)
         assert "https://app.docuelevate.org/files/42" in message
-        attachments = list(parsed.iter_attachments())
+        attachments = [part for part in parsed.walk() if part.get_filename()]
         assert attachments and attachments[0].get_filename() == "doc.pdf"
         assert attachments[0].get_payload(decode=True) == b"pdf payload"
         assert "postmark-server-token" not in message
