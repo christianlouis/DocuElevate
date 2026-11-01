@@ -20,6 +20,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `CELERY_RESULT_BACKEND` | Optional dedicated Celery result-backend URL; must resolve to a writable primary and falls back to `REDIS_URL`. | unset |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
+| `MEILISEARCH_DELETION_MODE` | Operator-only deletion contract: `managed` (default, fail-closed cleanup) or `never_used` (only with an explicit no-data attestation). | `managed` |
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
 | `DEPLOYMENT_LABEL`     | Optional label shown during onboarding so users can distinguish installations. | *(empty)* |
@@ -44,6 +45,7 @@ secret manager; do not store them in `.env` files committed to source control.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `VECTOR_INDEX_ENABLED` | Enable chunk indexing and the knowledge search API. | `false` |
+| `VECTOR_INDEX_DELETION_MODE` | Operator-only deletion contract: `managed` (default, fail-closed cleanup) or `never_used` (only with an explicit no-data attestation; rejected while indexing is enabled). | `managed` |
 | `VECTOR_INDEX_URL` | Internal Qdrant base URL. | `http://qdrant:6333` |
 | `VECTOR_INDEX_API_KEY` | Qdrant API key sent only to the internal service. | unset |
 | `VECTOR_INDEX_COLLECTION` | Qdrant collection for document chunks. | `docuelevate_documents` |
@@ -71,6 +73,7 @@ Example preproduction service configuration (secret values omitted):
 
 ```dotenv
 VECTOR_INDEX_ENABLED=true
+VECTOR_INDEX_DELETION_MODE=managed
 VECTOR_INDEX_URL=http://docuelevate-qdrant:6333
 VECTOR_INDEX_COLLECTION=docuelevate_documents
 VECTOR_CHUNK_TOKENS=600
