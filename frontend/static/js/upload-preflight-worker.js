@@ -39,9 +39,20 @@ function sniff(bytes, name, declared) {
   if (bytes[0]===0x50&&bytes[1]===0x4b&&bytes[2]===0x03&&bytes[3]===0x04) return declared || 'application/zip';
   return declared || (name.toLowerCase().endsWith('.md') ? 'text/markdown' : 'application/octet-stream');
 }
-self.onmessage = async ({ data }) => {
+async function inspect(data) {
   try { const file=data.file; const hash=new Sha256(); let first=new Uint8Array(0);
     for(let offset=0; offset<file.size; offset+=CHUNK_SIZE) { const chunk=new Uint8Array(await file.slice(offset,offset+CHUNK_SIZE).arrayBuffer()); if(!first.length) first=chunk.slice(0,512); hash.update(chunk); }
-    self.postMessage({id:data.id, sha256:hash.digest(), mime:sniff(first,data.name||file.name,data.mime||file.type), size:file.size});
-  } catch (error) { self.postMessage({id:data.id,error:String(error)}); }
+    const result={id:data.id, sha256:hash.digest(), mime:sniff(first,data.name||file.name,data.mime||file.type), size:file.size};
+    self.postMessage(result); return result;
+  } catch (error) { const result={id:data.id,error:String(error)}; self.postMessage(result); throw error; }
+}
+// Shared by the controller worker; importing this file there does not create
+// another worker, it only reuses the bounded hash/MIME implementation.
+self.inspectUploadFile = inspect;
+// One worker instance serves the whole page lifetime. Serializing inspections
+// keeps the worker a scheduler rather than accidentally creating a hidden pool.
+let inspectionTail = Promise.resolve();
+self.onmessage = ({ data }) => {
+  inspectionTail = inspectionTail.then(() => inspect(data)).catch(() => {});
+  return inspectionTail;
 };

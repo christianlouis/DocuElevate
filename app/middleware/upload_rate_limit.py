@@ -231,6 +231,12 @@ async def require_upload_rate_limit(request: Request) -> None:
             is exceeded.  The ``Retry-After`` header indicates how many
             seconds the client should wait before retrying.
     """
+    # Durable bulk intake is already bounded by the transactional filesystem
+    # admission ledger.  Applying the legacy per-request window here turns a
+    # 40k-file batch into avoidable 429s before bytes are durably accepted.
+    if request.url.path.rstrip("/") == "/api/uploads/files":
+        return
+
     r = _get_redis()
     if r is None:
         # Redis unavailable – fail open.

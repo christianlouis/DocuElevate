@@ -1,11 +1,60 @@
 /* HTTP carries bytes; the websocket only advertises capacity and status.
  * IndexedDB stores metadata, never a second copy of the selected corpus. */
 (function () {
+  if (typeof Worker !== 'undefined' && !window.uploadQueueTestMode) {
+    const worker = new Worker('/static/js/upload-controller-worker.js');
+    let registration;
+    const owner = crypto.randomUUID();
+    const csrf = () => typeof getCsrfToken === 'function' ? getCsrfToken() : '';
+    function postSW(message) {
+      return new Promise((resolve, reject) => {
+        const controller = navigator.serviceWorker?.controller || registration?.active;
+        if (!controller) return reject(new Error('Persistent upload queue is unavailable'));
+        const channel = new MessageChannel();
+        const timer = setTimeout(() => { channel.port1.close(); reject(new Error('Queue acknowledgement timed out')); }, 10000);
+        channel.port1.onmessage = event => { clearTimeout(timer); channel.port1.close(); event.data?.ok ? resolve(event.data.result) : reject(new Error(event.data?.error || 'Queue error')); };
+        controller.postMessage({ ...message, principal: window.uploadConfig?.queueOwner || 'single-user' }, [channel.port2]);
+      });
+    }
+    function render(payload) {
+      const container = document.getElementById('uploadProgress');
+      const status = document.getElementById('statusMessage');
+      if (status) status.textContent = payload.message || '';
+      if (!container || !payload.queue) return;
+      container.replaceChildren();
+      const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'Duplikat', processing: 'in Verarbeitung', complete: 'verarbeitet', needs_files: 'Datei erneut auswählen', failed: 'fehlgeschlagen' };
+      for (const item of payload.queue.slice(0, 100)) { const row = document.createElement('div'); row.className = 'text-xs mb-1'; row.textContent = `${item.name} — ${states[item.state] || item.state}`; container.appendChild(row); }
+      const accepted = payload.accepted ?? payload.queue.filter(item => item.fileId).length;
+      if (status) status.textContent = `${accepted} von ${payload.total ?? payload.queue.length} Dateien sicher angenommen. ${payload.message || ''}`;
+    }
+    worker.onmessage = event => {
+      const message = event.data || {};
+      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
+      if (message.type === 'status') render(message);
+      if (message.type === 'accepted') window.onDocuElevateUploadQueued?.(message);
+    };
+    async function start() {
+      if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
+      registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready;
+      if (navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
+      worker.postMessage({ type: 'init', principal: window.uploadConfig?.queueOwner || 'single-user', owner, csrf: csrf(), config: window.uploadConfig || {} });
+    }
+    let startPromise;
+    function ensureStarted() {
+      if (!startPromise) startPromise = start().catch(error => { render({ message: String(error), queue: [] }); throw error; });
+      return startPromise;
+    }
+    window.processFiles = async files => { await ensureStarted(); worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
+    window.addEventListener('DOMContentLoaded', () => { void ensureStarted().catch(() => {}); });
+    return;
+  }
   const WINDOW = 200, HASH_WORKERS = 2, MAX_RETRIES = 5;
   const principal = window.uploadConfig?.queueOwner || 'single-user';
   const owner = crypto.randomUUID(); // Each tab has its own lease identity.
   const storageKey = `docuelevate.upload.batch.${principal}`;
   let registration;
+  let preflightWorker;
+  const preflightJobs = new Map();
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   const csrf = () => {
     const token = typeof getCsrfToken === 'function' ? getCsrfToken() : '';
@@ -105,13 +154,32 @@
   }
   function digest(item) {
     return new Promise((resolve, reject) => {
-      const worker = new Worker('/static/js/upload-preflight-worker.js');
-      const finish = (error, result) => { worker.terminate(); error ? reject(error) : resolve(result); };
-      worker.onmessage = event => event.data.error ? finish(new Error(event.data.error)) : finish(null, event.data);
-      worker.onerror = () => finish(new Error('File inspection failed'));
-      worker.postMessage({ id: item.key, file: item.file, name: item.file.name, mime: item.file.type });
+      if (!preflightWorker) {
+        preflightWorker = new Worker('/static/js/upload-preflight-worker.js');
+        preflightWorker.onmessage = event => {
+          const job = preflightJobs.get(event.data?.id);
+          if (!job) return;
+          preflightJobs.delete(event.data.id);
+          event.data.error ? job.reject(new Error(event.data.error)) : job.resolve(event.data);
+        };
+        preflightWorker.onerror = error => {
+          const failure = new Error(error?.message || 'File inspection failed');
+          for (const job of preflightJobs.values()) job.reject(failure);
+          preflightJobs.clear(); preflightWorker.terminate(); preflightWorker = null;
+        };
+      }
+      preflightJobs.set(item.key, { resolve, reject });
+      preflightWorker.postMessage({ id: item.key, file: item.file, name: item.file.name, mime: item.file.type });
     });
   }
+  function shutdownPreflightWorker() {
+    if (!preflightWorker) return;
+    preflightWorker.terminate(); preflightWorker = null;
+    const failure = new Error('Upload page closed');
+    for (const job of preflightJobs.values()) job.reject(failure);
+    preflightJobs.clear();
+  }
+  window.addEventListener('pagehide', shutdownPreflightWorker);
   function metadata(item, batchId) {
     return { key: item.key, batchId: item.batchId || batchId, name: item.name, size: item.size, lastModified: item.lastModified,
       state: item.state, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf };
@@ -120,6 +188,7 @@
     constructor(container, status) {
       this.container = container; this.status = status; this.queue = []; this.batchId = null; this.batchIds = [];
       this.capacity = { slots: 0, max_bytes: 0 }; this.running = false;
+      this.pendingAdds = [];
       this.refreshPromise = null;
     }
     message(text) { if (this.status) this.status.textContent = text; }
@@ -192,25 +261,32 @@
       };
       socket.onclose = () => { if (this.socket === socket) clearInterval(this.heartbeat); if (this.socket === socket) this.wsTimer = setTimeout(() => this.connectEvents(), 5000); };
     }
-    async enqueue(files) {
-      if (this.running) { this.message('Ein Upload läuft bereits. Bitte danach weitere Dateien auswählen.'); return; }
+    async enqueue(files, options = {}) {
+      const list = Array.from(files || []).filter(file => file && file.size <= (window.uploadConfig?.maxFileSize || MAX_FILE_SIZE) && _isAcceptedFile(file));
+      if (!list.length) return;
+      if (this.running) {
+        // Keep the drop zone live. The active scheduler finishes its current
+        // batch, then starts this addition as a separate server batch.
+        this.pendingAdds.push(list);
+        this.message(`${this.pendingAdds.reduce((count, batch) => count + batch.length, 0)} weitere Dateien vorgemerkt.`);
+        return;
+      }
       this.running = true;
       try {
         await ensureSW();
-        const list = Array.from(files || []).filter(file => file && file.size <= (window.uploadConfig?.maxFileSize || MAX_FILE_SIZE) && _isAcceptedFile(file));
-        if (!list.length) return;
-        if (this.batchId && this.queue.some(item => !item.fileId)) {
+        if (!options.append && this.batchId && this.queue.some(item => !item.fileId)) {
           await this.refresh(); this.queue = matchReselected(this.queue, list);
           if (!this.queue.some(item => item.file && !item.fileId)) {
             this.message('Die Auswahl passt nicht zur offenen Queue. Bitte die ursprünglichen Dateien erneut auswählen.'); return;
           }
         } else {
           this.socket?.close(); this.batchId = null;
-          this.queue = list.map(file => ({ key: crypto.randomUUID(), file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
+          const additions = list.map(file => ({ key: crypto.randomUUID(), file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
+          this.queue = [...this.queue, ...additions];
           const clientBatchId = crypto.randomUUID();
           const batch = await json('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_batch_id: clientBatchId, total_files: list.length, total_bytes: list.reduce((sum, file) => sum + file.size, 0) }) });
-          this.batchId = batch.batch_id; this.queue.forEach(item => { item.batchId = this.batchId; }); this.batchIds = [...new Set([...this.batchIds, this.batchId])];
+          this.batchId = batch.batch_id; additions.forEach(item => { item.batchId = this.batchId; }); this.batchIds = [...new Set([...this.batchIds, this.batchId])];
           localStorage.setItem(storageKey, JSON.stringify({ batchId: this.batchId }));
           const pointerKey = `${storageKey}.batches`;
           const remember = () => { const current = JSON.parse(localStorage.getItem(pointerKey) || '[]'); if (!current.includes(this.batchId)) current.push(this.batchId); localStorage.setItem(pointerKey, JSON.stringify(current)); };
@@ -242,7 +318,11 @@
           }
         }
       } catch (error) { this.message(`Upload pausiert: ${error.message}. Die Queue bleibt gespeichert.`); }
-      finally { this.running = false; }
+      finally {
+        this.running = false;
+        const next = this.pendingAdds.shift();
+        if (next?.length) void this.enqueue(next, { append: true });
+      }
     }
     async send(item) {
       if (!await postSW({ op: 'lease', key: item.key, owner, ttl: 60000 })) return false;
@@ -286,5 +366,5 @@
     window.docuElevateUploadQueue = queue;
     queue.ready = queue.restore();
   });
-  window.uploadQueueTestHelpers = { windows, slots, applyPreflightResults, matchReselected, deduplicate, selectReady };
+  window.uploadQueueTestHelpers = { windows, slots, applyPreflightResults, matchReselected, deduplicate, selectReady, digest };
 })();
