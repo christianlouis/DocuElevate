@@ -616,9 +616,12 @@ class TestProcessingFlowComputation:
         assert branches["upload_to_s3"]["status"] == "failure"
         assert branches["upload_to_s3"]["can_retry"] is True
 
-    def test_flow_includes_all_global_destination_statuses(self):
+    def test_flow_includes_all_global_destination_statuses(self, monkeypatch):
         """Every dispatcher destination, including Notion and Evernote, is visible."""
         from app.views.files import _compute_processing_flow
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "dest_email_default_recipient", "evernote@m.evernote.com")
 
         class MockLog:
             def __init__(self, step_name, status, message):
@@ -634,6 +637,10 @@ class TestProcessingFlowComputation:
             MockLog("upload_to_notion", "success", "Uploaded to Notion"),
             MockLog("queue_evernote", "success", "Queued for evernote"),
             MockLog("upload_to_evernote", "failure", "Evernote upload failed"),
+            # A queue log arriving later must not hide the terminal failure.
+            MockLog("queue_email", "success", "Queued for email"),
+            MockLog("upload_to_email", "failure", "Email delivery failed"),
+            MockLog("queue_email", "success", "Queued for email"),
             MockLog("queue_sharepoint", "success", "Queued for sharepoint"),
             MockLog("queue_icloud", "success", "Queued for icloud"),
         ]
@@ -645,8 +652,32 @@ class TestProcessingFlowComputation:
         assert branches["upload_to_notion"]["status"] == "success"
         assert branches["upload_to_evernote"]["label"] == "Evernote"
         assert branches["upload_to_evernote"]["status"] == "failure"
+        assert branches["upload_to_email"]["label"] == "Evernote"
+        assert branches["upload_to_email"]["status"] == "failure"
         assert branches["upload_to_sharepoint"]["label"] == "SharePoint"
         assert branches["upload_to_icloud"]["label"] == "iCloud Drive"
+
+    def test_flow_keeps_unknown_future_upload_destination_visible(self):
+        """An unlisted upload task remains visible with a safe fallback label."""
+        from app.views.files import _compute_processing_flow
+
+        log = type(
+            "Log",
+            (),
+            {
+                "step_name": "upload_to_future_archive",
+                "status": "success",
+                "message": "Uploaded",
+                "timestamp": None,
+                "task_id": "future-task",
+            },
+        )()
+
+        upload_stage = next(stage for stage in _compute_processing_flow([log]) if stage.get("is_branch_parent"))
+        branch = upload_stage["branches"][0]
+
+        assert branch["label"] == "Future Archive"
+        assert branch["status"] == "success"
 
 
 @pytest.mark.unit
