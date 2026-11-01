@@ -6,8 +6,10 @@ import hashlib
 import threading
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
@@ -16,6 +18,10 @@ _local = threading.local()
 _registry_guard = threading.Lock()
 _thread_locks: dict[str, threading.RLock] = {}
 _pg_engines = {}
+
+
+def _pg_lock_operation(connection: Connection, operation: str, lock_id: int) -> Any:
+    return connection.execute(text(f"SELECT {operation}(:key)"), {"key": lock_id}).scalar()
 
 
 def _dedicated_pg_engine(bind):
@@ -119,9 +125,7 @@ async def async_account_lifecycle_lock(db, owner_id: str):
                 raise
             try:
                 acquired = await asyncio.to_thread(
-                    lambda connection=connection: connection.execute(
-                        text("SELECT pg_try_advisory_lock_shared(:key)"), {"key": lock_id}
-                    ).scalar()
+                    _pg_lock_operation, connection, "pg_try_advisory_lock_shared", lock_id
                 )
                 if acquired:
                     try:
@@ -129,9 +133,7 @@ async def async_account_lifecycle_lock(db, owner_id: str):
                     finally:
                         try:
                             released = await asyncio.to_thread(
-                                lambda connection=connection: connection.execute(
-                                    text("SELECT pg_advisory_unlock_shared(:key)"), {"key": lock_id}
-                                ).scalar()
+                                _pg_lock_operation, connection, "pg_advisory_unlock_shared", lock_id
                             )
                             if released is not True:
                                 raise RuntimeError("PostgreSQL lifecycle lock was not released")
