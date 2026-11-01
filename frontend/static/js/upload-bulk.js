@@ -49,10 +49,10 @@
   function slots(capacity) { return Math.max(0, Math.min(Number(capacity?.slots ?? 0), Number(window.uploadConfig?.concurrency ?? 3))); }
   function selectReady(queue, capacity) {
     const selected = []; let bytes = 0;
-    const maxBytes = Number(capacity?.max_bytes ?? 0);
+    const maxBytes = capacity?.max_bytes == null ? Infinity : Number(capacity.max_bytes);
     for (const item of queue) {
       if (selected.length >= slots(capacity)) break;
-      if (item.state !== 'queued' || !item.file || !item.sha256 || item.duplicateOf) continue;
+      if (item.state !== 'queued' || item.fileId || !item.file || !item.sha256 || item.duplicateOf) continue;
       if (bytes + item.file.size > maxBytes) continue;
       selected.push(item); bytes += item.file.size;
     }
@@ -72,15 +72,26 @@
     });
   }
   function deduplicate(items) {
+    if (window.uploadConfig?.enableDeduplication === false) {
+      items.forEach(item => { delete item.duplicateOf; });
+      return items;
+    }
     const seen = new Map();
     for (const item of items) {
       delete item.duplicateOf;
       if (!item.sha256 || item.state === 'failed') continue;
-      const first = seen.get(item.sha256);
-      if (first && first.key !== item.key) {
-        item.duplicateOf = first.key;
-        if (first.fileId) { item.state = 'duplicate'; item.fileId = first.fileId; }
-      } else { seen.set(item.sha256, item); delete item.duplicateOf; }
+      const candidates = seen.get(item.sha256) || [];
+      candidates.push(item);
+      // Prefer an admitted item, then a currently transferable item. A
+      // needs_files entry must never suppress a reselected copy.
+      const leader = candidates.find(candidate => candidate.fileId) || candidates.find(candidate => candidate.file);
+      seen.set(item.sha256, candidates);
+      if (!leader) continue;
+      for (const candidate of candidates) {
+        if (candidate.key === leader.key) { delete candidate.duplicateOf; continue; }
+        candidate.duplicateOf = leader.key;
+        if (leader.fileId) { candidate.state = 'duplicate'; candidate.fileId = leader.fileId; }
+      }
     }
     return items;
   }
@@ -101,13 +112,14 @@
     });
   }
   function metadata(item, batchId) {
-    return { key: item.key, batchId, name: item.name, size: item.size, lastModified: item.lastModified,
+    return { key: item.key, batchId: item.batchId || batchId, name: item.name, size: item.size, lastModified: item.lastModified,
       state: item.state, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf };
   }
   class Queue {
     constructor(container, status) {
-      this.container = container; this.status = status; this.queue = []; this.batchId = null;
+      this.container = container; this.status = status; this.queue = []; this.batchId = null; this.batchIds = [];
       this.capacity = { slots: 0, max_bytes: 0 }; this.running = false;
+      this.refreshPromise = null;
     }
     message(text) { if (this.status) this.status.textContent = text; }
     render() {
@@ -125,16 +137,22 @@
     async persist(items) { if (items.length) await postSW({ op: 'putMany', items: items.map(item => metadata(item, this.batchId)) }); }
     async restore() {
       try {
-        await ensureSW(); const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
-        if (!saved?.batchId) return;
-        this.batchId = saved.batchId;
-        this.queue = (await postSW({ op: 'snapshot', batchId: this.batchId })).map(item => ({ ...item, state: item.fileId ? item.state : 'needs_files' }));
+        await ensureSW();
+        const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        const pointers = JSON.parse(localStorage.getItem(`${storageKey}.batches`) || '[]');
+        this.batchIds = [...new Set([...(pointers || []), saved?.batchId].filter(Boolean))];
+        if (!this.batchIds.length) return;
+        this.batchId = this.batchIds[0];
+        const snapshots = await Promise.all(this.batchIds.map(batchId => postSW({ op: 'snapshot', batchId })));
+        this.queue = snapshots.flat().map(item => ({ ...item, state: item.fileId ? item.state : 'needs_files' }));
         await this.refresh(); this.render(); this.connectEvents();
         if (this.queue.some(item => !item.fileId)) this.message('Queue wiederhergestellt. Bitte die ursprünglichen Dateien erneut auswählen, um ausstehende Uploads fortzusetzen.');
       } catch (error) { this.message(String(error)); }
     }
     async refresh() {
       if (!this.batchId) return;
+      if (this.refreshPromise) return this.refreshPromise;
+      this.refreshPromise = (async () => {
       let cursor = null;
       do {
         const snapshot = await json(`/api/uploads/batches/${encodeURIComponent(this.batchId)}?limit=${WINDOW}${cursor === null ? "" : `&cursor=${cursor}`}`);
@@ -142,6 +160,8 @@
         cursor = snapshot.next_cursor ?? null;
       } while (cursor !== null);
       this.capacity = await json(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`);
+      })();
+      try { return await this.refreshPromise; } finally { this.refreshPromise = null; }
     }
     async reconcile(items) {
       const byClient = new Map(this.queue.map(item => [item.key, item])); const changed = [];
@@ -156,7 +176,7 @@
       this.socket?.close(); clearTimeout(this.wsTimer); clearInterval(this.heartbeat);
       const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/uploads/events?batch_id=${encodeURIComponent(this.batchId)}`);
       this.socket = socket;
-      socket.onopen = () => { this.heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send("capacity"); }, 5000); };
+      socket.onopen = () => { void this.refresh().catch(error => this.message(String(error))); this.heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send("capacity"); }, 5000); };
       socket.onmessage = event => {
         try {
           const message = JSON.parse(event.data);
@@ -164,6 +184,7 @@
           if (message.type === 'capacity' && message.slots !== undefined) this.capacity = message;
           const items = message.snapshot?.items || message.items;
           if (items) void this.reconcile(items).catch(error => this.message(String(error)));
+          if (message.snapshot?.truncated || message.truncated) void this.refresh().catch(error => this.message(String(error)));
         } catch (_) { /* REST reconciliation also runs after reconnect. */ }
       };
       socket.onclose = () => { if (this.socket === socket) clearInterval(this.heartbeat); if (this.socket === socket) this.wsTimer = setTimeout(() => this.connectEvents(), 5000); };
@@ -186,13 +207,22 @@
           const clientBatchId = crypto.randomUUID();
           const batch = await json('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_batch_id: clientBatchId, total_files: list.length, total_bytes: list.reduce((sum, file) => sum + file.size, 0) }) });
-          this.batchId = batch.batch_id;
+          this.batchId = batch.batch_id; this.queue.forEach(item => { item.batchId = this.batchId; }); this.batchIds = [...new Set([...this.batchIds, this.batchId])];
           localStorage.setItem(storageKey, JSON.stringify({ batchId: this.batchId }));
+          const pointerKey = `${storageKey}.batches`;
+          const remember = () => { const current = JSON.parse(localStorage.getItem(pointerKey) || '[]'); if (!current.includes(this.batchId)) current.push(this.batchId); localStorage.setItem(pointerKey, JSON.stringify(current)); };
+          if (navigator.locks?.request) await navigator.locks.request(`docuelevate-upload-pointers-${principal}`, remember); else remember();
+        }
+        if (this.queue.length && this.queue.every(item => item.fileId || item.state === 'duplicate') && !this.queue.some(item => item.state === 'failed')) {
+          window.dispatchEvent?.(new CustomEvent('allUploadsComplete', { detail: { total: this.queue.length, completed: this.queue.length } }));
         }
         await this.persist(this.queue); this.connectEvents(); this.render();
         // Hash and send in bounded windows, so the first files can start while
         // the rest of a large selection has not yet been inspected.
-        for (const group of windows(this.queue.filter(item => item.file && !item.fileId))) {
+        const pendingBatchIds = [...new Set(this.queue.filter(item => item.file && !item.fileId).map(item => item.batchId || this.batchId))];
+        for (const pendingBatchId of pendingBatchIds) {
+          this.batchId = pendingBatchId;
+          for (const group of windows(this.queue.filter(item => item.file && !item.fileId && (item.batchId || this.batchId) === pendingBatchId))) {
           for (let i = 0; i < group.length; i += HASH_WORKERS) {
             await Promise.all(group.slice(i, i + HASH_WORKERS).map(async item => {
               try { const result = await digest(item); item.sha256 = result.sha256; item.mime = result.mime; }
@@ -206,6 +236,7 @@
           deduplicate(this.queue); await this.persist(group);
           this.capacity = await json(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`);
           await this.run(group); this.render();
+          }
         }
       } catch (error) { this.message(`Upload pausiert: ${error.message}. Die Queue bleibt gespeichert.`); }
       finally { this.running = false; }
@@ -214,7 +245,7 @@
       if (!await postSW({ op: 'lease', key: item.key, owner, ttl: 60000 })) return false;
       const renewal = setInterval(() => postSW({ op: 'lease', key: item.key, owner, ttl: 60000 }).catch(() => {}), 10000);
       try {
-        const body = new FormData(); body.append('file', item.file); body.append('batch_id', this.batchId);
+        const body = new FormData(); body.append('file', item.file); body.append('batch_id', item.batchId || this.batchId);
         body.append('client_id', item.key); body.append('sha256', item.sha256);
         const result = await json('/api/uploads/files', { method: 'POST', body });
         item.fileId = result.file_id; item.state = result.duplicate ? 'duplicate' : result.state || 'accepted';

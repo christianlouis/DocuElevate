@@ -66,7 +66,7 @@ test('reselect reconciliation preserves batch and client identities', () => {
 
 test('local SHA map marks later content duplicates before upload', () => {
   const { deduplicate } = helpers();
-  const result = deduplicate([{ key: 'a', sha256: 'x', state: 'queued' }, { key: 'b', sha256: 'x', state: 'queued' }, { key: 'c', sha256: 'y', state: 'queued' }]);
+  const result = deduplicate([{ key: 'a', sha256: 'x', state: 'queued', file: {} }, { key: 'b', sha256: 'x', state: 'queued', file: {} }, { key: 'c', sha256: 'y', state: 'queued', file: {} }]);
   assert.equal(result[1].state, 'queued'); // Only mark accepted after the leader has a server ID.
   assert.equal(result[1].duplicateOf, 'a');
   assert.equal(result[2].state, 'queued');
@@ -77,9 +77,29 @@ test('local SHA map marks later content duplicates before upload', () => {
 
 test('capacity zero pauses and a WebSocket-style update resumes bounded work', () => {
   const { selectReady } = helpers();
-  const queue = [{ key: 'a', file: {size: 5}, sha256: 'a', state: 'queued' }, { key: 'b', file: {size: 5}, sha256: 'b', state: 'queued' }];
+  const queue = [{ key: 'accepted', file: {size: 5}, fileId: 77, sha256: 'old', state: 'queued' }, { key: 'a', file: {size: 5}, sha256: 'a', state: 'queued' }, { key: 'b', file: {size: 5}, sha256: 'b', state: 'queued' }];
   assert.equal(selectReady(queue, { slots: 0 }).length, 0);
   assert.deepEqual(Array.from(selectReady(queue, { slots: 1, max_bytes: 5 }), x => x.key), ['a']);
+});
+
+test('deduplication can be disabled while preserving upload candidates', () => {
+  const { deduplicate } = helpers({ window: { uploadConfig: { enableDeduplication: false }, addEventListener() {} } });
+  const result = deduplicate([{ key: 'a', sha256: 'x', state: 'queued', file: {} }, { key: 'b', sha256: 'x', state: 'queued', file: {} }]);
+  assert.equal(result[0].duplicateOf, undefined);
+  assert.equal(result[1].duplicateOf, undefined);
+});
+
+test('truncated WebSocket snapshots trigger one coalesced REST refresh', async () => {
+  let socket;
+  class FakeWebSocket { static OPEN = 1; constructor() { socket = this; this.readyState = 1; } close() {} send() {} }
+  const { Queue } = helpers({ WebSocket: FakeWebSocket });
+  const queue = new Queue(null, null); queue.batchId = 'batch'; let refreshes = 0; let inFlight;
+  queue.refresh = () => inFlight || (inFlight = new Promise(resolve => { refreshes += 1; setImmediate(() => { inFlight = null; resolve(); }); }));
+  queue.connectEvents(); socket.onopen(); socket.onmessage({ data: JSON.stringify({ snapshot: { items: [], truncated: true } }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(refreshes, 1);
+  socket.onclose();
+  clearTimeout(queue.wsTimer);
 });
 
 test('worker reports file read errors instead of leaving a pending hash', async () => {
