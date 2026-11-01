@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- Define user-specific integration acceptance
+  ([`8f4564d`](https://github.com/christianlouis/DocuElevate/commit/8f4564ddc0043cfcc469a0c27a5aa403cea08e0f))
+
+
 ## v0.191.1 (2026-11-01)
 
 ### Bug Fixes
