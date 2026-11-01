@@ -151,6 +151,68 @@ test('a lost HTTP acceptance response retries the same client identity and commi
   assert.equal(operations.at(-1).op, 'release');
 });
 
+test('service worker discovers durable batches when local pointers are missing and isolates owners', async () => {
+  const rows = [
+    { key: 'one', principal: 'owner-a', batchId: 'batch-1' },
+    { key: 'two', principal: 'owner-a', batchId: 'batch-1' },
+    { key: 'three', principal: 'owner-a', batchId: 'batch-2' },
+    { key: 'other', principal: 'owner-b', batchId: 'private-batch' }
+  ];
+  function fakeIndexedDB() {
+    const range = (lower, upper) => ({ lower, upper });
+    class Tx {
+      constructor(store) { this.store = store; this.pending = 0; this.oncomplete = null; }
+      add() { this.pending += 1; }
+      done() {
+        this.pending -= 1;
+        if (!this.pending) queueMicrotask(() => this.oncomplete?.());
+      }
+      objectStore() { return this.store; }
+    }
+    const inRange = (key, wanted) => !wanted || (key[0] >= wanted.lower[0] && key[0] <= wanted.upper[0]);
+    const store = {
+      indexNames: { contains() { return true; } },
+      index() {
+        return {
+          openKeyCursor(wanted) {
+            const tx = currentTx; const keys = [...new Map(rows.map(item => [item.principal, item.batchId])
+              .map(key => [key.join('\0'), key])).values()]
+              .filter(key => inRange(key, wanted)).sort((a, b) => a.join('\0').localeCompare(b.join('\0')));
+            const request = { result: null, onsuccess: null }; let offset = 0;
+            tx.add();
+            const emit = () => {
+              request.result = offset < keys.length ? { key: keys[offset], continue() { offset += 1; queueMicrotask(emit); } } : null;
+              request.onsuccess?.({ target: request });
+              if (!request.result) tx.done();
+            };
+            queueMicrotask(emit); return request;
+          }
+        };
+      }
+    };
+    let currentTx;
+    const db = {
+      objectStoreNames: { contains() { return true; } },
+      transaction() { currentTx = new Tx(store); return currentTx; },
+      close() {}
+    };
+    return {
+      indexedDB: { open() {
+        const request = { result: db, transaction: { objectStore() { return store; } }, onupgradeneeded: null, onsuccess: null };
+        queueMicrotask(() => { request.onupgradeneeded?.({ target: request }); queueMicrotask(() => request.onsuccess?.({ target: request })); });
+        return request;
+      } },
+      IDBKeyRange: { bound: range }
+    };
+  }
+  const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-queue-sw.js'), 'utf8');
+  const fake = fakeIndexedDB();
+  const context = { ...fake, self: { addEventListener() {} }, Date };
+  vm.runInNewContext(`${source}\nself.__handle = handle;`, context);
+  assert.deepEqual(Array.from(await context.self.__handle({ op: 'listBatches', principal: 'owner-a' })), ['batch-1', 'batch-2']);
+  assert.deepEqual(Array.from(await context.self.__handle({ op: 'listBatches', principal: 'owner-b' })), ['private-batch']);
+});
+
 
 test('every upload entry script parses before browser event handlers run', () => {
   for (const file of ['upload.js', 'upload-bulk.js', 'upload-preflight-worker.js', 'upload-queue-sw.js']) {

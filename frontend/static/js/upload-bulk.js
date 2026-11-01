@@ -140,7 +140,9 @@
         await ensureSW();
         const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
         const pointers = JSON.parse(localStorage.getItem(`${storageKey}.batches`) || '[]');
-        this.batchIds = [...new Set([...(pointers || []), saved?.batchId].filter(Boolean))];
+        let discovered = [];
+        try { discovered = await postSW({ op: 'listBatches' }); } catch (_) { /* local pointers remain a compatibility fallback */ }
+        this.batchIds = [...new Set([...(discovered || []), ...(pointers || []), saved?.batchId].filter(Boolean))];
         if (!this.batchIds.length) return;
         this.batchId = this.batchIds[0];
         const snapshots = await Promise.all(this.batchIds.map(batchId => postSW({ op: 'snapshot', batchId })));

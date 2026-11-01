@@ -44,6 +44,18 @@ async function handle(message) {
       }
     });
   }
+  if (message.op === 'listBatches') return transaction('readonly', (store, result) => {
+    const batches = new Set();
+    const request = store.index('ownerBatch').openKeyCursor(
+      IDBKeyRange.bound([message.principal, ''], [message.principal, '\uffff']), 'nextunique'
+    );
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return result([...batches]);
+      batches.add(cursor.key[1]);
+      cursor.continue();
+    };
+  });
   if (message.op === 'snapshot') return transaction('readonly', (store, result) => {
     const request = store.index('ownerBatch').getAll(IDBKeyRange.only([message.principal, message.batchId]));
     request.onsuccess = () => result(request.result.filter(item => item.principal === message.principal && item.batchId === message.batchId));
