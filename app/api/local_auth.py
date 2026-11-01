@@ -197,9 +197,11 @@ async def reset_password_page(request: Request) -> Any:
 @router.get("/api/auth/capabilities", summary="Public authentication capabilities")
 async def auth_capabilities() -> dict[str, Any]:
     """Describe the public signup contract without exposing provider secrets."""
-    enabled = bool(settings.multi_user_enabled and settings.allow_local_signup)
+    smtp_configured = bool(settings.email_host)
+    enabled = bool(settings.multi_user_enabled and settings.allow_local_signup and smtp_configured)
     return {
         "local_signup": enabled,
+        "smtp_configured": smtp_configured,
         "email_verification_required": True,
         "terms_version": CURRENT_TERMS_VERSION,
         "privacy_version": CURRENT_PRIVACY_VERSION,
@@ -248,7 +250,6 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
     if db.query(LocalUser).filter(LocalUser.username == body.username).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
 
-    smtp_configured = True
     now = datetime.now(tz=timezone.utc)
     token = generate_token()
     user = LocalUser(

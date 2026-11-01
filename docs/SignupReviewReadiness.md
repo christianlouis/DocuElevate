@@ -34,6 +34,13 @@ Klick auf den Verifikationslink inaktiv. Mobile Clients können denselben
 Endpoint nutzen, anschließend die Mail-Verifikation abwarten und sich mit dem
 bestehenden Login anmelden.
 
+Auch Social-Login-Konten müssen vor dem Abschluss des Onboardings
+`POST /onboarding/complete` mit den vier Feldern `accept_terms`,
+`accept_privacy`, `terms_version` und `privacy_version` bestätigen. Die
+Versionen und Zeitpunkte werden in `UserProfile` gespeichert; veraltete oder
+fehlende Zustimmungen führen zu `422` und setzen das Onboarding nicht auf
+abgeschlossen.
+
 Alle `/onboarding/*`-Endpunkte akzeptieren weiterhin Browser-Sessions und nun
 auch einen gültigen `Authorization: Bearer ...`-Token. Die Identität wird durch
 die zentrale Authentifizierung aufgelöst; ein fehlender oder ungültiger Token

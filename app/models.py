@@ -604,6 +604,12 @@ class UserProfile(Base):
     contact_email = Column(String(255), nullable=True)
     preferred_destination = Column(String(50), nullable=True)
     stripe_customer_id = Column(String(64), nullable=True)
+    # Legal acknowledgements for OAuth/social accounts, which do not pass
+    # through LocalUser signup.
+    terms_accepted_version = Column(String(64), nullable=True)
+    terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_accepted_version = Column(String(64), nullable=True)
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
 
     # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
     # NULL means "auto-detect from browser Accept-Language header"
