@@ -169,6 +169,7 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     """Upload *file_path* to Google Drive using per-user OAuth or service-account credentials."""
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
+
     from app.tasks.upload_to_google_drive import extract_metadata_from_file, truncate_property_value
 
     folder_id = cfg.get("folder_id") or ""
@@ -217,16 +218,18 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
                     properties[key] = truncate_property_value(key, value)
             file_metadata["properties"] = properties
             file_metadata["appProperties"] = {"docuelevate": "true"}
-            file_metadata["description"] = (
-                "Document Metadata:\n\n```json\n" + json.dumps(metadata, indent=2) + "\n```"
-            )
+            file_metadata["description"] = "Document Metadata:\n\n```json\n" + json.dumps(metadata, indent=2) + "\n```"
 
     media = MediaFileUpload(file_path, mimetype="application/pdf", resumable=True)
-    file_obj = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id,name,webViewLink,properties,appProperties,description",
-    ).execute()
+    file_obj = (
+        service.files()
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id,name,webViewLink,properties,appProperties,description",
+        )
+        .execute()
+    )
 
     gdrive_id = file_obj.get("id")
     web_link = file_obj.get("webViewLink")
@@ -458,6 +461,7 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     import time
 
     import requests as _requests
+
     from app.tasks.upload_to_paperless import normalize_metadata_value
 
     host = (cfg.get("host") or "").rstrip("/")
