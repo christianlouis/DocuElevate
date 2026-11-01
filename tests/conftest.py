@@ -147,6 +147,7 @@ def _central_session_factory(db_session, request):
         module_name = request.node.path.name
         lifecycle_task_modules = {
             "test_coverage_uploads_notification.py",
+            "test_coverage_polish.py",
             "test_upload_to_notion.py",
         }
         if (

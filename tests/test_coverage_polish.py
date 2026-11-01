@@ -127,7 +127,7 @@ class TestDropboxUnexpectedExceptionHandler:
         mock_client.side_effect = RuntimeError("Something unexpected")
 
         with pytest.raises(Exception, match="Unexpected error"):
-            upload_to_dropbox.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_dropbox.__wrapped__(str(test_file), file_id=1)
 
 
 # ---------------------------------------------------------------------------
