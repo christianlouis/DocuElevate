@@ -15,11 +15,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database import get_db
 from app.api.local_auth import CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION
+from app.database import get_db
 from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserIntegration, UserProfile
 from app.utils.subscription import TIERS
-from app.utils.user_scope import get_current_owner_id
 from app.utils.tribe_scope import (
     canonical_tribe_name,
     ensure_personal_scope,
@@ -27,6 +26,7 @@ from app.utils.tribe_scope import (
     personal_tribe_id,
     shared_tribe_id,
 )
+from app.utils.user_scope import get_current_owner_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])

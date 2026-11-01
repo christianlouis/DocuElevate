@@ -4,6 +4,7 @@ from contextlib import contextmanager, nullcontext
 from unittest.mock import MagicMock
 
 from app.models import AccountDeletionTombstone, FileRecord
+from app.services.account_deletion import tombstone_key
 
 
 def _file(db):
@@ -22,7 +23,7 @@ def test_tombstone_blocks_background_writers(db_session, monkeypatch, tmp_path):
 
     monkeypatch.setattr(settings, "workdir", str(tmp_path))
     record = _file(db_session)
-    db_session.add(AccountDeletionTombstone(owner_id="alice", status="deleting"))
+    db_session.add(AccountDeletionTombstone(owner_id=tombstone_key("alice"), status="deleting"))
     db_session.commit()
     for module in (batch, dropbox, privacy, refine):
         monkeypatch.setattr(module, "SessionLocal", lambda: nullcontext(db_session))

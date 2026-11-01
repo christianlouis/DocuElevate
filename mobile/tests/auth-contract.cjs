@@ -1,6 +1,8 @@
 const fs = require('fs');
+const path = require('path');
+const root = path.resolve(__dirname, '../..');
 const vm = require('vm');
-const ts = require(process.cwd() + '/mobile/node_modules/typescript');
+const ts = require(path.join(root, 'mobile/node_modules/typescript'));
 const assert = require('assert');
 (async () => {
   const calls = [];
@@ -9,7 +11,7 @@ const assert = require('assert');
     calls.push({ url, options });
     return { ok: true, status: 200, json: async () => url.endsWith('/capabilities') ? caps : { email_verification_required: true } };
   };
-  const source = fs.readFileSync('mobile/src/services/api.ts', 'utf8');
+  const source = fs.readFileSync(path.join(root, 'mobile/src/services/api.ts'), 'utf8');
   const js = ts.transpile(source, { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 });
   const module = { exports: {} };
   vm.runInNewContext(js, { module, exports: module.exports, require: () => ({ getItemAsync: async () => 'old-server-token', setItemAsync: async () => {} }), fetch, URL, FormData, console });
@@ -27,7 +29,7 @@ const assert = require('assert');
   }
   assert.deepStrictEqual(JSON.parse(calls[1].options.body).terms_version, 't2');
   assert.deepStrictEqual(JSON.parse(calls[3].options.body), legal);
-  const web = fs.readFileSync('frontend/templates/signup.html', 'utf8');
+  const web = fs.readFileSync(path.join(root, 'frontend/templates/signup.html'), 'utf8');
   let script = web.match(/Alpine\.data\('signupForm', \(\) => \(\{([\s\S]*?)\n                \}\)\);/)[1];
   script = '({' + script.replace(/\{\{[\s\S]*?\}\}/g, '"message"') + '\n})';
   const webCalls = [];
@@ -38,7 +40,7 @@ const assert = require('assert');
   const payload = JSON.parse(webCalls[1].opts.body);
   for (const [key, value] of Object.entries(legal)) assert.equal(payload[key], value);
   assert.equal(payload.terms_accepted, undefined);
-  const onboardingTemplate = fs.readFileSync('frontend/templates/onboarding.html', 'utf8');
+  const onboardingTemplate = fs.readFileSync(path.join(root, 'frontend/templates/onboarding.html'), 'utf8');
   const onboardingSource = onboardingTemplate.match(/function onboardingWizard\(\) \{[\s\S]*?\n\}\n<\/script>/)[0]
     .replace(/<\/script>$/, '').replace(/\{\{[\s\S]*?\}\}/g, 'null');
   const onboardingCalls = [];

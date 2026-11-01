@@ -473,6 +473,8 @@ Credentials are encrypted at rest using Fernet encryption.
 
 ### Authentication
 
+Public self-registration requires `MULTI_USER_ENABLED=true`, `ALLOW_LOCAL_SIGNUP=true`, and working SMTP delivery. Check `/api/auth/capabilities` on the deployed server before enabling the signup entry point. Registration no longer activates accounts when SMTP is absent. Configure a public HTTPS base URL so verification links return to the correct installation, and test actual message delivery, verification, reset and resend before inviting users. Policy version changes must be deployed together with the corresponding legal pages. See [signup review readiness](SignupReviewReadiness.md).
+
 | **Variable**            | **Description**                                               |
 |-------------------------|---------------------------------------------------------------|
 | `AUTH_ENABLED`          | Enable or disable authentication (`true`/`false`).           |

@@ -1,9 +1,10 @@
 """Process-safe per-account coordination between deletion and document work."""
-from contextlib import contextmanager
+
 import fcntl
 import hashlib
-from pathlib import Path
 import threading
+from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy import text
 

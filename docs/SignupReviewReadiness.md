@@ -12,6 +12,8 @@ Provider die Anwendung bereits akzeptiert.
 ```json
 {
   "local_signup": true,
+  "smtp_configured": true,
+  "csrf_token": "session-bound-token",
   "email_verification_required": true,
   "terms_version": "2026-11-01",
   "privacy_version": "2026-11-01",
@@ -21,11 +23,13 @@ Provider die Anwendung bereits akzeptiert.
 }
 ```
 
-Die Versionswerte sind Beispiele des aktuell deployten Legal-Stands und müssen
+Die Versionswerte sind Beispiele des in diesem Änderungsstand implementierten Legal-Stands und müssen
 bei jeder Änderung der Texte gemeinsam mit den veröffentlichten Seiten erhöht
 werden. `POST /api/auth/signup` akzeptiert nur Requests mit
 `accept_terms=true`, `accept_privacy=true` und exakt den aktuell gemeldeten
 Versionswerten. Version und UTC-Zeitpunkt werden am `LocalUser` gespeichert.
+
+Cookie-basierte Clients laden zunächst die Capabilities mit `credentials: include` und senden den erhaltenen `csrf_token` im Header `X-CSRF-Token` zusammen mit demselben Session-Cookie. Die Antwort darf nicht zwischengespeichert werden. Native Geräte müssen die Cookie-Persistenz im Abnahmetest bestätigen.
 
 SMTP ist für öffentliche Registrierung zwingend. Fehlt die Konfiguration oder
 schlägt der Versand fehl, antwortet die API mit `503`; es wird kein aktivierter
@@ -35,13 +39,13 @@ Endpoint nutzen, anschließend die Mail-Verifikation abwarten und sich mit dem
 bestehenden Login anmelden.
 
 Auch Social-Login-Konten müssen vor dem Abschluss des Onboardings
-`POST /onboarding/complete` mit den vier Feldern `accept_terms`,
+`POST /api/onboarding/complete` mit den vier Feldern `accept_terms`,
 `accept_privacy`, `terms_version` und `privacy_version` bestätigen. Die
 Versionen und Zeitpunkte werden in `UserProfile` gespeichert; veraltete oder
 fehlende Zustimmungen führen zu `422` und setzen das Onboarding nicht auf
 abgeschlossen.
 
-Alle `/onboarding/*`-Endpunkte akzeptieren weiterhin Browser-Sessions und nun
+Alle `/api/onboarding/*`-Endpunkte akzeptieren weiterhin Browser-Sessions und nun
 auch einen gültigen `Authorization: Bearer ...`-Token. Die Identität wird durch
 die zentrale Authentifizierung aufgelöst; ein fehlender oder ungültiger Token
 bleibt `401`, und Daten werden immer auf diese Identität begrenzt.

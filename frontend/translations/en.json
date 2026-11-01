@@ -1,4 +1,13 @@
 {
+  "account.delete_heading": "Delete account",
+  "account.delete_warning": "Permanently delete your account and its DocuElevate documents, processing data, settings and connections. This cannot be undone.",
+  "account.delete_limits": "Copies exported to other services remain there. Backups follow the operator’s retention schedule. Documents under legal hold must be resolved before deletion. A minimal account block prevents queued work from recreating deleted data.",
+  "account.delete_login": "Sign in to the account you want to delete",
+  "account.delete_confirmation": "To confirm, type",
+  "account.delete_submit": "Delete account permanently",
+  "account.delete_loading": "Deleting…",
+  "account.delete_failed": "Account deletion failed. Please retry or contact support.",
+  "account.delete_done": "Your account and its DocuElevate data were deleted. External copies and backups follow their separate retention rules.",
   "about.creator_heading": "Meet the Creator",
   "about.creator_name": "Christian Krakau-Louis",
   "about.creator_pre": "DocuElevate is passionately developed by",

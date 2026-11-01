@@ -25,10 +25,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.local_auth import CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION
 from app.config import settings
 from app.database import Base, get_db
 from app.models import LocalUser, UserProfile
-from app.api.local_auth import CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION
 from app.utils.local_auth import (
     build_session_user,
     generate_token,
@@ -1400,3 +1400,20 @@ def test_build_session_user_no_display_name_falls_back_to_username():
     assert result["name"] == "uname"
     assert result["is_admin"] is True
     assert result["auth_method"] == "local"
+
+
+@pytest.mark.integration
+def test_signup_cannot_recreate_deleted_account(la_client, la_session):
+    from app.models import AccountDeletionTombstone
+    from app.services.account_deletion import tombstone_key
+
+    la_session.add(AccountDeletionTombstone(owner_id=tombstone_key("a@example.com"), status="deleted"))
+    la_session.commit()
+    with patch("app.api.local_auth.settings") as config, patch("app.api.local_auth.send_verification_email") as send:
+        config.multi_user_enabled = config.allow_local_signup = True
+        config.email_host = "smtp.example.com"
+        response = la_client.post("/api/auth/signup", json=_signup_payload())
+    assert response.status_code == 409
+    assert la_session.query(LocalUser).filter_by(email="a@example.com").first() is None
+    assert la_session.query(UserProfile).filter_by(user_id="a@example.com").first() is None
+    send.assert_not_called()

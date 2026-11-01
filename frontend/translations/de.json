@@ -1,4 +1,13 @@
 {
+  "account.delete_heading": "Konto löschen",
+  "account.delete_warning": "Lösche dein Konto und die zugehörigen Dokumente, Verarbeitungsdaten, Einstellungen und Verbindungen in DocuElevate dauerhaft. Dies lässt sich nicht rückgängig machen.",
+  "account.delete_limits": "Exportierte Kopien bei anderen Diensten bleiben dort bestehen. Für Sicherungen gelten die Aufbewahrungsfristen des Betreibers. Gesetzliche Aufbewahrungssperren müssen vor der Löschung geklärt werden. Eine minimale Kontosperre verhindert, dass wartende Aufträge gelöschte Daten erneut anlegen.",
+  "account.delete_login": "Mit dem Konto anmelden, das du löschen möchtest",
+  "account.delete_confirmation": "Gib zur Bestätigung Folgendes ein:",
+  "account.delete_submit": "Konto endgültig löschen",
+  "account.delete_loading": "Wird gelöscht…",
+  "account.delete_failed": "Die Kontolöschung ist fehlgeschlagen. Bitte versuche es erneut oder kontaktiere den Support.",
+  "account.delete_done": "Dein Konto und seine Daten in DocuElevate wurden gelöscht. Für externe Kopien und Sicherungen gelten deren eigene Aufbewahrungsregeln.",
   "about.creator_heading": "Lernen Sie den Ersteller kennen",
   "about.creator_name": "Christian Krakau-Louis",
   "about.creator_pre": "DocuElevate wird mit Leidenschaft entwickelt von",

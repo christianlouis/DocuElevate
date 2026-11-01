@@ -1,14 +1,49 @@
 {% extends "base.html" %}
-{% block title %}DocuElevate – Delete account{% endblock %}
+{% block title %}DocuElevate – {{ _('account.delete_heading') }}{% endblock %}
 {% block content %}
 <main x-data="accountDeletion" class="max-w-2xl mx-auto px-4 py-10">
-<h1 class="text-3xl font-bold mb-4">Delete your DocuElevate account</h1>
-<p class="mb-4">This permanently deletes your account and DocuElevate data, including documents, processing records, shares and device tokens.</p>
-<p class="text-sm text-gray-600 mb-6">Copies exported or shared with other services, provider data and legally required backups may remain outside DocuElevate.</p>
-<div x-show="error" x-cloak role="alert" x-text="error"></div><div x-show="success" x-cloak role="status" x-text="success"></div>
-<form @submit.prevent="submit"><label for="delete-confirmation">Type <strong>DELETE MY ACCOUNT</strong> to confirm</label><input id="delete-confirmation" x-model="confirmation" autocomplete="off" required><p>This action cannot be undone.</p><button type="submit" :disabled="loading || confirmation !== 'DELETE MY ACCOUNT'"><span x-show="!loading">Delete account permanently</span><span x-show="loading" x-cloak>Deleting…</span></button></form>
+  <h1 class="text-3xl font-bold mb-4">{{ _('account.delete_heading') }}</h1>
+  <p class="mb-4">{{ _('account.delete_warning') }}</p>
+  <p class="text-sm text-gray-600 mb-6">{{ _('account.delete_limits') }}</p>
+  <p class="mb-6"><a href="/login" class="text-blue-700 underline">{{ _('account.delete_login') }}</a></p>
+  <div x-show="error" x-cloak role="alert" class="text-red-700 mb-4" x-text="error"></div>
+  <div x-show="success" x-cloak role="status" class="mb-4" x-text="success"></div>
+  <form @submit.prevent="submit" x-show="!success">
+    <label for="delete-confirmation">{{ _('account.delete_confirmation') }} <strong>DELETE MY ACCOUNT</strong></label>
+    <input id="delete-confirmation" x-model="confirmation" autocomplete="off" required
+           class="block border rounded p-3 my-4 w-full">
+    <button type="submit" class="bg-red-700 text-white rounded p-3"
+            :disabled="loading || confirmation !== 'DELETE MY ACCOUNT'">
+      <span x-show="!loading">{{ _('account.delete_submit') }}</span>
+      <span x-show="loading" x-cloak>{{ _('account.delete_loading') }}</span>
+    </button>
+  </form>
 </main>
 <script>
-document.addEventListener('alpine:init', () => Alpine.data('accountDeletion', () => ({confirmation:'',loading:false,error:'',success:'',async submit(){if(this.confirmation!=='DELETE MY ACCOUNT')return;this.loading=true;this.error='';try{const r=await fetch('/api/account',{method:'DELETE',headers:{'Content-Type':'application/json','X-CSRF-Token':'{{ csrf_token }}'},body:JSON.stringify({confirmation:this.confirmation})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.detail||'Account deletion failed.');this.success='Your account and DocuElevate data were deleted. External copies and backups may remain.';this.confirmation='';}catch(e){this.error=e.message||'Account deletion failed.'}finally{this.loading=false}}})));
+document.addEventListener('alpine:init', () => {
+  Alpine.data('accountDeletion', () => ({
+    confirmation: '', loading: false, error: '', success: '',
+    async submit() {
+      if (this.confirmation !== 'DELETE MY ACCOUNT') return;
+      this.loading = true;
+      this.error = '';
+      try {
+        const response = await fetch('/api/account', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': {{ csrf_token | tojson }} },
+          body: JSON.stringify({ confirmation: this.confirmation })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || {{ _('account.delete_failed') | tojson }});
+        this.success = {{ _('account.delete_done') | tojson }};
+        this.confirmation = '';
+      } catch (error) {
+        this.error = error.message || {{ _('account.delete_failed') | tojson }};
+      } finally {
+        this.loading = false;
+      }
+    }
+  }));
+});
 </script>
 {% endblock %}

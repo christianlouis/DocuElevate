@@ -43,13 +43,14 @@ class TestGeneralViews:
         assert b"docuelevate@christian-louis.de" in response.content
         assert b"/account/delete" in response.content
 
-    def test_account_deletion_page_is_honest_about_transition(self, client):
-        """The interim deletion page must not claim automated deletion exists."""
+    def test_account_deletion_page_exposes_confirmed_self_service(self, client):
+        """Public deletion entry point explains limits and requires typed confirmation."""
         response = client.get("/account/delete")
         assert response.status_code == 200
-        content = response.content.lower()
-        assert b"self-service deletion flow is not available yet" in content
-        assert b"self-service deletion is not available in the app yet" in content
+        assert b"DELETE MY ACCOUNT" in response.content
+        assert b"/api/account" in response.content
+        assert b"X-CSRF-Token" in response.content
+        assert b"/login" in response.content
 
     def test_privacy_page_contains_gdpr_rights(self, client):
         """Test the privacy page includes GDPR rights section."""

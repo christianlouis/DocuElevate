@@ -17,7 +17,7 @@ import pathlib
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -195,11 +195,13 @@ async def reset_password_page(request: Request) -> Any:
 
 
 @router.get("/api/auth/capabilities", summary="Public authentication capabilities")
-async def auth_capabilities() -> dict[str, Any]:
+async def auth_capabilities(request: Request, response: Response) -> dict[str, Any]:
     """Describe the public signup contract without exposing provider secrets."""
     smtp_configured = bool(settings.email_host)
     enabled = bool(settings.multi_user_enabled and settings.allow_local_signup and smtp_configured)
+    response.headers["Cache-Control"] = "no-store"
     return {
+        "csrf_token": getattr(request.state, "csrf_token", None),
         "local_signup": enabled,
         "smtp_configured": smtp_configured,
         "email_verification_required": True,
@@ -245,65 +247,73 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
             detail="Registration is temporarily unavailable because email verification is not configured.",
         )
 
-    if db.query(LocalUser).filter(LocalUser.email == body.email).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
-    if db.query(LocalUser).filter(LocalUser.username == body.username).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
+    from app.services.account_deletion import deletion_blocked
+    from app.services.account_lifecycle_lock import account_lifecycle_lock
 
-    now = datetime.now(tz=timezone.utc)
-    token = generate_token()
-    user = LocalUser(
-        email=body.email,
-        username=body.username,
-        display_name=body.display_name,
-        hashed_password=hash_password(body.password),
-        is_active=False,
-        email_verification_token=token,
-        email_verification_sent_at=now,
-        terms_accepted_version=body.terms_version,
-        terms_accepted_at=now,
-        privacy_accepted_version=body.privacy_version,
-        privacy_accepted_at=now,
-    )
+    # Serialize account creation with deletion so a stale signup cannot recreate
+    # credentials or a profile after cleanup has committed.
+    with account_lifecycle_lock(db, str(body.email)):
+        if deletion_blocked(db, str(body.email)):
+            raise HTTPException(status_code=409, detail="This account cannot be registered. Contact support.")
+        if db.query(LocalUser).filter(LocalUser.email == body.email).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
+        if db.query(LocalUser).filter(LocalUser.username == body.username).first():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
 
-    db.add(user)
+        now = datetime.now(tz=timezone.utc)
+        token = generate_token()
+        user = LocalUser(
+            email=body.email,
+            username=body.username,
+            display_name=body.display_name,
+            hashed_password=hash_password(body.password),
+            is_active=False,
+            email_verification_token=token,
+            email_verification_sent_at=now,
+            terms_accepted_version=body.terms_version,
+            terms_accepted_at=now,
+            privacy_accepted_version=body.privacy_version,
+            privacy_accepted_at=now,
+        )
 
-    profile = UserProfile(
-        user_id=body.email,
-        display_name=body.display_name or body.username,
-    )
-    db.add(profile)
+        db.add(user)
 
-    # Flush to the DB so constraint violations (duplicate key etc.) surface NOW,
-    # before we attempt to send the email. We do NOT commit yet — the commit only
-    # happens after the email is sent successfully so that a failed email leaves
-    # no orphan records in the database.
-    try:
-        db.flush()
-    except Exception:
-        db.rollback()
-        raise
+        profile = UserProfile(
+            user_id=body.email,
+            display_name=body.display_name or body.username,
+        )
+        db.add(profile)
 
-    if token:
-        base_url = str(request.base_url).rstrip("/")
+        # Flush to the DB so constraint violations (duplicate key etc.) surface NOW,
+        # before we attempt to send the email. We do NOT commit yet — the commit only
+        # happens after the email is sent successfully so that a failed email leaves
+        # no orphan records in the database.
         try:
-            send_verification_email(body.email, body.username, token, base_url)
-        except Exception as exc:
-            # Email failed — roll back so no unverifiable user row persists.
-            # The user can simply try registering again once SMTP is fixed.
+            db.flush()
+        except Exception:
             db.rollback()
-            logger.warning("Signup email failed for %s: %s", body.email, exc)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    "Failed to send verification email. Please check that SMTP is correctly configured and try again."
-                ),
-            ) from exc
+            raise
 
-    db.commit()
-    logger.info("New local user registered: %s", body.email)
+        if token:
+            base_url = str(request.base_url).rstrip("/")
+            try:
+                send_verification_email(body.email, body.username, token, base_url)
+            except Exception as exc:
+                # Email failed — roll back so no unverifiable user row persists.
+                # The user can simply try registering again once SMTP is fixed.
+                db.rollback()
+                logger.warning("Signup email failed for %s: %s", body.email, exc)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "Failed to send verification email. Please check that SMTP is correctly configured and try again."
+                    ),
+                ) from exc
 
-    return {"message": "Verification email sent. Please check your inbox.", "email_verification_required": True}
+        db.commit()
+        logger.info("New local user registered: %s", body.email)
+
+        return {"message": "Verification email sent. Please check your inbox.", "email_verification_required": True}
 
 
 @router.get("/verify-email", include_in_schema=False)
