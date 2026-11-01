@@ -2,6 +2,7 @@
 File management views for displaying and managing files.
 """
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -20,7 +21,7 @@ from app.utils.pipeline_stages import (
     normalize_stage_name,
     stage_keys_for_pipeline_steps,
 )
-from app.utils.user_scope import apply_owner_filter
+from app.utils.user_scope import apply_owner_filter, get_current_owner_id
 from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
@@ -225,6 +226,10 @@ def files_page(
                 "ocr_quality_threshold": settings.text_quality_threshold,
                 "mime_types": mime_types,
                 "upload_concurrency": settings.upload_concurrency,
+                "upload_queue_owner": hashlib.sha256(
+                    (get_current_owner_id(request) or "single-user").encode()
+                ).hexdigest(),
+                "upload_max_file_size": settings.max_upload_size,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
             },
         )
@@ -240,6 +245,10 @@ def files_page(
                 "pagination": {"page": 1, "per_page": per_page, "total": 0, "pages": 0},
                 "error": str(e),
                 "upload_concurrency": settings.upload_concurrency,
+                "upload_queue_owner": hashlib.sha256(
+                    (get_current_owner_id(request) or "single-user").encode()
+                ).hexdigest(),
+                "upload_max_file_size": settings.max_upload_size,
                 "upload_queue_delay_ms": settings.upload_queue_delay_ms,
             },
         )

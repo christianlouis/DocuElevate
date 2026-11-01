@@ -4,10 +4,10 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const crypto = require('node:crypto');
 
-function helpers() {
-  const context = { window: { addEventListener() {} }, navigator: {}, document: { getElementById() { return null; } }, console, crypto: { randomUUID: () => 'test-uuid', subtle: crypto.webcrypto.subtle }, WebSocket: class {}, location: { protocol: 'http:', host: 'localhost' }, setTimeout, clearTimeout };
+function helpers(overrides = {}) {
+  const context = { window: { addEventListener() {} }, navigator: {}, document: { getElementById() { return null; } }, console, crypto: { randomUUID: () => 'test-uuid', subtle: crypto.webcrypto.subtle }, WebSocket: class {}, location: { protocol: 'http:', host: 'localhost' }, setTimeout, clearTimeout, setInterval, clearInterval, ...overrides };
   vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'upload-bulk.js'), 'utf8'), context);
-  return context.window.uploadQueueTestHelpers;
+  return { ...context.window.uploadQueueTestHelpers, Queue: context.window.PersistentBulkUploadQueue };
 }
 
 test('preflight windows cover every item without an oversized request', () => {
@@ -67,16 +67,19 @@ test('reselect reconciliation preserves batch and client identities', () => {
 test('local SHA map marks later content duplicates before upload', () => {
   const { deduplicate } = helpers();
   const result = deduplicate([{ key: 'a', sha256: 'x', state: 'queued' }, { key: 'b', sha256: 'x', state: 'queued' }, { key: 'c', sha256: 'y', state: 'queued' }]);
-  assert.equal(result[1].state, 'duplicate');
+  assert.equal(result[1].state, 'queued'); // Only mark accepted after the leader has a server ID.
   assert.equal(result[1].duplicateOf, 'a');
-  assert.equal(result[2].state, undefined);
+  assert.equal(result[2].state, 'queued');
+  result[0].fileId = 77; deduplicate(result);
+  assert.equal(result[1].state, 'duplicate');
+  assert.equal(result[1].fileId, 77);
 });
 
 test('capacity zero pauses and a WebSocket-style update resumes bounded work', () => {
   const { selectReady } = helpers();
-  const queue = [{ key: 'a', size: 5, state: 'queued' }, { key: 'b', size: 5, state: 'queued' }];
-  assert.deepEqual(selectReady(queue, { slots: 0 }), []);
-  assert.deepEqual(selectReady(queue, { slots: 1, max_bytes: 5 }).map((x) => x.key), ['a']);
+  const queue = [{ key: 'a', file: {size: 5}, sha256: 'a', state: 'queued' }, { key: 'b', file: {size: 5}, sha256: 'b', state: 'queued' }];
+  assert.equal(selectReady(queue, { slots: 0 }).length, 0);
+  assert.deepEqual(Array.from(selectReady(queue, { slots: 1, max_bytes: 5 }), x => x.key), ['a']);
 });
 
 test('worker reports file read errors instead of leaving a pending hash', async () => {
@@ -88,4 +91,49 @@ test('worker reports file read errors instead of leaving a pending hash', async 
   await context.self.onmessage({ data: { id: 'broken', file, name: file.name, mime: '' } });
   assert.equal(result.id, 'broken');
   assert.match(result.error, /read failed/);
+});
+
+
+test('REST reconciliation follows server cursors rather than repeating the first page', async () => {
+  const urls = [];
+  const pages = [{ items: [{client_id: 'first'}], next_cursor: 203 }, { items: [{client_id: 'second'}], next_cursor: null }, { slots: 0, max_bytes: 0 }];
+  const { Queue } = helpers({ fetch: async url => { urls.push(url); return { ok: true, json: async () => pages.shift() }; } });
+  const queue = new Queue(null, null); queue.batchId = 'batch';
+  const ids = []; queue.reconcile = async items => ids.push(...items.map(item => item.client_id));
+  await queue.refresh();
+  assert.deepEqual(ids, ['first', 'second']);
+  assert.match(urls[1], /cursor=203/);
+  assert.equal(queue.capacity.slots, 0);
+});
+
+test('a lost HTTP acceptance response retries the same client identity and commits its file id', async () => {
+  const { MessageChannel } = require('node:worker_threads');
+  const requests = [], operations = [];
+  class Body { constructor() { this.values = {}; } append(key, value) { this.values[key] = value; } }
+  const { Queue } = helpers({ MessageChannel, FormData: Body,
+    navigator: { serviceWorker: { controller: { postMessage(message, ports) {
+      operations.push(message); ports[0].postMessage({ ok: true, result: true }); ports[0].close();
+    } } } },
+    fetch: async (url, options) => {
+      requests.push(options.body.values);
+      if (requests.length === 1) throw new Error('lost response');
+      return {ok: true, json: async () => ({file_id: 91, state: 'accepted'})};
+    }
+  });
+  const queue = new Queue(null, null); queue.batchId = 'stable-batch';
+  const item = {key: 'stable-client', file: {}, sha256: 'abc', name: 'invoice.pdf', state: 'queued'};
+  assert.equal(await queue.send(item), true);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].client_id, requests[1].client_id);
+  assert.equal(requests[1].batch_id, 'stable-batch');
+  assert.equal(item.fileId, 91);
+  assert.ok(operations.some(op => op.op === 'putMany' && op.items[0].fileId === 91));
+  assert.equal(operations.at(-1).op, 'release');
+});
+
+
+test('every upload entry script parses before browser event handlers run', () => {
+  for (const file of ['upload.js', 'upload-bulk.js', 'upload-preflight-worker.js', 'upload-queue-sw.js']) {
+    assert.doesNotThrow(() => new vm.Script(fs.readFileSync(require('node:path').join(__dirname, file), 'utf8'), {filename: file}));
+  }
 });

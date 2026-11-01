@@ -11,7 +11,9 @@
   <script>
     window.uploadConfig = {
       concurrency: {{ upload_concurrency }},
-      queueDelayMs: {{ upload_queue_delay_ms }}
+      queueDelayMs: {{ upload_queue_delay_ms }},
+      queueOwner: {{ upload_queue_owner | tojson }},
+      maxFileSize: {{ upload_max_file_size }}
     };
   </script>
   <script src="/static/js/upload.js"></script>

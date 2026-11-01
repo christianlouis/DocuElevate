@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import secrets
-import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import redis
@@ -44,11 +46,22 @@ class ProviderLease:
 
 _redis_client: redis.Redis | None = None
 _RESERVE_SCRIPT = """
-local now = tonumber(ARGV[1]); local expiry = now - 60
+local clock = redis.call('TIME')
+local now = tonumber(clock[1]) + tonumber(clock[2]) / 1000000
+local expiry = now - 60
+local cooldown = redis.call('TTL', KEYS[5])
+if cooldown > 0 then return -cooldown end
 local lease_until = now + tonumber(ARGV[2])
 local rpm = tonumber(ARGV[3]); local tpm = tonumber(ARGV[4]); local pages = tonumber(ARGV[5]); local concurrency = tonumber(ARGV[6])
 local token_amount = tonumber(ARGV[7]); local page_amount = tonumber(ARGV[8]); local token = ARGV[9]
-redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', expiry); redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', expiry); redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', expiry); redis.call('ZREMRANGEBYSCORE', KEYS[4], '-inf', now)
+for i=2,3 do
+  local amounts = KEYS[i+4]
+  for _, member in ipairs(redis.call('ZRANGEBYSCORE', KEYS[i], '-inf', expiry)) do
+    redis.call('HDEL', amounts, member)
+  end
+end
+for i=1,3 do redis.call('ZREMRANGEBYSCORE', KEYS[i], '-inf', expiry) end
+redis.call('ZREMRANGEBYSCORE', KEYS[4], '-inf', now)
 local function total(key, amount_key)
   local sum = 0
   for _, member in ipairs(redis.call('ZRANGE', key, 0, -1)) do sum = sum + tonumber(redis.call('HGET', amount_key, member) or '0') end
@@ -60,7 +73,12 @@ if pages > 0 and total(KEYS[3], KEYS[7]) + page_amount > pages then return 0 end
 if concurrency > 0 and redis.call('ZCARD', KEYS[4]) + 1 > concurrency then return 0 end
 redis.call('ZADD', KEYS[1], now, token); redis.call('ZADD', KEYS[2], now, token); redis.call('ZADD', KEYS[3], now, token); redis.call('ZADD', KEYS[4], lease_until, token)
 redis.call('HSET', KEYS[6], token, token_amount); redis.call('HSET', KEYS[7], token, page_amount)
-for i=1,7 do redis.call('EXPIRE', KEYS[i], tonumber(ARGV[10])) end
+for _, i in ipairs({1,2,3,4,6,7}) do redis.call('EXPIRE', KEYS[i], tonumber(ARGV[10])) end
+return 1
+"""
+_COOLDOWN_SCRIPT = """
+local remaining = redis.call('TTL', KEYS[1])
+if remaining < tonumber(ARGV[1]) then redis.call('SET', KEYS[1], '1', 'EX', ARGV[1]) end
 return 1
 """
 _RELEASE_SCRIPT = """redis.call('ZREM', KEYS[1], ARGV[1]); return 1"""
@@ -124,14 +142,11 @@ def acquire(
     ]
     try:
         client = _client()
-        cooldown = client.ttl(keys[4])
-        if cooldown and cooldown > 0:
-            raise ProviderQuotaExceeded(f"Provider cooldown active for {provider}/{model}", cooldown)
         ok = client.eval(
             _RESERVE_SCRIPT,
             len(keys),
             *keys,
-            int(time.time()),
+            0,  # Admission uses the shared Redis clock.
             ttl,
             rpm,
             tpm,
@@ -146,6 +161,8 @@ def acquire(
         raise
     except Exception as exc:
         raise ProviderQuotaUnavailable("Provider limiter unavailable; retrying later", 30) from exc
+    if ok < 0:
+        raise ProviderQuotaExceeded(f"Provider cooldown active for {provider}/{model}", -ok)
     if not ok:
         raise ProviderQuotaExceeded(f"Provider budget exhausted for {provider}/{model}", 30)
     return ProviderLease(token, prefix, ttl)
@@ -164,10 +181,11 @@ def record_cooldown(provider: str, model: str, *, credential: str | None, retry_
     if not limits_enabled(provider, model):
         return
     try:
-        _client().set(
+        _client().eval(
+            _COOLDOWN_SCRIPT,
+            1,
             f"docuelevate:provider:{provider}:{model}:{_fingerprint(credential)}:cooldown",
-            "1",
-            ex=max(1, int(retry_after)),
+            max(1, math.ceil(retry_after)),
         )
     except Exception:
         logger.warning("Could not persist provider cooldown", exc_info=True)
@@ -180,5 +198,9 @@ def retry_after_from_exception(exc: BaseException, default: float = 30.0) -> flo
         try:
             return max(1.0, float(headers.get("retry-after") or headers.get("Retry-After")))
         except (TypeError, ValueError):
-            pass
+            try:
+                date = parsedate_to_datetime(headers.get("retry-after") or headers.get("Retry-After"))
+                return max(1.0, (date - datetime.now(timezone.utc)).total_seconds())
+            except (TypeError, ValueError, OverflowError):
+                pass
     return default

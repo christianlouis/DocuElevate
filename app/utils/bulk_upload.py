@@ -1,4 +1,5 @@
 """Small, dependency-free helpers for durable bulk uploads."""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,15 +9,25 @@ from pathlib import Path
 from app.config import settings
 
 
+def _sync_directory(path: Path) -> None:
+    directory_fd = os.open(str(path), os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
 def upload_root() -> Path:
     root = Path(settings.workdir) / "bulk_uploads"
     root.mkdir(parents=True, exist_ok=True)
+    _sync_directory(root.parent)
     return root
 
 
-def safe_path(batch_id: str, item_id: int, filename: str) -> Path:
+def safe_path(batch_id: str, item_id: str | int, filename: str) -> Path:
     folder = upload_root() / batch_id
     folder.mkdir(parents=True, exist_ok=True)
+    _sync_directory(folder.parent)
     suffix = Path(filename).suffix.lower()[:16]
     return folder / f"{item_id}{suffix}"
 
@@ -45,11 +56,7 @@ def stream_to_file(upload, target: Path, expected_sha256: str, max_size: int) ->
         os.replace(temporary, target)
         # A successful file fsync is insufficient after rename: without an
         # fsync of the containing directory a power loss may lose the name.
-        directory_fd = os.open(str(target.parent), os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        _sync_directory(target.parent)
         return size, actual
     finally:
         temporary.unlink(missing_ok=True)

@@ -1,48 +1,256 @@
-/* Reload-safe bulk queue. This module owns one queue per page and uses the
- * service worker as the cross-tab metadata/lease authority. */
+/* HTTP carries bytes; the websocket only advertises capacity and status.
+ * IndexedDB stores metadata, never a second copy of the selected corpus. */
 (function () {
-  const WINDOW = 200; const PREFLIGHT_CONCURRENCY = 2; const MAX_RETRIES = 5;
-  // The server may provide a stable, non-secret queue owner per authenticated
-  // principal. Fall back to a tab nonce when rendering a legacy page.
-  const owner = window.uploadConfig?.queueOwner || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const pending = new Map(); let swRegistration;
-  const csrf = () => { const t = typeof getCsrfToken === 'function' ? getCsrfToken() : ''; return t ? { 'X-CSRF-Token': t } : {}; };
-  const postSW = (message) => new Promise((resolve, reject) => {
-    const controller = (navigator.serviceWorker && navigator.serviceWorker.controller) || (swRegistration && swRegistration.active);
-    if (!controller) return reject(new Error('service worker is not controlling this page'));
-    const channel = new MessageChannel(); const timer = setTimeout(() => reject(new Error('service worker acknowledgement timeout')), 5000);
-    channel.port1.onmessage = (event) => { clearTimeout(timer); event.data && event.data.ok ? resolve(event.data.result) : reject(new Error(event.data && event.data.error || 'service worker error')); };
-    controller.postMessage(message, [channel.port2]);
-  });
-  async function ensureSW() {
-    if (!('serviceWorker' in navigator)) return false;
-    try { swRegistration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready; return !!(navigator.serviceWorker.controller || swRegistration.active); } catch (_) { return false; }
+  const WINDOW = 200, HASH_WORKERS = 2, MAX_RETRIES = 5;
+  const principal = window.uploadConfig?.queueOwner || 'single-user';
+  const owner = crypto.randomUUID(); // Each tab has its own lease identity.
+  const storageKey = `docuelevate.upload.batch.${principal}`;
+  let registration;
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const csrf = () => {
+    const token = typeof getCsrfToken === 'function' ? getCsrfToken() : '';
+    return token ? { 'X-CSRF-Token': token } : {};
+  };
+  function postSW(message) {
+    return new Promise((resolve, reject) => {
+      const controller = navigator.serviceWorker?.controller || registration?.active;
+      if (!controller) return reject(new Error('Persistent upload queue is unavailable'));
+      const channel = new MessageChannel();
+      const timer = setTimeout(() => { channel.port1.close(); reject(new Error('Queue acknowledgement timed out')); }, 10000);
+      channel.port1.onmessage = event => {
+        clearTimeout(timer); channel.port1.close();
+        event.data?.ok ? resolve(event.data.result) : reject(new Error(event.data?.error || 'Queue error'));
+      };
+      controller.postMessage({ ...message, principal }, [channel.port2]);
+    });
   }
-  function windows(items) { const out=[]; for(let i=0;i<items.length;i+=WINDOW) out.push(items.slice(i,i+WINDOW)); return out; }
-  function slots(capacity) { const configured=typeof _cfgConcurrency==='function'?_cfgConcurrency():Number(window.uploadConfig?.concurrency??3); return Math.max(0, Math.min(Number(capacity?.slots ?? 1), configured)); }
-  async function digest(item) { return new Promise((resolve, reject) => { const worker = new Worker('/static/js/upload-preflight-worker.js'); const id = `${owner}-${item.key}`; const done=(event)=>{worker.terminate(); if(event.data.id!==id)return; event.data.error?reject(new Error(event.data.error)):resolve(event.data);}; worker.onmessage=done; worker.onerror=()=>reject(new Error('preflight worker failed')); worker.postMessage({id,file:item.file,name:item.file.name,mime:item.file.type}); }); }
-  function render(queue, container) { if(!container)return; container.replaceChildren(); queue.slice(0,100).forEach(item=>{const row=document.createElement('div');row.className='flex justify-between text-xs mb-1';row.textContent=`${item.file?.name || item.name} — ${item.state}`;container.appendChild(row);}); if(queue.length>100){const more=document.createElement('div');more.className='text-xs text-gray-500';more.textContent=`… ${queue.length-100} weitere Dateien`;container.appendChild(more);} }
-  function applyPreflightResults(group, result) { (result.files||result.items||[]).forEach(entry=>{const item=group.find(i=>i.key===(entry.client_id||entry.key)); if(item&&(entry.duplicate||entry.duplicate_of||entry.state==='duplicate')){item.state='duplicate';item.fileId=entry.file_id||entry.duplicate_of;}}); }
-  async function preflight(queue, batchId, onUpdate) {
-    for (const windowItems of windows(queue)) {
-      let cursor=0;
-      while(cursor<windowItems.length){const group=windowItems.slice(cursor,cursor+PREFLIGHT_CONCURRENCY); const values=await Promise.all(group.map(digest)); values.forEach((v,i)=>{group[i].sha256=v.sha256;group[i].mime=v.mime;});
-        const response=await fetch('/api/uploads/preflight',{method:'POST',headers:{'Content-Type':'application/json',...csrf()},body:JSON.stringify({batch_id:batchId,files:group.map(i=>({client_id:i.key,sha256:i.sha256,size:i.file.size,name:i.file.name,mime:i.mime}))})}); if(!response.ok)throw new Error(`preflight ${response.status}`); const result=await response.json(); applyPreflightResults(group,result); cursor+=group.length; onUpdate(); }
+  async function ensureSW() {
+    if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
+    registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' });
+    await navigator.serviceWorker.ready;
+    if (navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
+  }
+  async function json(url, options = {}) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      let response;
+      try { response = await fetch(url, { ...options, headers: { ...csrf(), ...options.headers } }); }
+      catch (error) { if (attempt === MAX_RETRIES - 1) throw error; await sleep(500 * 2 ** attempt); continue; }
+      if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES - 1) {
+        const value = response.headers.get('Retry-After');
+        const seconds = Number(value);
+        const delay = value && !Number.isFinite(seconds) ? Date.parse(value) - Date.now() : seconds * 1000;
+        await sleep(Math.max(500 * 2 ** attempt, delay || 0)); continue;
+      }
+      if (!response.ok) throw new Error(`Upload request failed (${response.status})`);
+      return response.json();
     }
   }
-  async function send(item,batchId) {
-    if(item.state==='duplicate'||item.state==='accepted'||item.state==='processed')return;
-    if(!(await postSW({op:'lease',key:item.key,owner,ttl:30000})))return;
-    try { let attempt=0; while(attempt++<MAX_RETRIES){ const body=new FormData();body.append('file',item.file);body.append('batch_id',batchId);body.append('client_id',item.key);body.append('sha256',item.sha256);body.append('mime',item.mime||''); let response; try{response=await fetch('/api/uploads/files',{method:'POST',headers:csrf(),body});}catch(error){if(attempt>=MAX_RETRIES)throw error;await new Promise(r=>setTimeout(r,Math.min(30000,2**attempt*500)));continue;} if(response.status===429||response.status>=500){if(attempt>=MAX_RETRIES)throw new Error(`upload ${response.status}`);const retry=Number(response.headers.get('Retry-After')||0);await new Promise(r=>setTimeout(r,retry?retry*1000:Math.min(30000,2**attempt*500)));continue;} if(!response.ok)throw new Error(`upload ${response.status}`);const result=await response.json();item.fileId=result.file_id||result.id||result.duplicate_of;item.state=result.duplicate||result.state==='duplicate'?'duplicate':(result.state||'accepted');await postSW({op:'put',item:{key:item.key,batchId,clientId:item.key,name:item.file.name,size:item.file.size,sha256:item.sha256,state:item.state,fileId:item.fileId||null}});if(typeof window.onDocuElevateUploadQueued==='function')window.onDocuElevateUploadQueued({fileId:item.fileId,filename:item.file.name,state:item.state});return;} } catch(error){item.state='failed';item.error=String(error);} finally{await postSW({op:'release',key:item.key,owner}).catch(()=>{});} }
-  async function run(queue,batchId,capacity,container,status) { while(true){const ready=queue.filter(i=>i.state==='queued'&&i.sha256);if(!ready.length)break;const count=slots(capacity);const maxBytes=Number.isFinite(Number(capacity?.max_bytes))?Number(capacity.max_bytes):Infinity;const selected=[];let bytes=0;for(const item of ready){if(selected.length>=count)break;if(bytes+item.file.size>maxBytes)continue;selected.push(item);bytes+=item.file.size;}if(!count||!selected.length){if(status)status.textContent='Server pausiert die Uploads – warte auf Kapazität…';await new Promise(r=>setTimeout(r,1500));const response=await fetch(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`,{headers:csrf()});if(response.ok)capacity=await response.json();continue;} await Promise.all(selected.map(i=>send(i,batchId)));render(queue,container);if(status)status.textContent=uploadMessage('uploadingBatch',{done:queue.filter(i=>['accepted','duplicate','processed'].includes(i.state)).length,total:queue.length});await new Promise(r=>setTimeout(r,_effectiveDelay()));} }
-  class Queue { constructor(container,status){this.container=container;this.status=status;this.queue=[];this.batchId=null;this.capacity={slots:1};}
-    async enqueue(files){const list=Array.from(files||[]).filter(f=>f&&f.size<=MAX_FILE_SIZE&&_isAcceptedFile(f));if(!list.length)return;this.queue=list.map((file,i)=>({key:(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${i}`),file,state:'queued'}));render(this.queue,this.container);if(this.status)this.status.textContent=uploadMessage('queuedBatch',{count:list.length});await ensureSW();const response=await fetch('/api/uploads/batches',{method:'POST',headers:{'Content-Type':'application/json',...csrf()},body:JSON.stringify({client_batch_id:this.queue[0].key,total_files:list.length,total_bytes:list.reduce((n,f)=>n+f.size,0)})});if(!response.ok){if(response.status===404||response.status===405)return legacyProcessFiles(files,this.container,this.status);throw new Error(`batch ${response.status}`);}const batch=await response.json();this.batchId=batch.batch_id;localStorage.setItem('docuelevate.upload.batch',JSON.stringify({batchId:this.batchId}));for(const item of this.queue)await postSW({op:'put',item:{key:item.key,batchId:this.batchId,clientId:item.key,name:item.file.name,size:item.file.size,state:item.state}});this.connectEvents();await preflight(this.queue,this.batchId,()=>render(this.queue,this.container));this.capacity=await this.capacitySnapshot();await run(this.queue,this.batchId,this.capacity,this.container,this.status);}
-    async capacitySnapshot(){const response=await fetch(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`,{headers:csrf()});return response.ok?response.json():{slots:1};}
-    connectEvents(){if(!this.batchId||typeof WebSocket==='undefined')return;try{const scheme=location.protocol==='https:'?'wss':'ws';this.socket=new WebSocket(`${scheme}://${location.host}/api/uploads/events?batch_id=${encodeURIComponent(this.batchId)}`);this.socket.onmessage=event=>{try{const message=JSON.parse(event.data);if(message.capacity)this.capacity=message.capacity;if(message.snapshot)this.reconcile(message.snapshot);}catch(_){}};this.socket.onclose=()=>{if(this.batchId)this.wsTimer=setTimeout(()=>this.connectEvents(),3000);};}catch(_){} }
-    async reconcile(snapshot){if(!Array.isArray(snapshot))return;const byClient=new Map(snapshot.map(i=>[i.client_id||i.key,i]));this.queue.forEach(item=>{const server=byClient.get(item.key);if(server){item.fileId=server.file_id||server.fileId||item.fileId;item.state=server.state||item.state;}});render(this.queue,this.container);}
-    async restore(){const batch=localStorage.getItem('docuelevate.upload.batch');if(!batch)return;try{const info=JSON.parse(batch);this.batchId=info.batchId;await ensureSW();const items=await postSW({op:'snapshot',batchId:info.batchId});if(items?.length){this.queue=items.map(i=>({...i,state:i.state||'queued'}));render(this.queue,this.container);if(this.status)this.status.textContent='Wiederhergestellt. Dateien ohne Dateihandle bitte erneut auswählen.';this.connectEvents();const response=await fetch(`/api/uploads/batches/${encodeURIComponent(info.batchId)}`,{headers:csrf()});if(response.ok){const snapshot=await response.json();await this.reconcile(snapshot.items||snapshot.files||snapshot);}}}catch(_){} }
+  function windows(items) { const result = []; for (let i = 0; i < items.length; i += WINDOW) result.push(items.slice(i, i + WINDOW)); return result; }
+  function slots(capacity) { return Math.max(0, Math.min(Number(capacity?.slots ?? 0), Number(window.uploadConfig?.concurrency ?? 3))); }
+  function selectReady(queue, capacity) {
+    const selected = []; let bytes = 0;
+    const maxBytes = Number(capacity?.max_bytes ?? 0);
+    for (const item of queue) {
+      if (selected.length >= slots(capacity)) break;
+      if (item.state !== 'queued' || !item.file || !item.sha256 || item.duplicateOf) continue;
+      if (bytes + item.file.size > maxBytes) continue;
+      selected.push(item); bytes += item.file.size;
+    }
+    return selected;
   }
-  window.PersistentBulkUploadQueue=Queue;window.processFiles=async(files,container,status)=>{const q=new Queue(container,status);window.docuElevateUploadQueue=q;await q.enqueue(files);};
-  window.addEventListener('DOMContentLoaded',()=>{const q=new Queue(document.getElementById('uploadProgress'),document.getElementById('statusMessage'));window.docuElevateUploadQueue=q;q.restore();});
-  window.uploadQueueTestHelpers={windows,slots,applyPreflightResults};
+  function matchReselected(savedItems, files) {
+    const bySignature = new Map();
+    for (const file of files) {
+      const signature = JSON.stringify([file.name, file.size, file.lastModified || 0]);
+      if (!bySignature.has(signature)) bySignature.set(signature, []);
+      bySignature.get(signature).push(file);
+    }
+    return savedItems.map(item => {
+      const signature = JSON.stringify([item.name, item.size, item.lastModified || 0]);
+      const file = bySignature.get(signature)?.shift();
+      return { ...item, file, state: item.fileId ? item.state : (file ? 'queued' : 'needs_files') };
+    });
+  }
+  function deduplicate(items) {
+    const seen = new Map();
+    for (const item of items) {
+      delete item.duplicateOf;
+      if (!item.sha256 || item.state === 'failed') continue;
+      const first = seen.get(item.sha256);
+      if (first && first.key !== item.key) {
+        item.duplicateOf = first.key;
+        if (first.fileId) { item.state = 'duplicate'; item.fileId = first.fileId; }
+      } else { seen.set(item.sha256, item); delete item.duplicateOf; }
+    }
+    return items;
+  }
+  function applyPreflightResults(group, result) {
+    const byClient = new Map(group.map(item => [item.key, item]));
+    for (const entry of result.files || []) {
+      const item = byClient.get(entry.client_id);
+      if (item && entry.state === 'duplicate') { item.state = 'duplicate'; item.fileId = entry.file_id; }
+    }
+  }
+  function digest(item) {
+    return new Promise((resolve, reject) => {
+      const worker = new Worker('/static/js/upload-preflight-worker.js');
+      const finish = (error, result) => { worker.terminate(); error ? reject(error) : resolve(result); };
+      worker.onmessage = event => event.data.error ? finish(new Error(event.data.error)) : finish(null, event.data);
+      worker.onerror = () => finish(new Error('File inspection failed'));
+      worker.postMessage({ id: item.key, file: item.file, name: item.file.name, mime: item.file.type });
+    });
+  }
+  function metadata(item, batchId) {
+    return { key: item.key, batchId, name: item.name, size: item.size, lastModified: item.lastModified,
+      state: item.state, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf };
+  }
+  class Queue {
+    constructor(container, status) {
+      this.container = container; this.status = status; this.queue = []; this.batchId = null;
+      this.capacity = { slots: 0, max_bytes: 0 }; this.running = false;
+    }
+    message(text) { if (this.status) this.status.textContent = text; }
+    render() {
+      if (!this.container) return;
+      this.container.replaceChildren();
+      for (const item of this.queue.slice(0, 100)) {
+        const row = document.createElement('div'); row.className = 'text-xs mb-1';
+        const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'Duplikat', processing: 'in Verarbeitung',
+          complete: 'verarbeitet', completed: 'verarbeitet', failed: 'fehlgeschlagen', needs_files: 'Datei erneut auswählen' };
+        row.textContent = `${item.name} — ${states[item.state] || item.state}`; this.container.appendChild(row);
+      }
+      const accepted = this.queue.filter(item => item.fileId).length;
+      this.message(`${accepted} von ${this.queue.length} Dateien sicher angenommen. Die Verarbeitung läuft im Hintergrund.`);
+    }
+    async persist(items) { if (items.length) await postSW({ op: 'putMany', items: items.map(item => metadata(item, this.batchId)) }); }
+    async restore() {
+      try {
+        await ensureSW(); const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        if (!saved?.batchId) return;
+        this.batchId = saved.batchId;
+        this.queue = (await postSW({ op: 'snapshot', batchId: this.batchId })).map(item => ({ ...item, state: item.fileId ? item.state : 'needs_files' }));
+        await this.refresh(); this.render(); this.connectEvents();
+        if (this.queue.some(item => !item.fileId)) this.message('Queue wiederhergestellt. Bitte die ursprünglichen Dateien erneut auswählen, um ausstehende Uploads fortzusetzen.');
+      } catch (error) { this.message(String(error)); }
+    }
+    async refresh() {
+      if (!this.batchId) return;
+      let cursor = null;
+      do {
+        const snapshot = await json(`/api/uploads/batches/${encodeURIComponent(this.batchId)}?limit=${WINDOW}${cursor === null ? "" : `&cursor=${cursor}`}`);
+        await this.reconcile(snapshot.items || []);
+        cursor = snapshot.next_cursor ?? null;
+      } while (cursor !== null);
+      this.capacity = await json(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`);
+    }
+    async reconcile(items) {
+      const byClient = new Map(this.queue.map(item => [item.key, item])); const changed = [];
+      for (const server of items) {
+        const item = byClient.get(server.client_id);
+        if (item && server.file_id) { item.fileId = server.file_id; item.state = server.state; changed.push(item); }
+      }
+      await this.persist(changed); this.render();
+    }
+    connectEvents() {
+      if (!this.batchId || typeof WebSocket === 'undefined') return;
+      this.socket?.close(); clearTimeout(this.wsTimer); clearInterval(this.heartbeat);
+      const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/uploads/events?batch_id=${encodeURIComponent(this.batchId)}`);
+      this.socket = socket;
+      socket.onopen = () => { this.heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send("capacity"); }, 5000); };
+      socket.onmessage = event => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.capacity) this.capacity = message.capacity;
+          if (message.type === 'capacity' && message.slots !== undefined) this.capacity = message;
+          const items = message.snapshot?.items || message.items;
+          if (items) void this.reconcile(items).catch(error => this.message(String(error)));
+        } catch (_) { /* REST reconciliation also runs after reconnect. */ }
+      };
+      socket.onclose = () => { if (this.socket === socket) clearInterval(this.heartbeat); if (this.socket === socket) this.wsTimer = setTimeout(() => this.connectEvents(), 5000); };
+    }
+    async enqueue(files) {
+      if (this.running) { this.message('Ein Upload läuft bereits. Bitte danach weitere Dateien auswählen.'); return; }
+      this.running = true;
+      try {
+        await ensureSW();
+        const list = Array.from(files || []).filter(file => file && file.size <= (window.uploadConfig?.maxFileSize || MAX_FILE_SIZE) && _isAcceptedFile(file));
+        if (!list.length) return;
+        if (this.batchId && this.queue.some(item => !item.fileId)) {
+          await this.refresh(); this.queue = matchReselected(this.queue, list);
+          if (!this.queue.some(item => item.file && !item.fileId)) {
+            this.message('Die Auswahl passt nicht zur offenen Queue. Bitte die ursprünglichen Dateien erneut auswählen.'); return;
+          }
+        } else {
+          this.socket?.close(); this.batchId = null;
+          this.queue = list.map(file => ({ key: crypto.randomUUID(), file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
+          const clientBatchId = crypto.randomUUID();
+          const batch = await json('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_batch_id: clientBatchId, total_files: list.length, total_bytes: list.reduce((sum, file) => sum + file.size, 0) }) });
+          this.batchId = batch.batch_id;
+          localStorage.setItem(storageKey, JSON.stringify({ batchId: this.batchId }));
+        }
+        await this.persist(this.queue); this.connectEvents(); this.render();
+        // Hash and send in bounded windows, so the first files can start while
+        // the rest of a large selection has not yet been inspected.
+        for (const group of windows(this.queue.filter(item => item.file && !item.fileId))) {
+          for (let i = 0; i < group.length; i += HASH_WORKERS) {
+            await Promise.all(group.slice(i, i + HASH_WORKERS).map(async item => {
+              try { const result = await digest(item); item.sha256 = result.sha256; item.mime = result.mime; }
+              catch (error) { item.state = 'failed'; this.message(String(error)); }
+            }));
+          }
+          deduplicate(this.queue);
+          const check = group.filter(item => item.state === 'queued' && !item.duplicateOf);
+          if (check.length) applyPreflightResults(check, await json('/api/uploads/preflight', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batch_id: this.batchId, files: check.map(item => ({ client_id: item.key, sha256: item.sha256, size: item.size })) }) }));
+          deduplicate(this.queue); await this.persist(group);
+          this.capacity = await json(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`);
+          await this.run(group); this.render();
+        }
+      } catch (error) { this.message(`Upload pausiert: ${error.message}. Die Queue bleibt gespeichert.`); }
+      finally { this.running = false; }
+    }
+    async send(item) {
+      if (!await postSW({ op: 'lease', key: item.key, owner, ttl: 60000 })) return false;
+      const renewal = setInterval(() => postSW({ op: 'lease', key: item.key, owner, ttl: 60000 }).catch(() => {}), 10000);
+      try {
+        const body = new FormData(); body.append('file', item.file); body.append('batch_id', this.batchId);
+        body.append('client_id', item.key); body.append('sha256', item.sha256);
+        const result = await json('/api/uploads/files', { method: 'POST', body });
+        item.fileId = result.file_id; item.state = result.duplicate ? 'duplicate' : result.state || 'accepted';
+        await this.persist([item]);
+        window.onDocuElevateUploadQueued?.({ fileId: item.fileId, filename: item.name, state: item.state });
+        return true;
+      } catch (error) { item.state = 'failed'; await this.persist([item]); this.message(String(error)); return false; }
+      finally { clearInterval(renewal); await postSW({ op: 'release', key: item.key, owner }).catch(() => {}); }
+    }
+    async run(group) {
+      while (group.some(item => item.state === 'queued' && !item.fileId && !item.duplicateOf)) {
+        const selected = selectReady(group, this.capacity);
+        if (!selected.length) {
+          this.message('Server pausiert die Uploads – warte auf Kapazität…'); await sleep(2000);
+          this.capacity = await json(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`); continue;
+        }
+        const results = await Promise.all(selected.map(item => this.send(item)));
+        deduplicate(this.queue); await this.persist(group); this.render();
+        if (results.every(result => !result)) { await sleep(2000); await this.refresh(); }
+        this.capacity = await json(`/api/uploads/capacity?batch_id=${encodeURIComponent(this.batchId)}`);
+      }
+    }
+  }
+  window.PersistentBulkUploadQueue = Queue;
+  window.processFiles = async (files, container, status) => {
+    let queue = window.docuElevateUploadQueue;
+    if (!queue) { queue = new Queue(container, status); window.docuElevateUploadQueue = queue; await queue.restore(); }
+    if (container) queue.container = container;
+    if (status) queue.status = status;
+    if (queue.ready) await queue.ready;
+    return queue.enqueue(files);
+  };
+  window.addEventListener('DOMContentLoaded', () => {
+    const queue = new Queue(document.getElementById('uploadProgress'), document.getElementById('statusMessage'));
+    window.docuElevateUploadQueue = queue;
+    queue.ready = queue.restore();
+  });
+  window.uploadQueueTestHelpers = { windows, slots, applyPreflightResults, matchReselected, deduplicate, selectReady };
 })();

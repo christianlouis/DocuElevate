@@ -1,4 +1,5 @@
 """Bounded, lease-based transactional-outbox dispatcher."""
+
 from __future__ import annotations
 
 import logging
@@ -49,16 +50,36 @@ def dispatch_upload_item(self, outbox_id: int, claim_token: str) -> dict[str, ob
         outbox.pipeline_started_at = outbox.pipeline_started_at or datetime.now(timezone.utc)
         db.commit()
         extension = record.original_filename.rsplit(".", 1)[-1].lower() if "." in record.original_filename else ""
-        headers = {"bulk_upload": True, "bulk_accepted_at": batch.created_at.isoformat() if batch and batch.created_at else None, "bulk_batch_id": item.batch_id}
+        headers = {
+            "bulk_upload": True,
+            "bulk_accepted_at": batch.created_at.isoformat() if batch and batch.created_at else None,
+            "bulk_batch_id": item.batch_id,
+        }
         kwargs = {"original_filename": record.original_filename, "file_id": record.id, "owner_id": record.owner_id}
         try:
             if record.mime_type == "application/pdf" or extension == "pdf":
-                task = process_document.apply_async(args=[record.original_file_path or record.local_filename], kwargs=kwargs, priority=_priority(batch), headers=headers, task_id=f"bulk-upload-{outbox.id}")
+                task = process_document.apply_async(
+                    args=[record.original_file_path or record.local_filename],
+                    kwargs=kwargs,
+                    priority=_priority(batch),
+                    headers=headers,
+                    task_id=f"bulk-upload-{outbox.id}",
+                )
             else:
-                task = convert_to_pdf.apply_async(args=[record.original_file_path or record.local_filename], kwargs=kwargs, priority=_priority(batch), headers=headers, task_id=f"bulk-upload-{outbox.id}")
+                task = convert_to_pdf.apply_async(
+                    args=[record.original_file_path or record.local_filename],
+                    kwargs=kwargs,
+                    priority=_priority(batch),
+                    headers=headers,
+                    task_id=f"bulk-upload-{outbox.id}",
+                )
         except Exception as exc:
             with SessionLocal() as retry_db:
-                failed = retry_db.query(UploadOutbox).filter(UploadOutbox.id == outbox_id, UploadOutbox.claim_token == claim_token).one_or_none()
+                failed = (
+                    retry_db.query(UploadOutbox)
+                    .filter(UploadOutbox.id == outbox_id, UploadOutbox.claim_token == claim_token)
+                    .one_or_none()
+                )
                 if failed:
                     failed.last_error = str(exc)[:1000]
                     failed.claim_token = None
@@ -66,7 +87,11 @@ def dispatch_upload_item(self, outbox_id: int, claim_token: str) -> dict[str, ob
                     retry_db.commit()
             raise
         with SessionLocal() as done_db:
-            done = done_db.query(UploadOutbox).filter(UploadOutbox.id == outbox_id, UploadOutbox.claim_token == claim_token).one_or_none()
+            done = (
+                done_db.query(UploadOutbox)
+                .filter(UploadOutbox.id == outbox_id, UploadOutbox.claim_token == claim_token)
+                .one_or_none()
+            )
             if done:
                 done.dispatched_at = datetime.now(timezone.utc)
                 done.claim_token = None
@@ -88,14 +113,17 @@ def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
             (UploadBatch.created_at <= age_before, 1),
             else_=2,
         )
-        rows = (db.query(UploadOutbox)
+        rows = (
+            db.query(UploadOutbox)
             .join(UploadItem, UploadOutbox.item_id == UploadItem.id)
             .join(UploadBatch, UploadItem.batch_id == UploadBatch.id)
             .filter(UploadOutbox.dispatched_at.is_(None))
             .filter(or_(UploadOutbox.claim_expires_at.is_(None), UploadOutbox.claim_expires_at < stale_before))
             .order_by(order, UploadOutbox.created_at.asc())
             .with_for_update(skip_locked=True)
-            .limit(limit).all())
+            .limit(limit)
+            .all()
+        )
         claims = []
         for row in rows:
             token = str(uuid.uuid4())
@@ -118,12 +146,15 @@ def reconcile_upload_states(limit: int = 100) -> int:
     slow upstream providers instead of admitting an unbounded backlog.
     """
     with SessionLocal() as db:
-        rows = (db.query(UploadItem)
+        rows = (
+            db.query(UploadItem)
             .join(FileRecord, UploadItem.file_id == FileRecord.id)
             .filter(UploadItem.state.in_(("accepted", "queued", "processing")))
             .filter(FileRecord.processed_file_path.isnot(None))
             .with_for_update(skip_locked=True)
-            .limit(min(max(1, int(limit)), 500)).all())
+            .limit(min(max(1, int(limit)), 500))
+            .all()
+        )
         if not rows:
             return 0
         ledger = db.get(UploadCapacity, 1)

@@ -155,7 +155,9 @@
   // Expose server-side upload throttling configuration to upload.js
   window.uploadConfig = {
     concurrency: {{ upload_concurrency }},
-    queueDelayMs: {{ upload_queue_delay_ms }}
+    queueDelayMs: {{ upload_queue_delay_ms }},
+    queueOwner: {{ upload_queue_owner | default("single-user") | tojson }},
+    maxFileSize: {{ upload_max_file_size | default(1073741824) }}
   };
   window.uploadI18n = {
     queuedBatch: {{ _("upload.queue_queued") | tojson }},

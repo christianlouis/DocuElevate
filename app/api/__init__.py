@@ -13,6 +13,7 @@ from app.api.automation import router as automation_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
+from app.api.bulk_upload import router as bulk_upload_router
 from app.api.classification_rules import router as classification_rules_router
 from app.api.comments import router as comments_router
 from app.api.compliance import router as compliance_router
@@ -27,7 +28,6 @@ from app.api.i18n import router as i18n_router
 from app.api.imap_accounts import router as imap_accounts_router
 from app.api.imap_profiles import router as imap_profiles_router
 from app.api.intake import router as intake_router
-from app.api.bulk_upload import router as bulk_upload_router
 from app.api.integrations import router as integrations_router
 from app.api.knowledge import router as knowledge_router
 from app.api.logs import router as logs_router

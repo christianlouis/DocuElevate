@@ -3,10 +3,11 @@
 import logging
 import os
 
-from celery import Celery, bootsteps
+from celery import Celery, bootsteps, current_task
 from celery.signals import (
     after_setup_logger,
     after_setup_task_logger,
+    before_task_publish,
     task_failure,
     worker_process_init,
     worker_ready,
@@ -59,6 +60,20 @@ celery.conf.task_routes = {
     "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     "app.tasks.*": {"queue": "document_processor"},
 }
+
+
+# Do not reserve a corpus of work inside one worker process; urgent mail and
+# small batches need a chance to run between individual pipeline stages.
+celery.conf.worker_prefetch_multiplier = 1
+
+
+@before_task_publish.connect
+def preserve_bulk_upload_priority(headers=None, properties=None, **kwargs):
+    """Propagate the admission priority to downstream OCR/AI/delivery tasks."""
+    from app.utils.upload_priority import inherit_upload_priority
+
+    if headers is not None and properties is not None:
+        inherit_upload_priority(headers, properties, getattr(current_task, "request", None))
 
 
 class ResultBackendWriteabilityCheck(bootsteps.StartStopStep):

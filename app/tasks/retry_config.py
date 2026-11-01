@@ -19,6 +19,7 @@ Usage::
 """
 
 import logging
+import math
 import random
 from typing import Any
 
@@ -155,7 +156,7 @@ class BaseTaskWithRetry(Task):
                 quota_retry = isinstance(exc, ProviderQuotaError)
             except ImportError:  # pragma: no cover - defensive import guard
                 pass
-        if quota_retry and max_retries is None:
+        if quota_retry:
             try:
                 from app.config import settings  # noqa: PLC0415
 
@@ -166,7 +167,7 @@ class BaseTaskWithRetry(Task):
         if countdown is None and eta is None:
             hinted = getattr(exc, "retry_after", None) if exc is not None else None
             countdown = (
-                max(1, int(float(hinted)))
+                max(1, math.ceil(float(hinted)))
                 if hinted is not None
                 else compute_countdown(
                     retries=self.request.retries,
