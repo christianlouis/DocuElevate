@@ -45,6 +45,11 @@ _templates_dir = pathlib.Path(__file__).parents[2] / "frontend" / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 templates.env.globals["_"] = lambda key, **kwargs: _translate(key, "en", **kwargs)
 
+# Bump these when the legal text changes.  The submitted version is persisted
+# with the account so provider-review evidence is reproducible.
+CURRENT_TERMS_VERSION = "2026-11-01"
+CURRENT_PRIVACY_VERSION = "2026-11-01"
+
 DbSession = Annotated[Session, Depends(get_db)]
 
 
@@ -75,6 +80,10 @@ class SignupBody(BaseModel):
     display_name: str | None = Field(default=None, max_length=255)
     password: str = Field(..., min_length=8, max_length=128)
     password_confirm: str
+    accept_terms: bool = False
+    accept_privacy: bool = False
+    terms_version: str = Field(default="", max_length=64)
+    privacy_version: str = Field(default="", max_length=64)
 
 
 class ResendVerificationBody(BaseModel):
@@ -185,14 +194,28 @@ async def reset_password_page(request: Request) -> Any:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/api/auth/capabilities", summary="Public authentication capabilities")
+async def auth_capabilities() -> dict[str, Any]:
+    """Describe the public signup contract without exposing provider secrets."""
+    enabled = bool(settings.multi_user_enabled and settings.allow_local_signup)
+    return {
+        "local_signup": enabled,
+        "email_verification_required": True,
+        "terms_version": CURRENT_TERMS_VERSION,
+        "privacy_version": CURRENT_PRIVACY_VERSION,
+        "terms_url": "/terms",
+        "privacy_url": "/privacy",
+        "account_deletion_url": "/account/delete",
+    }
+
+
 @router.post("/api/auth/signup", status_code=status.HTTP_201_CREATED)
 async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str, str | bool]:
     """Create a new local user account.
 
-    When SMTP is configured the account is inactive until the user clicks the
-    verification link sent to their email.  When SMTP is **not** configured the
-    account is activated immediately so that deployments without email can still
-    use the self-registration flow.
+    SMTP is mandatory: the account remains inactive until the user clicks the
+    verification link sent to their email.  Public signup fails closed when
+    email verification cannot be delivered.
 
     Both ``MULTI_USER_ENABLED`` and ``ALLOW_LOCAL_SIGNUP`` must be ``True``.
 
@@ -207,35 +230,40 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is not enabled.")
     if body.password != body.password_confirm:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Passwords do not match.")
+    if not body.accept_terms or body.terms_version != CURRENT_TERMS_VERSION:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Current terms must be accepted.")
+    if not body.accept_privacy or body.privacy_version != CURRENT_PRIVACY_VERSION:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Current privacy notice must be acknowledged.",
+        )
+    if not settings.email_host:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registration is temporarily unavailable because email verification is not configured.",
+        )
 
     if db.query(LocalUser).filter(LocalUser.email == body.email).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered.")
     if db.query(LocalUser).filter(LocalUser.username == body.username).first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken.")
 
-    smtp_configured = bool(settings.email_host)
-
-    if smtp_configured:
-        token = generate_token()
-        user = LocalUser(
-            email=body.email,
-            username=body.username,
-            display_name=body.display_name,
-            hashed_password=hash_password(body.password),
-            is_active=False,
-            email_verification_token=token,
-            email_verification_sent_at=datetime.now(tz=timezone.utc),
-        )
-    else:
-        # No SMTP configured — activate the account immediately.
-        token = None
-        user = LocalUser(
-            email=body.email,
-            username=body.username,
-            display_name=body.display_name,
-            hashed_password=hash_password(body.password),
-            is_active=True,
-        )
+    smtp_configured = True
+    now = datetime.now(tz=timezone.utc)
+    token = generate_token()
+    user = LocalUser(
+        email=body.email,
+        username=body.username,
+        display_name=body.display_name,
+        hashed_password=hash_password(body.password),
+        is_active=False,
+        email_verification_token=token,
+        email_verification_sent_at=now,
+        terms_accepted_version=body.terms_version,
+        terms_accepted_at=now,
+        privacy_accepted_version=body.privacy_version,
+        privacy_accepted_at=now,
+    )
 
     db.add(user)
 
@@ -255,7 +283,7 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
         db.rollback()
         raise
 
-    if smtp_configured and token:
+    if token:
         base_url = str(request.base_url).rstrip("/")
         try:
             send_verification_email(body.email, body.username, token, base_url)
@@ -274,9 +302,7 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
     db.commit()
     logger.info("New local user registered: %s", body.email)
 
-    if smtp_configured:
-        return {"message": "Verification email sent. Please check your inbox.", "email_verification_required": True}
-    return {"message": "Account created successfully. You can now log in.", "email_verification_required": False}
+    return {"message": "Verification email sent. Please check your inbox.", "email_verification_required": True}
 
 
 @router.get("/verify-email", include_in_schema=False)

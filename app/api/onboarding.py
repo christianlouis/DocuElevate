@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserIntegration, UserProfile
 from app.utils.subscription import TIERS
+from app.utils.user_scope import get_current_owner_id
 from app.utils.tribe_scope import (
     canonical_tribe_name,
     ensure_personal_scope,
@@ -45,10 +46,7 @@ def _get_current_user_id(request: Request) -> str:
     Raises:
         HTTPException: 401 if the user is not authenticated.
     """
-    user = request.session.get("user")
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    user_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    user_id = get_current_owner_id(request)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return user_id

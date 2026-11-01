@@ -534,6 +534,12 @@ class LocalUser(Base):
     is_admin = Column(Boolean, nullable=False, default=False, server_default="0")
     email_verification_token = Column(String(128), nullable=True)
     email_verification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    # Immutable-at-signup evidence for the legal documents the user accepted.
+    # Nullable keeps existing local accounts compatible with the migration.
+    terms_accepted_version = Column(String(64), nullable=True)
+    terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_accepted_version = Column(String(64), nullable=True)
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
     password_reset_token = Column(String(128), nullable=True)
     password_reset_sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -555,7 +561,6 @@ class UserProfile(Base):
 
     # Stable user identifier — matches FileRecord.owner_id (OAuth sub / email / username)
     user_id = Column(String, unique=True, nullable=False, index=True)
-
 
     # Optional human-readable display name set by the admin
     display_name = Column(String, nullable=True)
