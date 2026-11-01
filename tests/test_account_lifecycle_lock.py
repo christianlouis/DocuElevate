@@ -151,13 +151,16 @@ def test_ownerless_single_user_task_runs(tmp_path, monkeypatch):
     assert task() == {"status": "skipped", "reason": "owner_unavailable"}
 
 
-def test_postgres_unlocks_when_task_raises():
+def test_postgres_unlocks_when_task_raises(monkeypatch):
     from unittest.mock import MagicMock
 
     import pytest
 
     db = MagicMock()
     db.get_bind.return_value.dialect.name = "postgresql"
+    import app.services.account_lifecycle_lock as lifecycle
+
+    monkeypatch.setattr(lifecycle, "_dedicated_pg_engine", lambda bind: bind)
     connection = db.get_bind.return_value.connect.return_value.__enter__.return_value
     connection.execute.return_value.scalar.return_value = True
     with pytest.raises(ValueError, match="crash"):
@@ -168,16 +171,44 @@ def test_postgres_unlocks_when_task_raises():
     connection.invalidate.assert_not_called()
 
 
-def test_postgres_failed_unlock_invalidates_connection():
+def test_postgres_failed_unlock_invalidates_connection(monkeypatch):
     from unittest.mock import MagicMock
 
     import pytest
 
     db = MagicMock()
     db.get_bind.return_value.dialect.name = "postgresql"
+    import app.services.account_lifecycle_lock as lifecycle
+
+    monkeypatch.setattr(lifecycle, "_dedicated_pg_engine", lambda bind: bind)
     connection = db.get_bind.return_value.connect.return_value.__enter__.return_value
     connection.execute.side_effect = [MagicMock(), RuntimeError("connection failed")]
     with pytest.raises(RuntimeError, match="connection failed"):
         with account_lifecycle_lock(db, "alice", exclusive=True):
             pass
     connection.invalidate.assert_called_once()
+
+
+def test_async_postgres_releases_connections_while_waiting(monkeypatch):
+    import asyncio
+    from unittest.mock import MagicMock
+
+    import app.services.account_lifecycle_lock as lifecycle
+
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    first, second = MagicMock(), MagicMock()
+    first.execute.return_value.scalar.return_value = False
+    second.execute.return_value.scalar.side_effect = [True, True]
+    engine = MagicMock()
+    engine.connect.side_effect = [first, second]
+    monkeypatch.setattr(lifecycle, "_dedicated_pg_engine", lambda bind: engine)
+
+    async def run():
+        async with lifecycle.async_account_lifecycle_lock(db, "alice"):
+            first.close.assert_called_once()
+            second.close.assert_not_called()
+
+    asyncio.run(run())
+    second.close.assert_called_once()
+    assert second.execute.call_count == 2

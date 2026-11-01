@@ -24,6 +24,23 @@ def deletion_fence_database(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
     AccountDeletionTombstone.__table__.create(engine)
     monkeypatch.setattr("app.database.SessionLocal", sessionmaker(bind=engine))
+    # Legacy unit tests use MagicMock sessions; real sessions still exercise the lock.
+    from contextlib import asynccontextmanager
+    from unittest.mock import Mock
+
+    from app.services import account_lifecycle_lock as locking
+
+    real_lock = locking.async_account_lifecycle_lock
+
+    @asynccontextmanager
+    async def lock_for_test(db, owner):
+        if isinstance(db, Mock):
+            yield
+        else:
+            async with real_lock(db, owner):
+                yield
+
+    monkeypatch.setattr(locking, "async_account_lifecycle_lock", lock_for_test)
     yield
     engine.dispose()
 

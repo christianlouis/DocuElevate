@@ -918,7 +918,9 @@ async def test_admin_login_username_case_insensitive():
         mock_settings.admin_password = "adminpass"
         mock_settings.multi_user_enabled = False
 
-        result = await auth(mock_request, db=MagicMock())
+        mock_db = MagicMock()
+        mock_db.get_bind.return_value.dialect.name = "sqlite"
+        result = await auth(mock_request, db=mock_db)
 
     assert result.status_code == 302
     assert "user" in mock_request.session

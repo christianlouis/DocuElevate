@@ -248,11 +248,11 @@ async def signup(request: Request, body: SignupBody, db: DbSession) -> dict[str,
         )
 
     from app.services.account_deletion import deletion_blocked
-    from app.services.account_lifecycle_lock import account_lifecycle_lock
+    from app.services.account_lifecycle_lock import async_account_lifecycle_lock
 
     # Serialize account creation with deletion so a stale signup cannot recreate
     # credentials or a profile after cleanup has committed.
-    with account_lifecycle_lock(db, str(body.email)):
+    async with async_account_lifecycle_lock(db, str(body.email)):
         if deletion_blocked(db, str(body.email)):
             raise HTTPException(status_code=409, detail="This account cannot be registered. Contact support.")
         if db.query(LocalUser).filter(LocalUser.email == body.email).first():

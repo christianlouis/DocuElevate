@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.auth import require_login
 from app.database import get_db
@@ -34,7 +36,7 @@ async def delete_my_account(request: Request, payload: AccountDeletionRequest, d
     if not owner_id or owner_id == "anonymous":
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
-        result = delete_account(db, owner_id, confirmation=payload.confirmation)
+        result = await run_in_threadpool(partial(delete_account, db, owner_id, confirmation=payload.confirmation))
     except AccountDeletionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     request.session.clear()
