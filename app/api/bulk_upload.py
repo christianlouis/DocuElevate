@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.intake import _authenticate_intake
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import FileRecord, UploadBatch, UploadItem, UploadOutbox
 from app.tasks.dispatch_uploads import dispatch_upload_item
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
@@ -154,10 +154,28 @@ async def events(websocket: WebSocket):
     if origin and allowed and origin.rstrip("/") not in allowed:
         await websocket.close(code=1008)
         return
+    batch_id = websocket.query_params.get("batch_id")
+    if not batch_id:
+        await websocket.close(code=1008)
+        return
+    secret = websocket.headers.get("x-docuelevate-intake-secret")
+    if settings.auth_enabled and not (settings.document_intake_shared_secret and secret and secret == settings.document_intake_shared_secret):
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
+    db = SessionLocal()
     try:
-        await websocket.send_json({"type": "capacity", "retry_after": 0})
+        batch = db.query(UploadBatch).filter(UploadBatch.id == batch_id).one_or_none()
+        if batch is None:
+            await websocket.close(code=1008)
+            return
+        await websocket.send_json({"type": "capacity", "batch_id": batch_id, "retry_after": 0})
+        await websocket.send_json({"type": "snapshot", **_snapshot(db, batch, 0, 100)})
         while True:
             await websocket.receive_text()
+            db.expire_all()
+            await websocket.send_json({"type": "snapshot", **_snapshot(db, batch, 0, 100)})
     except WebSocketDisconnect:
         return
+    finally:
+        db.close()
