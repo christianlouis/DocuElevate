@@ -145,7 +145,15 @@ def _central_session_factory(db_session, request):
         # Give those IDs real, shared-space records so the lifecycle fence is
         # exercised without weakening its missing-file fail-closed behavior.
         module_name = request.node.path.name
-        if module_name.startswith("test_upload_") or module_name == "test_send_to_all.py":
+        lifecycle_task_modules = {
+            "test_coverage_uploads_notification.py",
+            "test_upload_to_notion.py",
+        }
+        if (
+            module_name.startswith("test_upload_")
+            or module_name == "test_send_to_all.py"
+            or module_name in lifecycle_task_modules
+        ):
             synthetic_ids = set(range(1, 51)) | {88, 99, 100, 123, 200, 300, 400, 456, 500}
             for file_id in synthetic_ids:
                 db_session.add(
@@ -154,6 +162,7 @@ def _central_session_factory(db_session, request):
                         filehash=f"test-file-{file_id}",
                         local_filename=f"/tmp/test-file-{file_id}",
                         file_size=0,
+                        owner_id="test-owner",
                     )
                 )
             db_session.flush()
