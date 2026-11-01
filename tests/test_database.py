@@ -227,12 +227,7 @@ class TestInitDb:
             )
             # user_profiles predates revision 026 and is altered by the
             # signup-consent migration near the head of the chain.
-            conn.execute(
-                text(
-                    "CREATE TABLE user_profiles ("
-                    "id INTEGER PRIMARY KEY, user_id VARCHAR(255) NOT NULL)"
-                )
-            )
+            conn.execute(text("CREATE TABLE user_profiles (id INTEGER PRIMARY KEY, user_id VARCHAR(255) NOT NULL)"))
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
             conn.execute(text("INSERT INTO alembic_version VALUES ('026_add_scheduled_jobs')"))
 
