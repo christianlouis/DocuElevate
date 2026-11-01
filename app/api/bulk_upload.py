@@ -349,6 +349,7 @@ def get_batch(
 async def events(websocket: WebSocket):
     origin, host = websocket.headers.get("origin"), websocket.headers.get("host")
     scheme = websocket.headers.get("x-forwarded-proto", websocket.url.scheme)
+    scheme = {"ws": "http", "wss": "https"}.get(scheme, scheme)
     if not origin or not host or origin.rstrip("/") != f"{scheme}://{host}".rstrip("/"):
         await websocket.close(code=1008)
         return
@@ -357,7 +358,7 @@ async def events(websocket: WebSocket):
         await websocket.close(code=1008)
         return
     try:
-        principal, _ = _principal(Request(websocket.scope))
+        principal, _ = _principal(Request({**websocket.scope, "type": "http"}))
     except HTTPException:
         await websocket.close(code=1008)
         return

@@ -43,6 +43,21 @@ Run the Celery beat outbox recovery task as well as the workers. Redis priority
 queues and worker prefetch of one let mail and small imports overtake bulk work
 between pipeline tasks. Bulk provenance is carried through descendant tasks;
 old documents receive higher priority when subsequent tasks are published.
+The outbox dispatcher runs every five seconds and publishes at most ten items
+per run. Admission caps outstanding work at 1,000 documents and the smaller of
+10 GiB or ten times the configured per-file upload limit. These bounds limit
+backlog growth independently of the provider budgets.
+
+The transactional outbox provides at-least-once publication. A crash after
+publishing a Celery task but before recording publication can execute processing
+again for the same file ID; a deterministic task ID does not deduplicate Celery
+execution. Upload replay prevents extra file records, but does not establish
+exactly-once downstream processing.
+
+Admission reservations are released when the existing pipeline records its
+terminal delivery-handoff step, or failure. Completion here does not certify
+that every external destination has finished delivery; destination tasks retain
+their existing retry and status handling.
 
 Provider admission is shared in Redis, with separate request, estimated-token,
 OCR-page and in-flight budgets per provider/model/credential fingerprint:

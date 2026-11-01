@@ -199,3 +199,29 @@ def test_reconcile_uses_terminal_step_and_atomic_ledger_decrement(db_session, mo
     ledger = db_session.get(UploadCapacity, 1)
     assert item.state == "complete"
     assert (ledger.reserved_files, ledger.reserved_bytes) == (0, 0)
+
+
+def test_websocket_capacity_uses_browser_origin_and_session_auth(client, db_session, monkeypatch):
+    from app.api import bulk_upload
+
+    monkeypatch.setattr(bulk_upload, "SessionLocal", lambda: db_session)
+    batch_id = _batch(client, "queue-owner:websocket")
+    with client.websocket_connect(
+        f"ws://localhost/api/uploads/events?batch_id={batch_id}", headers={"origin": "http://localhost"}
+    ) as socket:
+        capacity = socket.receive_json()
+        assert capacity["type"] == "capacity"
+        assert capacity["slots"] > 0
+        assert socket.receive_json()["type"] == "snapshot"
+        socket.send_text("capacity")
+        assert socket.receive_json()["type"] == "capacity"
+
+
+def test_batches_are_scoped_to_authenticated_principal(client, monkeypatch):
+    from app.api import bulk_upload
+
+    monkeypatch.setattr(bulk_upload, "_principal", lambda *args: ("alice", None))
+    batch_id = _batch(client, "alice:private-batch")
+    monkeypatch.setattr(bulk_upload, "_principal", lambda *args: ("bob", None))
+    assert client.get(f"/api/uploads/batches/{batch_id}").status_code == 404
+    assert client.get(f"/api/uploads/capacity?batch_id={batch_id}").status_code == 404
