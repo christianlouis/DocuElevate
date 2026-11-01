@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.194.1 (2026-11-01)
+
+### Bug Fixes
+
+- Continuous worker-managed uploads and storage-based admission
+  ([#1303](https://github.com/christianlouis/DocuElevate/pull/1303),
+  [`1e26dfd`](https://github.com/christianlouis/DocuElevate/commit/1e26dfd9db3e91eccc65a0e5b938bc49f6363251))
+
+
 ## v0.194.0 (2026-11-01)
 
 ### Features
