@@ -368,6 +368,15 @@ class Settings(BaseSettings):
             "Requires auth_enabled=True. Default: False (auth-free compatibility fallback)."
         ),
     )
+    strict_user_destination_routing: bool = Field(
+        default=False,
+        description=(
+            "Route owned documents only to the owner's active destinations. "
+            "When enabled, destination lookup failures and missing personal destinations "
+            "are retried instead of falling back to global destinations. Default: False "
+            "for backward-compatible rollout."
+        ),
+    )
     default_daily_upload_limit: int = Field(
         default=0,
         description=(

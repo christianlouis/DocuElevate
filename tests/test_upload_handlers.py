@@ -915,7 +915,7 @@ class TestFinalizeDocumentStorageUncoveredBranches:
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
-    def test_routes_to_global_when_count_query_raises(
+    def test_retries_without_global_fallback_when_count_query_raises(
         self,
         mock_session_local,
         mock_log_progress,
@@ -926,7 +926,7 @@ class TestFinalizeDocumentStorageUncoveredBranches:
         mock_notify,
         tmp_path,
     ):
-        """When get_user_destination_count raises, falls back to global routing."""
+        """A destination lookup failure must retry instead of leaking to global sinks."""
         from app.tasks.finalize_document_storage import finalize_document_storage
 
         processed_file = str(tmp_path / "processed2" / "doc.pdf")
@@ -948,13 +948,13 @@ class TestFinalizeDocumentStorageUncoveredBranches:
         mock_get_dest_count.side_effect = Exception("DB connection error")
 
         finalize_document_storage.request.id = "test-task-id"
-        finalize_document_storage.__wrapped__(
-            original_file=original_file,
-            processed_file=processed_file,
-            metadata={},
-            file_id=88,
-        )
+        with pytest.raises(Exception, match="DB connection error"):
+            finalize_document_storage.__wrapped__(
+                original_file=original_file,
+                processed_file=processed_file,
+                metadata={},
+                file_id=88,
+            )
 
-        # Falls back to global since count raised
-        mock_send_all.delay.assert_called_once()
+        mock_send_all.delay.assert_not_called()
         mock_send_user.delay.assert_not_called()
