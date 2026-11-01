@@ -5,6 +5,8 @@ Pytest configuration and shared fixtures for DocuElevate tests.
 import os
 import tempfile
 from typing import Dict, Generator, Optional
+from unittest.mock import Mock, patch
+from contextlib import asynccontextmanager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -120,6 +122,75 @@ def db_session():
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _central_session_factory(db_session):
+    """Keep direct ``SessionLocal`` users on the test database.
+
+    Request middleware and background helpers deliberately open their own
+    sessions to enforce the account-deletion fence.  With the production
+    ``sqlite:///:memory:`` NullPool engine those sessions otherwise see a
+    different empty database than the dependency-injected test session.
+    """
+    from app import database
+
+    test_session_factory = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=db_session.get_bind(),
+    )
+    with patch.object(database, "SessionLocal", test_session_factory):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _mock_database_lifecycle_lock():
+    """Let unit tests using ``MagicMock`` sessions exercise auth flow logic.
+
+    Production code still rejects unknown database dialects.  These legacy
+    unit tests provide an unconfigured mock session whose dialect is itself a
+    ``MagicMock``; treating that as a test-only no-op keeps the contract test
+    focused on authentication behavior while real SQLite/PostgreSQL sessions
+    continue through the actual lock implementation.
+    """
+    from app.services import account_lifecycle_lock as lifecycle
+
+    real_lock = lifecycle.async_account_lifecycle_lock
+
+    @asynccontextmanager
+    async def lock_for_test(db, owner_id):
+        dialect = getattr(getattr(db.get_bind(), "dialect", None), "name", None)
+        if isinstance(dialect, str):
+            async with real_lock(db, owner_id):
+                yield
+        else:
+            yield
+
+    with patch.object(lifecycle, "async_account_lifecycle_lock", lock_for_test):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _mock_account_deletion_check_for_mock_sessions():
+    """Keep legacy auth unit mocks from masquerading as tombstone rows.
+
+    A few unit tests configure ``query().first()`` to return a ``UserProfile``
+    mock, while the lifecycle check queries a different model.  Real sessions
+    always execute the unchanged deletion check; only an explicitly mocked
+    session gets the test-only compatibility behavior.
+    """
+    from app.services import account_deletion
+
+    real_check = account_deletion.assert_account_active
+
+    def check_for_test(db, owner_id):
+        if isinstance(db, Mock):
+            return None
+        return real_check(db, owner_id)
+
+    with patch.object(account_deletion, "assert_account_active", check_for_test):
+        yield
 
 
 @pytest.fixture(scope="function")

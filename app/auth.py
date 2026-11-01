@@ -311,7 +311,19 @@ router = APIRouter()
 def _deletion_fenced(request: Request, user, db=None) -> bool:
     if not isinstance(user, dict):
         return False
-    if request.url.path.rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
+    # Some lightweight unit-test requests provide only headers/session in
+    # their ASGI scope.  Accessing ``Request.url`` then raises KeyError for
+    # the missing path; a missing path cannot be the account endpoint.
+    request_path = ""
+    request_scope = getattr(request, "scope", None)
+    if isinstance(request_scope, dict):
+        request_path = request_scope.get("path", "")
+    if not request_path:
+        try:
+            request_path = getattr(request.url, "path", "")
+        except (AttributeError, KeyError):
+            request_path = ""
+    if str(request_path).rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
         return False
     from app.utils.user_scope import _owner_id_from_user
 
@@ -324,15 +336,15 @@ def _deletion_fenced(request: Request, user, db=None) -> bool:
 
     session = db or SessionLocal()
     try:
-        return (
+        row = (
             session.query(AccountDeletionTombstone)
             .filter(
                 AccountDeletionTombstone.owner_id == tombstone_key(owner),
                 AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
             )
             .first()
-            is not None
         )
+        return row is not None and getattr(row, "status", None) in {"deleting", "deleted", "failed"}
     except Exception:
         logger.warning("Could not verify account deletion fence", exc_info=True)
         return True
