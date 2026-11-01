@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user_id, require_login
+from app.auth import require_login
+from app.utils.user_scope import get_current_owner_id
 from app.database import get_db
 from app.services.account_deletion import AccountDeletionError, CONFIRMATION, delete_account
 
@@ -28,8 +29,8 @@ async def delete_my_account(request: Request, payload: AccountDeletionRequest, d
     Browser requests remain subject to the application's CSRF middleware;
     mobile clients may authenticate with the existing Bearer-token path.
     """
-    owner_id = get_current_user_id(request)
-    if owner_id == "anonymous":
+    owner_id = get_current_owner_id(request)
+    if not owner_id or owner_id == "anonymous":
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
         result = delete_account(db, owner_id, confirmation=payload.confirmation)
@@ -43,8 +44,8 @@ async def delete_my_account(request: Request, payload: AccountDeletionRequest, d
 @require_login
 async def account_deletion_status(request: Request, db: DbSession):
     from app.models import AccountDeletionTombstone
-    owner_id = get_current_user_id(request)
-    if owner_id == "anonymous":
+    owner_id = get_current_owner_id(request)
+    if not owner_id or owner_id == "anonymous":
         raise HTTPException(status_code=401, detail="Authentication required")
     row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == owner_id).first()
     return {"status": row.status if row else "active"}

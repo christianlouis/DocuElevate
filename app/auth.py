@@ -308,36 +308,36 @@ _setup_social_providers()
 router = APIRouter()
 
 
-def get_current_user(request: Request):
-    def _deletion_fenced(user):
-        if not isinstance(user, dict):
-            return False
-        # The original authenticated credential may only access deletion retry/status.
-        if request.url.path.rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
-            return False
-        owner = user.get("preferred_username") or user.get("email") or user.get("id")
-        if not owner:
-            return False
-        try:
-            from app.database import SessionLocal
-            from app.models import AccountDeletionTombstone
-            db = SessionLocal()
-            try:
-                return db.query(AccountDeletionTombstone).filter(
-                    AccountDeletionTombstone.owner_id == owner,
-                    AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
-                ).first() is not None
-            finally:
-                db.close()
-        except Exception:
-            # Older installations may not have migrated yet; normal auth must
-            # continue until the migration is applied.
-            return False
+def _deletion_fenced(request: Request, user, db=None) -> bool:
+    if not isinstance(user, dict):
+        return False
+    if request.url.path.rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
+        return False
+    from app.utils.user_scope import _owner_id_from_user
+    owner = _owner_id_from_user(user)
+    if not owner:
+        return False
+    from app.database import SessionLocal
+    from app.models import AccountDeletionTombstone
+    session = db or SessionLocal()
+    try:
+        return session.query(AccountDeletionTombstone).filter(
+            AccountDeletionTombstone.owner_id == owner,
+            AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
+        ).first() is not None
+    except Exception:
+        logger.warning("Could not verify account deletion fence", exc_info=True)
+        return True
+    finally:
+        if db is None:
+            session.close()
 
+
+def get_current_user(request: Request):
     # Check for Bearer token auth first (API tokens)
     api_user = getattr(request.state, "api_token_user", None)
     if isinstance(api_user, dict):
-        if _deletion_fenced(api_user):
+        if _deletion_fenced(request, api_user):
             return None
         logger.debug("[AUTH] get_current_user: resolved from API token (user_id=%s)", api_user.get("id"))
         return api_user
@@ -378,8 +378,7 @@ def get_current_user(request: Request):
         )
     else:
         logger.debug("[AUTH] get_current_user: no user in session or API token")
-    if _deletion_fenced(session_user):
-        request.session.clear()
+    if _deletion_fenced(request, session_user):
         return None
     return session_user
 
@@ -428,6 +427,9 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
         db_token.id,
         db_token.owner_id,
     )
+
+    if _deletion_fenced(request, {"id": db_token.owner_id}, db=db):
+        return None
 
     # Update usage tracking
     try:
@@ -753,12 +755,18 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
                 status_code=status.HTTP_302_FOUND,
             )
 
+        # A new OAuth callback must not recreate a profile or provider grant
+        # for an account already fenced by deletion.
+        if _deletion_fenced(request, user_data, db=db):
+            return RedirectResponse(url="/login?error=Account+unavailable", status_code=status.HTTP_302_FOUND)
+
         if provider == "apple":
             # Keep the refresh grant encrypted so account deletion can revoke it.
             from app.models import ProviderGrant
             from app.utils.encryption import encrypt_value
             grant_token = token.get("refresh_token")
-            owner = user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
+            from app.utils.user_scope import _owner_id_from_user
+            owner = _owner_id_from_user(user_data)
             grant = db.query(ProviderGrant).filter_by(owner_id=owner, provider="apple").first()
             if grant_token:
                 encrypted = encrypt_value(grant_token)
