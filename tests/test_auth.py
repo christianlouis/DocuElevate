@@ -14,6 +14,18 @@ from app.auth import get_current_user, get_gravatar_url, require_login
 _TEST_CREDENTIAL = "test"  # noqa: S105
 
 
+@pytest.fixture(autouse=True)
+def deletion_fence_database(monkeypatch):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models import AccountDeletionTombstone
+    engine = create_engine("sqlite:///:memory:")
+    AccountDeletionTombstone.__table__.create(engine)
+    monkeypatch.setattr("app.database.SessionLocal", sessionmaker(bind=engine))
+    yield
+    engine.dispose()
+
+
 @pytest.mark.unit
 class TestGetCurrentUser:
     """Tests for get_current_user function."""

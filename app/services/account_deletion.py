@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import hashlib
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -34,14 +35,19 @@ class UnsafeDeletion(AccountDeletionError):
     status_code = 409
 
 
+def tombstone_key(owner_id: str) -> str:
+    """Return a stable pseudonymous deletion fence for a canonical owner."""
+    return hashlib.sha256(owner_id.encode("utf-8")).hexdigest()
+
+
 def deletion_blocked(db: Session, owner_id: str) -> bool:
-    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == owner_id).first()
+    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == tombstone_key(owner_id)).first()
     return row is not None and row.status in {"deleting", "deleted", "failed"}
 
 
 def assert_account_active(db: Session, owner_id: str) -> None:
     """Raise when an ingestion/worker must not create new owner data."""
-    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == owner_id).first()
+    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == tombstone_key(owner_id)).first()
     if row is not None and row.status in {"deleting", "deleted", "failed"}:
         raise DeletionBlocked("account deletion is in progress or complete")
 
@@ -101,13 +107,13 @@ def _safe_paths_for_sharing(file: FileRecord, workdir: str | Path) -> list[Path]
 def _delete_external_indexes(owner_id: str, file_ids: list[int]) -> None:
     if not file_ids:
         return
-    from app.utils.meilisearch_client import get_meilisearch_client
+    if not settings.meilisearch_url or not settings.vector_index_url:
+        raise RuntimeError("Search or vector endpoint is missing; historical index cleanup cannot be verified")
+    import meilisearch
     from app.utils.vector_index import QdrantVectorIndex
 
-    if settings.enable_search and settings.meilisearch_url:
-        client = get_meilisearch_client()
-        if client is None:
-            raise RuntimeError("Meilisearch unavailable")
+    if settings.meilisearch_url:
+        client = meilisearch.Client(url=settings.meilisearch_url, api_key=settings.meilisearch_api_key or None)
         try:
             index = client.get_index(settings.meilisearch_index_name)
         except Exception as exc:
@@ -122,7 +128,7 @@ def _delete_external_indexes(owner_id: str, file_ids: list[int]) -> None:
                 status = result.status if hasattr(result, "status") else result.get("status")
                 if status != "succeeded":
                     raise RuntimeError("Meilisearch deletion was not confirmed")
-    if settings.vector_index_enabled and settings.vector_index_url:
+    if settings.vector_index_url:
         QdrantVectorIndex().delete_documents(file_ids, owner_id=owner_id)
 
 
@@ -158,8 +164,9 @@ def delete_account(db: Session, owner_id: str, *, confirmation: str, workdir: st
 
 
 def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | None) -> dict[str, Any]:
-    from app.models import DropboxImportObject, Pipeline, PipelineStep, PipelineVersion, UserIntegration
-    tombstone = db.query(AccountDeletionTombstone).filter_by(owner_id=owner_id).first()
+    from app.models import (DocumentComment, DropboxImportObject, Pipeline, PipelineRoutingRule,
+                            PipelineStep, PipelineVersion, UserIntegration)
+    tombstone = db.query(AccountDeletionTombstone).filter_by(owner_id=tombstone_key(owner_id)).first()
     if tombstone is not None and tombstone.status == "deleted":
         return {"status": "deleted", "files_deleted": 0, "already_deleted": True}
     fenced = tombstone is not None
@@ -172,10 +179,14 @@ def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | 
         # SQL != does not include NULL; unowned documents also protect paths.
         others = db.query(FileRecord).filter(or_(FileRecord.owner_id != owner_id, FileRecord.owner_id.is_(None))).all()
         shared = {str(p) for f in others for p in _safe_paths_for_sharing(f, root)}
+        for intake in db.query(DocumentIntake).filter(or_(DocumentIntake.principal_id != owner_id, DocumentIntake.principal_id.is_(None))).all():
+            if intake.local_path:
+                candidate = Path(intake.local_path).expanduser()
+                shared.add(str((candidate if candidate.is_absolute() else Path(root).expanduser().resolve() / candidate).resolve(strict=False)))
         paths = [p for p in paths if str(p.resolve(strict=False)) not in shared]
         file_ids = [f.id for f in files]
         if tombstone is None:
-            tombstone = AccountDeletionTombstone(owner_id=owner_id, status="deleting")
+            tombstone = AccountDeletionTombstone(owner_id=tombstone_key(owner_id), status="deleting")
             tombstone.cleanup_manifest = json.dumps({"file_ids": file_ids, "paths": [str(p) for p in paths]})
             db.add(tombstone)
         else:
@@ -197,6 +208,17 @@ def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | 
 
         # Delete indirect children before their owner-scoped parent rows.
         pipeline_ids = db.query(Pipeline.id).filter(Pipeline.owner_id == owner_id)
+        routing_ids = db.query(PipelineRoutingRule.id).filter(PipelineRoutingRule.owner_id == owner_id)
+        other_files = or_(FileRecord.owner_id != owner_id, FileRecord.owner_id.is_(None))
+        for column, ids in ((FileRecord.duplicate_of_id, file_ids),
+                            (FileRecord.pipeline_id, pipeline_ids),
+                            (FileRecord.pipeline_routing_rule_id, routing_ids)):
+            db.query(FileRecord).filter(other_files, column.in_(ids)).update({column: None}, synchronize_session=False)
+        deleted_comment_ids = [row[0] for row in db.query(DocumentComment.id).filter(
+            or_(DocumentComment.user_id == owner_id, DocumentComment.file_id.in_(file_ids))).all()]
+        if deleted_comment_ids:
+            db.query(DocumentComment).filter(DocumentComment.parent_id.in_(deleted_comment_ids),
+                ~DocumentComment.id.in_(deleted_comment_ids)).update({DocumentComment.parent_id: None}, synchronize_session=False)
         integration_ids = db.query(UserIntegration.id).filter(UserIntegration.owner_id == owner_id)
         intake_ids = db.query(DocumentIntake.id).filter(DocumentIntake.principal_id == owner_id)
         db.query(PipelineStep).filter(PipelineStep.pipeline_id.in_(pipeline_ids)).delete(synchronize_session=False)
@@ -211,7 +233,7 @@ def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | 
         db.query(FileShare).filter((FileShare.owner_id == owner_id) | (FileShare.shared_with_user_id == owner_id)).delete(synchronize_session=False)
         db.query(FileRecord).filter(FileRecord.owner_id == owner_id).delete(synchronize_session=False)
         dependent_deleted += _delete_mapped_owner_rows(db, owner_id)
-        db.query(LocalUser).filter((LocalUser.email == owner_id) | (LocalUser.username == owner_id)).delete(synchronize_session=False)
+        db.query(LocalUser).filter(LocalUser.email == owner_id).delete(synchronize_session=False)
         tombstone.status = "deleted"
         tombstone.error = None
         tombstone.cleanup_manifest = None
@@ -222,9 +244,9 @@ def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | 
         db.rollback()
         if not fenced:
             raise
-        row = db.query(AccountDeletionTombstone).filter_by(owner_id=owner_id).first()
+        row = db.query(AccountDeletionTombstone).filter_by(owner_id=tombstone_key(owner_id)).first()
         if row is not None:
             row.status = "failed"
             row.error = type(exc).__name__
             db.commit()
-        raise AccountDeletionError("account cleanup failed; retry is required") from exc
+        raise AccountDeletionError("account cleanup could not be verified; check configured services and retry") from exc

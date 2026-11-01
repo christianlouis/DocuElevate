@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.models import AccountDeletionTombstone, FileRecord, Tenant, Tribe
+from app.services.account_deletion import tombstone_key
 from app.services.account_deletion import DeletionBlocked, delete_account, assert_account_active
 
 
@@ -73,7 +74,7 @@ def test_external_failure_keeps_manifest_and_can_retry(deletion_db, monkeypatch)
     from app.services.account_deletion import AccountDeletionError
     with pytest.raises(AccountDeletionError):
         delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)
-    row = db.query(AccountDeletionTombstone).filter_by(owner_id="alice").one()
+    row = db.query(AccountDeletionTombstone).filter_by(owner_id=tombstone_key("alice")).one()
     assert row.status == "failed" and 'file_ids' in row.cleanup_manifest
     assert path.exists()
     monkeypatch.setattr("app.services.account_deletion._delete_external_indexes", lambda owner, ids: None)
@@ -117,7 +118,7 @@ def test_crashed_deleting_state_can_resume(deletion_db, monkeypatch):
     file = _file("alice", path)
     db.add(file)
     db.flush()
-    db.add(AccountDeletionTombstone(owner_id="alice", status="deleting", cleanup_manifest=json.dumps({"file_ids": [file.id], "paths": [str(path)]})))
+    db.add(AccountDeletionTombstone(owner_id=tombstone_key("alice"), status="deleting", cleanup_manifest=json.dumps({"file_ids": [file.id], "paths": [str(path)]})))
     db.commit()
     assert delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)["status"] == "deleted"
     assert not path.exists()
@@ -147,7 +148,7 @@ def test_subject_is_fenced_but_retry_route_remains_accessible(deletion_db, monke
     from app.config import settings
     from app.utils.user_scope import get_current_owner_id
     db, root = deletion_db
-    db.add(AccountDeletionTombstone(owner_id="subject-1", status="failed"))
+    db.add(AccountDeletionTombstone(owner_id=tombstone_key("subject-1"), status="failed"))
     db.commit()
     monkeypatch.setattr(app.database, "SessionLocal", lambda: sessionmaker(bind=db.get_bind())())
     monkeypatch.setattr(settings, "auth_enabled", False)
@@ -165,7 +166,7 @@ def test_bearer_fence_allows_only_retry_route(deletion_db):
     from app.auth import _resolve_bearer_user
     from app.models import ApiToken
     db, _ = deletion_db
-    db.add_all([AccountDeletionTombstone(owner_id="alice", status="failed"),
+    db.add_all([AccountDeletionTombstone(owner_id=tombstone_key("alice"), status="failed"),
                 ApiToken(owner_id="alice", name="phone", token_hash=hash_token("secret"), token_prefix="secret")])
     db.commit()
     request = SimpleNamespace(url=SimpleNamespace(path="/api/files"), method="GET", headers={"authorization": "Bearer secret"}, client=None)
@@ -174,16 +175,26 @@ def test_bearer_fence_allows_only_retry_route(deletion_db):
     assert _resolve_bearer_user(request, db)["id"] == "alice"
 
 
-def test_disabled_indexes_do_not_block(deletion_db, monkeypatch):
+def test_configured_indexes_are_cleaned_even_when_disabled(deletion_db, monkeypatch):
+    from unittest.mock import MagicMock
+    import meilisearch
     from app.config import settings
+    from app.utils.vector_index import QdrantVectorIndex
     db, root = deletion_db
     monkeypatch.setattr(settings, "enable_search", False)
     monkeypatch.setattr(settings, "vector_index_enabled", False)
+    client = MagicMock()
+    client.wait_for_task.return_value.status = "succeeded"
+    monkeypatch.setattr(meilisearch, "Client", lambda **kwargs: client)
+    vector_delete = MagicMock()
+    monkeypatch.setattr(QdrantVectorIndex, "delete_documents", vector_delete)
     path = root / "file.pdf"
     path.write_bytes(b"x")
     db.add(_file("alice", path))
     db.commit()
     assert delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)["status"] == "deleted"
+    client.get_index.return_value.delete_document.assert_called_once()
+    vector_delete.assert_called_once()
     assert not path.exists()
 
 
@@ -202,7 +213,62 @@ def test_database_cleanup_failure_is_retryable(deletion_db, monkeypatch):
     monkeypatch.setattr(service, "_delete_mapped_owner_rows", fail)
     with pytest.raises(AccountDeletionError):
         delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)
-    assert db.query(AccountDeletionTombstone).filter_by(owner_id="alice").one().status == "failed"
+    assert db.query(AccountDeletionTombstone).filter_by(owner_id=tombstone_key("alice")).one().status == "failed"
     assert db.query(FileRecord).filter_by(owner_id="alice").count() == 1
     monkeypatch.setattr(service, "_delete_mapped_owner_rows", original)
     assert delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)["status"] == "deleted"
+
+
+def test_other_owner_references_and_local_username_are_preserved(deletion_db, monkeypatch):
+    from app.models import DocumentComment, LocalUser, Pipeline, PipelineRoutingRule
+    monkeypatch.setattr("app.services.account_deletion._delete_external_indexes", lambda *args: None)
+    db, root = deletion_db
+    alice = _file("alice", root / "alice.pdf")
+    bob = _file("bob", root / "bob.pdf")
+    pipeline = Pipeline(owner_id="alice", name="private")
+    db.add_all([alice, bob, pipeline, LocalUser(email="bob@example.com", username="alice", hashed_password="x")])
+    db.flush()
+    rule = PipelineRoutingRule(owner_id="alice", name="r", field="filename", operator="equals", value="x", target_pipeline_id=pipeline.id)
+    db.add(rule)
+    db.flush()
+    bob.duplicate_of_id, bob.pipeline_id, bob.pipeline_routing_rule_id = alice.id, pipeline.id, rule.id
+    comment = DocumentComment(file_id=bob.id, user_id="alice", body="hello")
+    db.add(comment)
+    db.flush()
+    reply = DocumentComment(file_id=bob.id, user_id="bob", body="reply", parent_id=comment.id)
+    db.add(reply)
+    db.commit()
+    bob_id, reply_id = bob.id, reply.id
+    delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)
+    db.expire_all()
+    survivor = db.get(FileRecord, bob_id)
+    assert (survivor.duplicate_of_id, survivor.pipeline_id, survivor.pipeline_routing_rule_id) == (None, None, None)
+    assert db.get(DocumentComment, reply_id).parent_id is None
+    assert db.query(LocalUser).filter_by(email="bob@example.com").count() == 1
+    assert db.query(AccountDeletionTombstone).one().owner_id == tombstone_key("alice")
+
+
+def test_other_owner_intake_protects_shared_path(deletion_db, monkeypatch):
+    from app.models import DocumentIntake
+    monkeypatch.setattr("app.services.account_deletion._delete_external_indexes", lambda *args: None)
+    db, root = deletion_db
+    path = root / "shared.pdf"
+    path.write_bytes(b"data")
+    db.add_all([_file("alice", path), DocumentIntake(principal_id="bob", idempotency_key="k", source="upload", original_filename="shared.pdf", local_path=str(path))])
+    db.commit()
+    delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)
+    assert path.exists()
+
+
+def test_unconfigured_index_does_not_claim_cleanup(deletion_db, monkeypatch):
+    from app.config import settings
+    from app.services.account_deletion import AccountDeletionError
+    db, root = deletion_db
+    monkeypatch.setattr(settings, "meilisearch_url", "")
+    db.add(_file("alice", root / "file.pdf"))
+    db.commit()
+    with pytest.raises(AccountDeletionError):
+        delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)
+    row = db.query(AccountDeletionTombstone).one()
+    assert row.status == "failed" and row.cleanup_manifest
+    assert db.query(FileRecord).filter_by(owner_id="alice").count() == 1

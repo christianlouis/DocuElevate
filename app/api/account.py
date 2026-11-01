@@ -44,8 +44,9 @@ async def delete_my_account(request: Request, payload: AccountDeletionRequest, d
 @require_login
 async def account_deletion_status(request: Request, db: DbSession):
     from app.models import AccountDeletionTombstone
+    from app.services.account_deletion import tombstone_key
     owner_id = get_current_owner_id(request)
     if not owner_id or owner_id == "anonymous":
         raise HTTPException(status_code=401, detail="Authentication required")
-    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == owner_id).first()
+    row = db.query(AccountDeletionTombstone).filter(AccountDeletionTombstone.owner_id == tombstone_key(owner_id)).first()
     return {"status": row.status if row else "active"}

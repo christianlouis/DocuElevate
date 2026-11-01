@@ -319,10 +319,11 @@ def _deletion_fenced(request: Request, user, db=None) -> bool:
         return False
     from app.database import SessionLocal
     from app.models import AccountDeletionTombstone
+    from app.services.account_deletion import tombstone_key
     session = db or SessionLocal()
     try:
         return session.query(AccountDeletionTombstone).filter(
-            AccountDeletionTombstone.owner_id == owner,
+            AccountDeletionTombstone.owner_id == tombstone_key(owner),
             AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
         ).first() is not None
     except Exception:

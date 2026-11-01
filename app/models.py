@@ -635,8 +635,8 @@ class UserProfile(Base):
 class AccountDeletionTombstone(Base):
     """Durable account deletion state used to fence stale jobs and sessions.
 
-    Completed tombstones are intentionally retained without personal data.  A
-    worker seeing a deleting/deleted owner must never recreate records for it.
+    The owner identifier is a SHA-256 hash, retained as a pseudonymous fence;
+    it is not anonymous and may be guessable. Workers must respect the fence.
     """
 
     __tablename__ = "account_deletion_tombstones"
