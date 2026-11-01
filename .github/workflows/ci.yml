@@ -138,6 +138,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -155,6 +160,9 @@ jobs:
           --cov=app --cov-report=xml:coverage.xml
           --junitxml=junit.xml -o junit_family=legacy
           -m "not e2e"
+
+      - name: Run browser upload queue tests
+        run: node --test frontend/static/js/upload-bulk.test.js
 
       - name: Upload Unified Coverage to Codecov
         if: always()
