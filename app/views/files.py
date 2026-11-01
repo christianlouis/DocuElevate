@@ -885,9 +885,7 @@ def _compute_processing_flow(logs, pipeline_steps=None):
                 # Queue completion only means that a delivery task was handed
                 # off. Keep a terminal delivery result visible, except when a
                 # later queue record has a new dispatcher task id (a retry).
-                terminal_indexes = [
-                    index for index, entry in enumerate(upload_logs) if not entry["is_queue"]
-                ]
+                terminal_indexes = [index for index, entry in enumerate(upload_logs) if not entry["is_queue"]]
                 queue_indexes = [index for index, entry in enumerate(upload_logs) if entry["is_queue"]]
                 if not terminal_indexes:
                     latest_upload = upload_logs[-1]
@@ -905,9 +903,7 @@ def _compute_processing_flow(logs, pipeline_steps=None):
                         }
                         is_new_attempt = latest_queue_id is not None and latest_queue_id not in prior_queue_ids
                         latest_upload = (
-                            upload_logs[latest_queue_index]
-                            if is_new_attempt
-                            else upload_logs[latest_terminal_index]
+                            upload_logs[latest_queue_index] if is_new_attempt else upload_logs[latest_terminal_index]
                         )
 
                 branch_status = latest_upload["status"]
