@@ -337,8 +337,11 @@
       progressContainer.className = "space-y-2";
       uploadProgress.appendChild(progressContainer);
 
-      // Use the shared processFiles function
-      processFiles(Array.from(e.target.files), progressContainer, statusMessage);
+      // Release the picker selection so another selection can be appended,
+      // including the same files for resuming a persisted queue.
+      const selectedFiles = Array.from(e.target.files);
+      e.target.value = "";
+      processFiles(selectedFiles, progressContainer, statusMessage);
     }
   }
 
