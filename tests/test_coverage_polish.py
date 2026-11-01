@@ -99,7 +99,7 @@ class TestDropboxPathExists:
 
         mock_unique.side_effect = capture_callback
 
-        result = upload_to_dropbox.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+        result = upload_to_dropbox.__wrapped__(str(test_file), file_id=1)
         assert result["status"] == "Completed"
 
 

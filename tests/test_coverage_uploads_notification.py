@@ -81,7 +81,7 @@ class TestUploadToS3Coverage:
             ms.s3_acl = ""
             mock_boto3.client.return_value = mock_s3
 
-            result = upload_to_s3.apply(args=[str(f)], kwargs={"file_id": 1}).get()
+            result = upload_to_s3.__wrapped__(str(f), file_id=1)
 
         uploaded_key = mock_s3.upload_file.call_args[0][2]
         assert uploaded_key == "docs/test.pdf"

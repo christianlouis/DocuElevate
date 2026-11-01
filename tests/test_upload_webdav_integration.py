@@ -210,7 +210,7 @@ class TestWebDAVIntegration:
 
             # Upload should fail with 401 Unauthorized
             with pytest.raises(Exception, match="Failed to upload.*401"):
-                upload_to_webdav.apply(args=[sample_text_file], kwargs={"file_id": 4}).get()
+                upload_to_webdav.__wrapped__(sample_text_file, file_id=4)
 
     def test_upload_multiple_files(self, webdav_server, sample_text_file, tmp_path):
         """Test uploading multiple files sequentially."""
@@ -240,7 +240,7 @@ class TestWebDAVIntegration:
             uploaded_files = []
 
             for idx, file_path in enumerate(files, start=1):
-                result = upload_to_webdav.apply(args=[file_path], kwargs={"file_id": idx + 10}).get()
+                result = upload_to_webdav.__wrapped__(file_path, file_id=idx + 10)
 
                 assert result["status"] == "Completed"
                 uploaded_files.append(os.path.basename(file_path))
@@ -271,7 +271,7 @@ class TestWebDAVIntegration:
             file1.write_text("Original content")
 
             # Upload first version
-            result1 = upload_to_webdav.apply(args=[str(file1)], kwargs={"file_id": 20}).get()
+            result1 = upload_to_webdav.__wrapped__(str(file1), file_id=20)
             assert result1["status"] == "Completed"
 
             # Verify first version
@@ -283,7 +283,7 @@ class TestWebDAVIntegration:
             file1.write_text("Updated content - version 2")
 
             # Upload second version
-            result2 = upload_to_webdav.apply(args=[str(file1)], kwargs={"file_id": 21}).get()
+            result2 = upload_to_webdav.__wrapped__(str(file1), file_id=21)
             assert result2["status"] == "Completed"
 
             # Verify file was overwritten
