@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}DocuElevate – Delete account{% endblock %}
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-3xl">
+  <h1 class="text-4xl font-bold mb-4">Delete your DocuElevate account</h1>
+  <div class="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-6">
+    <p class="font-semibold text-gray-900 mb-2">The self-service deletion flow is not available yet.</p>
+    <p class="text-gray-700">Until it is released, request deletion by emailing <a class="text-blue-600 hover:underline" href="mailto:docuelevate@christian-louis.de?subject=DocuElevate%20account%20deletion">docuelevate@christian-louis.de</a>. Include the account email address, but never include a password or document content.</p>
+  </div>
+  <section class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 class="text-2xl font-semibold mb-3">What will be handled</h2>
+    <p class="text-gray-700">The deletion request covers the DocuElevate account, account profile, stored source documents, OCR output, document metadata and configured integration credentials. Copies already written to a connected provider are managed under that provider's controls and may need separate removal there. We will review connected grants and queued processing as part of the completed deletion procedure.</p>
+  </section>
+  <section class="bg-white shadow rounded-lg p-6">
+    <h2 class="text-2xl font-semibold mb-3">Current process</h2>
+    <p class="text-gray-700">This is an interim, manual process. We will confirm the request and handle deletion under the privacy notice; self-service deletion is not available in the app yet.</p>
+    <p class="mt-4"><a class="text-blue-600 hover:underline" href="/privacy">Read the privacy notice</a> · <a class="text-blue-600 hover:underline" href="/support">Contact support</a></p>
+  </section>
+</div>
+{% endblock %}

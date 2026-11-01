@@ -39,6 +39,8 @@ Welcome to the DocuElevate documentation. This directory contains comprehensive 
 
 ## Additional Resources
 
+- [OAuth provider submissions](OAuthProviderSubmissionGuide.md) - Evidence-based preparation for Apple, Google, Dropbox and Microsoft, including scopes, redirects, reviewer evidence and the iCloud limitation.
+
 - [Contributing Guide](../CONTRIBUTING.md) - How to contribute to DocuElevate development
 - [License Information](../LICENSE) - Apache License 2.0 details
 

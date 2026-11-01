@@ -148,9 +148,19 @@ async def serve_about(request: Request):
 @router.get("/privacy", include_in_schema=False)
 async def serve_privacy(request: Request):
     """Serve the privacy policy page."""
-    # Pass the current date for the "Last Updated" field
-    current_date = date.today().strftime(_DATE_DISPLAY_FORMAT)
-    return templates.TemplateResponse("privacy.html", {"request": request, "current_date": current_date})
+    return templates.TemplateResponse("privacy.html", {"request": request, "policy_revision": "November 1, 2026"})
+
+
+@router.get("/support", include_in_schema=False)
+async def serve_support(request: Request):
+    """Serve public support and provider-review information."""
+    return templates.TemplateResponse("support.html", {"request": request})
+
+
+@router.get("/account/delete", include_in_schema=False)
+async def serve_account_deletion(request: Request):
+    """Explain the current account-deletion process until self-service ships."""
+    return templates.TemplateResponse("account_delete.html", {"request": request})
 
 
 @router.get("/imprint", include_in_schema=False)
