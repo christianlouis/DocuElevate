@@ -42,6 +42,26 @@ def mark_bulk_terminal_failure(file_id: int | None, error: str) -> None:
         ).update({"state": "failed", "error": str(error)[:1000]}, synchronize_session=False)
         db.commit()
 
+
+def _file_id_from_task_call(task: Task, args: tuple[Any, ...], kwargs: dict[str, Any]) -> int | None:
+    """Return a named ``file_id`` after binding a task's actual signature.
+
+    Celery preserves positional arguments in ``on_failure``. Several
+    document-pipeline tasks use a positional ``file_id``, so consulting only
+    ``kwargs`` would leave their accepted bulk uploads reserved forever.
+    """
+    import inspect
+
+    try:
+        signature = inspect.signature(task.run)
+        if "file_id" not in signature.parameters:
+            return None
+        file_id = signature.bind_partial(*args, **kwargs).arguments.get("file_id")
+    except (TypeError, ValueError):
+        return None
+    return file_id if isinstance(file_id, int) and not isinstance(file_id, bool) else None
+
+
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
@@ -152,11 +172,7 @@ class BaseTaskWithRetry(Task):
         without prematurely releasing pending retries.
         """
         try:
-            file_id = (kwargs or {}).get("file_id")
-            if file_id is None and args:
-                # File-id is keyword-only in the bulk pipeline; retain a
-                # conservative fallback for tasks whose first argument is it.
-                file_id = (kwargs or {}).get("file_id")
+            file_id = _file_id_from_task_call(self, tuple(args or ()), dict(kwargs or {}))
             if file_id is not None:
                 mark_bulk_terminal_failure(file_id, f"{self.name}: {str(exc)[:1000]}")
         except Exception:
