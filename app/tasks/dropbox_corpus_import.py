@@ -321,7 +321,44 @@ def _bounded_config_int(
     return min(value, maximum) if maximum is not None else value
 
 
+def _guard_owner_work(model, row_id, callback, db_session=None):
+    """Resolve ownership from the durable row, fence deletion, then re-read it."""
+    from contextlib import nullcontext
+
+    from app.services.account_deletion import DeletionBlocked, assert_account_active
+    from app.services.account_lifecycle_lock import account_lifecycle_lock
+
+    with nullcontext(db_session) if db_session is not None else SessionLocal() as db:
+        row = db.query(model).filter(model.id == row_id).first()
+        if not row:
+            return {"status": "skipped", "detail": "Import source not found"}
+        owner = row.owner_id
+        if not owner:
+            if settings.multi_user_enabled:
+                return {"status": "skipped", "detail": "Import owner unavailable"}
+            return callback()
+        with account_lifecycle_lock(db, owner, exclusive=False):
+            db.expire_all()
+            try:
+                assert_account_active(db, owner)
+            except DeletionBlocked:
+                return {"status": "skipped", "detail": "Account deletion"}
+            row = db.query(model).filter(model.id == row_id, model.owner_id == owner).first()
+            if not row:
+                return {"status": "skipped", "detail": "Import source not found"}
+            return callback()
+
+
 def queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
+    return _guard_owner_work(
+        UserIntegration,
+        integration_id,
+        lambda: _queue_dropbox_watch_sync(integration_id, db_session=db_session),
+        db_session,
+    )
+
+
+def _queue_dropbox_watch_sync(integration_id: int, db_session=None) -> dict:
     """Queue the initial true-up or the next cursor-based delta for a watch source."""
     owns_session = db_session is None
     db = db_session or SessionLocal()
@@ -708,7 +745,15 @@ def _import_file(
             _release_corpus_llm_tokens(reservation)
 
 
-def _run_dropbox_corpus_import(
+def _run_dropbox_corpus_import(self, job_id: str, *, lock_lost_event: Event | None = None) -> dict:
+    return _guard_owner_work(
+        DropboxImportJob,
+        job_id,
+        lambda: _run_dropbox_corpus_import_guarded(self, job_id, lock_lost_event=lock_lost_event),
+    )
+
+
+def _run_dropbox_corpus_import_guarded(
     self,
     job_id: str,
     *,
@@ -725,8 +770,8 @@ def _run_dropbox_corpus_import(
         if job.state == "completed":
             return {"status": "completed", "job_id": job.id}
         integration = db.query(UserIntegration).filter(UserIntegration.id == job.integration_id).first()
-        if not integration or not integration.is_active:
-            raise RuntimeError("Dropbox source integration is missing or inactive")
+        if not integration or not integration.is_active or integration.owner_id != job.owner_id:
+            raise RuntimeError("Dropbox source integration is missing, inactive, or has a different owner")
 
         try:
             config = json.loads(integration.config or "{}")
@@ -1186,6 +1231,11 @@ def _reconcile_stale_queued(
 
 @celery.task(base=BaseTaskWithRetry, bind=True, name="run_dropbox_corpus_ocr_backlog")
 def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
+    """Queue bounded OCR-only work while the owning account remains active."""
+    return _guard_owner_work(DropboxImportJob, job_id, lambda: _run_dropbox_corpus_ocr_backlog(job_id))
+
+
+def _run_dropbox_corpus_ocr_backlog(job_id: str) -> dict:
     """Queue bounded OCR-only work for scanned index-first corpus documents."""
     should_recheck = False
     recheck_delay = settings.corpus_backfill_ocr_recheck_seconds
@@ -1198,8 +1248,8 @@ def run_dropbox_corpus_ocr_backlog(self, job_id: str) -> dict:
         if not job:
             return {"status": "skipped", "detail": "Import job not found"}
         integration = db.query(UserIntegration).filter(UserIntegration.id == job.integration_id).first()
-        if not integration or not integration.is_active:
-            return {"status": "skipped", "detail": "Dropbox source integration is inactive"}
+        if not integration or not integration.is_active or integration.owner_id != job.owner_id:
+            return {"status": "skipped", "detail": "Dropbox source integration is inactive or has a different owner"}
         try:
             config = json.loads(integration.config or "{}")
         except (json.JSONDecodeError, TypeError):
