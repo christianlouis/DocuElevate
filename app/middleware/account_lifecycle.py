@@ -28,12 +28,18 @@ class AccountLifecycleMiddleware:
             or path.startswith("/social-callback/")
         ):
             return await self.app(scope, receive, send)
+        # Anonymous requests have no owner whose deletion fence can apply.
+        # Avoid opening a database session for them; this also keeps optional
+        # integrations usable when their own persistence probe is being tested.
+        session_user = request.session.get("user")
+        auth = request.headers.get("authorization", "")
+        if not isinstance(session_user, dict) and not auth.startswith("Bearer "):
+            return await self.app(scope, receive, send)
+
         db = SessionLocal()
         try:
-            user = request.session.get("user")
-            owner = _owner_id_from_user(user) if isinstance(user, dict) else None
+            owner = _owner_id_from_user(session_user) if isinstance(session_user, dict) else None
             owners = {owner} if owner else set()
-            auth = request.headers.get("authorization", "")
             if auth.startswith("Bearer "):
                 token = db.query(ApiToken).filter_by(token_hash=hash_token(auth[7:]), is_active=True).first()
                 if token and token.owner_id:

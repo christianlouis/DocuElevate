@@ -211,6 +211,28 @@ class TestInitDb:
                     "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
                 )
             )
+            # local_users was introduced before revision 026 and is required
+            # by the later signup-consent migration in the chain.
+            conn.execute(
+                text(
+                    "CREATE TABLE local_users ("
+                    "id INTEGER PRIMARY KEY, email VARCHAR(255) NOT NULL UNIQUE, "
+                    "username VARCHAR(64) NOT NULL UNIQUE, display_name VARCHAR(255), "
+                    "hashed_password VARCHAR(255) NOT NULL, is_active BOOLEAN NOT NULL DEFAULT 0, "
+                    "is_admin BOOLEAN NOT NULL DEFAULT 0, email_verification_token VARCHAR(128), "
+                    "email_verification_sent_at DATETIME, password_reset_token VARCHAR(128), "
+                    "password_reset_sent_at DATETIME, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                    "updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+                )
+            )
+            # user_profiles predates revision 026 and is altered by the
+            # signup-consent migration near the head of the chain.
+            conn.execute(
+                text(
+                    "CREATE TABLE user_profiles ("
+                    "id INTEGER PRIMARY KEY, user_id VARCHAR(255) NOT NULL)"
+                )
+            )
             conn.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
             conn.execute(text("INSERT INTO alembic_version VALUES ('026_add_scheduled_jobs')"))
 
