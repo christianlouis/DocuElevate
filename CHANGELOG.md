@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.191.1 (2026-11-01)
+
+### Bug Fixes
+
+- **ui**: Show all upload destinations and accurate delivery states
+  ([#1293](https://github.com/christianlouis/DocuElevate/pull/1293),
+  [`3d3b161`](https://github.com/christianlouis/DocuElevate/commit/3d3b1611a409968380cfce91a8c75f7b50af8954))
+
+
 ## v0.191.0 (2026-10-31)
 
 ### Bug Fixes
