@@ -56,6 +56,30 @@ test('preflight worker hashes a vector larger than one megabyte', async () => {
   assert.equal(result.sha256, crypto.createHash('sha256').update(bytes).digest('hex'));
 });
 
+test('reuses one long-lived preflight worker for multiple files', async () => {
+  let created = 0;
+  class FakeWorker {
+    constructor() { created += 1; }
+    postMessage(message) { queueMicrotask(() => this.onmessage({ data: { id: message.id, sha256: message.id, mime: 'text/plain' } })); }
+    terminate() {}
+  }
+  const { digest } = helpers({ Worker: FakeWorker });
+  const file = { name: 'x.txt', type: 'text/plain', size: 0 };
+  await digest({ key: 'one', file });
+  await digest({ key: 'two', file });
+  assert.equal(created, 1);
+});
+
+test('accepts a drop while another upload is running instead of blocking or replacing the queue', async () => {
+  const { Queue } = helpers({ _isAcceptedFile: () => true, MAX_FILE_SIZE: 10_000 });
+  const queue = new Queue(null, null); queue.running = true;
+  const file = { name: 'later.pdf', size: 3, lastModified: 1 };
+  await queue.enqueue([file]);
+  assert.equal(queue.pendingAdds.length, 1);
+  assert.equal(queue.pendingAdds[0][0], file);
+  assert.equal(queue.running, true);
+});
+
 test('reselect reconciliation preserves batch and client identities', () => {
   const { matchReselected } = helpers();
   const saved = [{ key: 'client-a', batchId: 'batch-1', name: 'a.pdf', size: 12, lastModified: 7 }];
