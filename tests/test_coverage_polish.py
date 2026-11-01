@@ -201,8 +201,8 @@ class TestRotatePdfPagesEdgeCases:
 
         mock_extract.delay = Mock()
 
-        # Exercise the rotation body directly; this unit test has no persisted
-        # FileRecord for the lifecycle task guard to validate.
+        # Exercise the provider body directly; lifecycle dispatch is outside
+        # this unit test's rotation-data contract.
         result = rotate_pdf_pages.run(
             "test.pdf", "some text", rotation_data={"not_a_number": "invalid", 0: 0}, file_id=1
         )

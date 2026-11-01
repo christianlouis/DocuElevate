@@ -166,7 +166,10 @@ def _central_session_factory(db_session, request):
                         owner_id="test-owner",
                     )
                 )
-            db_session.flush()
+            # Celery's task-prerun hook reloads settings through a separate
+            # SessionLocal.  Commit these fixture-only rows so that session
+            # can observe the synthetic records on the shared test engine.
+            db_session.commit()
         yield
 
 
