@@ -160,6 +160,8 @@ class BaseTaskWithRetry(Task):
             if not owner and "owner_id" in signature.parameters and not file_id:
                 owner = settings.default_owner_id
             if not owner:
+                if not settings.multi_user_enabled:
+                    return super().__call__(*args, **kwargs)
                 return {"status": "skipped", "reason": "owner_unavailable"}
             with account_lifecycle_lock(db, owner):
                 # The deletion could have fenced the owner while this task waited.

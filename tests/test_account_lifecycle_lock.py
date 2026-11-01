@@ -101,3 +101,49 @@ def test_unsupported_backend_fails_closed():
     with pytest.raises(RuntimeError, match="unsupported"):
         with account_lifecycle_lock(DB(), "alice", exclusive=True):
             pass
+
+
+def test_ownerless_single_user_task_runs(tmp_path, monkeypatch):
+    import app.database
+    from app.config import settings
+    from celery import Celery
+    engine = create_engine(f"sqlite:///{tmp_path / 'db.sqlite'}")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(app.database, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(settings, "multi_user_enabled", False)
+    class DocumentTask(BaseTaskWithRetry):
+        name = "test.ownerless"
+        def run(self, file_id=None):
+            return "ran"
+    task = Celery("test-ownerless").register_task(DocumentTask())
+    assert task() == "ran"
+    monkeypatch.setattr(settings, "multi_user_enabled", True)
+    assert task() == {"status": "skipped", "reason": "owner_unavailable"}
+
+
+def test_postgres_unlocks_when_task_raises():
+    import pytest
+    from unittest.mock import MagicMock
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    connection = db.get_bind.return_value.connect.return_value.__enter__.return_value
+    connection.execute.return_value.scalar.return_value = True
+    with pytest.raises(ValueError, match="crash"):
+        with account_lifecycle_lock(db, "alice"):
+            raise ValueError("crash")
+    assert connection.execute.call_count == 2
+    assert "pg_advisory_unlock_shared" in str(connection.execute.call_args.args[0])
+    connection.invalidate.assert_not_called()
+
+
+def test_postgres_failed_unlock_invalidates_connection():
+    import pytest
+    from unittest.mock import MagicMock
+    db = MagicMock()
+    db.get_bind.return_value.dialect.name = "postgresql"
+    connection = db.get_bind.return_value.connect.return_value.__enter__.return_value
+    connection.execute.side_effect = [MagicMock(), RuntimeError("connection failed")]
+    with pytest.raises(RuntimeError, match="connection failed"):
+        with account_lifecycle_lock(db, "alice", exclusive=True):
+            pass
+    connection.invalidate.assert_called_once()

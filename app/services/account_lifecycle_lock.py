@@ -45,7 +45,16 @@ def account_lifecycle_lock(db, owner_id: str, *, exclusive: bool = False):
                 yield
             finally:
                 held.pop(key, None)
-                connection.execute(text(f"SELECT pg_advisory_unlock{suffix}(:key)"), {"key": lock_id})
+                try:
+                    released = connection.execute(
+                        text(f"SELECT pg_advisory_unlock{suffix}(:key)"), {"key": lock_id}
+                    ).scalar()
+                    if released is not True:
+                        raise RuntimeError("PostgreSQL lifecycle lock was not released")
+                except BaseException:
+                    # A pooled session must never retain a session-level lock.
+                    connection.invalidate()
+                    raise
     elif dialect == "sqlite":
         with _registry_guard:
             lock = _thread_locks.setdefault(key, threading.RLock())
