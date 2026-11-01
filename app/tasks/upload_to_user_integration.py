@@ -38,9 +38,9 @@ FTP         credentials = {"password"}
 SFTP        credentials = {"password"} or {"private_key"}
             config      = {"host", "username", "port", "folder"}
 
-EMAIL       credentials = {"password"}
+EMAIL       credentials = {"username", "password"}
             config      = {"host", "username", "port", "recipient",
-                           "use_tls", "sender_name"}
+                           "use_tls", "sender", "sender_name"}
 
 PAPERLESS   credentials = {"api_token"}
             config      = {"host"}
@@ -386,20 +386,34 @@ def _upload_sftp(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], tas
     folder = cfg.get("folder") or ""
     password = creds.get("password") or ""
     private_key_text = creds.get("private_key") or ""
+    private_key_passphrase = creds.get("private_key_passphrase") or ""
     filename = os.path.basename(file_path)
 
     if not host:
         raise ValueError("SFTP integration is missing host in config")
 
     ssh = paramiko.SSHClient()
-    ssh.load_system_host_keys()
+    known_hosts_file = getattr(settings, "sftp_known_hosts_file", None) or cfg.get("known_hosts_file")
+    if known_hosts_file:
+        ssh.load_host_keys(known_hosts_file)
+    else:
+        ssh.load_system_host_keys()
     ssh.set_missing_host_key_policy(paramiko.RejectPolicy())
 
     connect_kwargs: dict[str, Any] = {"hostname": host, "port": port, "username": username}
     if private_key_text:
         import io
 
-        pkey = paramiko.RSAKey.from_private_key(io.StringIO(private_key_text))
+        key_kwargs = {"password": private_key_passphrase} if private_key_passphrase else {}
+        pkey = None
+        for key_type in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.DSSKey):
+            try:
+                pkey = key_type.from_private_key(io.StringIO(private_key_text), **key_kwargs)
+                break
+            except (paramiko.SSHException, ValueError):
+                continue
+        if pkey is None:
+            raise ValueError("SFTP private_key could not be parsed")
         connect_kwargs["pkey"] = pkey
     elif password:
         connect_kwargs["password"] = password
@@ -478,30 +492,50 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     return {"status": "Completed", "paperless_host": host, "paperless_document_id": doc_id}
 
 
-def _upload_email(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
+def _upload_email(
+    file_path: str,
+    cfg: dict[str, Any],
+    creds: dict[str, Any],
+    task_id: str,
+    *,
+    file_id: int | None = None,
+) -> dict[str, Any]:
     """Send *file_path* as an email attachment using per-user SMTP credentials."""
     import smtplib
     from email.mime.application import MIMEApplication
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+    from email.utils import parseaddr
 
     host = cfg.get("host") or ""
     port = int(cfg.get("port") or 587)
-    username = cfg.get("username") or ""
+    username = creds.get("username") or cfg.get("username") or ""
     recipient = cfg.get("recipient") or ""
     use_tls = cfg.get("use_tls", True)
     sender_name = cfg.get("sender_name") or "DocuElevate"
+    sender = cfg.get("sender") or ""
     password = creds.get("password") or ""
     filename = os.path.basename(file_path)
 
     if not (host and recipient):
         raise ValueError("Email integration is missing host or recipient in config")
 
+    # Postmark and similar SMTP providers use a token as the login username.
+    # Never put that credential in the message headers; use an explicit sender
+    # address, with a legacy username fallback only when it is an email.
+    sender = sender.strip() or username.strip()
+    parsed_sender = parseaddr(sender)[1]
+    if not parsed_sender or parsed_sender != sender or "@" not in parsed_sender:
+        raise ValueError("Email integration requires a valid sender address in config")
+
     msg = MIMEMultipart()
-    msg["From"] = f"{sender_name} <{username}>" if username else sender_name
+    msg["From"] = f"{sender_name} <{sender}>" if sender_name else sender
     msg["To"] = recipient
     msg["Subject"] = f"Document: {filename}"
-    msg.attach(MIMEText(f"Please find the attached document: {filename}", "plain"))
+    body = f"Please find the attached document: {filename}"
+    if file_id is not None:
+        body += f"\n\nView it in DocuElevate: https://app.docuelevate.org/files/{file_id}"
+    msg.attach(MIMEText(body, "plain"))
 
     with open(file_path, "rb") as fh:
         part = MIMEApplication(fh.read(), Name=filename)
@@ -885,6 +919,8 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
             result = handler(file_path, cfg, creds, task_id, file_id=file_id)
             notion_page_created = True
         elif itype == IntegrationType.EVERNOTE:
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
+        elif itype == IntegrationType.EMAIL:
             result = handler(file_path, cfg, creds, task_id, file_id=file_id)
         else:
             result = handler(file_path, cfg, creds, task_id)

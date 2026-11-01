@@ -796,6 +796,7 @@ class Settings(BaseSettings):
     sftp_folder: Optional[str] = None
     sftp_private_key: Optional[str] = None
     sftp_private_key_passphrase: Optional[str] = None
+    sftp_known_hosts_file: Optional[str] = None
     # Security: Host key verification is enabled by default for security
     # In development/testing, set to True to disable verification (not recommended)
     sftp_disable_host_key_verification: bool = False  # Default enforces host key verification

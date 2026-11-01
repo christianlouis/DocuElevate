@@ -705,12 +705,86 @@ class TestUploadEmail:
         with patch("smtplib.SMTP", mock_smtp_class):
             result = self._call(
                 fp,
-                {"host": "smtp.example.com", "recipient": "r@ex.com", "use_tls": False},
+                {
+                    "host": "smtp.example.com",
+                    "username": "legacy-sender@example.com",
+                    "recipient": "r@ex.com",
+                    "use_tls": False,
+                },
                 {},
             )
 
         mock_smtp_instance.starttls.assert_not_called()
         assert result["status"] == "Completed"
+
+    def test_postmark_token_is_login_only_and_file_link_is_in_body(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp, b"pdf payload")
+        smtp = MagicMock()
+        smtp.__enter__ = MagicMock(return_value=smtp)
+        smtp.__exit__ = MagicMock(return_value=False)
+
+        with patch("smtplib.SMTP", return_value=smtp):
+            result = self._call(
+                fp,
+                {
+                    "host": "smtp.postmarkapp.com",
+                    "port": 587,
+                    "sender": "archive@example.com",
+                    "recipient": "evernote@example.com",
+                    "use_tls": True,
+                },
+                {"username": "postmark-server-token", "password": "secret"},
+            )
+
+        message = smtp.sendmail.call_args.args[2]
+        assert "archive@example.com" in message
+        assert "postmark-server-token" not in message
+        assert "https://app.docuelevate.org/files/42" not in message
+        assert result["status"] == "Completed"
+
+    def test_file_id_link_and_attachment_are_sent_without_global_settings(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp, b"pdf payload")
+        smtp = MagicMock()
+        smtp.__enter__ = MagicMock(return_value=smtp)
+        smtp.__exit__ = MagicMock(return_value=False)
+
+        with patch("smtplib.SMTP", return_value=smtp):
+            self._call(
+                fp,
+                {
+                    "host": "smtp.postmarkapp.com",
+                    "sender": "archive@example.com",
+                    "recipient": "evernote@example.com",
+                },
+                {"username": "postmark-server-token", "password": "secret"},
+            )
+            # The helper deliberately takes all personal SMTP inputs from cfg/creds.
+            from app.tasks import upload_to_user_integration as module
+
+            with patch.object(module, "settings", MagicMock(side_effect=AssertionError("global settings used"))):
+                module._upload_email(
+                    fp,
+                    {
+                        "host": "smtp.postmarkapp.com",
+                        "sender": "archive@example.com",
+                        "recipient": "evernote@example.com",
+                    },
+                    {"username": "postmark-server-token", "password": "secret"},
+                    TASK_ID,
+                    file_id=42,
+                )
+
+        message = smtp.sendmail.call_args.args[2]
+        from email import message_from_string
+
+        parsed = message_from_string(message)
+        assert "https://app.docuelevate.org/files/42" in message
+        attachments = list(parsed.iter_attachments())
+        assert attachments and attachments[0].get_filename() == "doc.pdf"
+        assert attachments[0].get_payload(decode=True) == b"pdf payload"
+        assert "postmark-server-token" not in message
 
 
 # ---------------------------------------------------------------------------
