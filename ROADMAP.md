@@ -1,302 +1,120 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-07-19
-**Version:** 2.3
+**Last updated:** 2026-10-30
 
-## Vision
+## Vision and planning rules
 
-DocuElevate aims to be the premier open-source intelligent document processing platform, providing seamless integration with cloud storage providers, advanced AI-powered metadata extraction, and enterprise-grade security and scalability.
+DocuElevate helps people and teams ingest, understand, find, and safely route documents. This roadmap describes product outcomes and sequencing; GitHub issues and milestones remain authoritative for scoped work and current status. A merged change or available code is evidence of a foundation, not proof that a complete user journey is accepted. Track implementation, acceptance, and live operational verification separately.
 
-## How to Read This Roadmap
+The project ships through automated semantic versioning. The verified repository version for this review is **0.189.1**; it does not indicate completion of any named planning track or predict the next release. Dates below are the existing GitHub milestone targets, retained as planning targets rather than delivery promises.
 
-DocuElevate ships frequently (automated semantic versioning), so this roadmap is organized around **milestone outcomes** and **themes**, not exact build numbers.
+## Cross-cutting security and recovery gate
 
-- **P0** = required for the milestone to feel “done”
-- **P1** = strongly desired; may slip if needed
-- **P2** = nice-to-have / opportunistic
+Credential exposure, security/privacy gaps, and recovery risks are always active gates, not work deferred until after product features. Protect and rotate affected credentials ([#1162](https://github.com/christianlouis/DocuElevate/issues/1162)); maintain tenant/privacy boundaries; address single-host loss and backup integrity ([#902](https://github.com/christianlouis/DocuElevate/issues/902), [#1190](https://github.com/christianlouis/DocuElevate/issues/1190)–[#1193](https://github.com/christianlouis/DocuElevate/issues/1193)); and require the separate explicit production approval ([#1201](https://github.com/christianlouis/DocuElevate/issues/1201)). Prioritize product work below after or alongside these gates, based on impact and evidence. Do not infer current live deployment state from this roadmap.
 
-For the detailed milestone breakdown and target dates, see [MILESTONES.md](MILESTONES.md).
+## Delivery sequence
 
-## Current Focus and Delivery Order
+### 1. Useful fresh installation
 
-The automated release number (`0.188.2` at the time of this review) is independent
-from the named planning anchors below. The team should execute work in dependency
-order, not in numeric-anchor order:
+Make a new installation usable from setup through the first successfully processed and retrievable document ([#1134](https://github.com/christianlouis/DocuElevate/issues/1134), [#1151](https://github.com/christianlouis/DocuElevate/issues/1151)).
 
-1. **Close the active security and privacy gaps** — rotate the affected Preprod
-   credentials (#1162), complete owner/Tribe assignment for legacy corpora, and
-   keep secret values out of GitOps, diagnostics, and browser responses. The
-   single-user privacy regression (#1170) is closed; its guardrails stay mandatory.
-2. **Make a clean installation genuinely useful** — finish the disposable
-   fresh-install journey (#1134, #1151), including integrations, a first processed
-   document, a second isolated user, recovery paths, and browser E2E evidence.
-3. **Complete Family/Tribe document separation** — deliver recipient profiles,
-   explainable classification, per-user routing, review, invitations, delegated
-   administration, and owner-controlled privacy (#1142–#1147).
-4. **Finish retrieval quality rather than widening brute-force context** — tune
-   hybrid ranking (#871), add an evaluation harness (#880), and only then close
-   Chat with Library (#478) against cited-answer quality and latency targets.
-5. **Remove operational single points of failure** — executable backup creation
-   and restore acceptance are complete (#1062, #1102). Next, make credential
-   monitor state transactional (#1190), verify protected archives before retention
-   (#1191), account for abandoned partial archives (#1192), estimate first-backup
-   capacity conservatively (#1193), harden maintenance monitors (#1103, #1121),
-   and finish the single-host-loss resilience plan (#902).
-6. **Build later enterprise and ecosystem layers on proven contracts** — workflow
-   editing, RBAC, full organization management, audit, plugins, governance, MCP,
-   and agent actions remain sequenced behind the user-facing foundations above.
+**Acceptance:** a clean install can configure, test, skip, and resume optional integrations; configure AI or choose no AI; ingest and process a first document; create a second user with verified isolation; recover from interrupted setup; and complete the journey in browser E2E. Record a repeatable result against a supported deployment profile.
 
-GitHub issues and milestones are the source of truth for executable scope. This
-document explains sequencing and product intent; it should not duplicate a sprint
-backlog.
+### 2. Complete the Family/Tribe shared-intake journey
 
-Production promotion is not implied by a merge or Preprod acceptance. The
-production deployment remains pinned to its explicitly approved Evergreen legacy
-image until a separate manual production approval is given.
+Tenant/Tribe fields, personal Tribes, quarantine, scoped SQL/Qdrant access, and optional shared Family/Team onboarding exist ([#1155](https://github.com/christianlouis/DocuElevate/pull/1155), [#1168](https://github.com/christianlouis/DocuElevate/pull/1168)). Canonical `is_private` enforcement, owner override, privacy controls for filename/OCR/metadata, preview and retroactive application, link revocation, and index reconciliation are also implemented ([#1147](https://github.com/christianlouis/DocuElevate/issues/1147), [#1152](https://github.com/christianlouis/DocuElevate/pull/1152), [#1155](https://github.com/christianlouis/DocuElevate/pull/1155)). These foundations do not yet establish a complete shared workflow.
 
-The current issue inventory also contains post-merge follow-ups. Before starting
-one, verify it against `main` and existing regression tests; close already-delivered
-findings with evidence instead of carrying stale work forward.
+Complete invitations and consent, membership, shared-intake administration, recipient profiles and explainable classification, authorized per-member destinations, delegated routing, review and historical-document handling, and multi-identity browser acceptance ([#1142](https://github.com/christianlouis/DocuElevate/issues/1142)–[#1147](https://github.com/christianlouis/DocuElevate/issues/1147)). Broader natural-language matching remains a product goal; do not claim universal matching quality without evaluation.
 
-## Preprod Pilot: DearConcierge Knowledge Bridge
+**Acceptance:** an owner can invite members, collect consent, ingest or review a shared document, explain its proposed recipient, route it only to authorized destinations, correct/review the result, and revoke access. Tests and browser E2E cover personal/shared boundaries, privacy choices, existing documents, and multiple identities; access revocation is reflected in retrieval/index behavior.
 
-The first agent-facing document retrieval pilot is deliberately isolated in the
-new DocuElevate preprod line. Production remains pinned to the Evergreen legacy
-release. Delivery is split into independently reversible slices:
+### 3. Measurable retrieval, chat, and AI quality
 
-1. **P0 — Authenticated document intake**
-   - Accept a multipart document plus source metadata through a dedicated intake endpoint.
-   - Reuse DocuElevate API Bearer tokens and OAuth sessions; optionally accept a
-     separately configured shared intake secret for machine-to-machine migration.
-   - Write to the existing work directory and enqueue the normal processing pipeline.
-   - Make an idempotency key mandatory for automated senders so retries cannot create duplicates.
-2. **P0 — Legacy document bridge**
-   - Add an optional outbound destination that sends the completed document bytes and
-     provenance metadata to the preprod intake endpoint.
-   - Keep the bridge disabled by default and isolated from processing success: delivery
-     failures are retryable and observable but never invalidate the legacy document.
-   - Retrofit only this bounded sender into Evergreen after it passes preprod contract tests.
-3. **P0 — Dropbox collection import**
-   - Import an existing Dropbox tree recursively without deleting source files.
-   - Persist a cursor/checkpoint and Dropbox revision per source object so the import is
-     resumable and re-runs only changed content.
-   - Route every downloaded file through the same authenticated intake/processing contract.
-4. **P0 — Chunk-level vector index**
-   - Split complete OCR text into overlapping token-aware chunks and store source-backed
-     payloads in a private Qdrant collection.
-   - Keep the existing whole-document embedding for duplicate detection; vector export is
-     optional and idempotent.
-   - Provide explicit backfill and health/status operations for the existing corpus.
-5. **P0 — Complete lexical corpus index**
-   - Reconcile every processed, non-duplicate document into Meilisearch without a
-     fixed corpus-size ceiling.
-   - Use bounded, resumable bulk updates on a dedicated worker and expose the
-     remaining gap so exhaustive answers cannot silently claim incomplete coverage.
-6. **P0 — DearConcierge retrieval contract**
-   - Expose authenticated semantic search and cited full-text retrieval with DocuElevate's
-     existing owner/share checks applied to every result.
-   - Support OAuth browser sessions and personal Bearer tokens first; add an MCP adapter as
-     a thin client over the same API rather than duplicating authorization logic.
-7. **P0 — Preprod acceptance and promotion gate**
-   - Prove retry/idempotency, owner isolation, Dropbox resume, vector backfill, citation
-     retrieval, and end-to-end DearConcierge queries in preprod.
-   - Do not change the production image or enable the Evergreen sender without a separate,
-     explicit production approval.
+Search, hybrid scoring, ranking explanations, metadata fallback, semantic and lexical retrieval, chat/research APIs, citations, coverage reporting, and an extraction evaluation harness already exist ([#477](https://github.com/christianlouis/DocuElevate/issues/477), [#478](https://github.com/christianlouis/DocuElevate/issues/478), [#480](https://github.com/christianlouis/DocuElevate/issues/480), [#880](https://github.com/christianlouis/DocuElevate/issues/880)). Saved searches, preview, and bulk operations are tracked as delivered in the Clarity epic ([#870](https://github.com/christianlouis/DocuElevate/issues/870), [#872](https://github.com/christianlouis/DocuElevate/issues/872), [#873](https://github.com/christianlouis/DocuElevate/issues/873)). Local AI support also exists through LiteLLM/Ollama for extraction; broader private local embedding and query flows remain ([#479](https://github.com/christianlouis/DocuElevate/issues/479)). These capabilities still need representative acceptance and quality evidence.
 
-The detailed contract, security boundaries, rollout order, and acceptance evidence are
-maintained in [docs/DearConciergeKnowledgeBridge.md](docs/DearConciergeKnowledgeBridge.md).
+Complete relevance tuning and user-facing explanations/configuration ([#871](https://github.com/christianlouis/DocuElevate/issues/871)); measure cited chat outcomes, latency, and corpus coverage ([#478](https://github.com/christianlouis/DocuElevate/issues/478)); and extend extraction evaluation with representative fixtures, CI quality reports, calibration, and regression criteria ([#880](https://github.com/christianlouis/DocuElevate/issues/880)). Add per-field confidence ([#878](https://github.com/christianlouis/DocuElevate/issues/878)) and extraction review ([#879](https://github.com/christianlouis/DocuElevate/issues/879)), then feedback workflows where issue scope requires. Stabilize the versioned tenant-scoped consumer contract ([#1082](https://github.com/christianlouis/DocuElevate/issues/1082)). Continue multilingual and large-document work ([#198](https://github.com/christianlouis/DocuElevate/issues/198), [#881](https://github.com/christianlouis/DocuElevate/issues/881), [#1189](https://github.com/christianlouis/DocuElevate/issues/1189), [#1066](https://github.com/christianlouis/DocuElevate/issues/1066), [#1090](https://github.com/christianlouis/DocuElevate/issues/1090), [#1091](https://github.com/christianlouis/DocuElevate/issues/1091)).
+
+**Acceptance:** published, reproducible retrieval and extraction evaluation sets report baseline and changed results; regressions have agreed thresholds; chat answers cite source documents and disclose incomplete coverage; latency and relevance targets are recorded; representative users can inspect why results matched and review/correct extraction. Local private embeddings/query acceptance is separately documented before claiming end-to-end local AI.
+
+### 4. Operational reliability and security gates
+
+Operational foundations include executable backup/restore work and monitor retry/transient database recovery ([#1062](https://github.com/christianlouis/DocuElevate/issues/1062), [#1102](https://github.com/christianlouis/DocuElevate/issues/1102), [#1276](https://github.com/christianlouis/DocuElevate/pull/1276)), bounded OCR/IMAP resources and telemetry privacy ([#1280](https://github.com/christianlouis/DocuElevate/pull/1280)), plus shared archive and credential improvements. Follow-up work remains in host-loss resilience ([#902](https://github.com/christianlouis/DocuElevate/issues/902)), atomic credential state ([#1190](https://github.com/christianlouis/DocuElevate/issues/1190)), archive integrity and partial-archive accounting ([#1191](https://github.com/christianlouis/DocuElevate/issues/1191), [#1192](https://github.com/christianlouis/DocuElevate/issues/1192)), initial backup sizing ([#1193](https://github.com/christianlouis/DocuElevate/issues/1193)), and monitor recovery ([#1121](https://github.com/christianlouis/DocuElevate/issues/1121)). Credential rotation ([#1162](https://github.com/christianlouis/DocuElevate/issues/1162)) and explicit production approval ([#1201](https://github.com/christianlouis/DocuElevate/issues/1201)) remain tracked. Verify current evidence before closing any item; do not repeat already-remediated monitor defects as absent.
+
+**Acceptance:** documented restore and host-loss exercises meet recorded recovery objectives; backup integrity and capacity checks pass; credential rotation and recovery are evidenced; telemetry and diagnostic output meet privacy constraints; deployment promotion has a named, explicit approval and a read-back of the selected artifact/configuration. This roadmap makes no claim about the currently deployed production image or configuration.
+
+### 5. Workflow authoring and integration
+
+Existing processing pipelines and service polling are not a general workflow authoring or scheduling product. Deliver editable, versioned workflows with execution status, retry/recovery, recurring and delayed triggers, and reusable starter templates ([#875](https://github.com/christianlouis/DocuElevate/issues/875)–[#877](https://github.com/christianlouis/DocuElevate/issues/877), [#885](https://github.com/christianlouis/DocuElevate/issues/885)). Complete bidirectional sync where supported ([#481](https://github.com/christianlouis/DocuElevate/issues/481)), and add a stable event/webhook contract ([#894](https://github.com/christianlouis/DocuElevate/issues/894)) with delivery observability and retries.
+
+**Acceptance:** an administrator can author, validate, version, publish, inspect, roll back, and safely retry a workflow; scheduled and event-triggered runs have documented idempotency and failure behavior; a starter template works end-to-end; connector sync can reconcile changes without silent loss or duplicate actions.
+
+### 6. Enterprise, governance, and ecosystem
+
+Build on proven tenant contracts: organization/team administration ([#199](https://github.com/christianlouis/DocuElevate/issues/199)), RBAC ([#200](https://github.com/christianlouis/DocuElevate/issues/200)), scale ([#201](https://github.com/christianlouis/DocuElevate/issues/201)), SLA ([#211](https://github.com/christianlouis/DocuElevate/issues/211)), admin activity feed ([#882](https://github.com/christianlouis/DocuElevate/issues/882)), SSO ([#883](https://github.com/christianlouis/DocuElevate/issues/883)), and organization quotas ([#884](https://github.com/christianlouis/DocuElevate/issues/884)). Basic audit capabilities, Stripe integration, user quotas, and Tribe boundaries are not equivalent to the full enterprise outcomes. Governance follows with retention ([#218](https://github.com/christianlouis/DocuElevate/issues/218)), legal hold ([#888](https://github.com/christianlouis/DocuElevate/issues/888)), PII controls ([#889](https://github.com/christianlouis/DocuElevate/issues/889)), tamper-evident audit ([#890](https://github.com/christianlouis/DocuElevate/issues/890)), KMS ([#891](https://github.com/christianlouis/DocuElevate/issues/891)), and policy management ([#892](https://github.com/christianlouis/DocuElevate/issues/892)).
+
+Per-user Notion and Evernote destinations are implemented; live setup and delivery acceptance with real provider accounts remains to be recorded. Read-only MCP stdio tools for document search and retrieval are delivered in contract v1.0 ([#1281](https://github.com/christianlouis/DocuElevate/pull/1281); [docs/MCP.md](docs/MCP.md)). Broader MCP scope remains: read-only API token scopes, summaries/actions/shared HTTP interoperability ([#893](https://github.com/christianlouis/DocuElevate/issues/893)). Durable signed webhooks ([#894](https://github.com/christianlouis/DocuElevate/issues/894)) and audited action permissions ([#896](https://github.com/christianlouis/DocuElevate/issues/896)) belong to the later interoperability layer. Plugin infrastructure, SDK, marketplace, and desktop application remain future ecosystem work ([#220](https://github.com/christianlouis/DocuElevate/issues/220), [#886](https://github.com/christianlouis/DocuElevate/issues/886), [#887](https://github.com/christianlouis/DocuElevate/issues/887), [#214](https://github.com/christianlouis/DocuElevate/issues/214)).
+
+**Acceptance:** enterprise isolation and permissions have cross-tenant tests and operational scale evidence; governance actions are auditable and policy enforcement is tested; integrations document supported scopes and recovery; MCP and agent actions have least-privilege authorization, revocation, and audit evidence. Do not equate basic audit/quotas or a read-only adapter with these broader outcomes.
+
+### Longer-horizon product ambitions
+
+These themes remain part of the product vision beyond near-term acceptance work. Sequence them through GitHub issues as needs and evidence develop.
+
+- **Search:** query suggestions, pinned results, entity search for people/companies/amounts/dates, and graph-style exploration.
+- **AI quality:** per-document-type schemas/templates, feedback-driven active learning, and multi-model routing by cost, latency, or accuracy.
+- **Enterprise and scale:** SCIM provisioning, deeper SAML/Okta/Azure AD support, organization billing, multi-region deployment, and disaster-recovery playbooks.
+- **Governance:** data residency controls, compliance packs (SOC 2/GDPR/HIPAA), and BYOK/KMS integration paths.
+- **Automation:** approval-gated agentic workflows, integration hub patterns, connector templates, and MCP tools as workflow steps.
+
+## Planning tracks
+
+| Track | GitHub milestone | Target date | Product emphasis |
+|---|---|---:|---|
+| Clarity | `Clarity - Enhanced Search & UI` ([#863](https://github.com/christianlouis/DocuElevate/issues/863)) | 2026-10-31 | Search relevance, discovery UX, and acceptance of delivered foundations |
+| Conductor | `Conductor - Workflow Automation` ([#864](https://github.com/christianlouis/DocuElevate/issues/864)) | 2027-01-31 | Workflow authoring, scheduling, and integrations |
+| Signal | `Signal - Advanced AI & Multi-language` ([#865](https://github.com/christianlouis/DocuElevate/issues/865)) | 2027-04-30 | Measurable retrieval, extraction quality, review, and localization |
+| Summit | `v1.0.0 - Enterprise Edition` ([#866](https://github.com/christianlouis/DocuElevate/issues/866)) | 2027-09-30 | Organization administration, access control, scale |
+| Horizon | `v2.0.0 - Platform Expansion` ([#867](https://github.com/christianlouis/DocuElevate/issues/867)) | 2028-03-31 | Plugins, SDK, connector and surface maturity |
+| Sentinel | `v2.1.0 - Governance & Policy (Sentinel)` ([#868](https://github.com/christianlouis/DocuElevate/issues/868)) | 2028-09-30 | Retention, legal hold, privacy, policy and audit |
+| Constellation | `v3.0.0 - Integration Hub & Agent Platform (Constellation)` ([#869](https://github.com/christianlouis/DocuElevate/issues/869)) | 2029-03-31 | Interoperability, event delivery, governed agent actions |
+
+Clarity's target is 2026-10-31; the open [#871](https://github.com/christianlouis/DocuElevate/issues/871) acceptance work means the date itself is not evidence of completion. Track names and future version anchors are planning labels, not guaranteed semantic-release versions. See [MILESTONES.md](MILESTONES.md) for recorded dates and status context.
+
+## Research bets
+
+Evaluate knowledge graphs, intent-based case files, privacy-preserving learning, and document provenance only when a measurable user benefit and safe operating model are established.
 
 ## Release Naming
 
-Selected delivery tracks carry codenames to mark key project moments. A planning
-track is not automatically a release codename: runtime names appear only when the
-actual semantic version matches an entry in `release_names.json`. Clarity,
-Conductor, and Signal are currently planning-track names because their former
-`0.6.x`–`0.8.x` version numbers have already shipped. For details, see
-[docs/ReleaseNaming.md](docs/ReleaseNaming.md).
-
-| Delivery Track | Codename        | Theme |
-|----------|------------------|-------|
-| Planning | **Clarity**      | Search, discovery, and modern UX |
-| Planning | **Conductor**    | Workflows, orchestration, and integrations |
-| Planning | **Signal**       | AI quality, multilingual, and “Chat with Library” foundations |
-| v1.0.0   | **Summit**       | Enterprise readiness (multi-tenancy, RBAC, scaling) |
-| v2.0.0   | **Horizon**      | Platform expansion and ecosystem maturity |
-| v2.1.0+  | **Sentinel**     | Governance, compliance, and policy-driven automation |
-| v3.0.0   | **Constellation**| Integration hub, agents, and interoperability |
-
-## Current Product Capabilities (Today)
-
-### Core Features ✅
-- Multi-channel ingestion (web upload, IMAP email, watched folders, mobile, CLI, API)
-- Multi-engine OCR + AI extraction with configurable providers
-- Customizable processing pipelines and routing rules
-- Full-text search and document discovery
-- Multi-destination distribution (cloud providers, DMS, protocols, email)
-- Admin UI for configuration (database-backed settings, encryption, setup wizard)
-- [x] Tenant/Tribe document boundary foundation with canonical per-file `is_private` enforcement
-- [x] Per-user onboarding creates an isolated personal Tribe and can create an initial shared Family/Team Tribe
-- [ ] Tribe membership, invitations, delegated routing administration, and explicit shared-intake UI (#1146)
-- Production hardening building blocks (CI/CD, security docs, deployment guides)
-
-## Feature Landscape (Themes)
-
-### 1) Search & Discovery
-- **P0:** hybrid search (keyword + semantic), fast faceted filtering, saved searches
-- **P1:** “explain results” (why a document matched), query suggestions, pinned results
-- **P2:** entity search (people/companies/amounts/dates) and graph-style exploration
-
-### 2) AI Quality & Trust
-- **P0:** confidence scoring, human review/edit loop, extraction evaluation harness
-- **P1:** per-document-type schemas/templates, active learning (feedback improves extraction)
-- **P2:** multi-model routing (choose model by cost/latency/accuracy per step)
-
-### 3) Workflow Automation & Orchestration
-- **P0:** first-class workflow model (steps, state, retries), workflow-aware UI status
-- **P1:** visual workflow builder, scheduling, webhooks, and event-driven triggers
-- **P2:** agentic workflows (“autopilot” suggestions with approval gates)
-
-### 4) Integrations & Ecosystem (Including MCP)
-- **P0:** stable webhooks + outbound actions (Slack/Teams, email, DMS), bi-directional sync where supported
-- **P1:** “Integration Hub” (Zapier/Make/n8n style), connector templates, secrets handling patterns
-- **P2:** **MCP**: ship a DocuElevate MCP server (search, retrieve, summarize, route) + allow MCP tools as pipeline steps
-
-### 5) Governance, Compliance, and Security
-- **P0:** audit trails, tamper-evident logs, API key lifecycle/rotation, admin activity feed
-- **P1:** retention policies, legal hold, PII detection + redaction, data residency controls
-- **P2:** compliance packs (SOC2/GDPR/HIPAA), BYOK/KMS integration paths
-
-### 6) Enterprise & Scale
-- **P0:** multi-tenancy, RBAC, horizontal scaling reference architecture
-- **P1:** SCIM provisioning, SAML/Okta/Azure AD hardening, quotas/billing at org level
-- **P2:** multi-region deployment patterns and disaster recovery playbooks
-
-## Release Plan (Extended)
-
-This plan extends the existing milestone anchors with a clearer thematic arc and a forward-looking “beyond v2.0” horizon. The anchor labels are planning references, not promises that the automated semantic-release stream will stay numerically below them. Each milestone links to an epic issue that owns scope and sub-issues.
-
-### Clarity (Search & UX)
-- **Outcome:** users can reliably find, preview, and act on documents in seconds
-- **P0:** semantic search + hybrid ranking, saved searches, fast filters, preview-first UX
-- **P1:** bulk operations, query suggestions, accessibility/dark mode polish
-- **Tracking:** GitHub milestone `Clarity - Enhanced Search & UI` (epic #863)
-
-### Conductor (Workflows & Integrations)
-- **Outcome:** workflows are explicit, inspectable, and automatable end-to-end
-- **P0:** workflow object model + workflow-aware UI status, retries, pipeline definitions
-- **P1:** workflow builder, scheduling, inbound/outbound webhooks
-- **P2:** integration templates + “connector marketplace” concepts
-- **Tracking:** GitHub milestone `Conductor - Workflow Automation` (epic #864)
-
-### Signal (AI Quality + “Chat with Library” Foundations)
-- **Outcome:** AI features are measurable, reviewable, and safe to trust
-- **P0:** vector DB + embeddings pipeline, chat UI foundations, local AI options
-- **P1:** confidence scoring and review loop, extraction evaluation harness
-- **P2:** multilingual UX + localization expansion
-- **Tracking:** GitHub milestone `Signal - Advanced AI & Multi-language` (epic #865)
-
-### v1.0.0 — Summit (Enterprise Readiness)
-- **Outcome:** teams can run DocuElevate with strong isolation, access control, and scale
-- **P0:** multi-tenancy, RBAC, audit logging, scaling guidance
-- **P1:** SSO hardening (SAML/LDAP), org-level quotas and billing hooks
-- **P2:** enterprise admin experience (policies, approvals, reporting)
-- **Tracking:** GitHub milestone `v1.0.0 - Enterprise Edition` (epic #866)
-
-### v2.0.0 — Horizon (Platform Expansion)
-- **Outcome:** DocuElevate becomes an extensible platform with a thriving ecosystem
-- **P0:** plugin system foundations, SDK + templates, deeper integrations
-- **P1:** marketplace patterns, app distribution, mobile/extension maturity
-- **P2:** multi-workspace experiences (personal + org)
-- **Tracking:** GitHub milestone `v2.0.0 - Platform Expansion` (epic #867)
-
-### v2.1.0+ — Sentinel (Governance & Policy)
-- **Outcome:** governance becomes a first-class layer (policy-driven automation)
-- **P0:** retention + legal hold, PII detection/redaction, tamper-evident audit trails
-- **P1:** BYOK/KMS integration patterns, advanced access policies, compliance reporting
-- **P2:** “policy as code” for workflows + approvals (change management)
-- **Tracking:** GitHub milestone `v2.1.0 - Governance & Policy (Sentinel)` (epic #868)
-
-### v3.0.0 — Constellation (Integration Hub & Agent Platform)
-- **Outcome:** DocuElevate plugs into modern automation and AI ecosystems as a first-class system of record
-- **P0:** MCP server, durable event stream + production-grade webhooks
-- **P1:** connector templates + curated catalog, agent-friendly permissioning and auditing
-- **P2:** bring-your-own-agent patterns (sandboxing, scoped credentials)
-- **Tracking:** GitHub milestone `v3.0.0 - Integration Hub & Agent Platform (Constellation)` (epic #869)
-
-## Research Bets (Optional / Experimental)
-
-These are longer-horizon bets that should only be productized if they prove real user value.
-
-- Knowledge graph over extracted entities (contracts ↔ vendors ↔ invoices)
-- Auto-generated “case files” (collections) from intent (“tax 2025”, “project alpha”)
-- Privacy-preserving learning (federated patterns) to improve extraction quality
-- Document provenance (signing, attestations) and tamper detection
+Planning tracks are distinct from runtime release codenames. A runtime name appears only when the actual semantic version matches an entry in `release_names.json`. Clarity, Conductor, and Signal remain planning-track names because their former `0.6.x`–`0.8.x` versions have already shipped. See [docs/ReleaseNaming.md](docs/ReleaseNaming.md).
 
 ## Community & Ecosystem
 
-### Developer Experience
-- [ ] Plugin system for custom processors
-- [ ] Marketplace for extensions
-- [ ] SDK for multiple languages (Python, JavaScript, Go)
-- [ ] Template library for common workflows
-- [ ] Video tutorials and courses
+### Developer experience
 
-### Documentation
-- [x] User guide
-- [x] API documentation
-- [x] Deployment guide
-- [ ] Architecture deep-dive
-- [ ] Contributing guide enhancements
-- [ ] Video walkthroughs
-- [ ] Internationalization (i18n) of docs
+- Plugin system for custom processors; marketplace for extensions; SDKs for Python, JavaScript, and Go; workflow template library; video tutorials and courses.
 
-### Community Building
-- [ ] Regular community calls
-- [ ] Bug bounty program
-- [ ] Ambassador program
-- [ ] Annual conference/meetup
-- [ ] Certification program
+### Documentation and community
+
+- Maintain user guide, API documentation, and deployment guide; add architecture deep-dive, contributor improvements, video walkthroughs, and translated documentation.
+- Consider community calls, a bug bounty, an ambassador program, annual events, and certification as the project and support model mature.
 
 ## Technology Debt
 
-### Refactoring Needed
-- [x] Migrate from PyPDF2 to pypdf (modern fork) - ✅ Completed 2026-02-12
-- [ ] Standardize error handling across modules
-- [ ] Consolidate configuration management
-- [ ] Optimize database queries
-- [ ] Reduce code duplication in storage providers
-
-### Performance Optimization
-- [ ] Profile and optimize hot paths
-- [ ] Implement lazy loading for UI
-- [ ] Add CDN for static assets
-- [ ] Optimize Docker image size
-- [ ] Database indexing strategy
+Track through issues: standardize error handling, consolidate configuration management, optimize database queries, reduce storage-provider duplication, profile hot paths, add UI lazy loading where useful, evaluate CDN/static asset delivery, reduce image size, and maintain a database indexing strategy. PyPDF2-to-pypdf migration is complete (2026-02-12).
 
 ## Deprecation Notice
 
-### Planned Deprecations
-- None currently planned
-
-### Migration Guides
-- Will be provided for any breaking changes
+No specific deprecations are currently planned. Breaking changes require migration guidance and a documented compatibility window; where applicable, preserve previous endpoint behavior for at least two minor milestones.
 
 ## How to Contribute
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines. Roadmap items are open for discussion and contributions!
-
-### Priority Labels
-- 🔴 Critical - Security, data loss, or major bugs
-- 🟠 High - Important features or significant improvements
-- 🟡 Medium - Nice-to-have features or minor improvements
-- 🟢 Low - Future considerations or research items
+See [CONTRIBUTING.md](CONTRIBUTING.md). Propose roadmap work through GitHub issues with user need, scope, and acceptance evidence; keep implementation tasks and status in GitHub.
 
 ## Feedback & Requests
 
-- **GitHub Issues:** Feature requests and bug reports
-- **GitHub Discussions:** General questions and ideas
-- **Email:** [Maintainer contact from repository]
+Use [GitHub Issues](https://github.com/christianlouis/DocuElevate/issues) for feature requests and bugs, and [GitHub Discussions](https://github.com/christianlouis/DocuElevate/discussions) for questions and broader product ideas.
 
 ---
 
-*This roadmap is a living document and may change based on community feedback, technical constraints, and strategic priorities.*
+*This roadmap is a living document and may change with community feedback, technical constraints, and product evidence.*
