@@ -37,7 +37,9 @@ class UnsafeDeletion(AccountDeletionError):
 
 def tombstone_key(owner_id: str) -> str:
     """Return a stable pseudonymous deletion fence for a canonical owner."""
-    return hashlib.sha256(owner_id.encode("utf-8")).hexdigest()
+    # This is an identity lookup key, never a password verifier or a secret.
+    # Mark its non-authentication purpose explicitly for security analyzers.
+    return hashlib.sha256(owner_id.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def deletion_blocked(db: Session, owner_id: str) -> bool:
