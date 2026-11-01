@@ -19,12 +19,48 @@ Usage::
 """
 
 import logging
+import math
 import random
 from typing import Any
 
 from celery import Task
 
 logger = logging.getLogger(__name__)
+
+
+def mark_bulk_terminal_failure(file_id: int | None, error: str) -> None:
+    """Persist a terminal bulk failure; the reconciler releases capacity."""
+    if file_id is None:
+        return
+    from app.database import SessionLocal
+    from app.models import UploadItem
+
+    with SessionLocal() as db:
+        db.query(UploadItem).filter(
+            UploadItem.file_id == file_id,
+            UploadItem.state.in_(("accepted", "queued", "processing")),
+        ).update({"state": "failed", "error": str(error)[:1000]}, synchronize_session=False)
+        db.commit()
+
+
+def _file_id_from_task_call(task: Task, args: tuple[Any, ...], kwargs: dict[str, Any]) -> int | None:
+    """Return a named ``file_id`` after binding a task's actual signature.
+
+    Celery preserves positional arguments in ``on_failure``. Several
+    document-pipeline tasks use a positional ``file_id``, so consulting only
+    ``kwargs`` would leave their accepted bulk uploads reserved forever.
+    """
+    import inspect
+
+    try:
+        signature = inspect.signature(task.run)
+        if "file_id" not in signature.parameters:
+            return None
+        file_id = signature.bind_partial(*args, **kwargs).arguments.get("file_id")
+    except (TypeError, ValueError):
+        return None
+    return file_id if isinstance(file_id, int) and not isinstance(file_id, bool) else None
+
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -120,11 +156,33 @@ class BaseTaskWithRetry(Task):
     #: (our retry() method injects the countdown instead).
     retry_kwargs: dict = {"max_retries": 3}
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Keep Celery task-specific retry options from mutating the base."""
+        super().__init_subclass__(**kwargs)
+        cls.retry_kwargs = dict(cls.retry_kwargs)
+
     #: Per-retry countdown values (seconds).  ``None`` → settings / DEFAULT.
     retry_delays: list[int] | None = None
 
     #: Apply ±20 % random jitter to prevent thundering-herd problems.
     retry_jitter: bool = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        """Persist a durable terminal signal after Celery exhausts retries.
+
+        ``log_task_progress`` records individual attempts and therefore cannot
+        distinguish a retryable failure from an exhausted task.  The Celery
+        lifecycle callback is only called for the final failure, so marking
+        the accepted upload here lets the capacity reconciler release it
+        without prematurely releasing pending retries.
+        """
+        try:
+            file_id = _file_id_from_task_call(self, tuple(args or ()), dict(kwargs or {}))
+            if file_id is not None:
+                mark_bulk_terminal_failure(file_id, f"{self.name}: {str(exc)[:1000]}")
+        except Exception:
+            logger.warning("Could not persist terminal bulk-upload failure for %s", task_id, exc_info=True)
+        return super().on_failure(exc, task_id, args, kwargs, einfo)
 
     # ------------------------------------------------------------------
     # Public API
@@ -194,11 +252,32 @@ class BaseTaskWithRetry(Task):
         countdown is computed via :func:`compute_countdown` using this task's
         :attr:`retry_delays` and :attr:`retry_jitter` settings.
         """
+        quota_retry = False
+        if exc is not None:
+            try:
+                from app.utils.provider_limits import ProviderQuotaError  # noqa: PLC0415
+
+                quota_retry = isinstance(exc, ProviderQuotaError)
+            except ImportError:  # pragma: no cover - defensive import guard
+                pass
+        if quota_retry:
+            try:
+                from app.config import settings  # noqa: PLC0415
+
+                max_retries = int(getattr(settings, "provider_limits_max_retries", 20))
+            except (ImportError, TypeError, ValueError):  # pragma: no cover
+                max_retries = 20
+
         if countdown is None and eta is None:
-            countdown = compute_countdown(
-                retries=self.request.retries,
-                base_delays=self._effective_retry_delays(),
-                jitter=self.retry_jitter,
+            hinted = getattr(exc, "retry_after", None) if exc is not None else None
+            countdown = (
+                max(1, math.ceil(float(hinted)))
+                if hinted is not None
+                else compute_countdown(
+                    retries=self.request.retries,
+                    base_delays=self._effective_retry_delays(),
+                    jitter=self.retry_jitter,
+                )
             )
             logger.debug(
                 "Retry %d/%d for task %s in %d s",

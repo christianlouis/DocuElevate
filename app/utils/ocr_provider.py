@@ -51,6 +51,13 @@ from contextlib import closing
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from app.config import settings
+from app.utils.provider_limits import (
+    ProviderRateLimited,
+    acquire,
+    record_cooldown,
+    release,
+    retry_after_from_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -368,35 +375,63 @@ class AzureOCRProvider(OCRProvider):
         client = DocumentIntelligenceClient(
             endpoint=settings.azure_endpoint,
             credential=AzureKeyCredential(settings.azure_ai_key),
+            **({"retry_total": 0} if getattr(settings, "provider_limits_enabled", False) else {}),
         )
 
-        with open(file_path, "rb") as f:
-            poller = client.begin_analyze_document("prebuilt-read", body=f, output=[AnalyzeOutputOption.PDF])
-        result = poller.result()
-        operation_id = poller.details["operation_id"]
+        try:
+            try:
+                from pypdf import PdfReader
 
-        # Extract rotation data
-        rotation_data: Dict[int, float] = {}
-        if hasattr(result, "pages") and result.pages:
-            for i, page in enumerate(result.pages):
-                if hasattr(page, "angle") and page.angle is not None and page.angle != 0:
-                    rotation_data[i] = page.angle
+                page_count = len(PdfReader(file_path).pages)
+            except Exception:
+                page_count = 1
+            lease = acquire(
+                "azure_ocr",
+                "prebuilt-read",
+                credential=settings.azure_ai_key,
+                pages=max(1, page_count),
+            )
+            with open(file_path, "rb") as f:
+                poller = client.begin_analyze_document("prebuilt-read", body=f, output=[AnalyzeOutputOption.PDF])
+            result = poller.result()
+            operation_id = poller.details["operation_id"]
 
-        # Retrieve searchable PDF
-        response = client.get_analyze_result_pdf(model_id=result.model_id, result_id=operation_id)
-        searchable_pdf_path = file_path  # overwrite in place
-        with open(searchable_pdf_path, "wb") as writer:
-            writer.writelines(response)
+            # Extract rotation data
+            rotation_data: Dict[int, float] = {}
+            if hasattr(result, "pages") and result.pages:
+                for i, page in enumerate(result.pages):
+                    if hasattr(page, "angle") and page.angle is not None and page.angle != 0:
+                        rotation_data[i] = page.angle
 
-        extracted_text = result.content if result.content else ""
-        logger.info(f"[AzureOCR] Extracted {len(extracted_text)} chars from {os.path.basename(file_path)}")
+            # Retrieve searchable PDF
+            response = client.get_analyze_result_pdf(model_id=result.model_id, result_id=operation_id)
+            searchable_pdf_path = file_path  # overwrite in place
+            with open(searchable_pdf_path, "wb") as writer:
+                writer.writelines(response)
 
-        return OCRResult(
-            provider="azure",
-            text=extracted_text,
-            searchable_pdf_path=searchable_pdf_path,
-            rotation_data=rotation_data,
-        )
+            extracted_text = result.content if result.content else ""
+            logger.info(f"[AzureOCR] Extracted {len(extracted_text)} chars from {os.path.basename(file_path)}")
+
+            return OCRResult(
+                provider="azure",
+                text=extracted_text,
+                searchable_pdf_path=searchable_pdf_path,
+                rotation_data=rotation_data,
+            )
+        except Exception as exc:
+            status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 429:
+                retry_after = retry_after_from_exception(exc)
+                record_cooldown(
+                    "azure_ocr",
+                    "prebuilt-read",
+                    credential=settings.azure_ai_key,
+                    retry_after=retry_after,
+                )
+                raise ProviderRateLimited("Azure OCR upstream rate limit", retry_after) from exc
+            raise
+        finally:
+            release(locals().get("lease"))
 
 
 class TesseractOCRProvider(OCRProvider):

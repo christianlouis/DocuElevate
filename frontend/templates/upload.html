@@ -154,8 +154,11 @@
 <script>
   // Expose server-side upload throttling configuration to upload.js
   window.uploadConfig = {
+      enableDeduplication: {{ upload_enable_deduplication | default(true) | tojson }},
     concurrency: {{ upload_concurrency }},
-    queueDelayMs: {{ upload_queue_delay_ms }}
+    queueDelayMs: {{ upload_queue_delay_ms }},
+    queueOwner: {{ upload_queue_owner | default("single-user") | tojson }},
+    maxFileSize: {{ upload_max_file_size | default(1073741824) }}
   };
   window.uploadI18n = {
     queuedBatch: {{ _("upload.queue_queued") | tojson }},
@@ -182,6 +185,7 @@
   };
 </script>
 <script src="/static/js/upload.js"></script>
+<script src="/static/js/upload-bulk.js"></script>
 <script>
   // Drag-and-drop / file input logic
   const dropZone = document.getElementById("dropZone");
@@ -222,7 +226,7 @@
     }, 1000);
   }
 
-  async function followFirstDocument({ operationId = null, taskId = null, duplicateFileId = null }) {
+  async function followFirstDocument({ operationId = null, taskId = null, fileId = null, duplicateFileId = null }) {
     if (!firstDocumentMode || followingFirstDocument) {
       return false;
     }
@@ -232,9 +236,10 @@
     updateFirstDocumentTracker(uploadMessage("firstDocumentQueued"), startedAt);
     startFirstDocumentTimer(startedAt);
 
-    if (duplicateFileId) {
+    const directFileId = fileId || duplicateFileId;
+    if (directFileId) {
       updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
-      window.location.href = `/files/${encodeURIComponent(duplicateFileId)}/process?onboarding=first-document`;
+      window.location.href = `/files/${encodeURIComponent(directFileId)}/process?onboarding=first-document`;
       return true;
     }
 

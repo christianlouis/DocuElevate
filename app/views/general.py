@@ -2,6 +2,7 @@
 General routes for the application homepage and basic pages.
 """
 
+import hashlib
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.utils.config_validator import get_provider_status, validate_storage_configs
+from app.utils.user_scope import get_current_owner_id
 from app.views.base import APIRouter, get_db, logger, require_login, templates
 
 router = APIRouter()
@@ -184,6 +186,11 @@ async def serve_upload(request: Request):
             "request": request,
             "upload_concurrency": settings.upload_concurrency,
             "upload_queue_delay_ms": settings.upload_queue_delay_ms,
+            "upload_queue_owner": hashlib.sha256(
+                str(get_current_owner_id(request) or "single-user").encode(), usedforsecurity=False
+            ).hexdigest(),
+            "upload_max_file_size": settings.max_upload_size,
+            "upload_enable_deduplication": settings.enable_deduplication,
         },
     )
 

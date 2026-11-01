@@ -142,6 +142,15 @@ class TestBaseTaskWithRetryAttributes:
         """countdown must NOT be in retry_kwargs so our retry() override controls it."""
         assert "countdown" not in BaseTaskWithRetry.retry_kwargs
 
+    def test_subclass_retry_kwargs_are_isolated(self):
+        """A quota-specific subclass must not rewrite the base retry policy."""
+        subclass = type("QuotaTask", (BaseTaskWithRetry,), {})
+
+        subclass.retry_kwargs["max_retries"] = 20
+
+        assert BaseTaskWithRetry.retry_kwargs["max_retries"] == 3
+        assert subclass.retry_kwargs["max_retries"] == 20
+
 
 # ---------------------------------------------------------------------------
 # OcrTaskWithRetry class attributes
@@ -313,3 +322,21 @@ class TestTaskTypeAssignment:
         from app.tasks.process_document import process_document
 
         assert isinstance(process_document, BaseTaskWithRetry)
+
+
+def test_quota_autoretry_uses_separate_budget_and_never_shortens_retry_after(monkeypatch):
+    from unittest.mock import patch
+
+    from app.config import settings
+    from app.utils.provider_limits import ProviderQuotaExceeded
+
+    monkeypatch.setattr(settings, "provider_limits_max_retries", 20)
+    task = BaseTaskWithRetry()
+    from celery import Celery
+
+    task.bind(Celery("quota-retry-test", broker="memory://"))
+    # Celery's autoretry wrapper passes retry_kwargs, including max_retries=3.
+    with patch("celery.Task.retry") as retry:
+        task.retry(exc=ProviderQuotaExceeded("busy", retry_after=30.8), max_retries=3)
+    assert retry.call_args.kwargs["max_retries"] == 20
+    assert retry.call_args.kwargs["countdown"] == 31

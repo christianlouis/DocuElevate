@@ -15,6 +15,7 @@ from app.tasks.retry_config import BaseTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider, is_ai_provider_configured
 from app.utils.filename_utils import VALID_FILENAME_RE
+from app.utils.provider_limits import ProviderQuotaError
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +260,24 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         return {"s3_file": os.path.basename(filename), "metadata": metadata}
 
     except Exception as e:
+        # Keep transient upstream failures visible to Celery's retry policy.
+        # Returning an empty metadata object here permanently loses work and
+        # makes a provider 429 look like a successful document.
+        status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
+        network_failure = isinstance(e, (TimeoutError, ConnectionError, OSError))
+        try:
+            import openai
+
+            network_failure = network_failure or isinstance(e, openai.APIConnectionError)
+        except (ImportError, AttributeError):
+            pass
+        if (
+            isinstance(e, ProviderQuotaError)
+            or network_failure
+            or status == 429
+            or (isinstance(status, int) and status >= 500)
+        ):
+            raise
         logger.exception(f"[{task_id}] AI provider classification failed for {filename}: {e}")
         log_task_progress(
             task_id,

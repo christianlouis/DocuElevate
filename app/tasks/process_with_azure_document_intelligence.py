@@ -12,6 +12,13 @@ from app.config import settings
 from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
+from app.utils.provider_limits import (
+    ProviderRateLimited,
+    acquire,
+    record_cooldown,
+    release,
+    retry_after_from_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +114,7 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
         f"Starting OCR for {filename}",
         file_id=file_id,
     )
+    lease = None
     try:
         tmp_file_path = os.path.join(settings.workdir, "tmp", filename)
         if not os.path.exists(tmp_file_path):
@@ -167,6 +175,14 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
             file_id=file_id,
         )
 
+        page_budget = page_count if filename.lower().endswith(".pdf") and page_count else 1
+        lease = acquire(
+            "azure_ocr",
+            "prebuilt-read",
+            credential=settings.azure_ai_key,
+            pages=page_budget,
+        )
+
         # Open and send the document for processing
         with open(tmp_file_path, "rb") as f:
             poller = document_intelligence_client.begin_analyze_document(
@@ -212,6 +228,16 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
 
         return {"file": filename, "searchable_pdf": searchable_pdf_path, "cleaned_text": extracted_text}
     except Exception as e:
+        status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
+        if status == 429:
+            retry_after = retry_after_from_exception(e)
+            record_cooldown(
+                "azure_ocr",
+                "prebuilt-read",
+                credential=settings.azure_ai_key,
+                retry_after=retry_after,
+            )
+            raise ProviderRateLimited("Azure OCR upstream rate limit", retry_after) from e
         logger.error(f"[{task_id}] Error processing {filename} with Azure Document Intelligence: {e}")
         log_task_progress(
             task_id,
@@ -222,3 +248,5 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
             detail=str(e),
         )
         raise
+    finally:
+        release(lease)

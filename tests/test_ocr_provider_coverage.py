@@ -35,6 +35,7 @@ from app.utils.ocr_provider import (
     get_ocr_providers,
     merge_ocr_results,
 )
+from app.utils.provider_limits import ProviderRateLimited
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -282,6 +283,34 @@ class TestAzureOCRProvider:
         assert result.text == "extracted text"
         assert result.searchable_pdf_path == pdf
         assert 0 in result.rotation_data
+
+    def test_azure_429_preserves_retry_after(self, tmp_path):
+        pdf = _make_pdf(tmp_path)
+        provider = AzureOCRProvider()
+        error = RuntimeError("rate limited")
+        error.status_code = 429
+        error.response = Mock(headers={"Retry-After": "7"})
+        mock_client = Mock()
+        mock_client.begin_analyze_document.side_effect = error
+        mock_di = Mock(DocumentIntelligenceClient=Mock(return_value=mock_client))
+        mock_ao = Mock()
+        mock_ao.PDF = "pdf"
+        with (
+            patch("app.utils.ocr_provider.settings") as ms,
+            patch.dict(
+                sys.modules,
+                {
+                    "azure.ai.documentintelligence": mock_di,
+                    "azure.ai.documentintelligence.models": Mock(AnalyzeOutputOption=mock_ao),
+                    "azure.core.credentials": Mock(AzureKeyCredential=Mock()),
+                },
+            ),
+        ):
+            ms.azure_ai_key = "key"
+            ms.azure_endpoint = "https://x.com"
+            with pytest.raises(ProviderRateLimited) as caught:
+                provider.process(pdf)
+        assert caught.value.retry_after == 7
 
     def test_no_rotation_data(self, tmp_path):
         """Works when pages have no rotation angle."""

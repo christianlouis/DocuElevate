@@ -14,6 +14,7 @@ from app.api.automation import router as automation_router
 from app.api.azure import router as azure_router
 from app.api.backup import router as backup_router
 from app.api.billing import router as billing_router
+from app.api.bulk_upload import router as bulk_upload_router
 from app.api.classification_rules import router as classification_rules_router
 from app.api.comments import router as comments_router
 from app.api.compliance import router as compliance_router
@@ -111,6 +112,7 @@ router.include_router(imap_accounts_router)
 router.include_router(imap_profiles_router)
 router.include_router(integrations_router)
 router.include_router(intake_router)
+router.include_router(bulk_upload_router)
 router.include_router(notifications_router)
 router.include_router(scheduled_jobs_router)
 router.include_router(audit_logs_router)

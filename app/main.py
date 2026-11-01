@@ -9,7 +9,7 @@ from datetime import timezone as _tz
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi.errors import RateLimitExceeded
@@ -389,6 +389,17 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 else:
     print(f"WARNING: Static directory not found at {static_dir}. Static files will not be served.")
+
+
+@app.get("/upload-queue-sw.js", include_in_schema=False)
+async def upload_queue_service_worker():
+    """Serve the queue coordinator at root scope, without caching application pages."""
+    return FileResponse(
+        static_dir / "js" / "upload-queue-sw.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
+
 
 # Mount the built MkDocs developer documentation at /developer-docs/
 # These docs target administrators and developers, not end-users.

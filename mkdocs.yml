@@ -40,6 +40,7 @@ nav:
       - Fujitsu ScanSnap: howto/SnapScanSetup.md
       - Watched Folder: howto/WatchedFolderSetup.md
       - Email Ingestion: howto/EmailIngestion.md
+      - Durable Bulk Uploads: BulkUploads.md
       - Mobile Scanning: howto/MobileScanning.md
   - API: API.md
   - MCP: MCP.md
