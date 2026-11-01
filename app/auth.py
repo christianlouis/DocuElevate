@@ -802,6 +802,7 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
         # via the Authentik/OIDC admin group or manually in the admin panel)
         user_data["is_admin"] = False
 
+        _ensure_user_profile(db, user_data, is_admin=False)
         request.session["user"] = user_data
 
         # Create server-side session for tracking and revocation
@@ -824,9 +825,6 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
                 request.session["_session_token"] = user_session.session_token
         except Exception:
             logger.debug("[AUTH] Failed to create server-side session for social user", exc_info=True)
-
-        # Auto-create or update UserProfile
-        _ensure_user_profile(db, user_data, is_admin=False)
 
         provider_name = SOCIAL_PROVIDERS[provider]["name"]
         logger.info(
@@ -904,6 +902,11 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
         logger.warning("Cannot create UserProfile: no stable user identifier in OAuth userinfo")
         return
 
+    # This check must propagate failures so callers never create a session or
+    # mobile token when the fence cannot be verified.
+    from app.services.account_deletion import assert_account_active
+
+    assert_account_active(db, user_id)
     try:
         existing = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if existing is None:
@@ -1007,6 +1010,7 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
         # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
         user_data["is_admin"] = is_admin
 
+        _ensure_user_profile(db, user_data, is_admin=is_admin)
         request.session["user"] = user_data
 
         # Create server-side session for tracking and revocation
@@ -1029,9 +1033,6 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
                 request.session["_session_token"] = user_session.session_token
         except Exception:
             logger.debug("[AUTH] Failed to create server-side session for OAuth user", exc_info=True)
-
-        # Auto-create or update UserProfile so the user appears in admin user management
-        _ensure_user_profile(db, user_data, is_admin=is_admin)
 
         # Log the successful authentication
         logger.info("[SECURITY] OAUTH_LOGIN_SUCCESS user=%s admin=%s", user_data.get("email", "unknown"), is_admin)
@@ -1282,6 +1283,11 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                 _record_login_event(db, request, username, success=False, detail="wrong_password")
                 return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
+            try:
+                _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
+            except Exception:
+                logger.warning("Unable to verify account eligibility for local login", exc_info=True)
+                return RedirectResponse(url="/login?error=Account+unavailable", status_code=302)
             request.session["user"] = user_data
             # Create server-side session for tracking and revocation
             try:
@@ -1298,7 +1304,6 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                 logger.debug("[AUTH] Failed to create server-side session", exc_info=True)
             logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
             _record_login_event(db, request, local_user.email, success=True)
-            _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
 
             # Mobile app flow: issue an inline API token and redirect back to the app.
             logger.debug(
@@ -1360,6 +1365,11 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             "picture": "/static/images/default-avatar.svg",
             "is_admin": True,
         }
+        try:
+            _ensure_user_profile(db, admin_user_data, is_admin=True)
+        except Exception:
+            logger.warning("Unable to verify account eligibility for admin login", exc_info=True)
+            return RedirectResponse(url="/login?error=Account+unavailable", status_code=302)
         request.session["user"] = admin_user_data
         # Create server-side session for tracking and revocation
         try:
@@ -1377,7 +1387,6 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             logger.debug("[AUTH] Failed to create server-side session for admin", exc_info=True)
         logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
         _record_login_event(db, request, username, success=True)
-        _ensure_user_profile(db, admin_user_data, is_admin=True)
 
         # Mobile app flow: issue an inline API token and redirect back to the app.
         logger.debug(

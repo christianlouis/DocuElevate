@@ -832,7 +832,13 @@ class TestEnsureUserProfile:
 
         mock_db = MagicMock()
         existing = UserProfile(user_id="sub-xyz", display_name="Old Name")
-        mock_db.query.return_value.filter.return_value.first.return_value = existing
+        from app.models import AccountDeletionTombstone
+
+        query = mock_db.query.return_value
+        empty = MagicMock()
+        empty.filter.return_value.first.return_value = None
+        mock_db.query.side_effect = lambda model: empty if model is AccountDeletionTombstone else query
+        query.filter.return_value.first.return_value = existing
 
         user_data = {"sub": "sub-xyz", "name": "New Name"}
 
@@ -1123,3 +1129,51 @@ class TestOAuthConfiguration:
             mock_settings.authentik_client_secret = None
 
             # The configuration logic at module load time would set OAUTH_CONFIGURED=False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deletion_status", ["deleted", "failed"])
+@pytest.mark.parametrize("login_type", ["local", "oidc"])
+async def test_fenced_login_cannot_create_profile_session_or_mobile_token(deletion_status, login_type, monkeypatch):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.auth import auth, oauth_callback
+    from app.config import settings
+    from app.database import Base
+    from app.models import AccountDeletionTombstone, ApiToken, LocalUser, UserProfile
+    from app.services.account_deletion import tombstone_key
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    owner = "alice@example.com" if login_type == "local" else "oidc-subject"
+    db.add(AccountDeletionTombstone(owner_id=tombstone_key(owner), status=deletion_status))
+    if login_type == "local":
+        db.add(LocalUser(email=owner, username="alice", hashed_password="hash", is_active=True))
+    db.commit()
+    request = MagicMock(spec=Request)
+    request.session = {"mobile_redirect_uri": "docuelevate://callback"}
+    request.form = AsyncMock(return_value={"username": "alice", "password": "password"})
+    with (
+        patch("app.auth._create_mobile_redirect") as mobile,
+        patch("app.utils.session_manager.create_session") as create_session,
+    ):
+        if login_type == "local":
+            monkeypatch.setattr(settings, "multi_user_enabled", True)
+            monkeypatch.setattr("app.auth._verify_password", lambda *args: True)
+            result = await auth(request, db=db)
+        else:
+            with patch("app.auth.oauth") as oauth:
+                oauth.authentik.authorize_access_token = AsyncMock(
+                    return_value={"userinfo": {"sub": owner, "email": "alice@example.com"}}
+                )
+                result = await oauth_callback(request, db=db)
+        assert result.headers["location"].startswith("/login?error=")
+        assert "user" not in request.session
+        mobile.assert_not_called()
+        create_session.assert_not_called()
+        assert db.query(UserProfile).count() == 0
+        assert db.query(ApiToken).count() == 0
+    db.close()
+    engine.dispose()
