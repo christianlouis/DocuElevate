@@ -288,8 +288,30 @@ class UploadOutbox(Base):
     item_id = Column(Integer, ForeignKey("upload_items.id", ondelete="CASCADE"), nullable=False, unique=True)
     attempts = Column(Integer, nullable=False, default=0, server_default="0")
     dispatched_at = Column(DateTime(timezone=True), nullable=True)
+    # A lease makes draining safe when more than one API/beat worker is alive.
+    # It is deliberately separate from dispatched_at: a crashed publisher can
+    # be retried after its lease expires.
+    claim_token = Column(String(36), nullable=True, index=True)
+    claim_expires_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    pipeline_started_at = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UploadCapacity(Base):
+    """Singleton, transactional global backlog reservation ledger.
+
+    This is intentionally a database row rather than process memory so all
+    API pods make the same admission decision.  It limits work accepted for
+    background processing; filesystem free-space is checked separately just
+    before the durable rename is acknowledged.
+    """
+
+    __tablename__ = "upload_capacity"
+    id = Column(Integer, primary_key=True, default=1)
+    reserved_files = Column(Integer, nullable=False, default=0, server_default="0")
+    reserved_bytes = Column(BigInteger, nullable=False, default=0, server_default="0")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class DropboxImportJob(Base):

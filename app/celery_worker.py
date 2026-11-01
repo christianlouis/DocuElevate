@@ -64,7 +64,7 @@ from app.tasks.upload_to_sftp import upload_to_sftp  # noqa: F401
 from app.tasks.upload_to_sharepoint import upload_to_sharepoint  # noqa: F401
 from app.tasks.upload_to_user_integration import upload_to_user_integration  # noqa: F401
 from app.tasks.upload_to_webdav import upload_to_webdav  # noqa: F401
-from app.tasks.dispatch_uploads import dispatch_upload_item, dispatch_upload_outbox  # noqa: F401
+from app.tasks.dispatch_uploads import dispatch_upload_item, dispatch_upload_outbox, reconcile_upload_states  # noqa: F401
 from app.tasks.upload_with_rclone import send_to_all_rclone_destinations, upload_with_rclone  # noqa: F401
 from app.tasks.uptime_kuma_tasks import ping_uptime_kuma  # noqa: F401
 from app.tasks.vector_index import index_document_vectors, reindex_document_vectors  # noqa: F401
@@ -96,6 +96,11 @@ check_credentials.apply_async(countdown=10)  # Run 10 seconds after worker start
 celery.conf.beat_schedule = {
     "dispatch-bulk-upload-outbox": {
         "task": "app.tasks.dispatch_uploads.dispatch_upload_outbox",
+        "schedule": crontab(minute="*/1"),
+        "options": {"expires": 55},
+    },
+    "reconcile-bulk-upload-status": {
+        "task": "app.tasks.dispatch_uploads.reconcile_upload_states",
         "schedule": crontab(minute="*/1"),
         "options": {"expires": 55},
     },

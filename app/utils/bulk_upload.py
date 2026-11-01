@@ -43,6 +43,13 @@ def stream_to_file(upload, target: Path, expected_sha256: str, max_size: int) ->
         if actual != expected_sha256.lower():
             raise ValueError("sha256 does not match upload content")
         os.replace(temporary, target)
+        # A successful file fsync is insufficient after rename: without an
+        # fsync of the containing directory a power loss may lose the name.
+        directory_fd = os.open(str(target.parent), os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
         return size, actual
     finally:
         temporary.unlink(missing_ok=True)
