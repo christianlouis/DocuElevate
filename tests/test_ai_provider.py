@@ -294,6 +294,14 @@ class TestAzureOpenAIProvider:
 
         assert result == "Azure response"
 
+    @patch("app.utils.ai_provider.acquire")
+    @patch("openai.AzureOpenAI")
+    def test_limiter_uses_canonical_azure_provider_name(self, mock_azure_cls, mock_acquire):
+        mock_azure_cls.return_value.chat.completions.create.return_value = _make_openai_response("ok")
+        provider = AzureOpenAIProvider(api_key="key", azure_endpoint="https://endpoint.openai.azure.com")
+        provider.chat_completion(messages=[{"role": "user", "content": "test"}], model="deployment")
+        assert mock_acquire.call_args.args[0] == "azure"
+
 
 # ---------------------------------------------------------------------------
 # AnthropicProvider

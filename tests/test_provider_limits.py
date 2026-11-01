@@ -110,3 +110,22 @@ def test_redis_failure_fails_closed_when_enabled(monkeypatch):
     monkeypatch.setattr(provider_limits, "_redis_client", Broken())
     with pytest.raises(provider_limits.ProviderQuotaUnavailable):
         provider_limits.acquire("openai", "model")
+
+
+def test_redis_client_uses_finite_socket_timeouts(monkeypatch):
+    captured = {}
+
+    class Client:
+        def ping(self):
+            return True
+
+    def fake_from_url(url, **kwargs):
+        captured.update(kwargs)
+        return Client()
+
+    monkeypatch.setattr(provider_limits, "_redis_client", None)
+    monkeypatch.setattr(provider_limits.redis.Redis, "from_url", staticmethod(fake_from_url))
+    monkeypatch.setattr(provider_limits, "settings", SimpleNamespace(redis_url="redis://unused"))
+    provider_limits._client()
+    assert captured["socket_connect_timeout"] == 5
+    assert captured["socket_timeout"] == 5
