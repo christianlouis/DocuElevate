@@ -309,9 +309,36 @@ router = APIRouter()
 
 
 def get_current_user(request: Request):
+    def _deletion_fenced(user):
+        if not isinstance(user, dict):
+            return False
+        # The original authenticated credential may only access deletion retry/status.
+        if request.url.path.rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
+            return False
+        owner = user.get("preferred_username") or user.get("email") or user.get("id")
+        if not owner:
+            return False
+        try:
+            from app.database import SessionLocal
+            from app.models import AccountDeletionTombstone
+            db = SessionLocal()
+            try:
+                return db.query(AccountDeletionTombstone).filter(
+                    AccountDeletionTombstone.owner_id == owner,
+                    AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
+                ).first() is not None
+            finally:
+                db.close()
+        except Exception:
+            # Older installations may not have migrated yet; normal auth must
+            # continue until the migration is applied.
+            return False
+
     # Check for Bearer token auth first (API tokens)
     api_user = getattr(request.state, "api_token_user", None)
     if isinstance(api_user, dict):
+        if _deletion_fenced(api_user):
+            return None
         logger.debug("[AUTH] get_current_user: resolved from API token (user_id=%s)", api_user.get("id"))
         return api_user
     session_user = request.session.get("user")
@@ -351,6 +378,9 @@ def get_current_user(request: Request):
         )
     else:
         logger.debug("[AUTH] get_current_user: no user in session or API token")
+    if _deletion_fenced(session_user):
+        request.session.clear()
+        return None
     return session_user
 
 
@@ -722,6 +752,26 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
                 url="/login?error=Could+not+retrieve+email+from+provider",
                 status_code=status.HTTP_302_FOUND,
             )
+
+        if provider == "apple":
+            # Keep the refresh grant encrypted so account deletion can revoke it.
+            from app.models import ProviderGrant
+            from app.utils.encryption import encrypt_value
+            grant_token = token.get("refresh_token")
+            owner = user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
+            grant = db.query(ProviderGrant).filter_by(owner_id=owner, provider="apple").first()
+            if grant_token:
+                encrypted = encrypt_value(grant_token)
+                if not encrypted or not encrypted.startswith("enc:"):
+                    raise RuntimeError("Apple grant encryption unavailable")
+                if not grant:
+                    grant = ProviderGrant(owner_id=owner, provider="apple", encrypted_token=encrypted)
+                    db.add(grant)
+                else:
+                    grant.encrypted_token = encrypted
+                db.commit()
+            elif not grant:
+                raise RuntimeError("Apple did not provide a revocable grant")
 
         # Add Gravatar if no picture provided
         if not user_data.get("picture") and user_data.get("email"):

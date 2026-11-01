@@ -556,6 +556,7 @@ class UserProfile(Base):
     # Stable user identifier — matches FileRecord.owner_id (OAuth sub / email / username)
     user_id = Column(String, unique=True, nullable=False, index=True)
 
+
     # Optional human-readable display name set by the admin
     display_name = Column(String, nullable=True)
 
@@ -618,6 +619,35 @@ class UserProfile(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AccountDeletionTombstone(Base):
+    """Durable account deletion state used to fence stale jobs and sessions.
+
+    Completed tombstones are intentionally retained without personal data.  A
+    worker seeing a deleting/deleted owner must never recreate records for it.
+    """
+
+    __tablename__ = "account_deletion_tombstones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String(255), nullable=False, unique=True, index=True)
+    status = Column(String(20), nullable=False, default="deleting", server_default="deleting", index=True)
+    requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error = Column(Text, nullable=True)
+    cleanup_manifest = Column(Text, nullable=True)
+    external_references = Column(Text, nullable=True)
+
+
+class ProviderGrant(Base):
+    """Encrypted OAuth grant retained only for provider revocation."""
+    __tablename__ = "provider_grants"
+    __table_args__ = (UniqueConstraint("owner_id", "provider", name="uq_provider_grant_owner_provider"),)
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(String(255), nullable=False, index=True)
+    provider = Column(String(40), nullable=False)
+    encrypted_token = Column(Text, nullable=False)
 
 
 class SubscriptionPlan(Base):

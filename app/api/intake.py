@@ -15,6 +15,7 @@ from app.config import settings
 from app.database import get_db
 from app.middleware.upload_rate_limit import require_upload_rate_limit
 from app.models import DocumentIntake
+from app.services.account_deletion import DeletionBlocked, assert_account_active
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
@@ -111,6 +112,11 @@ async def intake_document(
 ) -> dict[str, Any]:
     """Store a document atomically and queue the normal ingestion pipeline."""
     principal_id, owner_id = _authenticate_intake(request, x_docuelevate_intake_secret)
+    if owner_id:
+        try:
+            assert_account_active(db, owner_id)
+        except DeletionBlocked as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     if settings.multi_user_enabled and owner_id:
         from app.utils.subscription import QuotaExceeded, check_upload_allowed, get_user_tier_id
