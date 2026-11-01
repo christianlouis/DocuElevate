@@ -84,9 +84,7 @@ def test_legacy_reserved_file_counter_does_not_reject_new_upload(client, db_sess
     assert db_session.query(UploadOutbox).count() == 1
 
 
-def test_disk_exhaustion_returns_retry_after_without_accepting_or_enqueueing(
-    client, db_session, monkeypatch, tmp_path
-):
+def test_disk_exhaustion_returns_retry_after_without_accepting_or_enqueueing(client, db_session, monkeypatch, tmp_path):
     monkeypatch.setattr(settings, "workdir", str(tmp_path))
     batch_id = _batch(client, "queue-owner:disk-full")
     monkeypatch.setattr(

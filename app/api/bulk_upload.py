@@ -136,10 +136,7 @@ def _reserve_capacity(db: Session, size: int) -> bool:
     """Reserve headroom while holding the singleton row lock across the write."""
     _capacity(db)
     ledger = db.execute(
-        select(UploadCapacity)
-        .where(UploadCapacity.id == 1)
-        .with_for_update()
-        .execution_options(populate_existing=True)
+        select(UploadCapacity).where(UploadCapacity.id == 1).with_for_update().execution_options(populate_existing=True)
     ).scalar_one()
     usage = shutil.disk_usage(upload_root())
     if usage.free < size + _disk_reserve():
