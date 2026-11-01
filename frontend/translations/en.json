@@ -2529,5 +2529,11 @@
   "webhooks.signed": "Signed",
   "webhooks.signing_secret": "Signing secret",
   "webhooks.subheading": "Manage signed outbound endpoints and delivery retries.",
-  "webhooks.target_url": "Target URL"
+  "webhooks.target_url": "Target URL",
+  "auth.signup_unavailable": "Sign-up is unavailable on this server. Email delivery must be configured.",
+  "auth.signup_capabilities_failed": "Could not load the server settings. Please reload the page.",
+  "onboarding.legal_accept": "I accept the",
+  "onboarding.legal_terms": "Terms of Service",
+  "onboarding.legal_privacy": "Privacy Policy",
+  "auth.privacy_acknowledge": "I have read the"
 }

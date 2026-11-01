@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4"
-     x-data="onboardingWizard()" x-init="init()">
+     x-data="onboardingWizard()">
   <div class="max-w-2xl mx-auto">
 
     <!-- Brand header -->
@@ -513,8 +513,12 @@
             <i class="fas fa-circle-info text-indigo-600 mr-1" aria-hidden="true"></i>
             {{ _("onboarding.review_deferred_hint") }}
           </p>
+          <label class="flex items-start gap-2 text-sm text-gray-700 mb-5">
+            <input type="checkbox" x-model="legalAccepted" class="mt-1">
+            <span>{{ _('onboarding.legal_accept') }} <a :href="capabilities?.terms_url" target="_blank" rel="noopener" class="text-blue-600 underline">{{ _('onboarding.legal_terms') }}</a> &amp; <a :href="capabilities?.privacy_url" target="_blank" rel="noopener" class="text-blue-600 underline">{{ _('onboarding.legal_privacy') }}</a>.</span>
+          </label>
           <button @click="goNext()"
-                  :disabled="loading"
+                  :disabled="loading || !legalAccepted || !capabilities"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
             <span x-show="!loading">
               <i class="fas fa-rocket mr-2" aria-hidden="true"></i> {{ _("onboarding.start_uploading") }}
@@ -569,6 +573,8 @@ function onboardingWizard() {
     totalSteps: 8,
     loading: false,
     error: '',
+    capabilities: null,
+    legalAccepted: false,
 
     // Form data – pre-populated from Jinja2 context
     displayName: '{{ user.name | default("") | e }}',
@@ -611,6 +617,11 @@ function onboardingWizard() {
     },
 
     async init() {
+      try {
+        const capabilitiesResponse = await fetch('/api/auth/capabilities');
+        if (!capabilitiesResponse.ok) throw new Error('Capabilities unavailable');
+        this.capabilities = await capabilitiesResponse.json();
+      } catch (_) { this.error = onboardingI18n.networkError; }
       try {
         const r = await fetch('/api/onboarding/status');
         if (r.ok) {
@@ -758,7 +769,12 @@ function onboardingWizard() {
     async completeOnboarding() {
       this.loading = true; this.error = '';
       try {
-        const r = await fetch('/api/onboarding/complete', { method: 'POST' });
+        if (!this.legalAccepted || !this.capabilities) return;
+        const r = await fetch('/api/onboarding/complete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accept_terms: true, accept_privacy: true,
+            terms_version: this.capabilities.terms_version, privacy_version: this.capabilities.privacy_version })
+        });
         if (r.ok) {
           const data = await r.json();
           window.location.href = data.redirect_url || '/upload';

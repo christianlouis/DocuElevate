@@ -2378,5 +2378,11 @@
   "upload.url_network_error": "Netzwerkfehler: {detail}",
   "upload.url_placeholder": "https://example.com/dokument.pdf",
   "upload.url_success": "Erfolgreich! Datei \"{filename}\" ({size}) wurde geladen und zur Verarbeitung eingereiht.",
-  "annotations.type": "Type"
+  "annotations.type": "Type",
+  "auth.signup_unavailable": "Die Registrierung ist auf diesem Server nicht verfügbar. Der E-Mail-Versand muss eingerichtet sein.",
+  "auth.signup_capabilities_failed": "Servereinstellungen konnten nicht geladen werden. Bitte die Seite neu laden.",
+  "onboarding.legal_accept": "Ich akzeptiere die",
+  "onboarding.legal_terms": "Nutzungsbedingungen",
+  "onboarding.legal_privacy": "Datenschutzerklärung",
+  "auth.privacy_acknowledge": "Ich habe die folgende Erklärung gelesen:"
 }

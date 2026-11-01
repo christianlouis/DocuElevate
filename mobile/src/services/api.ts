@@ -28,8 +28,23 @@ export interface WhoAmIResponse {
   is_admin: boolean;
   preferred_language: string | null;
 }
+export interface AuthCapabilities {
+  local_signup: boolean;
+  smtp_configured: boolean;
+  terms_version: string;
+  privacy_version: string;
+  terms_url: string;
+  privacy_url: string;
+  csrf_token?: string;
+}
+export interface LegalConsent {
+  accept_terms: boolean;
+  accept_privacy: boolean;
+  terms_version: string;
+  privacy_version: string;
+}
 export interface SignupResponse { email_verification_required: boolean; message: string }
-export interface OnboardingStatus { completed: boolean; step: number; profile?: { display_name?: string | null; contact_email?: string | null } | null }
+export interface OnboardingStatus { completed: boolean; step: number; profile?: { display_name?: string | null; contact_email?: string | null; subscription_tier?: string | null; preferred_destination?: string | null } | null }
 
 export interface GenerateTokenResponse {
   token: string;
@@ -113,6 +128,7 @@ export interface FileDetail {
 
 class DocuElevateAPI {
   private baseUrl: string = "";
+  private csrfByOrigin: Record<string, string> = {};
 
   async init(baseUrl: string): Promise<void> {
     this.baseUrl = baseUrl.replace(/\/$/, "");
@@ -147,13 +163,17 @@ class DocuElevateAPI {
   private async request<T>(
     method: string,
     path: string,
-    options?: { body?: unknown; formData?: FormData }
+    options?: { body?: unknown; formData?: FormData; public?: boolean }
   ): Promise<T> {
-    const token = await this.getToken();
+    const token = options?.public ? null : await this.getToken();
     const headers: Record<string, string> = {};
 
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    if (options?.public && method !== "GET" && this.csrfByOrigin[this.baseUrl]) {
+      headers["X-CSRF-Token"] = this.csrfByOrigin[this.baseUrl];
     }
 
     let body: string | FormData | undefined;
@@ -169,6 +189,7 @@ class DocuElevateAPI {
       method,
       headers,
       body,
+      credentials: "include",
     });
 
     if (!response.ok) {
@@ -200,17 +221,35 @@ class DocuElevateAPI {
     });
   }
 
-  async signup(data: { email: string; username: string; display_name?: string; password: string; password_confirm: string; terms_accepted: boolean; privacy_accepted: boolean }): Promise<SignupResponse> {
-    return this.request<SignupResponse>("POST", "/api/auth/signup", { body: data });
+  async authCapabilities(origin = this.baseUrl): Promise<AuthCapabilities> {
+    const response = await fetch(`${origin}/api/auth/capabilities`, { credentials: "include" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const capabilities: AuthCapabilities = await response.json();
+    if (capabilities.csrf_token) this.csrfByOrigin[origin] = capabilities.csrf_token;
+    return capabilities;
+  }
+
+  async signup(data: LegalConsent & { email: string; username: string; display_name?: string; password: string; password_confirm: string }): Promise<SignupResponse> {
+    return this.request("POST", "/api/auth/signup", { body: data, public: true });
   }
 
   async resendVerification(email: string): Promise<void> {
-    await this.request("POST", "/api/auth/resend-verification", { body: { email } });
+    await this.request("POST", "/api/auth/resend-verification", { body: { email }, public: true });
   }
 
   async onboardingStatus(): Promise<OnboardingStatus> { return this.request("GET", "/api/onboarding/status"); }
-  async saveOnboardingProfile(data: { display_name?: string; contact_email?: string; space_mode: "personal" | "shared" }): Promise<void> { await this.request("POST", "/api/onboarding/profile", { body: data }); }
-  async completeOnboarding(): Promise<void> { await this.request("POST", "/api/onboarding/complete"); }
+  async saveOnboardingProfile(data: { display_name?: string; contact_email?: string; space_mode: "personal" | "shared"; tribe_name?: string }): Promise<void> {
+    await this.request("POST", "/api/onboarding/profile", { body: data });
+  }
+  async saveOnboardingPlan(): Promise<void> {
+    await this.request("POST", "/api/onboarding/plan", { body: { subscription_tier: "free", billing_cycle: "monthly" } });
+  }
+  async saveOnboardingStorage(): Promise<void> {
+    await this.request("POST", "/api/onboarding/storage", { body: { preferred_destination: null } });
+  }
+  async completeOnboarding(consent: LegalConsent): Promise<void> {
+    await this.request("POST", "/api/onboarding/complete", { body: consent });
+  }
 
   /** Claim a QR login challenge and receive an API token. */
   async claimQRChallenge(challengeToken: string, deviceName: string): Promise<QRClaimResponse> {
