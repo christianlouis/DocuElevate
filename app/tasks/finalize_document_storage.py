@@ -13,6 +13,7 @@ from app.tasks.retry_config import BaseTaskWithRetry
 
 # Import the aggregator tasks and validator
 from app.tasks.send_to_all import (
+    dispatch_document_destinations,
     get_configured_services_from_validator,
     get_user_destination_count,
     send_to_all_destinations,
@@ -108,21 +109,21 @@ def finalize_document_storage(self, original_file: str, processed_file: str, met
         try:
             user_dest_count = get_user_destination_count(owner_id)
         except Exception as e:
-            logger.warning("[%s] Could not query user destination count for owner=%s: %s", task_id, owner_id, e)
+            logger.error("[%s] Could not query user destination count for owner=%s; retrying: %s", task_id, owner_id, e)
+            raise
 
     if owner_id and user_dest_count > 0:
-        # User has configured their own destinations → use those exclusively
-        logger.info(
-            "[%s] Routing to %d user-specific destination(s) for owner=%s",
-            task_id,
-            user_dest_count,
-            owner_id,
-        )
-        send_to_user_destinations.delay(processed_file, owner_id, file_id)
-    else:
-        # No user-specific destinations → fall back to global configuration
+        logger.info("[%s] Routing to %d user-specific destination(s) for owner=%s", task_id, user_dest_count, owner_id)
+    elif not owner_id or not settings.strict_user_destination_routing:
         logger.info("[%s] No user-specific destinations found; using global destinations", task_id)
-        send_to_all_destinations.delay(processed_file, True, file_id)
+    dispatch_document_destinations(
+        processed_file,
+        owner_id=owner_id,
+        file_id=file_id,
+        destination_count=user_dest_count,
+        user_task=send_to_user_destinations,
+        global_task=send_to_all_destinations,
+    )
 
     # 4a. Trigger PDF/A archival conversion if enabled
     if settings.enable_pdfa_conversion:

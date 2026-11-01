@@ -323,6 +323,34 @@ class TestUploadGoogleDrive:
 
         assert result["status"] == "Completed"
 
+    def test_sidecar_metadata_is_preserved_as_drive_properties(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp)
+        with open(tmp_path / "doc.json", "w", encoding="utf-8") as fh:
+            json.dump({"absender": "Alice", "nested": {"ignored": True}}, fh)
+
+        service = MagicMock()
+        service.files.return_value.create.return_value.execute.return_value = {"id": "drive-id"}
+        modules = {
+            "googleapiclient.discovery": MagicMock(build=MagicMock(return_value=service)),
+            "googleapiclient.http": MagicMock(MediaFileUpload=MagicMock()),
+            "google.oauth2.credentials": MagicMock(),
+            "google.auth.transport.requests": MagicMock(),
+            "google.oauth2.service_account": MagicMock(),
+        }
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.upload_to_user_integration.settings.google_drive_client_id", "cid"),
+            patch("app.tasks.upload_to_user_integration.settings.google_drive_client_secret", "secret"),
+        ):
+            self._call(fp, {}, {"refresh_token": "refresh"})
+
+        body = service.files.return_value.create.call_args.kwargs["body"]
+        assert body["properties"]["absender"] == "Alice"
+        assert body["appProperties"] == {"docuelevate": "true"}
+        assert "Document Metadata" in body["description"]
+        assert "nested" in body["description"]
+
 
 # ---------------------------------------------------------------------------
 # _upload_webdav / _upload_nextcloud
@@ -639,6 +667,44 @@ class TestUploadPaperless:
                         {"api_token": "tok"},
                     )
 
+    def test_timeout_is_not_reported_as_completed(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp)
+        post = MagicMock(text='"task-timeout"')
+        pending = MagicMock()
+        pending.json.return_value = [{"status": "PENDING"}]
+        requests = MagicMock(post=MagicMock(return_value=post), get=MagicMock(return_value=pending))
+
+        with patch.dict("sys.modules", {"requests": requests}), patch("time.sleep", return_value=None):
+            with pytest.raises(TimeoutError, match="did not complete"):
+                self._call(fp, {"host": "https://paperless.example.com"}, {"api_token": "tok"})
+
+    def test_custom_field_mapping_uses_personal_config(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp)
+        with open(tmp_path / "doc.json", "w", encoding="utf-8") as fh:
+            json.dump({"absender": "Alice"}, fh)
+        post = MagicMock(text='"task-fields"')
+        poll = MagicMock()
+        poll.json.return_value = [{"status": "SUCCESS", "related_document": 7}]
+        fields = MagicMock()
+        fields.json.return_value = {"results": [{"id": 11, "name": "Sender"}]}
+        requests = MagicMock(post=MagicMock(return_value=post), get=MagicMock(side_effect=[poll, fields]))
+        requests.patch.return_value = MagicMock()
+
+        with patch.dict("sys.modules", {"requests": requests}), patch("time.sleep", return_value=None):
+            result = self._call(
+                fp,
+                {
+                    "host": "https://paperless.example.com",
+                    "custom_fields_mapping": {"absender": "Sender"},
+                },
+                {"api_token": "tok"},
+            )
+
+        assert result["status"] == "Completed"
+        assert requests.patch.call_args.kwargs["json"] == {"custom_fields": [{"field": 11, "value": "Alice"}]}
+
 
 # ---------------------------------------------------------------------------
 # _upload_email
@@ -705,12 +771,86 @@ class TestUploadEmail:
         with patch("smtplib.SMTP", mock_smtp_class):
             result = self._call(
                 fp,
-                {"host": "smtp.example.com", "recipient": "r@ex.com", "use_tls": False},
+                {
+                    "host": "smtp.example.com",
+                    "username": "legacy-sender@example.com",
+                    "recipient": "r@ex.com",
+                    "use_tls": False,
+                },
                 {},
             )
 
         mock_smtp_instance.starttls.assert_not_called()
         assert result["status"] == "Completed"
+
+    def test_postmark_token_is_login_only_and_file_link_is_in_body(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp, b"pdf payload")
+        smtp = MagicMock()
+        smtp.__enter__ = MagicMock(return_value=smtp)
+        smtp.__exit__ = MagicMock(return_value=False)
+
+        with patch("smtplib.SMTP", return_value=smtp):
+            result = self._call(
+                fp,
+                {
+                    "host": "smtp.postmarkapp.com",
+                    "port": 587,
+                    "sender": "archive@example.com",
+                    "recipient": "evernote@example.com",
+                    "use_tls": True,
+                },
+                {"username": "postmark-server-token", "password": "secret"},
+            )
+
+        message = smtp.sendmail.call_args.args[2]
+        assert "archive@example.com" in message
+        assert "postmark-server-token" not in message
+        assert "https://app.docuelevate.org/files/42" not in message
+        assert result["status"] == "Completed"
+
+    def test_file_id_link_and_attachment_are_sent_without_global_settings(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp, b"pdf payload")
+        smtp = MagicMock()
+        smtp.__enter__ = MagicMock(return_value=smtp)
+        smtp.__exit__ = MagicMock(return_value=False)
+
+        with patch("smtplib.SMTP", return_value=smtp):
+            self._call(
+                fp,
+                {
+                    "host": "smtp.postmarkapp.com",
+                    "sender": "archive@example.com",
+                    "recipient": "evernote@example.com",
+                },
+                {"username": "postmark-server-token", "password": "secret"},
+            )
+            # The helper deliberately takes all personal SMTP inputs from cfg/creds.
+            from app.tasks import upload_to_user_integration as module
+
+            with patch.object(module, "settings", MagicMock(side_effect=AssertionError("global settings used"))):
+                module._upload_email(
+                    fp,
+                    {
+                        "host": "smtp.postmarkapp.com",
+                        "sender": "archive@example.com",
+                        "recipient": "evernote@example.com",
+                    },
+                    {"username": "postmark-server-token", "password": "secret"},
+                    TASK_ID,
+                    file_id=42,
+                )
+
+        message = smtp.sendmail.call_args.args[2]
+        from email import message_from_string
+
+        parsed = message_from_string(message)
+        assert "https://app.docuelevate.org/files/42" in message
+        attachments = [part for part in parsed.walk() if part.get_filename()]
+        assert attachments and attachments[0].get_filename() == "doc.pdf"
+        assert attachments[0].get_payload(decode=True) == b"pdf payload"
+        assert "postmark-server-token" not in message
 
 
 # ---------------------------------------------------------------------------
@@ -915,7 +1055,7 @@ class TestFinalizeDocumentStorageUncoveredBranches:
     @patch("app.tasks.finalize_document_storage.get_configured_services_from_validator")
     @patch("app.tasks.finalize_document_storage.log_task_progress")
     @patch("app.tasks.finalize_document_storage.SessionLocal")
-    def test_routes_to_global_when_count_query_raises(
+    def test_retries_without_global_fallback_when_count_query_raises(
         self,
         mock_session_local,
         mock_log_progress,
@@ -926,7 +1066,7 @@ class TestFinalizeDocumentStorageUncoveredBranches:
         mock_notify,
         tmp_path,
     ):
-        """When get_user_destination_count raises, falls back to global routing."""
+        """A destination lookup failure must retry instead of leaking to global sinks."""
         from app.tasks.finalize_document_storage import finalize_document_storage
 
         processed_file = str(tmp_path / "processed2" / "doc.pdf")
@@ -948,13 +1088,13 @@ class TestFinalizeDocumentStorageUncoveredBranches:
         mock_get_dest_count.side_effect = Exception("DB connection error")
 
         finalize_document_storage.request.id = "test-task-id"
-        finalize_document_storage.__wrapped__(
-            original_file=original_file,
-            processed_file=processed_file,
-            metadata={},
-            file_id=88,
-        )
+        with pytest.raises(Exception, match="DB connection error"):
+            finalize_document_storage.__wrapped__(
+                original_file=original_file,
+                processed_file=processed_file,
+                metadata={},
+                file_id=88,
+            )
 
-        # Falls back to global since count raised
-        mock_send_all.delay.assert_called_once()
+        mock_send_all.delay.assert_not_called()
         mock_send_user.delay.assert_not_called()

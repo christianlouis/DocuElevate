@@ -30,6 +30,48 @@ from app.utils.s3_config import is_valid_s3_endpoint
 logger = logging.getLogger(__name__)
 
 
+class UserDestinationRoutingError(RuntimeError):
+    """Raised when strict owner-aware routing cannot safely resolve a route."""
+
+
+def dispatch_document_destinations(
+    file_path: str,
+    owner_id: str | None = None,
+    file_id: int | None = None,
+    folder_overrides: dict | None = None,
+    use_validator: bool = True,
+    destination_count: int | None = None,
+    user_task=None,
+    global_task=None,
+):
+    """Queue one document using owner-aware routing.
+
+    In compatibility mode, an owned document without an active personal
+    destination continues to use the global route. Destination lookup errors
+    always fail closed before any global task is queued; strict mode also
+    fails closed when no personal destination exists, allowing the bound
+    caller to retry.
+    """
+    owner_id = owner_id if isinstance(owner_id, str) and owner_id else None
+    user_task = user_task or send_to_user_destinations
+    global_task = global_task or send_to_all_destinations
+
+    if owner_id:
+        if destination_count is None:
+            try:
+                destination_count = get_user_destination_count(owner_id)
+            except Exception as exc:  # noqa: BLE001
+                raise UserDestinationRoutingError(f"Could not resolve destinations for owner {owner_id}") from exc
+
+        if destination_count > 0:
+            return user_task.delay(file_path, owner_id, file_id)
+        if settings.strict_user_destination_routing:
+            raise UserDestinationRoutingError(f"No active personal destinations for owner {owner_id}")
+
+    global_kwargs = {"folder_overrides": folder_overrides} if folder_overrides else {}
+    return global_task.delay(file_path, use_validator, file_id, **global_kwargs)
+
+
 def _should_upload_to_dropbox():
     return bool(
         getattr(settings, "dropbox_enabled", True)

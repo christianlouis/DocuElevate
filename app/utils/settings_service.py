@@ -181,6 +181,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "strict_user_destination_routing": {
+        "category": "Authentication",
+        "description": "Route owned documents only to the owner's destinations and retry instead of using global destinations on lookup failure.",
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "default_daily_upload_limit": {
         "category": "Authentication",
         "description": (
@@ -1666,6 +1674,14 @@ SETTING_METADATA = {
         "description": "Passphrase for encrypted SFTP private key",
         "type": "string",
         "sensitive": True,
+        "required": False,
+        "restart_required": False,
+    },
+    "sftp_known_hosts_file": {
+        "category": "Storage Providers",
+        "description": "Operator-managed known-hosts file used to verify SFTP server keys",
+        "type": "string",
+        "sensitive": False,
         "required": False,
         "restart_required": False,
     },
