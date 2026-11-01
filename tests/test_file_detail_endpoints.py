@@ -616,6 +616,38 @@ class TestProcessingFlowComputation:
         assert branches["upload_to_s3"]["status"] == "failure"
         assert branches["upload_to_s3"]["can_retry"] is True
 
+    def test_flow_includes_all_global_destination_statuses(self):
+        """Every dispatcher destination, including Notion and Evernote, is visible."""
+        from app.views.files import _compute_processing_flow
+
+        class MockLog:
+            def __init__(self, step_name, status, message):
+                self.step_name = step_name
+                self.status = status
+                self.message = message
+                self.timestamp = None
+                self.task_id = f"task-{step_name}"
+
+        logs = [
+            MockLog("queue_notion", "in_progress", "Queueing upload to notion"),
+            MockLog("queue_notion", "success", "Queued for notion"),
+            MockLog("upload_to_notion", "success", "Uploaded to Notion"),
+            MockLog("queue_evernote", "success", "Queued for evernote"),
+            MockLog("upload_to_evernote", "failure", "Evernote upload failed"),
+            MockLog("queue_sharepoint", "success", "Queued for sharepoint"),
+            MockLog("queue_icloud", "success", "Queued for icloud"),
+        ]
+
+        upload_stage = next(stage for stage in _compute_processing_flow(logs) if stage.get("is_branch_parent"))
+        branches = {branch["key"]: branch for branch in upload_stage["branches"]}
+
+        assert branches["upload_to_notion"]["label"] == "Notion"
+        assert branches["upload_to_notion"]["status"] == "success"
+        assert branches["upload_to_evernote"]["label"] == "Evernote"
+        assert branches["upload_to_evernote"]["status"] == "failure"
+        assert branches["upload_to_sharepoint"]["label"] == "SharePoint"
+        assert branches["upload_to_icloud"]["label"] == "iCloud Drive"
+
 
 @pytest.mark.unit
 class TestStepSummary:

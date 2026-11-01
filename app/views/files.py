@@ -768,6 +768,9 @@ def _compute_processing_flow(logs, pipeline_steps=None):
         "upload_to_sftp": "SFTP Storage",
         "upload_to_email": "Email",
         "upload_to_evernote": "Evernote",
+        "upload_to_notion": "Notion",
+        "upload_to_sharepoint": "SharePoint",
+        "upload_to_icloud": "iCloud Drive",
         "queue_dropbox": "Dropbox",
         "queue_nextcloud": "Nextcloud",
         "queue_paperless": "Paperless-ngx",
@@ -780,6 +783,9 @@ def _compute_processing_flow(logs, pipeline_steps=None):
         "queue_sftp": "SFTP Storage",
         "queue_email": "Email",
         "queue_evernote": "Evernote",
+        "queue_notion": "Notion",
+        "queue_sharepoint": "SharePoint",
+        "queue_icloud": "iCloud Drive",
     }
 
     # Create a map of step names to their log entries
