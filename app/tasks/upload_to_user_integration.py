@@ -169,6 +169,7 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     """Upload *file_path* to Google Drive using per-user OAuth or service-account credentials."""
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
+    from app.tasks.upload_to_google_drive import extract_metadata_from_file, truncate_property_value
 
     folder_id = cfg.get("folder_id") or ""
     filename = os.path.basename(file_path)
@@ -207,8 +208,25 @@ def _upload_google_drive(file_path: str, cfg: dict[str, Any], creds: dict[str, A
     if folder_id:
         file_metadata["parents"] = [folder_id]
 
+    if cfg.get("include_metadata", True):
+        metadata = extract_metadata_from_file(file_path)
+        if metadata:
+            properties = {}
+            for key, value in metadata.items():
+                if not isinstance(value, (dict, list)):
+                    properties[key] = truncate_property_value(key, value)
+            file_metadata["properties"] = properties
+            file_metadata["appProperties"] = {"docuelevate": "true"}
+            file_metadata["description"] = (
+                "Document Metadata:\n\n```json\n" + json.dumps(metadata, indent=2) + "\n```"
+            )
+
     media = MediaFileUpload(file_path, mimetype="application/pdf", resumable=True)
-    file_obj = service.files().create(body=file_metadata, media_body=media, fields="id,name,webViewLink").execute()
+    file_obj = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id,name,webViewLink,properties,appProperties,description",
+    ).execute()
 
     gdrive_id = file_obj.get("id")
     web_link = file_obj.get("webViewLink")
@@ -440,6 +458,7 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     import time
 
     import requests as _requests
+    from app.tasks.upload_to_paperless import normalize_metadata_value
 
     host = (cfg.get("host") or "").rstrip("/")
     api_token = creds.get("api_token") or ""
@@ -453,6 +472,12 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     headers = {"Authorization": f"Token {api_token}"}
     post_url = f"{host}/api/documents/post_document/"
 
+    metadata = {}
+    metadata_path = os.path.splitext(file_path)[0] + ".json"
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r", encoding="utf-8") as fh:
+            metadata = json.load(fh)
+
     with open(file_path, "rb") as fh:
         resp = _requests.post(
             post_url,
@@ -464,7 +489,8 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
     resp.raise_for_status()
     raw_task_id = resp.text.strip().strip('"').strip("'")
 
-    # Poll for completion (up to 30 s)
+    # Poll for completion (up to 30 s). A timeout is a failed upload, never a
+    # successful personal destination delivery.
     task_url = f"{host}/api/tasks/"
     doc_id = None
     for _ in range(10):
@@ -487,6 +513,42 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
             raise
         except Exception as poll_exc:
             logger.warning("[%s] Paperless poll error: %s", task_id, poll_exc)
+
+    if doc_id is None:
+        raise TimeoutError(f"Paperless task {raw_task_id} did not complete")
+
+    custom_fields = {}
+    mapping = cfg.get("custom_fields_mapping")
+    if isinstance(mapping, str):
+        mapping = json.loads(mapping)
+    if mapping:
+        for metadata_key, paperless_field in mapping.items():
+            value = normalize_metadata_value(metadata.get(metadata_key))
+            if value:
+                custom_fields[paperless_field] = value
+    legacy_field = cfg.get("custom_field_absender")
+    if legacy_field and legacy_field not in custom_fields:
+        value = normalize_metadata_value(metadata.get("absender"))
+        if value:
+            custom_fields[legacy_field] = value
+    if custom_fields:
+        fields = []
+        field_resp = _requests.get(f"{host}/api/custom_fields/", headers=headers, timeout=30)
+        field_resp.raise_for_status()
+        raw_fields = field_resp.json()
+        for field_name, value in custom_fields.items():
+            available = raw_fields.get("results", []) if isinstance(raw_fields, dict) else raw_fields
+            match = next((item for item in available if item.get("name") == field_name), None)
+            if match:
+                fields.append({"field": match["id"], "value": value})
+        if fields:
+            patch_resp = _requests.patch(
+                f"{host}/api/documents/{doc_id}/",
+                headers=headers,
+                json={"custom_fields": fields},
+                timeout=30,
+            )
+            patch_resp.raise_for_status()
 
     logger.info("[%s] Paperless upload complete: doc_id=%s", task_id, doc_id)
     return {"status": "Completed", "paperless_host": host, "paperless_document_id": doc_id}

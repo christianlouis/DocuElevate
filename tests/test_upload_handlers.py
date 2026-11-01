@@ -323,6 +323,34 @@ class TestUploadGoogleDrive:
 
         assert result["status"] == "Completed"
 
+    def test_sidecar_metadata_is_preserved_as_drive_properties(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp)
+        with open(tmp_path / "doc.json", "w", encoding="utf-8") as fh:
+            json.dump({"absender": "Alice", "nested": {"ignored": True}}, fh)
+
+        service = MagicMock()
+        service.files.return_value.create.return_value.execute.return_value = {"id": "drive-id"}
+        modules = {
+            "googleapiclient.discovery": MagicMock(build=MagicMock(return_value=service)),
+            "googleapiclient.http": MagicMock(MediaFileUpload=MagicMock()),
+            "google.oauth2.credentials": MagicMock(),
+            "google.auth.transport.requests": MagicMock(),
+            "google.oauth2.service_account": MagicMock(),
+        }
+        with (
+            patch.dict("sys.modules", modules),
+            patch("app.tasks.upload_to_user_integration.settings.google_drive_client_id", "cid"),
+            patch("app.tasks.upload_to_user_integration.settings.google_drive_client_secret", "secret"),
+        ):
+            self._call(fp, {}, {"refresh_token": "refresh"})
+
+        body = service.files.return_value.create.call_args.kwargs["body"]
+        assert body["properties"]["absender"] == "Alice"
+        assert body["appProperties"] == {"docuelevate": "true"}
+        assert "Document Metadata" in body["description"]
+        assert "nested" in body["description"]
+
 
 # ---------------------------------------------------------------------------
 # _upload_webdav / _upload_nextcloud
@@ -638,6 +666,44 @@ class TestUploadPaperless:
                         {"host": "https://paperless.example.com"},
                         {"api_token": "tok"},
                     )
+
+    def test_timeout_is_not_reported_as_completed(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp)
+        post = MagicMock(text='"task-timeout"')
+        pending = MagicMock()
+        pending.json.return_value = [{"status": "PENDING"}]
+        requests = MagicMock(post=MagicMock(return_value=post), get=MagicMock(return_value=pending))
+
+        with patch.dict("sys.modules", {"requests": requests}), patch("time.sleep", return_value=None):
+            with pytest.raises(TimeoutError, match="did not complete"):
+                self._call(fp, {"host": "https://paperless.example.com"}, {"api_token": "tok"})
+
+    def test_custom_field_mapping_uses_personal_config(self, tmp_path):
+        fp = str(tmp_path / "doc.pdf")
+        _write_file(fp)
+        with open(tmp_path / "doc.json", "w", encoding="utf-8") as fh:
+            json.dump({"absender": "Alice"}, fh)
+        post = MagicMock(text='"task-fields"')
+        poll = MagicMock()
+        poll.json.return_value = [{"status": "SUCCESS", "related_document": 7}]
+        fields = MagicMock()
+        fields.json.return_value = {"results": [{"id": 11, "name": "Sender"}]}
+        requests = MagicMock(post=MagicMock(return_value=post), get=MagicMock(side_effect=[poll, fields]))
+        requests.patch.return_value = MagicMock()
+
+        with patch.dict("sys.modules", {"requests": requests}), patch("time.sleep", return_value=None):
+            result = self._call(
+                fp,
+                {
+                    "host": "https://paperless.example.com",
+                    "custom_fields_mapping": {"absender": "Sender"},
+                },
+                {"api_token": "tok"},
+            )
+
+        assert result["status"] == "Completed"
+        assert requests.patch.call_args.kwargs["json"] == {"custom_fields": [{"field": 11, "value": "Alice"}]}
 
 
 # ---------------------------------------------------------------------------
