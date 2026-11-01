@@ -182,6 +182,7 @@
   };
 </script>
 <script src="/static/js/upload.js"></script>
+<script src="/static/js/upload-bulk.js"></script>
 <script>
   // Drag-and-drop / file input logic
   const dropZone = document.getElementById("dropZone");
@@ -222,7 +223,7 @@
     }, 1000);
   }
 
-  async function followFirstDocument({ operationId = null, taskId = null, duplicateFileId = null }) {
+  async function followFirstDocument({ operationId = null, taskId = null, fileId = null, duplicateFileId = null }) {
     if (!firstDocumentMode || followingFirstDocument) {
       return false;
     }
@@ -232,9 +233,10 @@
     updateFirstDocumentTracker(uploadMessage("firstDocumentQueued"), startedAt);
     startFirstDocumentTimer(startedAt);
 
-    if (duplicateFileId) {
+    const directFileId = fileId || duplicateFileId;
+    if (directFileId) {
       updateFirstDocumentTracker(uploadMessage("firstDocumentOpening"), startedAt);
-      window.location.href = `/files/${encodeURIComponent(duplicateFileId)}/process?onboarding=first-document`;
+      window.location.href = `/files/${encodeURIComponent(directFileId)}/process?onboarding=first-document`;
       return true;
     }
 

@@ -22,12 +22,12 @@ class Sha256 {
     for (let i = 0; i < end; i += 64) this.block(data.subarray(i, i + 64));
     this.buf = data.slice(end); return this;
   }
-  block(b) {
-    const w = new Uint32Array(64); for (let i=0;i<16;i++) w[i] = (b[i*4]<<24)|(b[i*4+1]<<16)|(b[i*4+2]<<8)|b[i*4+3];
+  block(blockBytes) {
+    const w = new Uint32Array(64); for (let i=0;i<16;i++) w[i] = (blockBytes[i*4]<<24)|(blockBytes[i*4+1]<<16)|(blockBytes[i*4+2]<<8)|blockBytes[i*4+3];
     for (let i=16;i<64;i++) { const x=w[i-15], y=w[i-2]; const s0=rotr(x,7)^rotr(x,18)^(x>>>3); const s1=rotr(y,17)^rotr(y,19)^(y>>>10); w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0; }
-    let [a,c,d,e,f,g,h,j] = this.h;
-    for (let i=0;i<64;i++) { const S1=rotr(e,6)^rotr(e,11)^rotr(e,25); const ch=(e&f)^(~e&g); const t1=(j+S1+ch+K[i]+w[i])>>>0; const S0=rotr(a,2)^rotr(a,13)^rotr(a,22); const maj=(a&c)^(a&d)^(c&d); const t2=(S0+maj)>>>0; j=g;g=f;f=e;e=(h+t1)>>>0;h=d;d=c;c=a;a=(t1+t2)>>>0; }
-    this.h = [(this.h[0]+a)>>>0,(this.h[1]+c)>>>0,(this.h[2]+d)>>>0,(this.h[3]+e)>>>0,(this.h[4]+f)>>>0,(this.h[5]+g)>>>0,(this.h[6]+h)>>>0,(this.h[7]+j)>>>0];
+    let [a,b,c,d,e,f,g,h] = this.h;
+    for (let i=0;i<64;i++) { const S1=rotr(e,6)^rotr(e,11)^rotr(e,25); const ch=(e&f)^(~e&g); const t1=(h+S1+ch+K[i]+w[i])>>>0; const S0=rotr(a,2)^rotr(a,13)^rotr(a,22); const maj=(a&b)^(a&c)^(b&c); const t2=(S0+maj)>>>0; h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0; }
+    this.h = [(this.h[0]+a)>>>0,(this.h[1]+b)>>>0,(this.h[2]+c)>>>0,(this.h[3]+d)>>>0,(this.h[4]+e)>>>0,(this.h[5]+f)>>>0,(this.h[6]+g)>>>0,(this.h[7]+h)>>>0];
   }
   digest() { const bit = this.bytes * 8; const tail = new Uint8Array(((this.buf.length + 9 + 63) >> 6) * 64); tail.set(this.buf); tail[this.buf.length]=0x80; const view=new DataView(tail.buffer); view.setUint32(tail.length-4, bit>>>0); view.setUint32(tail.length-8, Math.floor(bit/0x100000000)>>>0); for(let i=0;i<tail.length;i+=64)this.block(tail.subarray(i,i+64)); return this.h.map(x=>x.toString(16).padStart(8,'0')).join(''); }
 }
