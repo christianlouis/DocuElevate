@@ -1,6 +1,6 @@
 # DocuElevate Milestones
 
-**Last Updated:** 2026-07-19
+**Last Updated:** 2026-11-01
 
 This document outlines the release milestones, versioning strategy, and detailed feature breakdown for DocuElevate.
 
@@ -23,7 +23,7 @@ DocuElevate follows [Semantic Versioning 2.0.0](https://semver.org/):
 
 DocuElevate ships continuously via automated semantic versioning. Use **GitHub Releases** for the latest build artifacts and **GitHub Milestones** (below) for roadmap tracking.
 
-**Current stable release at this review:** `v0.188.2` (2026-07-19). The release
+**Current stable release at this review:** `v0.191.1` (2026-11-01). The release
 number is not a claim that the future named milestone outcomes are complete.
 
 The production deployment has its own manually approved release boundary and can
@@ -142,6 +142,51 @@ As of February 2026, DocuElevate uses **automated semantic versioning**:
 ---
 
 ## Upcoming Planning Anchors
+
+### User-specific document integration acceptance (P0–P3)
+**Target:** acceptance track beginning 2026-11-01
+
+**Status:** 🚧 Foundations implemented; disposable live E2E and strict-routing gate remain
+
+**Scope:** sources, owner profiles, classification, and explicitly scoped destinations. SaaS packaging and broader Tribe product proposals are separate tracks.
+
+#### Acceptance gates
+
+- **P0 — owner-to-sink E2E and rollback:** In a disposable environment, PersonA,
+  PersonB, and PersonC each configure a source/profile and personal destination.
+  Their processed documents reach only their own active destinations. A missing
+  destination or lookup error fails closed and never sends to a global sink; the
+  release can be rolled back or the integration disabled without orphaning work.
+- **P1 — classification and ownership:** A document classified to a person,
+  profile, or pipeline records the rule owner, proposed result, correction, and
+  authorized destination decision. Corrections cannot widen access implicitly.
+- **P2 — shared intake rules:** A joint document can route to multiple explicitly
+  authorized people. An optional Tribe-owner copy, Example Street10/12 object
+  targets, and a `tax-review` topic folder are each opt-in rules with audit
+  evidence; no shared copy is inferred from global defaults.
+- **P3 — click-login OAuth:** Future setup may reuse a centrally registered
+  provider application so each person need not create an app/key. Provider
+  consent, OAuth state/redirect URI/scope, revocation, and owner binding remain
+  mandatory. This does not change the current provider requirements documented in
+  [ROADMAP.md](ROADMAP.md).
+
+#### Current evidence and limits
+
+`UserIntegration` stores owner-scoped config and encrypted credentials, and the
+owner dispatcher queues one upload per active destination
+([app/tasks/send_to_all.py](app/tasks/send_to_all.py),
+[app/tasks/upload_to_user_integration.py](app/tasks/upload_to_user_integration.py)).
+Focused tests cover strict no-fallback behavior and personal-handler isolation
+([tests/test_user_destination_routing.py](tests/test_user_destination_routing.py),
+[tests/test_upload_handlers.py](tests/test_upload_handlers.py)). These are code
+and unit-test foundations, not provider-account or production acceptance. In
+particular, Google Drive's personal OAuth start/callback still uses global
+`google_drive_client_id` and `google_drive_client_secret`, but its destination
+handler also supports explicitly owner-scoped service-account `credentials_json`.
+OneDrive may reuse or accept per-integration client credentials. The roadmap's
+operator-runtime matrix also distinguishes optional system SMTP notifications
+from per-user EMAIL delivery and per-user IMAP sources; do not call setup
+app-key-free until the provider-specific path and live E2E evidence are proven.
 
 ### Clarity: Enhanced Search & UI (Planning track)
 **Target Date:** October 31, 2026

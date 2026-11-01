@@ -1,7 +1,7 @@
 # DocuElevate Roadmap
 
-**Last Updated:** 2026-07-19
-**Version:** 2.3
+**Last Updated:** 2026-11-01
+**Version:** 2.4
 
 ## Vision
 
@@ -57,6 +57,97 @@ image until a separate manual production approval is given.
 The current issue inventory also contains post-merge follow-ups. Before starting
 one, verify it against `main` and existing regression tests; close already-delivered
 findings with evidence instead of carrying stale work forward.
+
+## User-specific sources, profiles, and destinations
+
+This is the next document-integration acceptance track. It is deliberately about
+document sources, owner profiles, classification, and sinks; SaaS packaging and
+broader Tribe product work are separate planning tracks and are not acceptance
+criteria here. The implementation evidence below is from the current integration
+line ([PR #1294](https://github.com/christianlouis/DocuElevate/pull/1294)), not a claim that production has accepted the journey.
+
+### Delivery order
+
+1. **P0 — Prove the actual owner-to-sink journey and make it safe to roll back.**
+   Run a disposable end-to-end test with generic PersonA, PersonB, and PersonC
+   accounts. Each person must be able to configure a source/profile and at least
+   one personal destination; a processed document must reach only the owner's
+   configured active destinations. Missing or failed owner-destination lookup must
+   fail closed (no global destination fallback), be observable, retryable where
+   safe, and be reversible by disabling the integration or rolling back the
+   release. The existing code already queries active owner-matched destinations
+   and dispatches one task per integration (`app/tasks/send_to_all.py`), decrypts
+   credentials at execution time (`app/tasks/upload_to_user_integration.py`), and
+   has focused fallback tests (`tests/test_user_destination_routing.py`); these
+   are foundations, not live E2E evidence.
+2. **P1 — Classification to user pipeline and ownership.**
+   Add explainable classification from source/document metadata to an owner,
+   profile, and permitted pipeline. Record who owns the rule, who may change it,
+   the proposed result, the final correction, and the destination decision. A
+   correction must not broaden access or silently route to an operator/global
+   sink.
+3. **P2 — Shared intake rules with explicit scope.**
+   Support rules by person, topic, and object (for example, a household or
+   employer), with one document able to fan out to multiple explicitly authorized
+   targets. Cover a joint document, an optional explicitly configured
+   Tribe-owner copy, object-specific destinations (Example Street10/12), and a
+   topic destination (tax-review folder). Shared copies require an explicit rule;
+   they are never inferred from a global default.
+4. **P3 — Click-login OAuth setup.**
+   Simplify setup so a user can click a provider login without creating a separate
+   provider app/key for every person, while keeping provider consent, state,
+   redirect-URI, scope, revocation, and ownership boundaries explicit. This is
+   future work; the current provider app requirements remain in the matrix below.
+
+### Current configuration and OAuth boundary (implementation evidence)
+
+| Provider/handler | Personal configuration today | Mandatory central dependency today | Acceptance status |
+|---|---|---|---|
+| Google Drive | Owner-scoped integration stores OAuth refresh credentials; the destination handler also accepts owner-scoped `credentials_json` for a service account. | The current personal OAuth start/callback uses operator `google_drive_client_id` and `google_drive_client_secret`; those central OAuth settings are not mandatory when the owner explicitly supplies service-account credentials. | Personal sink implemented; no-admin/app-key-free OAuth setup is **not** accepted. |
+| OneDrive | Owner-scoped integration stores refresh token and can store client ID/secret and tenant/folder config. | A client ID/secret and tenant are still required; the flow may reuse operator settings or accept per-integration values. | Personal sink implemented; click-login simplification is future P3. |
+| Dropbox | Owner-scoped integration stores refresh token/app key/app secret and folder; an explicitly enabled global app-key/secret may be reused for setup. | Provider app registration is still required (central reuse is optional/configured, not a global destination fallback). | Personal sink implemented; live provider E2E remains open. |
+| Evernote | Owner-scoped integration uses only its encrypted auth token and notebook/configuration (`app/tasks/upload_to_evernote.py`). | No global destination credential is used by the personal helper. | Personal sink implemented; live account E2E remains open. |
+| Notion | Owner-scoped token and page/database configuration are passed to the personal handler. | No provider OAuth app is required by the current token-based handler. | Personal sink implemented; live account E2E remains open. |
+| Email and SFTP | Personal handler reads SMTP/SFTP connection fields and secrets from the owner integration. SFTP host-key trust can additionally use system host keys or operator `sftp_known_hosts_file` (`app/tasks/upload_to_user_integration.py`). | Email endpoint/credentials must be supplied per integration. SFTP still requires host-key trust (system/central known-hosts or an explicitly configured per-integration known-hosts file); this is not a destination fallback. | Personal handlers implemented; live delivery E2E remains open. |
+| WebDAV/Nextcloud, S3, FTP, Paperless, rclone, SharePoint, iCloud, vector | Generic owner integration model/dispatcher has handlers and encrypted config shapes (`app/models.py`, `app/tasks/upload_to_user_integration.py`). | Provider endpoint and credentials remain configuration requirements; coverage is not equivalent to accepted live E2E. | Track individually in P0 E2E; do not infer completion from handler presence. |
+
+Global/admin settings remain valid for legacy single-user or explicitly global
+destinations. They are not an implicit fallback for an owned document once strict
+owner routing is enabled. Personal source and sink credentials must remain scoped
+to the owning integration, encrypted at rest, absent from task payloads/logs, and
+revocable. This matrix intentionally names only repository paths and generic
+fixtures; it contains no real people, addresses, or provider accounts.
+
+### Operator runtime prerequisites versus personal settings
+
+The following is the current deployment boundary, not a proposal to make every
+setting user-editable. Values marked **required** are operator/runtime inputs for
+the application to boot or process documents; **optional** means the related
+feature stays disabled or uses its documented local default. None of these
+operator values may become an implicit destination for an owner-scoped document.
+
+| Area | Current operator/runtime setting | Current status and source |
+|---|---|---|
+| Database | `DATABASE_URL` / `database_url` | **Required** (`app/config.py:14`); persistence and owner routing depend on it. |
+| Queue/cache | `REDIS_URL` / `redis_url` (Celery URLs may override it) | **Required** for the deployed worker/lock topology; defaults to the Compose Redis service (`app/config.py:15-33`). |
+| Work files | `WORKDIR` / `workdir` | **Required runtime location**, with `/workdir` default (`app/config.py:116`); it is not a personal destination. |
+| Encryption and auth | `SESSION_SECRET` / `session_secret`; `AUTH_ENABLED`, admin credentials as applicable | **Required** when authentication is enabled; the secret is also the current encryption-key basis and must be rotated using the documented previous-secret path (`app/config.py:322-334,1819-1822`). |
+| Application URL | `PUBLIC_BASE_URL` / `public_base_url` (and `external_hostname`) | **Optional locally**, but required for reliable OAuth redirect URLs behind a proxy (`app/config.py:277-286`). |
+| AI/processing | `AI_PROVIDER` plus the selected provider endpoint/key (for example `OPENAI_BASE_URL` + `OPENAI_API_KEY`, or Azure/Mistral/Gemini equivalents) | AI-backed extraction/merge is **required for those enabled processing paths**; local Tesseract OCR is the default, so a paid OCR key is not universally required (`app/config.py:52-60,230-245,267-276`). |
+| Conversion | `GOTENBERG_URL` / `gotenberg_url` | **Optional by deployment/format**; the current default is the Compose service (`app/config.py:230-234`). A conversion-dependent acceptance case must provision it and record the result. |
+| Search index | `MEILISEARCH_URL`, optional `MEILISEARCH_API_KEY`, `MEILISEARCH_INDEX_NAME`, `ENABLE_SEARCH` | **Optional feature** with local defaults; search/index availability is not a prerequisite for owner-to-sink delivery (`app/config.py:884-891`). |
+| System notifications | Shared `EMAIL_*` SMTP settings and notification URLs | **Optional operator notification channel** for password/verification/system messages; it is separate from a user's document-delivery SMTP (`app/config.py:804-811,1125-1149`). |
+| Personal EMAIL destination | Owner `UserIntegration` config/credentials: SMTP host/port/TLS, sender, recipient, username/password | **Per-user**, encrypted and owner-bound; it must not read the shared system SMTP values (`app/tasks/upload_to_user_integration.py:565-622`, `tests/test_upload_handlers.py`). |
+| Personal IMAP source | Owner `UserImapAccount`/IMAP integration host, port, username, password, TLS/delete/profile settings | **Per-user**, encrypted and owner-bound. The current source handler is generic password-based IMAP plus optional legacy system slots; OAuth support is not claimed here (`app/tasks/imap_tasks.py:159-213`, `app/views/imap_accounts.py:46-105`). |
+
+Provider OAuth has two distinct parts: a centrally registered application
+(client ID/secret, redirect URI and scopes) and each person's consented token plus
+target/folder. P3 can centralize the first part so a person need not register an
+app/key, but it cannot remove the second part or ownership checks. Current GDrive
+also supports the explicit owner-scoped service-account `credentials_json` path;
+therefore “central OAuth app required” must not be generalized to every GDrive
+configuration. Current SFTP host-key verification similarly may depend on central
+known-hosts trust, even though endpoint credentials remain personal.
 
 ## Preprod Pilot: DearConcierge Knowledge Bridge
 
