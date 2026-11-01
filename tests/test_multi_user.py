@@ -48,6 +48,25 @@ def mu_session(mu_engine):
     session.close()
 
 
+@pytest.fixture(autouse=True)
+def _central_fence_session_factory(db_session):
+    """Point the central deletion fence at this test's real database.
+
+    ``get_current_owner_id`` opens ``app.database.SessionLocal`` directly for
+    bearer-token and deletion-fence checks, so the API fixture's injected
+    session must be its backing engine too.
+    """
+    from app import database
+
+    test_session_factory = sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        bind=db_session.get_bind(),
+    )
+    with patch.object(database, "SessionLocal", test_session_factory):
+        yield
+
+
 def _create_file_record(
     session,
     owner_id=None,
