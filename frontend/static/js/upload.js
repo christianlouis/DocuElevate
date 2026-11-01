@@ -295,7 +295,7 @@ async function getFilesFromDataTransfer(dataTransfer) {
  * @param {HTMLElement} progressContainer
  * @param {HTMLElement} statusMessage
  */
-function processFiles(files, progressContainer, statusMessage) {
+function legacyProcessFiles(files, progressContainer, statusMessage) {
   const fileArray = Array.from(files);
   if (!fileArray.length) return;
 
@@ -590,3 +590,93 @@ function initDragAndDrop(element, progressContainer, statusMessage, options = {}
     if (files.length > 0) processFiles(files, progressContainer, statusMessage);
   });
 }
+
+// ── Durable bulk queue ────────────────────────────────────────────────────────
+// The queue is deliberately metadata-first. Browser quotas make copying a
+// 40,000-file corpus into IndexedDB unsafe; FileSystem handles are retained when
+// available and otherwise the UI reports which files need to be selected again.
+class PersistentBulkUploadQueue {
+  constructor(progressContainer, statusMessage) {
+    this.progressContainer = progressContainer; this.statusMessage = statusMessage;
+    this.items = []; this.batchId = null; this.worker = null; this.workerSeq = 0;
+    this.socket = null; this.capacity = { slots: 2, maxBytes: Infinity }; this.running = false;
+  }
+  async enqueue(files) {
+    const list = Array.from(files || []).filter((f) => f && f.size <= MAX_FILE_SIZE && _isAcceptedFile(f));
+    if (!list.length) return;
+    this.items = list.map((file, index) => ({ key: `${crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+index}`, file, state: 'queued', sha256: null, mime: file.type || '', fileId: null }));
+    this.render(); this.setStatus(uploadMessage('queuedBatch', { count: this.items.length }));
+    await this.persistMetadata();
+    try {
+      const response = await fetch('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this.csrf() }, body: JSON.stringify({ client_batch_id: this.batchId || this.items[0].key, total_files: this.items.length, total_bytes: this.items.reduce((n, i) => n + i.file.size, 0) }) });
+      if (!response.ok) { if (response.status === 404 || response.status === 405) return legacyProcessFiles(files, this.progressContainer, this.statusMessage); throw new Error(`batch ${response.status}`); }
+      const batch = await response.json(); this.batchId = batch.batch_id; await this.persistBatch(batch);
+      await this.preflight(); this.connectEvents(); await this.pump();
+    } catch (error) { console.warn('[DocuElevate] durable queue unavailable, using legacy upload:', error); legacyProcessFiles(files, this.progressContainer, this.statusMessage); }
+  }
+  csrf() { const token = typeof getCsrfToken === 'function' ? getCsrfToken() : ''; return token ? { 'X-CSRF-Token': token } : {}; }
+  async persistBatch(batch) {
+    try {
+      if (!navigator.serviceWorker?.controller) return;
+      navigator.serviceWorker.controller.postMessage({ type: 'enqueue', item: { key: `batch:${this.batchId}`, batchId: this.batchId, state: 'queued', totalFiles: batch.total_files || this.items.length } });
+      // Persist only a bounded metadata record. The File object is intentionally
+      // omitted; callers with a FileSystemFileHandle can add it to this record.
+      this.items.forEach((item) => navigator.serviceWorker.controller.postMessage({ type: 'enqueue', item: { key: item.key, batchId: this.batchId, clientId: item.key, name: item.file.name, size: item.file.size, state: item.state, handle: item.handle || null } }));
+    } catch (_) { /* best effort */ }
+  }
+  async persistMetadata() {
+    // Keep at most a small manifest in local storage. Files remain in the page
+    // and are never serialized; this is the important 40k-file memory guard.
+    try { localStorage.setItem('docuelevate.upload.batch', JSON.stringify({ batchId: this.items[0]?.key, count: this.items.length, updatedAt: Date.now() })); } catch (_) { /* private mode/quota */ }
+  }
+  async preflight() {
+    this.worker = new Worker('/static/js/upload-preflight-worker.js');
+    const candidates = this.items.slice(0, 200); // bounded request; remaining files follow in windows
+    const digests = await Promise.all(candidates.map((item) => new Promise((resolve) => { const id = ++this.workerSeq; const on = (e) => { if (e.data.id !== id) return; this.worker.removeEventListener('message', on); resolve(e.data); }; this.worker.addEventListener('message', on); this.worker.postMessage({ id, file: item.file, name: item.file.name, mime: item.file.type }); })));
+    digests.forEach((result, index) => { const item = candidates[index]; if (result.error) { item.state = 'failed'; item.error = result.error; } else { item.sha256 = result.sha256; item.mime = result.mime; } });
+    const response = await fetch('/api/uploads/preflight', { method: 'POST', headers: { 'Content-Type': 'application/json', ...this.csrf() }, body: JSON.stringify({ batch_id: this.batchId, files: candidates.map((i) => ({ client_id: i.key, sha256: i.sha256, size: i.file.size, name: i.file.name, mime: i.mime })) }) });
+    if (!response.ok) throw new Error(`preflight ${response.status}`);
+    const result = await response.json();
+    (result.files || result.items || []).forEach((entry) => { const item = candidates.find((i) => i.key === (entry.client_id || entry.key)); if (!item) return; if (entry.duplicate || entry.duplicate_of) { item.state = 'duplicate'; item.fileId = entry.file_id || entry.duplicate_of; } });
+    this.render();
+  }
+  connectEvents() {
+    if (!this.batchId || !window.WebSocket) return;
+    const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:'; this.socket = new WebSocket(`${scheme}//${location.host}/api/uploads/events?batch_id=${encodeURIComponent(this.batchId)}`);
+    this.socket.onmessage = (event) => { try { const data = JSON.parse(event.data); if (data.type === 'capacity') this.capacity = { slots: Math.max(1, data.slots || 1), maxBytes: data.max_bytes || Infinity }; if (data.type === 'snapshot') this.reconcile(data); this.pump(); } catch (_) {} };
+    this.socket.onclose = () => { this.socket = null; setTimeout(() => this.connectEvents(), 3000); };
+  }
+  reconcile(snapshot) { (snapshot.items || snapshot.files || []).forEach((entry) => { const item = this.items.find((i) => i.key === (entry.client_id || entry.key)); if (item && entry.file_id) { item.fileId = entry.file_id; item.state = entry.state || 'accepted'; } }); this.render(); }
+  async pump() {
+    if (this.running || !this.batchId) return; this.running = true;
+    try {
+      while (true) {
+        const pending = this.items.filter((i) => i.state === 'queued' && i.sha256 && i.file);
+        if (!pending.length) break;
+        const slots = Math.max(1, Math.min(this.capacity.slots || 1, _effectiveConcurrency()));
+        const window = pending.slice(0, slots); await Promise.all(window.map((item) => this.send(item)));
+        this.render(); this.setStatus(uploadMessage('uploadingBatch', { done: this.items.filter((i) => ['accepted','duplicate','processed'].includes(i.state)).length, total: this.items.length }));
+        await new Promise((resolve) => setTimeout(resolve, _effectiveDelay()));
+      }
+      this.setStatus(uploadMessage('allComplete', { done: this.items.filter((i) => i.state !== 'failed').length, total: this.items.length }));
+      window.dispatchEvent(new CustomEvent('allUploadsComplete', { detail: { total: this.items.length, completed: this.items.filter((i) => i.state !== 'failed').length } }));
+    } finally { this.running = false; }
+  }
+  async send(item) {
+    const body = new FormData(); body.append('file', item.file); body.append('batch_id', this.batchId); body.append('client_id', item.key); body.append('sha256', item.sha256); if (item.mime) body.append('mime', item.mime);
+    item.state = 'uploading'; this.render();
+    try { const response = await fetch('/api/uploads/files', { method: 'POST', headers: this.csrf(), body }); if (response.status === 429) { item.state='queued'; const retry=Number(response.headers.get('Retry-After') || 2); _onRateLimited(retry); await new Promise((resolve)=>setTimeout(resolve,retry*1000)); return this.send(item); } if (!response.ok) throw new Error(`upload ${response.status}`); const result=await response.json(); item.fileId=result.file_id || result.id || result.duplicate_of; item.state=result.duplicate ? 'duplicate' : (result.state || 'accepted'); this.storeItem(item); if (typeof window.onDocuElevateUploadQueued==='function') window.onDocuElevateUploadQueued({ operationId: result.batch_id || this.batchId, fileId: item.fileId, filename: item.file.name, state: item.state }); }
+    catch (error) { item.state = 'failed'; item.error = String(error); }
+  }
+  setStatus(message) { if (this.statusMessage) this.statusMessage.textContent = message; }
+  storeItem(item) { try { navigator.serviceWorker?.controller?.postMessage({ type: 'enqueue', item: { key: item.key, batchId: this.batchId, clientId: item.key, name: item.file.name, size: item.file.size, sha256: item.sha256, state: item.state, fileId: item.fileId || null, handle: item.handle || null } }); } catch (_) {} }
+  render() { if (!this.progressContainer) return; this.progressContainer.replaceChildren(); this.items.slice(0, 100).forEach((item) => { const row=document.createElement('div'); row.className='flex justify-between text-xs mb-1'; row.textContent=`${item.file.name} — ${item.state}`; this.progressContainer.appendChild(row); }); if (this.items.length>100) { const more=document.createElement('div'); more.className='text-xs text-gray-500'; more.textContent=`… ${this.items.length-100} weitere Dateien`; this.progressContainer.appendChild(more); } }
+}
+
+async function processFiles(files, progressContainer, statusMessage) {
+  if (!files || !Array.from(files).length) return;
+  if ('serviceWorker' in navigator && !navigator.serviceWorker.controller) { try { await navigator.serviceWorker.register('/static/js/upload-queue-sw.js', { scope: '/' }); } catch (_) {} }
+  const queue = new PersistentBulkUploadQueue(progressContainer, statusMessage); window.docuElevateUploadQueue = queue; await queue.enqueue(files);
+}
+
+if (typeof window !== 'undefined') window.PersistentBulkUploadQueue = PersistentBulkUploadQueue;

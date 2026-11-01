@@ -1,0 +1,8 @@
+/* The service worker is a small durable coordinator. It never owns file bytes:
+ * it stores metadata and FileSystemFileHandle objects when the browser allows
+ * that, leaving the page to request permission before a retry. */
+const DB_NAME='docuelevate-upload-queue'; const DB_VERSION=1;
+function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains('batches'))d.createObjectStore('batches',{keyPath:'batchId'});if(!d.objectStoreNames.contains('items')){const s=d.createObjectStore('items',{keyPath:'key'});s.createIndex('batch','batchId');s.createIndex('state','state');}};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+function tx(store,mode,fn){return openDb().then(db=>new Promise((resolve,reject)=>{const t=db.transaction(store,mode),s=t.objectStore(store);let out;try{out=fn(s)}catch(e){reject(e);return}t.oncomplete=()=>resolve(out);t.onerror=()=>reject(t.error);}));}
+self.addEventListener('install',e=>e.waitUntil(self.skipWaiting())); self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
+self.addEventListener('message',e=>{const m=e.data||{}; if(m.type==='enqueue') e.waitUntil(tx('items','readwrite',s=>s.put(m.item)).then(()=>e.source&&e.source.postMessage({type:'queueStored',key:m.item.key}))); else if(m.type==='remove')e.waitUntil(tx('items','readwrite',s=>s.delete(m.key))); else if(m.type==='snapshot')e.waitUntil(tx('items','readonly',s=>{const r=s.getAll();r.onsuccess=()=>e.source&&e.source.postMessage({type:'snapshot',items:r.result});}));});
