@@ -10,6 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.193.0 (2026-11-01)
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f933d4f`](https://github.com/christianlouis/DocuElevate/commit/f933d4f5f96327e1611a65a658fbdcec397ed4af))
+
+### Features
+
+- Add verified signup, onboarding and account deletion
+  ([`7896d94`](https://github.com/christianlouis/DocuElevate/commit/7896d94c939746049e364728a54915fe21f90c64))
+
+
 ## Unreleased
 
 

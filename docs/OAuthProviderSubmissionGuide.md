@@ -117,3 +117,7 @@ Ein Antrag wird erst als bereit markiert, wenn diese Nachweise, die öffentliche
 - [Apple Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 - [Apple Private Email Relay](https://developer.apple.com/documentation/signinwithapple/communicating-using-the-private-email-relay-service)
 - [Dropbox Developer Guide](https://www.dropbox.com/developers/reference/developer-guide)
+
+## Registrierung und Kontolebenszyklus im aktuellen Änderungsstand
+
+Web und Mobile enthalten eine Registrierung mit aktuellen Zustimmungen, verpflichtender E-Mail-Verifikation und anschließender Einrichtung. SMTP und öffentliche Registrierung müssen auf dem Zielserver aktiviert sein. Social-Login-Konten bestätigen die aktuellen Bedingungen beim Abschluss der Einrichtung. Kontolöschung ist über Profil und `/account/delete` erreichbar; sie bereinigt verwaltete Daten und widerruft gespeicherte Apple-Grants. Details und Grenzen: [SignupReviewReadiness.md](SignupReviewReadiness.md), [AccountDeletion.md](AccountDeletion.md). Diese Implementierung ist erst nach Deployment und Geräteabnahme ein Produktionsnachweis. Die oben genannten Provider-Konsolen, nativen Apple-Freigaben und iCloud-Grenzen bleiben getrennte Prüfpunkte.

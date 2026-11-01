@@ -29,6 +29,10 @@ If OpenID Connect authentication is configured:
 4. You'll be redirected back to DocuElevate after successful authentication
 
 #### Local User Accounts
+If public registration is enabled, choose **Create account** on the web or mobile login screen. Enter your email address, username and password, read the linked terms and privacy notice, and confirm them. Open the verification email before signing in; you can request a replacement email from the registration screen.
+
+After the first login, complete the setup for your profile and document space. A personal space and the local archive allow you to start without connecting a cloud provider. Connect optional sources and destinations only when you want documents transferred to them. External sign-in users also confirm the current terms and privacy notice during setup.
+
 If your administrator has created a local (email/password) account for you:
 
 1. You'll see a "Sign in with username" form on the login page
@@ -813,3 +817,7 @@ For programmatic access, DocuElevate provides a comprehensive REST API:
 ## Troubleshooting
 
 If you encounter issues while using DocuElevate, please refer to the [Troubleshooting Guide](Troubleshooting.md).
+
+### Delete your account
+
+Open **Profile → Delete account** in the web or mobile application and enter the displayed confirmation phrase. This permanently removes the account and its managed DocuElevate data. Legal holds can block deletion; a temporary cleanup failure requires retry. Exported copies and backups have separate retention rules. See [Account deletion](AccountDeletion.md).

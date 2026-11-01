@@ -42,7 +42,7 @@ class TestUploadToFtp:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_ftp(mock_self, "/tmp/test.pdf")
+        result = upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Completed"
         assert result["used_tls"] is True
@@ -82,7 +82,7 @@ class TestUploadToFtp:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_ftp(mock_self, "/tmp/test.pdf")
+        result = upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Completed"
         assert result["used_tls"] is False
@@ -114,7 +114,7 @@ class TestUploadToFtp:
         mock_self.request.id = "test-task-id"
 
         with pytest.raises(Exception, match="FTPS connection failed and plaintext FTP is forbidden"):
-            upload_to_ftp(mock_self, "/tmp/test.pdf")
+            upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
@@ -128,7 +128,7 @@ class TestUploadToFtp:
         mock_self.request.id = "test-task-id"
 
         with pytest.raises(FileNotFoundError):
-            upload_to_ftp(mock_self, "/nonexistent/file.pdf")
+            upload_to_ftp.__wrapped__(mock_self, "/nonexistent/file.pdf")
 
     @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.log_task_progress")
@@ -144,7 +144,7 @@ class TestUploadToFtp:
         mock_self.request.id = "test-task-id"
 
         with pytest.raises(ValueError, match="FTP host is not configured"):
-            upload_to_ftp(mock_self, "/tmp/test.pdf")
+            upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
@@ -179,7 +179,7 @@ class TestUploadToFtp:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_ftp(mock_self, "/tmp/test.pdf")
+        result = upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Completed"
         mock_ftp.mkd.assert_called()
@@ -210,7 +210,7 @@ class TestUploadToFtp:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_ftp(mock_self, "/tmp/test.pdf")
+        result = upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
         assert result["status"] == "Completed"
         assert result["used_tls"] is False
@@ -234,7 +234,7 @@ class TestUploadToFtp:
         mock_self.request.id = "test-task-id"
 
         with pytest.raises(Exception, match="Plaintext FTP is forbidden"):
-            upload_to_ftp(mock_self, "/tmp/test.pdf")
+            upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
@@ -261,7 +261,7 @@ class TestUploadToFtp:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        upload_to_ftp(mock_self, "/tmp/test.pdf")
+        upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
         # Verify cwd was called with folder without leading slash
         mock_ftp.cwd.assert_called_with("uploads")
@@ -291,7 +291,7 @@ class TestUploadToFtp:
         mock_self.request.id = "test-task-id"
 
         with pytest.raises(Exception, match="Failed to change/create directory"):
-            upload_to_ftp(mock_self, "/tmp/test.pdf")
+            upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
     @patch("app.tasks.upload_to_ftp.os.path.basename")
     @patch("app.tasks.upload_to_ftp.ftplib.FTP_TLS")
@@ -318,7 +318,7 @@ class TestUploadToFtp:
         mock_self = Mock()
         mock_self.request.id = "test-task-id"
 
-        result = upload_to_ftp(mock_self, "/tmp/test.pdf")
+        result = upload_to_ftp.__wrapped__(mock_self, "/tmp/test.pdf")
 
         assert "ftp_path" in result
         assert result["ftp_path"] == "/uploads/test.pdf"

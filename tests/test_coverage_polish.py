@@ -99,7 +99,7 @@ class TestDropboxPathExists:
 
         mock_unique.side_effect = capture_callback
 
-        result = upload_to_dropbox.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+        result = upload_to_dropbox.__wrapped__(str(test_file), file_id=1)
         assert result["status"] == "Completed"
 
 
@@ -127,7 +127,7 @@ class TestDropboxUnexpectedExceptionHandler:
         mock_client.side_effect = RuntimeError("Something unexpected")
 
         with pytest.raises(Exception, match="Unexpected error"):
-            upload_to_dropbox.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_dropbox.__wrapped__(str(test_file), file_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -201,10 +201,11 @@ class TestRotatePdfPagesEdgeCases:
 
         mock_extract.delay = Mock()
 
-        result = rotate_pdf_pages.apply(
-            args=["test.pdf", "some text"],
-            kwargs={"rotation_data": {"not_a_number": "invalid", 0: 0}, "file_id": 1},
-        ).get()
+        # Exercise the provider body directly; lifecycle dispatch is outside
+        # this unit test's rotation-data contract.
+        result = rotate_pdf_pages.run(
+            "test.pdf", "some text", rotation_data={"not_a_number": "invalid", 0: 0}, file_id=1
+        )
         # With only invalid keys and a zero-angle, no rotation needed
         assert result["status"] == "no_rotation_needed"
 

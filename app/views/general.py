@@ -161,8 +161,11 @@ async def serve_support(request: Request):
 
 @router.get("/account/delete", include_in_schema=False)
 async def serve_account_deletion(request: Request):
-    """Explain the current account-deletion process until self-service ships."""
-    return templates.TemplateResponse("account_delete.html", {"request": request})
+    """Serve the public deletion entry point with a session-bound CSRF token."""
+    return templates.TemplateResponse(
+        "account_delete.html",
+        {"request": request, "csrf_token": getattr(request.state, "csrf_token", "")},
+    )
 
 
 @router.get("/imprint", include_in_schema=False)

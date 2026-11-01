@@ -144,7 +144,7 @@ The privacy manifest is configured via `expo-build-properties` plugin in `app.js
 ### 3.4 Safety & Privacy (Guideline 5.x) (release gates remain)
 
 - **5.1.1 Data Collection and Storage:** The mobile app handles server configuration, authentication/session data, push tokens and user-selected document content; the server may process document content, OCR metadata and configured cloud-storage transfers. The final privacy labels must reflect the actual deployed configuration and data recipients.
-- **5.1.1(v) Account Deletion:** The mobile client opens the configured server's account-deletion URL. The current repository audit did not establish a complete user-facing deletion workflow at that URL; this remains a release gate. See the [OAuth provider submission guide](OAuthProviderSubmissionGuide.md).
+- **5.1.1(v) Account Deletion:** The mobile Profile screen includes typed-confirmation account deletion, backed by the authenticated lifecycle API. The web application provides the same entry point. Real-device acceptance, deployed cleanup and Apple grant revocation remain release gates. See [Account deletion](AccountDeletion.md). See the [OAuth provider submission guide](OAuthProviderSubmissionGuide.md).
 - **5.1.2 Data Use and Sharing:** The product has no advertising purpose in the reviewed configuration, but user-initiated document processing can transfer content to configured OCR, AI and storage providers. Provider names, purposes, retention and consent text must be reconciled before submission.
 
 ### 3.5 Privacy Policy (historical links; revalidate before submission)

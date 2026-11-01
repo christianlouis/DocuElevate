@@ -162,7 +162,7 @@ class TestUploadToNextcloud:
         mock_requests.request.return_value = mock_propfind_response
 
         with pytest.raises(Exception, match="Failed to upload"):
-            upload_to_nextcloud.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_nextcloud.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_nextcloud.get_unique_filename")
     @patch("app.tasks.upload_to_nextcloud.extract_remote_path")
@@ -229,7 +229,7 @@ class TestUploadToNextcloud:
         mock_requests.request.return_value = Mock(text="")
 
         with pytest.raises(Exception, match="Failed to upload"):
-            upload_to_nextcloud.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_nextcloud.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_nextcloud.get_unique_filename")
     @patch("app.tasks.upload_to_nextcloud.extract_remote_path")

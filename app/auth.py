@@ -308,10 +308,57 @@ _setup_social_providers()
 router = APIRouter()
 
 
+def _deletion_fenced(request: Request, user, db=None) -> bool:
+    if not isinstance(user, dict):
+        return False
+    # Some lightweight unit-test requests provide only headers/session in
+    # their ASGI scope.  Accessing ``Request.url`` then raises KeyError for
+    # the missing path; a missing path cannot be the account endpoint.
+    request_path = ""
+    request_scope = getattr(request, "scope", None)
+    if isinstance(request_scope, dict):
+        request_path = request_scope.get("path", "")
+    if not request_path:
+        try:
+            request_path = getattr(request.url, "path", "")
+        except (AttributeError, KeyError):
+            request_path = ""
+    if str(request_path).rstrip("/") == "/api/account" and request.method in {"GET", "DELETE"}:
+        return False
+    from app.utils.user_scope import _owner_id_from_user
+
+    owner = _owner_id_from_user(user)
+    if not owner:
+        return False
+    from app.database import SessionLocal
+    from app.models import AccountDeletionTombstone
+    from app.services.account_deletion import tombstone_key
+
+    session = db or SessionLocal()
+    try:
+        row = (
+            session.query(AccountDeletionTombstone)
+            .filter(
+                AccountDeletionTombstone.owner_id == tombstone_key(owner),
+                AccountDeletionTombstone.status.in_(["deleting", "deleted", "failed"]),
+            )
+            .first()
+        )
+        return row is not None and getattr(row, "status", None) in {"deleting", "deleted", "failed"}
+    except Exception:
+        logger.warning("Could not verify account deletion fence", exc_info=True)
+        return True
+    finally:
+        if db is None:
+            session.close()
+
+
 def get_current_user(request: Request):
     # Check for Bearer token auth first (API tokens)
     api_user = getattr(request.state, "api_token_user", None)
     if isinstance(api_user, dict):
+        if _deletion_fenced(request, api_user):
+            return None
         logger.debug("[AUTH] get_current_user: resolved from API token (user_id=%s)", api_user.get("id"))
         return api_user
     session_user = request.session.get("user")
@@ -351,6 +398,8 @@ def get_current_user(request: Request):
         )
     else:
         logger.debug("[AUTH] get_current_user: no user in session or API token")
+    if _deletion_fenced(request, session_user):
+        return None
     return session_user
 
 
@@ -398,6 +447,9 @@ def _resolve_bearer_user(request: Request, db: Session) -> dict | None:
         db_token.id,
         db_token.owner_id,
     )
+
+    if _deletion_fenced(request, {"id": db_token.owner_id}, db=db):
+        return None
 
     # Update usage tracking
     try:
@@ -723,74 +775,108 @@ async def social_callback(request: Request, provider: str, db: Session = Depends
                 status_code=status.HTTP_302_FOUND,
             )
 
-        # Add Gravatar if no picture provided
-        if not user_data.get("picture") and user_data.get("email"):
-            user_data["picture"] = get_gravatar_url(user_data["email"])
+        from app.services.account_lifecycle_lock import async_account_lifecycle_lock
+        from app.utils.user_scope import _owner_id_from_user
 
-        # Tag the login source for audit/debugging
-        user_data["auth_provider"] = provider
+        async with async_account_lifecycle_lock(db, _owner_id_from_user(user_data)):
+            # A new OAuth callback must not recreate a profile or provider grant
+            # for an account already fenced by deletion.
+            if _deletion_fenced(request, user_data, db=db):
+                return RedirectResponse(url="/login?error=Account+unavailable", status_code=status.HTTP_302_FOUND)
 
-        # Social login users are never admin by default (admin must be granted
-        # via the Authentik/OIDC admin group or manually in the admin panel)
-        user_data["is_admin"] = False
+            if provider == "apple":
+                # Keep the refresh grant encrypted so account deletion can revoke it.
+                from app.models import ProviderGrant
+                from app.utils.encryption import encrypt_value
 
-        request.session["user"] = user_data
+                grant_token = token.get("refresh_token")
+                from app.utils.user_scope import _owner_id_from_user
 
-        # Create server-side session for tracking and revocation
-        try:
-            from app.utils.session_manager import create_session
+                owner = _owner_id_from_user(user_data)
+                grant = db.query(ProviderGrant).filter_by(owner_id=owner, provider="apple").first()
+                if grant_token:
+                    encrypted = encrypt_value(grant_token)
+                    if not encrypted or not encrypted.startswith("enc:"):
+                        raise RuntimeError("Apple grant encryption unavailable")
+                    if not grant:
+                        grant = ProviderGrant(owner_id=owner, provider="apple", encrypted_token=encrypted)
+                        db.add(grant)
+                    else:
+                        grant.encrypted_token = encrypted
+                    db.commit()
+                elif not grant:
+                    raise RuntimeError("Apple did not provide a revocable grant")
 
-            _session_user_id = (
+            # Add Gravatar if no picture provided
+            if not user_data.get("picture") and user_data.get("email"):
+                user_data["picture"] = get_gravatar_url(user_data["email"])
+
+            # Tag the login source for audit/debugging
+            user_data["auth_provider"] = provider
+
+            # Social login users are never admin by default (admin must be granted
+            # via the Authentik/OIDC admin group or manually in the admin panel)
+            user_data["is_admin"] = False
+
+            _ensure_user_profile(db, user_data, is_admin=False)
+            request.session["user"] = user_data
+
+            # Create server-side session for tracking and revocation
+            try:
+                from app.utils.session_manager import create_session
+
+                _session_user_id = (
+                    user_data.get("sub")
+                    or user_data.get("preferred_username")
+                    or user_data.get("email")
+                    or user_data.get("id")
+                )
+                if _session_user_id:
+                    user_session = create_session(
+                        db,
+                        user_id=_session_user_id,
+                        ip_address=get_client_ip(request),
+                        user_agent=request.headers.get("user-agent"),
+                    )
+                    request.session["_session_token"] = user_session.session_token
+            except Exception:
+                db.rollback()
+                logger.debug("[AUTH] Failed to create server-side session for social user", exc_info=True)
+
+            provider_name = SOCIAL_PROVIDERS[provider]["name"]
+            logger.info(
+                "[SECURITY] SOCIAL_LOGIN_SUCCESS provider=%s user=%s", provider_name, user_data.get("email", "unknown")
+            )
+
+            # Redirect first-time users to onboarding
+            user_id = (
                 user_data.get("sub")
                 or user_data.get("preferred_username")
                 or user_data.get("email")
                 or user_data.get("id")
             )
-            if _session_user_id:
-                user_session = create_session(
-                    db,
-                    user_id=_session_user_id,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get("user-agent"),
-                )
-                request.session["_session_token"] = user_session.session_token
-        except Exception:
-            logger.debug("[AUTH] Failed to create server-side session for social user", exc_info=True)
 
-        # Auto-create or update UserProfile
-        _ensure_user_profile(db, user_data, is_admin=False)
+            # Mobile app flow: issue an inline API token and redirect back to the app.
+            logger.debug(
+                "[MOBILE] social_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+                "mobile_redirect_uri" in request.session,
+            )
+            mobile_resp = _create_mobile_redirect(request, db)
+            if mobile_resp:
+                logger.info("[MOBILE] social_callback: returning mobile redirect response for provider=%s", provider)
+                return mobile_resp
 
-        provider_name = SOCIAL_PROVIDERS[provider]["name"]
-        logger.info(
-            "[SECURITY] SOCIAL_LOGIN_SUCCESS provider=%s user=%s", provider_name, user_data.get("email", "unknown")
-        )
+            if user_id:
+                profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
+                if profile and not profile.onboarding_completed:
+                    logger.debug("[AUTH] social_callback: user=%s needs onboarding, redirecting", user_id)
+                    post_onboarding = request.session.pop("redirect_after_login", "/upload")
+                    request.session["post_onboarding_redirect"] = post_onboarding
+                    return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
 
-        # Redirect first-time users to onboarding
-        user_id = (
-            user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
-        )
-
-        # Mobile app flow: issue an inline API token and redirect back to the app.
-        logger.debug(
-            "[MOBILE] social_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
-            "mobile_redirect_uri" in request.session,
-        )
-        mobile_resp = _create_mobile_redirect(request, db)
-        if mobile_resp:
-            logger.info("[MOBILE] social_callback: returning mobile redirect response for provider=%s", provider)
-            return mobile_resp
-
-        if user_id:
-            profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
-            if profile and not profile.onboarding_completed:
-                logger.debug("[AUTH] social_callback: user=%s needs onboarding, redirecting", user_id)
-                post_onboarding = request.session.pop("redirect_after_login", "/upload")
-                request.session["post_onboarding_redirect"] = post_onboarding
-                return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
-
-        redirect_url = request.session.pop("redirect_after_login", "/upload")
-        logger.debug("[AUTH] social_callback: login complete, redirecting to %s", redirect_url)
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+            redirect_url = request.session.pop("redirect_after_login", "/upload")
+            logger.debug("[AUTH] social_callback: login complete, redirecting to %s", redirect_url)
+            return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
         logger.warning("[SECURITY] SOCIAL_LOGIN_FAILURE provider=%s error=%s", provider, type(e).__name__)
         logger.debug("[AUTH] social_callback: full exception for provider=%s", provider, exc_info=True)
@@ -836,6 +922,11 @@ def _ensure_user_profile(db: Session, user_data: dict, is_admin: bool = False) -
         logger.warning("Cannot create UserProfile: no stable user identifier in OAuth userinfo")
         return
 
+    # This check must propagate failures so callers never create a session or
+    # mobile token when the fence cannot be verified.
+    from app.services.account_deletion import assert_account_active
+
+    assert_account_active(db, user_id)
     try:
         existing = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if existing is None:
@@ -916,94 +1007,100 @@ async def oauth_callback(request: Request, db: Session = Depends(get_db)):
             user_data.get("groups", []),
         )
 
-        # Add Gravatar picture if no picture is provided
-        if not user_data.get("picture") and user_data.get("email"):
-            user_data["picture"] = get_gravatar_url(user_data["email"])
+        from app.services.account_lifecycle_lock import async_account_lifecycle_lock
+        from app.utils.user_scope import _owner_id_from_user
 
-        # Check if user is admin based on OAuth groups or specific email
-        # You can customize this logic based on your OAuth provider's attributes
-        # For example, check if user has an "admin" group or specific email domain
-        is_admin = False
-        if "groups" in user_data:
-            # Check if user is in admin group
-            groups = user_data.get("groups", [])
-            admin_group = (settings.admin_group_name or "admin").strip().lower()
-            is_admin = admin_group in [group.lower() for group in groups]
-            logger.debug(
-                "[AUTH] oauth_callback: admin group check — looking for %r in %s → is_admin=%s",
-                admin_group,
-                [g.lower() for g in groups],
-                is_admin,
+        async with async_account_lifecycle_lock(db, _owner_id_from_user(user_data)):
+            # Add Gravatar picture if no picture is provided
+            if not user_data.get("picture") and user_data.get("email"):
+                user_data["picture"] = get_gravatar_url(user_data["email"])
+
+            # Check if user is admin based on OAuth groups or specific email
+            # You can customize this logic based on your OAuth provider's attributes
+            # For example, check if user has an "admin" group or specific email domain
+            is_admin = False
+            if "groups" in user_data:
+                # Check if user is in admin group
+                groups = user_data.get("groups", [])
+                admin_group = (settings.admin_group_name or "admin").strip().lower()
+                is_admin = admin_group in [group.lower() for group in groups]
+                logger.debug(
+                    "[AUTH] oauth_callback: admin group check — looking for %r in %s → is_admin=%s",
+                    admin_group,
+                    [g.lower() for g in groups],
+                    is_admin,
+                )
+
+            # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
+            user_data["is_admin"] = is_admin
+
+            _ensure_user_profile(db, user_data, is_admin=is_admin)
+            request.session["user"] = user_data
+
+            # Create server-side session for tracking and revocation
+            try:
+                from app.utils.session_manager import create_session
+
+                _session_user_id = (
+                    user_data.get("sub")
+                    or user_data.get("preferred_username")
+                    or user_data.get("email")
+                    or user_data.get("id")
+                )
+                if _session_user_id:
+                    user_session = create_session(
+                        db,
+                        user_id=_session_user_id,
+                        ip_address=get_client_ip(request),
+                        user_agent=request.headers.get("user-agent"),
+                    )
+                    request.session["_session_token"] = user_session.session_token
+            except Exception:
+                db.rollback()
+                logger.debug("[AUTH] Failed to create server-side session for OAuth user", exc_info=True)
+
+            # Log the successful authentication
+            logger.info("[SECURITY] OAUTH_LOGIN_SUCCESS user=%s admin=%s", user_data.get("email", "unknown"), is_admin)
+            _record_login_event(
+                db,
+                request,
+                user_data.get("email") or user_data.get("preferred_username") or "unknown",
+                success=True,
+                method="oauth",
             )
 
-        # Set is_admin flag (defaults to False for OAuth users unless they're in admin group)
-        user_data["is_admin"] = is_admin
-
-        request.session["user"] = user_data
-
-        # Create server-side session for tracking and revocation
-        try:
-            from app.utils.session_manager import create_session
-
-            _session_user_id = (
+            # Redirect first-time users to onboarding
+            user_id = (
                 user_data.get("sub")
                 or user_data.get("preferred_username")
                 or user_data.get("email")
                 or user_data.get("id")
             )
-            if _session_user_id:
-                user_session = create_session(
-                    db,
-                    user_id=_session_user_id,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get("user-agent"),
-                )
-                request.session["_session_token"] = user_session.session_token
-        except Exception:
-            logger.debug("[AUTH] Failed to create server-side session for OAuth user", exc_info=True)
 
-        # Auto-create or update UserProfile so the user appears in admin user management
-        _ensure_user_profile(db, user_data, is_admin=is_admin)
+            # Mobile app flow: issue an inline API token and redirect back to the app.
+            # This check runs before onboarding so native-app users are never sent
+            # to the web-based onboarding wizard.
+            logger.debug(
+                "[MOBILE] oauth_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+                "mobile_redirect_uri" in request.session,
+            )
+            mobile_resp = _create_mobile_redirect(request, db)
+            if mobile_resp:
+                logger.info("[MOBILE] oauth_callback: returning mobile redirect response")
+                return mobile_resp
 
-        # Log the successful authentication
-        logger.info("[SECURITY] OAUTH_LOGIN_SUCCESS user=%s admin=%s", user_data.get("email", "unknown"), is_admin)
-        _record_login_event(
-            db,
-            request,
-            user_data.get("email") or user_data.get("preferred_username") or "unknown",
-            success=True,
-            method="oauth",
-        )
+            if user_id:
+                profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
+                if profile and not profile.onboarding_completed:
+                    logger.debug("[AUTH] oauth_callback: user=%s needs onboarding, redirecting", user_id)
+                    post_onboarding = request.session.pop("redirect_after_login", "/upload")
+                    request.session["post_onboarding_redirect"] = post_onboarding
+                    return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
 
-        # Redirect first-time users to onboarding
-        user_id = (
-            user_data.get("sub") or user_data.get("preferred_username") or user_data.get("email") or user_data.get("id")
-        )
-
-        # Mobile app flow: issue an inline API token and redirect back to the app.
-        # This check runs before onboarding so native-app users are never sent
-        # to the web-based onboarding wizard.
-        logger.debug(
-            "[MOBILE] oauth_callback: checking for mobile redirect (session has mobile_redirect_uri=%s)",
-            "mobile_redirect_uri" in request.session,
-        )
-        mobile_resp = _create_mobile_redirect(request, db)
-        if mobile_resp:
-            logger.info("[MOBILE] oauth_callback: returning mobile redirect response")
-            return mobile_resp
-
-        if user_id:
-            profile = db.query(_UserProfile).filter(_UserProfile.user_id == user_id).first()
-            if profile and not profile.onboarding_completed:
-                logger.debug("[AUTH] oauth_callback: user=%s needs onboarding, redirecting", user_id)
-                post_onboarding = request.session.pop("redirect_after_login", "/upload")
-                request.session["post_onboarding_redirect"] = post_onboarding
-                return RedirectResponse(url="/onboarding", status_code=status.HTTP_302_FOUND)
-
-        # Redirect to original destination or default
-        redirect_url = request.session.pop("redirect_after_login", "/upload")
-        logger.debug("[AUTH] oauth_callback: login complete, redirecting to %s", redirect_url)
-        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+            # Redirect to original destination or default
+            redirect_url = request.session.pop("redirect_after_login", "/upload")
+            logger.debug("[AUTH] oauth_callback: login complete, redirecting to %s", redirect_url)
+            return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except Exception as e:
         logger.warning(f"[SECURITY] OAUTH_LOGIN_FAILURE error={type(e).__name__}")
         logger.debug("[AUTH] oauth_callback: full exception details", exc_info=True)
@@ -1049,6 +1146,7 @@ def _record_login_event(
             severity="info" if success else "warning",
         )
     except Exception:
+        db.rollback()
         logger.debug("Failed to write login audit event for user=%s", username, exc_info=True)
 
 
@@ -1214,41 +1312,50 @@ async def auth(request: Request, db: Session = Depends(get_db)):
                 _record_login_event(db, request, username, success=False, detail="wrong_password")
                 return RedirectResponse(url="/login?error=Invalid+username+or+password", status_code=302)
             user_data = _build_session_user(local_user)
-            request.session["user"] = user_data
-            # Create server-side session for tracking and revocation
-            try:
-                from app.utils.session_manager import create_session
+            from app.services.account_lifecycle_lock import async_account_lifecycle_lock
+            from app.utils.user_scope import _owner_id_from_user
 
-                user_session = create_session(
-                    db,
-                    user_id=local_user.email,
-                    ip_address=get_client_ip(request),
-                    user_agent=request.headers.get("user-agent"),
+            async with async_account_lifecycle_lock(db, _owner_id_from_user(user_data)):
+                try:
+                    _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
+                except Exception:
+                    logger.warning("Unable to verify account eligibility for local login", exc_info=True)
+                    return RedirectResponse(url="/login?error=Account+unavailable", status_code=302)
+                request.session["user"] = user_data
+                # Create server-side session for tracking and revocation
+                try:
+                    from app.utils.session_manager import create_session
+
+                    user_session = create_session(
+                        db,
+                        user_id=local_user.email,
+                        ip_address=get_client_ip(request),
+                        user_agent=request.headers.get("user-agent"),
+                    )
+                    request.session["_session_token"] = user_session.session_token
+                except Exception:
+                    db.rollback()
+                    logger.debug("[AUTH] Failed to create server-side session", exc_info=True)
+                logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
+                _record_login_event(db, request, local_user.email, success=True)
+
+                # Mobile app flow: issue an inline API token and redirect back to the app.
+                logger.debug(
+                    "[MOBILE] local auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+                    "mobile_redirect_uri" in request.session,
                 )
-                request.session["_session_token"] = user_session.session_token
-            except Exception:
-                logger.debug("[AUTH] Failed to create server-side session", exc_info=True)
-            logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", local_user.email)
-            _record_login_event(db, request, local_user.email, success=True)
-            _ensure_user_profile(db, user_data, is_admin=bool(local_user.is_admin))
+                mobile_resp = _create_mobile_redirect(request, db)
+                if mobile_resp:
+                    logger.info("[MOBILE] local auth: returning mobile redirect response")
+                    return mobile_resp
 
-            # Mobile app flow: issue an inline API token and redirect back to the app.
-            logger.debug(
-                "[MOBILE] local auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
-                "mobile_redirect_uri" in request.session,
-            )
-            mobile_resp = _create_mobile_redirect(request, db)
-            if mobile_resp:
-                logger.info("[MOBILE] local auth: returning mobile redirect response")
-                return mobile_resp
-
-            profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
-            if profile and not profile.onboarding_completed:
-                post_onboarding = request.session.pop("redirect_after_login", "/upload")
-                request.session["post_onboarding_redirect"] = post_onboarding
-                return RedirectResponse(url="/onboarding", status_code=302)
-            redirect_url = request.session.pop("redirect_after_login", "/upload")
-            return RedirectResponse(url=redirect_url, status_code=302)
+                profile = db.query(_UserProfile).filter(_UserProfile.user_id == local_user.email).first()
+                if profile and not profile.onboarding_completed:
+                    post_onboarding = request.session.pop("redirect_after_login", "/upload")
+                    request.session["post_onboarding_redirect"] = post_onboarding
+                    return RedirectResponse(url="/onboarding", status_code=302)
+                redirect_url = request.session.pop("redirect_after_login", "/upload")
+                return RedirectResponse(url=redirect_url, status_code=302)
 
         # Local user not found; fall through to admin credential check below.
         logger.debug(
@@ -1292,43 +1399,52 @@ async def auth(request: Request, db: Session = Depends(get_db)):
             "picture": "/static/images/default-avatar.svg",
             "is_admin": True,
         }
-        request.session["user"] = admin_user_data
-        # Create server-side session for tracking and revocation
-        try:
-            from app.utils.session_manager import create_session
+        from app.services.account_lifecycle_lock import async_account_lifecycle_lock
+        from app.utils.user_scope import _owner_id_from_user
 
-            admin_user_id = settings.admin_username or "admin"
-            user_session = create_session(
-                db,
-                user_id=admin_user_id,
-                ip_address=get_client_ip(request),
-                user_agent=request.headers.get("user-agent"),
+        async with async_account_lifecycle_lock(db, _owner_id_from_user(admin_user_data)):
+            try:
+                _ensure_user_profile(db, admin_user_data, is_admin=True)
+            except Exception:
+                logger.warning("Unable to verify account eligibility for admin login", exc_info=True)
+                return RedirectResponse(url="/login?error=Account+unavailable", status_code=302)
+            request.session["user"] = admin_user_data
+            # Create server-side session for tracking and revocation
+            try:
+                from app.utils.session_manager import create_session
+
+                admin_user_id = settings.admin_username or "admin"
+                user_session = create_session(
+                    db,
+                    user_id=admin_user_id,
+                    ip_address=get_client_ip(request),
+                    user_agent=request.headers.get("user-agent"),
+                )
+                request.session["_session_token"] = user_session.session_token
+            except Exception:
+                db.rollback()
+                logger.debug("[AUTH] Failed to create server-side session for admin", exc_info=True)
+            logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
+            _record_login_event(db, request, username, success=True)
+
+            # Mobile app flow: issue an inline API token and redirect back to the app.
+            logger.debug(
+                "[MOBILE] admin auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
+                "mobile_redirect_uri" in request.session,
             )
-            request.session["_session_token"] = user_session.session_token
-        except Exception:
-            logger.debug("[AUTH] Failed to create server-side session for admin", exc_info=True)
-        logger.info("[SECURITY] LOCAL_LOGIN_SUCCESS user=%s", username)
-        _record_login_event(db, request, username, success=True)
-        _ensure_user_profile(db, admin_user_data, is_admin=True)
+            mobile_resp = _create_mobile_redirect(request, db)
+            if mobile_resp:
+                logger.info("[MOBILE] admin auth: returning mobile redirect response")
+                return mobile_resp
 
-        # Mobile app flow: issue an inline API token and redirect back to the app.
-        logger.debug(
-            "[MOBILE] admin auth: checking for mobile redirect (session has mobile_redirect_uri=%s)",
-            "mobile_redirect_uri" in request.session,
-        )
-        mobile_resp = _create_mobile_redirect(request, db)
-        if mobile_resp:
-            logger.info("[MOBILE] admin auth: returning mobile redirect response")
-            return mobile_resp
+            profile = db.query(_UserProfile).filter(_UserProfile.user_id == username).first()
+            if profile and not profile.onboarding_completed:
+                post_onboarding = request.session.pop("redirect_after_login", "/upload")
+                request.session["post_onboarding_redirect"] = post_onboarding
+                return RedirectResponse(url="/onboarding", status_code=302)
 
-        profile = db.query(_UserProfile).filter(_UserProfile.user_id == username).first()
-        if profile and not profile.onboarding_completed:
-            post_onboarding = request.session.pop("redirect_after_login", "/upload")
-            request.session["post_onboarding_redirect"] = post_onboarding
-            return RedirectResponse(url="/onboarding", status_code=302)
-
-        redirect_url = request.session.pop("redirect_after_login", "/upload")
-        return RedirectResponse(url=redirect_url, status_code=302)
+            redirect_url = request.session.pop("redirect_after_login", "/upload")
+            return RedirectResponse(url=redirect_url, status_code=302)
     else:
         logger.warning(
             "[SECURITY] LOCAL_LOGIN_FAILURE reason=no_match user=%r "

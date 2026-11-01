@@ -131,6 +131,53 @@ class BaseTaskWithRetry(Task):
     # Public API
     # ------------------------------------------------------------------
 
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Keep account deletion from racing an active document task."""
+        import inspect
+
+        signature = inspect.signature(self.run)
+        if "file_id" not in signature.parameters and "owner_id" not in signature.parameters:
+            return super().__call__(*args, **kwargs)
+        try:
+            bound = signature.bind_partial(*args, **kwargs)
+        except TypeError:
+            return super().__call__(*args, **kwargs)
+        file_id = bound.arguments.get("file_id")
+        explicit_owner = bound.arguments.get("owner_id")
+        from app.config import settings
+        from app.database import SessionLocal
+        from app.models import FileRecord
+        from app.services.account_deletion import deletion_blocked
+        from app.services.account_lifecycle_lock import account_lifecycle_lock
+
+        with SessionLocal() as db:
+            file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+            if file_id and not file_record:
+                return {"status": "skipped", "reason": "file_not_found"}
+            if file_record and explicit_owner and file_record.owner_id != explicit_owner:
+                return {"status": "skipped", "reason": "owner_mismatch"}
+            owner = file_record.owner_id if file_record else explicit_owner
+            # New process_document invocations may use the configured default owner.
+            if not owner and "owner_id" in signature.parameters and not file_id:
+                owner = settings.default_owner_id
+            if not owner:
+                if not settings.multi_user_enabled:
+                    return super().__call__(*args, **kwargs)
+                return {"status": "skipped", "reason": "owner_unavailable"}
+            with account_lifecycle_lock(db, owner):
+                # The deletion could have fenced the owner while this task waited.
+                db.expire_all()
+                if deletion_blocked(db, owner):
+                    return {"status": "skipped", "reason": "account_deletion"}
+                if (
+                    file_id
+                    and not db.query(FileRecord.id)
+                    .filter(FileRecord.id == file_id, FileRecord.owner_id == owner)
+                    .first()
+                ):
+                    return {"status": "skipped", "reason": "file_not_found"}
+                return super().__call__(*args, **kwargs)
+
     def retry(
         self,
         args: Any = None,

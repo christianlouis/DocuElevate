@@ -3026,6 +3026,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "meilisearch_deletion_mode": {
+        "category": "Core",
+        "description": "Operator-only account-deletion contract: managed always removes historical documents; never_used is allowed only after attesting that no application data was ever indexed.",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     # PDF/A Archival Conversion
     "enable_pdfa_conversion": {
         "category": "PDF/A Archival",
@@ -3820,6 +3828,14 @@ SETTING_METADATA = {
         "category": "Knowledge Bridge",
         "description": "Enable chunk-level vector indexing and knowledge retrieval endpoints.",
         "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
+    "vector_index_deletion_mode": {
+        "category": "Knowledge Bridge",
+        "description": "Operator-only account-deletion contract for Qdrant: managed cleans historical vectors; never_used requires an explicit no-data attestation and is rejected while vector indexing is enabled.",
+        "type": "string",
         "sensitive": False,
         "required": False,
         "restart_required": True,

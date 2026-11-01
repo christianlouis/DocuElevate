@@ -606,6 +606,12 @@ class LocalUser(Base):
     is_admin = Column(Boolean, nullable=False, default=False, server_default="0")
     email_verification_token = Column(String(128), nullable=True)
     email_verification_sent_at = Column(DateTime(timezone=True), nullable=True)
+    # Immutable-at-signup evidence for the legal documents the user accepted.
+    # Nullable keeps existing local accounts compatible with the migration.
+    terms_accepted_version = Column(String(64), nullable=True)
+    terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_accepted_version = Column(String(64), nullable=True)
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
     password_reset_token = Column(String(128), nullable=True)
     password_reset_sent_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -670,6 +676,12 @@ class UserProfile(Base):
     contact_email = Column(String(255), nullable=True)
     preferred_destination = Column(String(50), nullable=True)
     stripe_customer_id = Column(String(64), nullable=True)
+    # Legal acknowledgements for OAuth/social accounts, which do not pass
+    # through LocalUser signup.
+    terms_accepted_version = Column(String(64), nullable=True)
+    terms_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_accepted_version = Column(String(64), nullable=True)
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
 
     # UI language preference for i18n (ISO 639-1 code, e.g. "en", "de", "fr")
     # NULL means "auto-detect from browser Accept-Language header"
@@ -690,6 +702,36 @@ class UserProfile(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AccountDeletionTombstone(Base):
+    """Durable account deletion state used to fence stale jobs and sessions.
+
+    The owner identifier is a SHA-256 hash, retained as a pseudonymous fence;
+    it is not anonymous and may be guessable. Workers must respect the fence.
+    """
+
+    __tablename__ = "account_deletion_tombstones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String(255), nullable=False, unique=True, index=True)
+    status = Column(String(20), nullable=False, default="deleting", server_default="deleting", index=True)
+    requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    error = Column(Text, nullable=True)
+    cleanup_manifest = Column(Text, nullable=True)
+    external_references = Column(Text, nullable=True)
+
+
+class ProviderGrant(Base):
+    """Encrypted OAuth grant retained only for provider revocation."""
+
+    __tablename__ = "provider_grants"
+    __table_args__ = (UniqueConstraint("owner_id", "provider", name="uq_provider_grant_owner_provider"),)
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(String(255), nullable=False, index=True)
+    provider = Column(String(40), nullable=False)
+    encrypted_token = Column(Text, nullable=False)
 
 
 class SubscriptionPlan(Base):

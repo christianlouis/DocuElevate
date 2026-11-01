@@ -515,7 +515,7 @@ class TestUploadToSharepoint:
         mock_token.side_effect = ValueError("Token error")
 
         with pytest.raises(RuntimeError, match="Failed to upload"):
-            upload_to_sharepoint.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_sharepoint.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_sharepoint.upload_large_file_sharepoint")
     @patch("app.tasks.upload_to_sharepoint.create_sharepoint_upload_session")

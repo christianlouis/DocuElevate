@@ -301,7 +301,7 @@ class TestUploadToDropbox:
         mock_client.side_effect = AuthError("req-id", "Invalid token")
 
         with pytest.raises(Exception, match="Authentication failed"):
-            upload_to_dropbox.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_dropbox.__wrapped__(str(test_file), file_id=1)
 
     @patch("app.tasks.upload_to_dropbox.get_dropbox_client")
     @patch("app.tasks.upload_to_dropbox.log_task_progress")
@@ -324,4 +324,4 @@ class TestUploadToDropbox:
         mock_client.side_effect = ApiError("req-id", mock_error, "user msg", "header")
 
         with pytest.raises(Exception, match="Failed to upload"):
-            upload_to_dropbox.apply(args=[str(test_file)], kwargs={"file_id": 1}).get()
+            upload_to_dropbox.__wrapped__(str(test_file), file_id=1)

@@ -78,6 +78,11 @@ def compute_document_embedding(self, file_id: int) -> dict:
             logger.warning("[%s] File %s not found, skipping embedding", task_id, file_id)
             return {"status": "skipped", "detail": "File not found"}
 
+        from app.services.account_deletion import deletion_blocked
+
+        if file_record.owner_id and deletion_blocked(db, file_record.owner_id):
+            return {"status": "skipped", "detail": "Account deletion"}
+
         now = datetime.now(timezone.utc)
         update_step_status(db, file_id, "compute_embedding", "in_progress", started_at=now)
 

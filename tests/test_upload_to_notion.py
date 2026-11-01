@@ -260,8 +260,8 @@ def test_global_task_gates_disabled_and_multi_user_without_provider_call(tmp_pat
         patch("app.tasks.upload_to_notion.os.path.exists", return_value=True),
         patch("app.tasks.upload_to_notion.upload_to_notion") as provider,
     ):
-        result = upload_to_notion_global.apply(args=[str(pdf), 42])
-    assert result.failed()
+        with pytest.raises(ValueError, match="Global Notion is disabled"):
+            upload_to_notion_global.__wrapped__(str(pdf), 42)
     provider.assert_not_called()
 
 
@@ -288,8 +288,8 @@ def test_global_task_records_uncertain_failure_without_secret(tmp_path):
         ) as provider,
         patch("app.tasks.upload_to_notion.log_task_progress") as progress,
     ):
-        result = upload_to_notion_global.apply(args=[str(pdf), 42])
-    assert result.failed()
+        with pytest.raises(NotionPageCreationUncertain, match="secret-token"):
+            upload_to_notion_global.__wrapped__(str(pdf), 42)
     provider.assert_called_once()
     assert any(call.args[2] == "failure" and "uncertain" in call.args[3] for call in progress.call_args_list)
     assert all("secret-token" not in str(call) for call in progress.call_args_list)
@@ -315,7 +315,7 @@ def test_global_task_records_sanitized_normal_failure(tmp_path):
         patch("app.tasks.upload_to_notion.upload_to_notion", side_effect=RuntimeError("secret-token")),
         patch("app.tasks.upload_to_notion.log_task_progress") as progress,
     ):
-        result = upload_to_notion_global.apply(args=[str(pdf), 42])
-    assert result.failed()
+        with pytest.raises(RuntimeError, match="secret-token"):
+            upload_to_notion_global.__wrapped__(str(pdf), 42)
     assert any(call.args[2] == "failure" and call.args[3] == "Notion upload failed" for call in progress.call_args_list)
     assert all("secret-token" not in str(call) for call in progress.call_args_list)

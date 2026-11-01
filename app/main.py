@@ -24,6 +24,7 @@ from app.api.local_auth import router as local_auth_router
 from app.auth import router as auth_router
 from app.config import settings
 from app.database import init_db
+from app.middleware.account_lifecycle import AccountLifecycleMiddleware
 from app.middleware.audit_log import AuditLogMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.rate_limit import create_limiter, get_rate_limit_exceeded_handler
@@ -355,6 +356,7 @@ def _get_session_max_age() -> int:
         return 30 * 86400  # 30 days default fallback
 
 
+app.add_middleware(AccountLifecycleMiddleware)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=_get_session_max_age())
 
 # 3a) CORS Middleware - handles cross-origin requests and preflight (OPTIONS) responses.

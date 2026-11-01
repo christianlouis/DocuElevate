@@ -93,6 +93,15 @@ def _make_profile(session, user_id: str, **kwargs) -> UserProfile:
     return profile
 
 
+def _consent_payload() -> dict[str, object]:
+    return {
+        "accept_terms": True,
+        "accept_privacy": True,
+        "terms_version": "2026-11-01",
+        "privacy_version": "2026-11-01",
+    }
+
+
 # ---------------------------------------------------------------------------
 # TestOnboardingAPI
 # ---------------------------------------------------------------------------
@@ -525,10 +534,26 @@ class TestOnboardingAPI:
     # POST /api/onboarding/complete
     # ------------------------------------------------------------------
 
+    def test_complete_rejects_missing_legal_consent(self, ob_client_authed, ob_session):
+        _make_profile(ob_session, _TEST_USER["sub"])
+        response = ob_client_authed.post(
+            "/api/onboarding/complete",
+            json={
+                "accept_terms": True,
+                "accept_privacy": True,
+                "terms_version": "outdated",
+                "privacy_version": "2026-11-01",
+            },
+        )
+        assert response.status_code == 422
+        ob_session.expire_all()
+        profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
+        assert profile.onboarding_completed is False
+
     def test_complete_sets_onboarding_completed(self, ob_client_authed, ob_session):
         """POST /complete should set onboarding_completed=True on the profile."""
         _make_profile(ob_session, _TEST_USER["sub"])
-        resp = ob_client_authed.post("/api/onboarding/complete")
+        resp = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -549,7 +574,7 @@ class TestOnboardingAPI:
 
         # We patch FastAPI's Request.session property to simulate an active session
         with patch("fastapi.Request.session", new_callable=lambda: {"post_onboarding_redirect": "/custom-dashboard"}):
-            resp = ob_client_authed.post("/api/onboarding/complete")
+            resp = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
 
         assert resp.status_code == 200
         assert resp.json()["redirect_url"] == "/custom-dashboard"
@@ -563,12 +588,12 @@ class TestOnboardingAPI:
         from unittest.mock import patch
 
         with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB Error")):
-            resp = ob_client_authed.post("/api/onboarding/complete")
+            resp = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
             assert resp.status_code == 500
 
     def test_complete_creates_profile_if_missing(self, ob_client_authed, ob_session):
         """POST /complete should create a profile when none exists and mark it done."""
-        resp = ob_client_authed.post("/api/onboarding/complete")
+        resp = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
         assert resp.status_code == 200
 
         profile = ob_session.query(UserProfile).filter(UserProfile.user_id == _TEST_USER["sub"]).first()
@@ -590,7 +615,7 @@ class TestOnboardingAPI:
 
         app.dependency_overrides[get_db] = override_db
         with TestClient(app, base_url="http://localhost", raise_server_exceptions=False) as client:
-            resp = client.post("/api/onboarding/complete")
+            resp = client.post("/api/onboarding/complete", json=_consent_payload())
         app.dependency_overrides.clear()
 
         assert resp.status_code == 401
@@ -607,7 +632,7 @@ class TestOnboardingAPI:
         with patch("app.api.onboarding.Request.session", new_callable=dict) as mock_session:
             mock_session.update({"post_onboarding_redirect": "/dashboard"})
 
-            resp = ob_client_authed.post("/api/onboarding/complete")
+            resp = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
 
         assert resp.status_code == 200
         assert resp.json()["redirect_url"] == "/dashboard"
@@ -620,7 +645,7 @@ class TestOnboardingAPI:
 
         with patch("app.api.onboarding.Request.session", new_callable=dict) as mock_session:
             mock_session.update({"post_onboarding_redirect": "/upload"})
-            response = ob_client_authed.post("/api/onboarding/complete")
+            response = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
 
         assert response.status_code == 200
         assert response.json()["redirect_url"] == "/upload?onboarding=first-document"
@@ -634,7 +659,7 @@ class TestOnboardingAPI:
 
         with patch("sqlalchemy.orm.Session.commit", side_effect=Exception("DB error")) as mock_commit:
             with patch("sqlalchemy.orm.Session.rollback") as mock_rollback:
-                resp = ob_client_authed.post("/api/onboarding/complete")
+                resp = ob_client_authed.post("/api/onboarding/complete", json=_consent_payload())
 
                 # Fast API error handler handles the exception and returns a 500 error
                 assert resp.status_code == 500

@@ -182,11 +182,17 @@ class TestStepTypesCatalogue:
 class TestPipelineCRUD:
     """Full CRUD test-suite for pipeline management."""
 
-    def test_list_pipelines_empty(self, client):
-        """List returns an empty array when no pipelines exist."""
+    def test_list_pipelines_empty(self, client, db_session):
+        """List has no user-owned pipelines in a fresh database.
+
+        Application startup provisions the system default pipeline, which is
+        intentionally visible to all users.
+        """
+        system_ids = {pipeline.id for pipeline in db_session.query(Pipeline).filter(Pipeline.owner_id.is_(None)).all()}
         r = client.get("/api/pipelines")
         assert r.status_code == 200
-        assert r.json() == []
+        assert {pipeline["id"] for pipeline in r.json()} == system_ids
+        assert all(pipeline["owner_id"] is None for pipeline in r.json())
 
     def test_create_pipeline(self, client):
         """POST /api/pipelines creates a new pipeline."""

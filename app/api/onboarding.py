@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api.local_auth import CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION
 from app.database import get_db
 from app.models import DEFAULT_TENANT_ID, Tribe, TribeMembership, UserIntegration, UserProfile
 from app.utils.subscription import TIERS
@@ -25,6 +26,7 @@ from app.utils.tribe_scope import (
     personal_tribe_id,
     shared_tribe_id,
 )
+from app.utils.user_scope import get_current_owner_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
@@ -45,10 +47,7 @@ def _get_current_user_id(request: Request) -> str:
     Raises:
         HTTPException: 401 if the user is not authenticated.
     """
-    user = request.session.get("user")
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    user_id = user.get("sub") or user.get("preferred_username") or user.get("email") or user.get("id")
+    user_id = get_current_owner_id(request)
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return user_id
@@ -66,6 +65,15 @@ class ProfileBody(BaseModel):
     contact_email: str | None = Field(default=None, max_length=255)
     space_mode: Literal["personal", "shared"] = "personal"
     tribe_name: str | None = Field(default=None, max_length=255)
+
+
+class OnboardingConsentBody(BaseModel):
+    """Current legal acknowledgements required before onboarding completion."""
+
+    accept_terms: bool
+    accept_privacy: bool
+    terms_version: str = Field(max_length=64)
+    privacy_version: str = Field(max_length=64)
 
 
 class PlanBody(BaseModel):
@@ -413,7 +421,7 @@ def save_storage(request: Request, body: StorageBody, db: DbSession) -> dict[str
 
 
 @router.post("/complete", summary="Mark onboarding as completed")
-def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
+def complete_onboarding(request: Request, body: OnboardingConsentBody, db: DbSession) -> dict[str, Any]:
     """Set onboarding_completed=True, record the completion timestamp, and return the post-onboarding redirect URL.
 
     The redirect URL is read from ``request.session["post_onboarding_redirect"]`` (stored by
@@ -424,9 +432,18 @@ def complete_onboarding(request: Request, db: DbSession) -> dict[str, Any]:
     preserved.
     """
     user_id = _get_current_user_id(request)
+    if not body.accept_terms or body.terms_version != CURRENT_TERMS_VERSION:
+        raise HTTPException(status_code=422, detail="Current terms must be accepted")
+    if not body.accept_privacy or body.privacy_version != CURRENT_PRIVACY_VERSION:
+        raise HTTPException(status_code=422, detail="Current privacy notice must be acknowledged")
     profile = _get_or_create_profile(db, user_id)
+    now = datetime.now(tz=timezone.utc)
+    profile.terms_accepted_version = body.terms_version
+    profile.terms_accepted_at = now
+    profile.privacy_accepted_version = body.privacy_version
+    profile.privacy_accepted_at = now
     profile.onboarding_completed = True
-    profile.onboarding_completed_at = datetime.now(tz=timezone.utc)
+    profile.onboarding_completed_at = now
     profile.onboarding_current_step = 8
     ensure_personal_scope(db, user_id)
 
