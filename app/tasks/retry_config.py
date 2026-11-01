@@ -147,12 +147,32 @@ class BaseTaskWithRetry(Task):
         countdown is computed via :func:`compute_countdown` using this task's
         :attr:`retry_delays` and :attr:`retry_jitter` settings.
         """
+        quota_retry = False
+        if exc is not None:
+            try:
+                from app.utils.provider_limits import ProviderQuotaError  # noqa: PLC0415
+
+                quota_retry = isinstance(exc, ProviderQuotaError)
+            except ImportError:  # pragma: no cover - defensive import guard
+                pass
+        if quota_retry and max_retries is None:
+            try:
+                from app.config import settings  # noqa: PLC0415
+
+                max_retries = int(getattr(settings, "provider_limits_max_retries", 20))
+            except (ImportError, TypeError, ValueError):  # pragma: no cover
+                max_retries = 20
+
         if countdown is None and eta is None:
             hinted = getattr(exc, "retry_after", None) if exc is not None else None
-            countdown = max(1, int(float(hinted))) if hinted is not None else compute_countdown(
-                retries=self.request.retries,
-                base_delays=self._effective_retry_delays(),
-                jitter=self.retry_jitter,
+            countdown = (
+                max(1, int(float(hinted)))
+                if hinted is not None
+                else compute_countdown(
+                    retries=self.request.retries,
+                    base_delays=self._effective_retry_delays(),
+                    jitter=self.retry_jitter,
+                )
             )
             logger.debug(
                 "Retry %d/%d for task %s in %d s",

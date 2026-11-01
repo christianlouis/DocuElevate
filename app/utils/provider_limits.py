@@ -1,13 +1,9 @@
-"""Distributed provider budgets shared by all Celery workers.
-
-Budgets are deliberately opt-in (all limits default to zero).  Reservations are
-atomic Redis operations and expire automatically, so a crashed worker cannot
-hold a provider slot forever.  When enabled, Redis errors fail closed.
-"""
+"""Atomic distributed upstream budgets shared by all workers."""
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import secrets
 import time
@@ -22,23 +18,21 @@ logger = logging.getLogger(__name__)
 
 
 class ProviderQuotaError(RuntimeError):
-    """Base class for distributed provider admission failures."""
-
     def __init__(self, message: str, retry_after: float = 60.0) -> None:
         super().__init__(message)
         self.retry_after = max(1.0, float(retry_after))
 
 
 class ProviderQuotaExceeded(ProviderQuotaError):
-    """The configured RPM/TPM/page/concurrency budget is currently full."""
+    """A configured rolling-window or concurrency budget is full."""
 
 
 class ProviderRateLimited(ProviderQuotaError):
-    """The upstream returned a rate-limit response; retry after its hint."""
+    """The upstream returned a rate-limit response."""
 
 
 class ProviderQuotaUnavailable(ProviderQuotaError):
-    """The limiter could not reach Redis while limits were enabled."""
+    """Redis admission control is unavailable while limits are enabled."""
 
 
 @dataclass(frozen=True)
@@ -50,38 +44,26 @@ class ProviderLease:
 
 _redis_client: redis.Redis | None = None
 _RESERVE_SCRIPT = """
-local now = tonumber(ARGV[1])
-local ttl = tonumber(ARGV[2])
-local rpm = tonumber(ARGV[3])
-local tpm = tonumber(ARGV[4])
-local pages = tonumber(ARGV[5])
-local concurrency = tonumber(ARGV[6])
-local limits = {rpm, tpm, pages, concurrency}
-local amounts = {1, tonumber(ARGV[7]), tonumber(ARGV[8]), 1}
-for i=1,4 do
-  if limits[i] > 0 then
-    local current = tonumber(redis.call('GET', KEYS[i]) or '0')
-    if current + amounts[i] > limits[i] then return 0 end
-  end
+local now = tonumber(ARGV[1]); local expiry = now - 60
+local lease_until = now + tonumber(ARGV[2])
+local rpm = tonumber(ARGV[3]); local tpm = tonumber(ARGV[4]); local pages = tonumber(ARGV[5]); local concurrency = tonumber(ARGV[6])
+local token_amount = tonumber(ARGV[7]); local page_amount = tonumber(ARGV[8]); local token = ARGV[9]
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', expiry); redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', expiry); redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', expiry); redis.call('ZREMRANGEBYSCORE', KEYS[4], '-inf', now)
+local function total(key, amount_key)
+  local sum = 0
+  for _, member in ipairs(redis.call('ZRANGE', key, 0, -1)) do sum = sum + tonumber(redis.call('HGET', amount_key, member) or '0') end
+  return sum
 end
-for i=1,4 do
-  if limits[i] > 0 then
-    redis.call('INCRBY', KEYS[i], amounts[i])
-    redis.call('EXPIRE', KEYS[i], ttl)
-  end
-end
-redis.call('SET', KEYS[5], ARGV[9], 'EX', ttl, 'NX')
+if rpm > 0 and redis.call('ZCARD', KEYS[1]) + 1 > rpm then return 0 end
+if tpm > 0 and total(KEYS[2], KEYS[6]) + token_amount > tpm then return 0 end
+if pages > 0 and total(KEYS[3], KEYS[7]) + page_amount > pages then return 0 end
+if concurrency > 0 and redis.call('ZCARD', KEYS[4]) + 1 > concurrency then return 0 end
+redis.call('ZADD', KEYS[1], now, token); redis.call('ZADD', KEYS[2], now, token); redis.call('ZADD', KEYS[3], now, token); redis.call('ZADD', KEYS[4], lease_until, token)
+redis.call('HSET', KEYS[6], token, token_amount); redis.call('HSET', KEYS[7], token, page_amount)
+for i=1,7 do redis.call('EXPIRE', KEYS[i], tonumber(ARGV[10])) end
 return 1
 """
-_RELEASE_SCRIPT = """
-if redis.call('GET', KEYS[5]) ~= ARGV[1] then return 0 end
-for i=1,4 do
-  local amount = tonumber(ARGV[i])
-  if amount > 0 then redis.call('DECRBY', KEYS[i], amount) end
-end
-redis.call('DEL', KEYS[5])
-return 1
-"""
+_RELEASE_SCRIPT = """redis.call('ZREM', KEYS[1], ARGV[1]); return 1"""
 
 
 def _client() -> redis.Redis:
@@ -93,69 +75,110 @@ def _client() -> redis.Redis:
 
 
 def _fingerprint(value: str | None) -> str:
-    return hashlib.sha256((value or "shared").encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256((value or "shared").encode()).hexdigest()[:16]
 
 
-def _limits() -> tuple[int, int, int, int]:
-    return (
-        max(0, int(getattr(settings, "provider_limits_rpm", 0))),
-        max(0, int(getattr(settings, "provider_limits_tpm", 0))),
-        max(0, int(getattr(settings, "provider_limits_pages_per_minute", 0))),
-        max(0, int(getattr(settings, "provider_limits_concurrency", 0))),
+def _limits(provider: str, model: str) -> tuple[int, int, int, int]:
+    values: dict[str, Any] = {
+        "rpm": getattr(settings, "provider_limits_rpm", 0),
+        "tpm": getattr(settings, "provider_limits_tpm", 0),
+        "pages_per_minute": getattr(settings, "provider_limits_pages_per_minute", 0),
+        "concurrency": getattr(settings, "provider_limits_concurrency", 0),
+    }
+    raw = getattr(settings, "provider_limits_overrides", "")
+    if raw:
+        try:
+            overrides = json.loads(raw) if isinstance(raw, str) else raw
+            scope = overrides.get(f"{provider}/{model}") or overrides.get(provider) or {}
+            if isinstance(scope, dict):
+                values.update(scope)
+        except (TypeError, ValueError, AttributeError):
+            logger.warning("Invalid PROVIDER_LIMITS_OVERRIDES; using global limits")
+    return tuple(max(0, int(values[name])) for name in ("rpm", "tpm", "pages_per_minute", "concurrency"))  # type: ignore[return-value]
+
+
+def limits_enabled(provider: str | None = None, model: str | None = None) -> bool:
+    return bool(getattr(settings, "provider_limits_enabled", False)) and any(
+        _limits(provider or "default", model or "default")
     )
 
 
-def limits_enabled() -> bool:
-    return bool(getattr(settings, "provider_limits_enabled", False)) and any(_limits())
-
-
-def acquire(provider: str, model: str, *, credential: str | None = None, tokens: int = 0, pages: int = 0) -> ProviderLease | None:
-    """Atomically reserve provider capacity, or raise a retryable error."""
-    if not limits_enabled():
+def acquire(
+    provider: str, model: str, *, credential: str | None = None, tokens: int = 0, pages: int = 0
+) -> ProviderLease | None:
+    if not limits_enabled(provider, model):
         return None
-    rpm, tpm, page_limit, concurrency = _limits()
+    rpm, tpm, page_limit, concurrency = _limits(provider, model)
     ttl = max(10, int(getattr(settings, "provider_limits_lease_seconds", 300)))
+    key_ttl = max(125, ttl + 5)
     prefix = f"docuelevate:provider:{provider}:{model}:{_fingerprint(credential)}"
     token = secrets.token_urlsafe(18)
-    keys = [f"{prefix}:rpm", f"{prefix}:tpm", f"{prefix}:pages", f"{prefix}:concurrency", f"{prefix}:lease:{token}"]
+    keys = [
+        f"{prefix}:rpm",
+        f"{prefix}:tpm",
+        f"{prefix}:pages",
+        f"{prefix}:concurrency",
+        f"{prefix}:cooldown",
+        f"{prefix}:token_amounts",
+        f"{prefix}:page_amounts",
+    ]
     try:
-        ok = _client().eval(_RESERVE_SCRIPT, len(keys), *keys, int(time.time()), ttl, rpm, tpm, page_limit, concurrency, max(0, int(tokens)), max(0, int(pages)), token)
-    except Exception as exc:  # fail closed while configured
+        client = _client()
+        cooldown = client.ttl(keys[4])
+        if cooldown and cooldown > 0:
+            raise ProviderQuotaExceeded(f"Provider cooldown active for {provider}/{model}", cooldown)
+        ok = client.eval(
+            _RESERVE_SCRIPT,
+            len(keys),
+            *keys,
+            int(time.time()),
+            ttl,
+            rpm,
+            tpm,
+            page_limit,
+            concurrency,
+            max(0, int(tokens)),
+            max(0, int(pages)),
+            token,
+            key_ttl,
+        )
+    except ProviderQuotaError:
+        raise
+    except Exception as exc:
         raise ProviderQuotaUnavailable("Provider limiter unavailable; retrying later", 30) from exc
     if not ok:
         raise ProviderQuotaExceeded(f"Provider budget exhausted for {provider}/{model}", 30)
     return ProviderLease(token, prefix, ttl)
 
 
-def release(lease: ProviderLease | None, *, tokens: int = 0, pages: int = 0) -> None:
+def release(lease: ProviderLease | None) -> None:
     if lease is None:
         return
-    rpm, tpm, page_limit, concurrency = _limits()
-    keys = [f"{lease.key_prefix}:rpm", f"{lease.key_prefix}:tpm", f"{lease.key_prefix}:pages", f"{lease.key_prefix}:concurrency", f"{lease.key_prefix}:lease:{lease.token}"]
     try:
-        _client().eval(
-            _RELEASE_SCRIPT,
-            len(keys),
-            *keys,
-            lease.token,
-            1 if rpm else 0,
-            max(0, int(tokens)) if tpm else 0,
-            max(0, int(pages)) if page_limit else 0,
-            1 if concurrency else 0,
-        )
+        _client().eval(_RELEASE_SCRIPT, 1, f"{lease.key_prefix}:concurrency", lease.token)
     except Exception:
         logger.warning("Provider lease release failed; it will expire automatically", exc_info=True)
 
 
+def record_cooldown(provider: str, model: str, *, credential: str | None, retry_after: float) -> None:
+    if not limits_enabled(provider, model):
+        return
+    try:
+        _client().set(
+            f"docuelevate:provider:{provider}:{model}:{_fingerprint(credential)}:cooldown",
+            "1",
+            ex=max(1, int(retry_after)),
+        )
+    except Exception:
+        logger.warning("Could not persist provider cooldown", exc_info=True)
+
+
 def retry_after_from_exception(exc: BaseException, default: float = 30.0) -> float:
-    """Extract a provider Retry-After value without depending on SDK types."""
     response = getattr(exc, "response", None)
     headers: Any = getattr(response, "headers", None) or getattr(exc, "headers", None)
     if headers:
-        value = headers.get("retry-after") or headers.get("Retry-After")
         try:
-            return max(1.0, float(value))
+            return max(1.0, float(headers.get("retry-after") or headers.get("Retry-After")))
         except (TypeError, ValueError):
             pass
     return default
-

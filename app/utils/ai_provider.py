@@ -17,7 +17,13 @@ from functools import wraps
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
-from app.utils.provider_limits import ProviderRateLimited, acquire, release, retry_after_from_exception
+from app.utils.provider_limits import (
+    ProviderRateLimited,
+    acquire,
+    record_cooldown,
+    release,
+    retry_after_from_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +123,19 @@ class AIProvider(ABC):
             except Exception as exc:
                 status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
                 if status == 429:
+                    retry_after = retry_after_from_exception(exc)
+                    record_cooldown(
+                        cls.__name__.removesuffix("Provider").lower(),
+                        model,
+                        credential=credential,
+                        retry_after=retry_after,
+                    )
                     raise ProviderRateLimited(
-                        f"Upstream rate limit for {cls.__name__}", retry_after_from_exception(exc)
+                        f"Upstream rate limit for {cls.__name__}", retry_after
                     ) from exc
                 raise
             finally:
-                release(lease, tokens=estimated_tokens)
+                release(lease)
 
         limited._provider_limited = True
         cls.chat_completion = limited  # type: ignore[assignment]

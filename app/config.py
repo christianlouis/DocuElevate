@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     provider_limits_pages_per_minute: int = Field(default=0, ge=0, description="Document pages per minute for OCR providers.")
     provider_limits_concurrency: int = Field(default=0, ge=0, description="Concurrent in-flight calls per provider/model/credential.")
     provider_limits_lease_seconds: int = Field(default=300, ge=10, le=3600)
+    provider_limits_overrides: str = Field(default="", description="JSON provider/model budget overrides.")
+    provider_limits_max_retries: int = Field(default=20, ge=3, le=1000)
     # Independent model for document-grounded RAG answers. This remains
     # separate from metadata/OCR model selection and is live-reloadable from
     # the database-backed settings service.

@@ -264,7 +264,13 @@ def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: i
         # Returning an empty metadata object here permanently loses work and
         # makes a provider 429 look like a successful document.
         status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
-        if isinstance(e, ProviderQuotaError) or status == 429 or (isinstance(status, int) and status >= 500):
+        network_failure = isinstance(e, (TimeoutError, ConnectionError, OSError))
+        if (
+            isinstance(e, ProviderQuotaError)
+            or network_failure
+            or status == 429
+            or (isinstance(status, int) and status >= 500)
+        ):
             raise
         logger.exception(f"[{task_id}] AI provider classification failed for {filename}: {e}")
         log_task_progress(
