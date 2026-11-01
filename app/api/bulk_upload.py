@@ -20,6 +20,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -134,7 +135,12 @@ def _capacity(db: Session) -> UploadCapacity:
 def _reserve_capacity(db: Session, size: int) -> bool:
     """Reserve headroom while holding the singleton row lock across the write."""
     _capacity(db)
-    ledger = db.execute(select(UploadCapacity).where(UploadCapacity.id == 1).with_for_update()).scalar_one()
+    ledger = db.execute(
+        select(UploadCapacity)
+        .where(UploadCapacity.id == 1)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).scalar_one()
     usage = shutil.disk_usage(upload_root())
     if usage.free < size + _disk_reserve():
         return False
@@ -294,7 +300,14 @@ def upload_file(
     if size_hint is None or size_hint > settings.max_upload_size:
         raise HTTPException(413, "file exceeds configured upload limit")
     if not _reserve_capacity(db, size_hint):
-        raise HTTPException(429, "local upload storage is at capacity", headers={"Retry-After": "30"})
+        # The application-wide API exception handler intentionally emits a
+        # compact JSON error and otherwise drops exception headers.  Return a
+        # response directly so clients can reliably honor back-pressure.
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "local upload storage is at capacity"},
+            headers={"Retry-After": "30"},
+        )
     # The request body is already spooled by Starlette.  The singleton ledger
     # row lock is intentionally held through the atomic rename so concurrent
     # admissions cannot all observe the same free-space headroom.
@@ -361,6 +374,10 @@ def upload_file(
         db.flush()
         item.file_id = record.id
         if not duplicate:
+            # Keep the accepted-file metric for capacity/status reporting, but
+            # deliberately do not use it as an admission limit.  Admission is
+            # governed by durable bytes and actual disk headroom above.
+            _capacity(db).reserved_files += 1
             db.add(UploadOutbox(item_id=item.id))
         else:
             _release_capacity(db, size)

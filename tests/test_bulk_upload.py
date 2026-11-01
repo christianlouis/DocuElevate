@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import io
+import shutil
 import zipfile
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app.api import bulk_upload
 from app.config import settings
 from app.models import FileProcessingStep, FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.tasks import dispatch_uploads
@@ -60,6 +62,111 @@ def test_idempotent_replay_is_returned_even_after_capacity_is_exhausted(client, 
     replay = client.post("/api/uploads/files", data=fields, files={"file": ("replay.pdf", content, "application/pdf")})
     assert replay.status_code == 202
     assert replay.json()["file_id"] == first.json()["file_id"]
+
+
+def test_legacy_reserved_file_counter_does_not_reject_new_upload(client, db_session, monkeypatch, tmp_path):
+    """Ingest admission is byte/disk based, not coupled to processing counters."""
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, "queue-owner:legacy-counter")
+    ledger = UploadCapacity(id=1, reserved_files=0, reserved_bytes=0)
+    db_session.add(ledger)
+    db_session.flush()
+    ledger.reserved_files = 1001
+    ledger.reserved_bytes = 0
+    db_session.commit()
+    content = b"%PDF-1.4 counter-is-not-admission"
+    response = client.post(
+        "/api/uploads/files",
+        data={"batch_id": batch_id, "client_id": "counter", "sha256": hashlib.sha256(content).hexdigest()},
+        files={"file": ("counter.pdf", content, "application/pdf")},
+    )
+    assert response.status_code == 202, response.text
+    assert db_session.query(UploadOutbox).count() == 1
+
+
+def test_disk_exhaustion_returns_retry_after_without_accepting_or_enqueueing(
+    client, db_session, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, "queue-owner:disk-full")
+    monkeypatch.setattr(
+        bulk_upload.shutil,
+        "disk_usage",
+        lambda _path: shutil._ntuple_diskusage(total=1000, used=950, free=50),
+    )
+    content = b"%PDF-1.4 disk-full"
+    response = client.post(
+        "/api/uploads/files",
+        data={"batch_id": batch_id, "client_id": "disk-full", "sha256": hashlib.sha256(content).hexdigest()},
+        files={"file": ("full.pdf", content, "application/pdf")},
+    )
+    assert response.status_code == 429
+    assert response.headers.get("retry-after") == "30", response.text
+    assert db_session.query(UploadItem).count() == 0
+    assert db_session.query(UploadOutbox).count() == 0
+
+
+def test_bulk_acceptance_is_not_subject_to_legacy_twenty_per_minute_limiter(client, db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, "queue-owner:twenty-one")
+    # If the old per-user dependency is accidentally reintroduced this test
+    # must fail immediately, even though the bulk route is intentionally exempt.
+    monkeypatch.setattr(
+        "app.middleware.upload_rate_limit.require_upload_rate_limit",
+        lambda *_args, **_kwargs: pytest.fail("legacy limiter invoked for bulk acceptance"),
+    )
+    for index in range(21):
+        content = f"%PDF-1.4 bulk-{index}".encode()
+        response = client.post(
+            "/api/uploads/files",
+            data={
+                "batch_id": batch_id,
+                "client_id": f"bulk-{index}",
+                "sha256": hashlib.sha256(content).hexdigest(),
+            },
+            files={"file": (f"bulk-{index}.pdf", content, "application/pdf")},
+        )
+        assert response.status_code == 202, response.text
+    assert db_session.query(UploadOutbox).count() == 21
+
+
+def test_duplicate_acceptance_releases_its_reservation(client, db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    monkeypatch.setattr(settings, "enable_deduplication", True)
+    batch_id = _batch(client, "queue-owner:duplicate-release")
+    content = b"%PDF-1.4 duplicate-release"
+    sha = hashlib.sha256(content).hexdigest()
+    first = client.post(
+        "/api/uploads/files",
+        data={"batch_id": batch_id, "client_id": "first", "sha256": sha},
+        files={"file": ("same.pdf", content, "application/pdf")},
+    )
+    assert first.status_code == 202
+    reserved_after_first = db_session.get(UploadCapacity, 1).reserved_bytes
+    duplicate = client.post(
+        "/api/uploads/files",
+        data={"batch_id": batch_id, "client_id": "second", "sha256": sha},
+        files={"file": ("same.pdf", content, "application/pdf")},
+    )
+    assert duplicate.status_code == 202
+    assert duplicate.json()["duplicate"] is True
+    assert db_session.get(UploadCapacity, 1).reserved_bytes == reserved_after_first
+    assert db_session.query(UploadOutbox).count() == 1
+
+
+def test_capacity_reports_multiple_ingest_slots(client, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    monkeypatch.setattr(
+        bulk_upload.shutil,
+        "disk_usage",
+        lambda _path: shutil._ntuple_diskusage(total=100_000_000_000, used=10_000_000_000, free=90_000_000_000),
+    )
+    batch_id = _batch(client, "queue-owner:positive-capacity")
+    response = client.get(f"/api/uploads/capacity?batch_id={batch_id}")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["slots"] > 1
+    assert payload["max_bytes"] > 0
 
 
 def test_preflight_and_snapshot_are_bounded(client, monkeypatch, tmp_path):
@@ -283,7 +390,7 @@ def test_reconcile_uses_terminal_step_and_atomic_ledger_decrement(db_session, mo
     db_session.refresh(item)
     ledger = db_session.get(UploadCapacity, 1)
     assert item.state == "complete"
-    assert (ledger.reserved_files, ledger.reserved_bytes) == (1, 0)
+    assert (ledger.reserved_files, ledger.reserved_bytes) == (0, 0)
     assert dispatch_uploads.reconcile_upload_states.run() == 0
 
 
@@ -317,7 +424,7 @@ def test_reconcile_releases_exhausted_failure_and_deleted_file(db_session, monke
     db_session.commit()
     monkeypatch.setattr(dispatch_uploads, "SessionLocal", lambda: nullcontext(db_session))
     assert dispatch_uploads.reconcile_upload_states.run() == 2
-    assert db_session.get(UploadCapacity, 1).reserved_files == 2
+    assert db_session.get(UploadCapacity, 1).reserved_files == 0
     assert failed.capacity_released is True and failed.state == "failed"
     assert deleted.capacity_released is True and deleted.state == "failed"
 
