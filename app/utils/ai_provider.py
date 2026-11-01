@@ -28,6 +28,11 @@ from app.utils.provider_limits import (
 logger = logging.getLogger(__name__)
 
 
+def _sdk_retry_options() -> dict[str, int]:
+    """Disable SDK-internal retries when the shared limiter is active."""
+    return {"max_retries": 0} if getattr(settings, "provider_limits_enabled", False) else {}
+
+
 def _resolve_temperature(model: str, requested: float) -> Optional[float]:
     """Return a temperature value compatible with the given model, or ``None`` to omit it.
 
@@ -114,14 +119,20 @@ class AIProvider(ABC):
             return
 
         @wraps(method)
-        def limited(self: "AIProvider", messages: List[Dict[str, str]], model: str, *args: Any, **call_kwargs: Any) -> str:
+        def limited(
+            self: "AIProvider", messages: List[Dict[str, str]], model: str, *args: Any, **call_kwargs: Any
+        ) -> str:
             estimated_tokens = max(1, sum(len(str(item.get("content", ""))) for item in messages) // 3)
             credential = getattr(self, "_api_key", None) or settings.openai_api_key
-            lease = acquire(cls.__name__.removesuffix("Provider").lower(), model, credential=credential, tokens=estimated_tokens)
+            lease = acquire(
+                cls.__name__.removesuffix("Provider").lower(), model, credential=credential, tokens=estimated_tokens
+            )
             try:
                 return method(self, messages, model, *args, **call_kwargs)
             except Exception as exc:
-                status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+                status = getattr(exc, "status_code", None) or getattr(
+                    getattr(exc, "response", None), "status_code", None
+                )
                 if status == 429:
                     retry_after = retry_after_from_exception(exc)
                     record_cooldown(
@@ -130,9 +141,7 @@ class AIProvider(ABC):
                         credential=credential,
                         retry_after=retry_after,
                     )
-                    raise ProviderRateLimited(
-                        f"Upstream rate limit for {cls.__name__}", retry_after
-                    ) from exc
+                    raise ProviderRateLimited(f"Upstream rate limit for {cls.__name__}", retry_after) from exc
                 raise
             finally:
                 release(lease)
@@ -176,9 +185,11 @@ class OpenAIProvider(AIProvider):
     def __init__(self, api_key: str, base_url: Optional[str] = None) -> None:
         import openai
 
+        self._api_key = api_key
         self._client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url or "https://api.openai.com/v1",
+            **_sdk_retry_options(),
         )
 
     def chat_completion(
@@ -204,10 +215,12 @@ class AzureOpenAIProvider(AIProvider):
     def __init__(self, api_key: str, azure_endpoint: str, api_version: str = "2024-02-01") -> None:
         import openai
 
+        self._api_key = api_key
         self._client = openai.AzureOpenAI(
             api_key=api_key,
             azure_endpoint=azure_endpoint,
             api_version=api_version,
+            **_sdk_retry_options(),
         )
 
     def chat_completion(
@@ -308,9 +321,11 @@ class OllamaProvider(AIProvider):
     def __init__(self, base_url: str = "http://localhost:11434") -> None:
         import openai
 
+        self._api_key = "ollama"
         self._client = openai.OpenAI(
             api_key="ollama",  # Ollama does not require a real API key
             base_url=f"{base_url.rstrip('/')}/v1",
+            **_sdk_retry_options(),
         )
 
     def chat_completion(
@@ -342,9 +357,11 @@ class OpenRouterProvider(AIProvider):
     def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1") -> None:
         import openai
 
+        self._api_key = api_key
         self._client = openai.OpenAI(
             api_key=api_key,
             base_url=base_url,
+            **_sdk_retry_options(),
         )
 
     def chat_completion(
@@ -401,6 +418,7 @@ class PortkeyProvider(AIProvider):
     ) -> None:
         import openai
 
+        self._api_key = api_key
         portkey_headers: Dict[str, str] = {"x-portkey-api-key": api_key}
         if virtual_key:
             portkey_headers["x-portkey-virtual-key"] = virtual_key
@@ -411,6 +429,7 @@ class PortkeyProvider(AIProvider):
             api_key=api_key,
             base_url=base_url,
             default_headers=portkey_headers,
+            **_sdk_retry_options(),
         )
 
     def chat_completion(
