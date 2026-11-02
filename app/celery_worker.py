@@ -82,6 +82,7 @@ logger = logging.getLogger(__name__)
 
 register_settings_reload_signal()
 
+
 @celery.task
 def test_task():
     return "Celery is working!"

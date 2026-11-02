@@ -91,7 +91,9 @@ async def scheduler_probe() -> JSONResponse:
     if status == "healthy":
         return JSONResponse(content={"status": "ok"}, status_code=200)
     if status == "stalled":
-        return JSONResponse(content={"status": status, "detail": "scheduler heartbeat missing or stale"}, status_code=503)
+        return JSONResponse(
+            content={"status": status, "detail": "scheduler heartbeat missing or stale"}, status_code=503
+        )
     return JSONResponse(content={"status": status, "detail": "scheduler heartbeat unavailable"}, status_code=503)
 
 
