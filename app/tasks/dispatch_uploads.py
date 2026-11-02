@@ -139,9 +139,12 @@ def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
             row.claim_expires_at = now + timedelta(seconds=CLAIM_SECONDS)
             claims.append((row.id, token))
         db.commit()
-    mark_fresh(DISPATCHER_KEY)
     for outbox_id, token in claims:
         dispatch_upload_item.delay(outbox_id, token)
+    # The marker certifies a completed control-plane tick, not merely that it
+    # began claiming rows.  A publication failure is retried and must remain
+    # visible to the capacity endpoint.
+    mark_fresh(DISPATCHER_KEY)
     return len(claims)
 
 

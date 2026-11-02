@@ -7,7 +7,7 @@ description: >
 type: application
 
 # Chart version — bump on every chart change (independent of appVersion).
-version: 0.2.0
+version: 0.2.1
 
 # Application version — kept in sync with the VERSION file.
 appVersion: "0.195.0"

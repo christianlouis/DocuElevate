@@ -29,11 +29,11 @@ from app.api.intake import _authenticate_intake
 from app.config import settings
 from app.database import SessionLocal, get_db
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
-from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, SCHEDULER_KEY, freshness
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file, upload_root
 from app.utils.filename_utils import sanitize_filename
 from app.utils.tribe_scope import ensure_document_scope
+from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, SCHEDULER_KEY, freshness
 
 router = APIRouter(prefix="/uploads", tags=["bulk-uploads"])
 Db = Annotated[Session, Depends(get_db)]
@@ -264,7 +264,13 @@ def capacity(request: Request, db: Db, batch_id: str, x_docuelevate_intake_secre
     dispatcher_status = freshness(DISPATCHER_KEY)
     reconciler_status = freshness(RECONCILER_KEY)
     statuses = (scheduler_status, dispatcher_status, reconciler_status)
-    processing_status = "stalled" if "stalled" in statuses else ("healthy" if "healthy" in statuses else "unknown")
+    # A partially visible control plane is not healthy: callers must see an
+    # unavailable component rather than masking it with two fresh markers.
+    processing_status = (
+        "stalled"
+        if "stalled" in statuses
+        else ("healthy" if all(status == "healthy" for status in statuses) else "unknown")
+    )
     return {
         "batch_id": batch.id,
         "slots": _capacity_slots(available),

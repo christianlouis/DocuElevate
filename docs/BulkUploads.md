@@ -42,7 +42,17 @@ lost 202 response does not create a second document.
 Run the database migration before enabling this release. API and processing
 workers must share durable `WORKDIR` storage; an ephemeral pod filesystem cannot
 provide the acceptance guarantee. Preserve that volume in backup/recovery plans.
-Run the Celery beat outbox recovery task as well as the workers. Redis priority
+Run the Celery beat outbox recovery task as well as the workers. The
+`upload-maintenance` worker must be deployed with the same application revision
+as Beat: it exclusively runs claim, dispatch and reconciliation tasks, while
+the `document_processor` workers run conversion and document pipelines. Roll
+out Beat and the maintenance worker before (or atomically with) the API/worker
+revision; do not leave a new dispatcher publishing to a queue with no consumer.
+Its readiness requires a worker ping plus recent successful dispatch and
+reconciliation ticks. Beat readiness requires a fresh scheduler marker. Both
+markers use `REDIS_URL`, even when Celery itself uses another broker.
+
+Redis priority
 queues and worker prefetch of one let mail and small imports overtake bulk work
 between pipeline tasks. Bulk provenance is carried through descendant tasks;
 old documents receive higher priority when subsequent tasks are published.

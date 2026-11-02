@@ -58,7 +58,10 @@ celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {
     "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
     "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
-    "app.tasks.dispatch_uploads.dispatch_upload_item": {"queue": "document_processor"},
+    # The dispatcher only publishes durable outbox entries.  It must not wait
+    # behind OCR/AI work on the document queue: its lease is deliberately
+    # short and a delayed dispatcher would otherwise re-publish valid claims.
+    "app.tasks.dispatch_uploads.dispatch_upload_item": {"queue": "upload_maintenance"},
     "app.tasks.dispatch_uploads.dispatch_upload_outbox": {"queue": "upload_maintenance"},
     "app.tasks.dispatch_uploads.reconcile_upload_states": {"queue": "upload_maintenance"},
     "app.tasks.*": {"queue": "document_processor"},

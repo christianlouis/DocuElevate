@@ -81,3 +81,13 @@ def test_celery_redis_routes_keep_local_defaults_and_allow_operator_overrides():
     assert environment["REDIS_URL"] == "redis://redis:6379/0"
     assert environment["CELERY_BROKER_URL"] == "${CELERY_BROKER_URL:-redis://redis:6379/0}"
     assert environment["CELERY_RESULT_BACKEND"] == "${CELERY_RESULT_BACKEND:-redis://redis:6379/0}"
+
+
+def test_upload_control_plane_processes_have_health_contracts():
+    compose = _compose()["services"]
+
+    assert "healthcheck" in compose["beat"]
+    assert "SCHEDULER_KEY" in str(compose["beat"]["healthcheck"])
+    assert "--hostname=upload-maintenance@%h" in compose["upload-maintenance-worker"]["command"]
+    assert "inspect ping" in str(compose["upload-maintenance-worker"]["healthcheck"])
+    assert "DISPATCHER_KEY" in str(compose["upload-maintenance-worker"]["healthcheck"])

@@ -201,6 +201,82 @@ worker:
     capabilities:
       drop: ["ALL"]
 
+# Beat records a short-lived scheduler heartbeat in REDIS_URL.  Keep this
+# separately configurable because it is a control-plane process, not an OCR
+# worker.
+beat:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+  livenessProbe:
+    exec:
+      command: ["python", "-c", "from app.utils.upload_health import SCHEDULER_KEY, freshness; raise SystemExit(freshness(SCHEDULER_KEY) != 'healthy')"]
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    exec:
+      command: ["python", "-c", "from app.utils.upload_health import SCHEDULER_KEY, freshness; raise SystemExit(freshness(SCHEDULER_KEY) != 'healthy')"]
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+# This worker exclusively executes the short upload control-plane tasks.  The
+# readiness check requires both its own Celery ping and recent completed
+# dispatcher/reconciler ticks.
+uploadMaintenanceWorker:
+  replicaCount: 1
+  concurrency: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    exec:
+      command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=upload-maintenance@$(hostname) --timeout=5"]
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    failureThreshold: 3
+  readinessProbe:
+    exec:
+      command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=upload-maintenance@$(hostname) --timeout=5 && python -c \"from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, freshness; raise SystemExit(0 if freshness(DISPATCHER_KEY) == freshness(RECONCILER_KEY) == 'healthy' else 1)\""]
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    failureThreshold: 3
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
 knowledgeResearchWorker:
   enabled: true
   replicaCount: 1

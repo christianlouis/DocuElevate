@@ -7,32 +7,59 @@ metadata:
     {{- include "docuelevate.labels" . | nindent 4 }}
     app.kubernetes.io/component: upload-maintenance
 spec:
-  replicas: 1
+  replicas: {{ .Values.uploadMaintenanceWorker.replicaCount }}
   selector:
     matchLabels:
       {{- include "docuelevate.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: upload-maintenance
   template:
     metadata:
+      {{- with .Values.uploadMaintenanceWorker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
         {{- include "docuelevate.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: upload-maintenance
     spec:
       serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.uploadMaintenanceWorker.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: upload-maintenance
           image: {{ include "docuelevate.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "upload_maintenance"]
+          command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency={{ .Values.uploadMaintenanceWorker.concurrency }}", "--hostname=upload-maintenance@%h", "-Q", "upload_maintenance"]
           envFrom:
             - configMapRef:
                 name: {{ include "docuelevate.fullname" . }}-config
             - secretRef:
                 name: {{ include "docuelevate.secretName" . }}
+          {{- with .Values.uploadMaintenanceWorker.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            {{- toYaml .Values.uploadMaintenanceWorker.resources | nindent 12 }}
+          livenessProbe:
+            {{- toYaml .Values.uploadMaintenanceWorker.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.uploadMaintenanceWorker.readinessProbe | nindent 12 }}
+      {{- with .Values.uploadMaintenanceWorker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.uploadMaintenanceWorker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.uploadMaintenanceWorker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
