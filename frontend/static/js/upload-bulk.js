@@ -1,6 +1,32 @@
 /* HTTP carries bytes; the websocket only advertises capacity and status.
  * IndexedDB stores metadata, never a second copy of the selected corpus. */
 (function () {
+  function globalPopup() {
+    const panel = document.getElementById('globalUploadQueue');
+    if (!panel) return null;
+    const reopen = document.getElementById('globalUploadQueueReopen');
+    const show = () => { panel.classList.remove('hidden'); reopen?.classList.add('hidden'); };
+    const hide = () => { panel.classList.add('hidden'); reopen?.classList.remove('hidden'); };
+    document.getElementById('globalUploadQueueMinimize')?.addEventListener('click', hide);
+    document.getElementById('globalUploadQueueClose')?.addEventListener('click', hide);
+    reopen?.addEventListener('click', show);
+    return { panel, show, render(payload, options = {}) {
+      const summary = document.getElementById('globalUploadQueueSummary');
+      const progress = document.getElementById('globalUploadQueueProgress');
+      const rows = document.getElementById('globalUploadQueueRows');
+      const queue = payload.queue || []; const total = Number(payload.total ?? queue.length);
+      const accepted = Number(payload.accepted ?? queue.filter(item => item.fileId != null).length);
+      const failed = Number(payload.failed ?? queue.filter(item => String(item.state || '').includes('failed')).length);
+      const complete = Number(payload.complete ?? queue.filter(item => ['complete', 'completed'].includes(item.state)).length);
+      const needsFiles = Number(payload.needsFiles ?? queue.filter(item => item.state === 'needs_files').length);
+      const processing = Number(payload.processing ?? queue.filter(item => item.state === 'processing').length);
+      if (summary) summary.textContent = `${accepted} angenommen · ${complete} verarbeitet · ${failed} fehlgeschlagen · ${needsFiles} erneut auswählen · ${processing} in Verarbeitung`;
+      if (progress) progress.style.width = `${total ? Math.min(100, (complete / total) * 100) : 0}%`;
+      if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.errorCode || item.error ? `: ${item.errorCode || item.error}` : ''; row.textContent = `${item.name || 'Datei'} — ${item.state || 'offen'}${reason}`; rows.appendChild(row); } }
+      if (options.open) show();
+    }};
+  }
+  const popup = globalPopup();
   if (typeof Worker !== 'undefined' && !window.uploadQueueTestMode) {
     const worker = new Worker('/static/js/upload-controller-worker.js');
     let registration;
@@ -17,6 +43,7 @@
       });
     }
     function render(payload) {
+      popup?.render(payload, { open: /wiederhergestellt|hinzugefügt/.test(payload.message || '') });
       const container = document.getElementById('uploadProgress');
       const status = document.getElementById('statusMessage');
       if (status) status.textContent = payload.message || '';
@@ -44,7 +71,7 @@
       if (!startPromise) startPromise = start().catch(error => { render({ message: String(error), queue: [] }); throw error; });
       return startPromise;
     }
-    window.processFiles = async files => { await ensureStarted(); worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
+    window.processFiles = async files => { popup?.show(); await ensureStarted(); worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
     window.addEventListener('DOMContentLoaded', () => { void ensureStarted().catch(() => {}); });
     return;
   }
@@ -193,6 +220,7 @@
     }
     message(text) { if (this.status) this.status.textContent = text; }
     render() {
+      popup?.render({ queue: this.queue, total: this.queue.length, accepted: this.queue.filter(item => item.fileId != null).length }, { open: false });
       if (!this.container) return;
       this.container.replaceChildren();
       for (const item of this.queue.slice(0, 100)) {
@@ -354,6 +382,7 @@
   }
   window.PersistentBulkUploadQueue = Queue;
   window.processFiles = async (files, container, status) => {
+    popup?.show();
     let queue = window.docuElevateUploadQueue;
     if (!queue) { queue = new Queue(container, status); window.docuElevateUploadQueue = queue; await queue.restore(); }
     if (container) queue.container = container;

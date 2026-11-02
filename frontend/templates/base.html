@@ -67,6 +67,13 @@
         data-allow-signup="{{ 'true' if allow_signup else 'false' }}">
     <!-- Skip to main content link for keyboard/screen reader users -->
     <a href="#main-content" class="skip-link">{{ _("nav.skip_to_content") }}</a>
+    {% if is_logged_in and upload_queue_owner %}
+    <div id="globalUploadQueue" class="hidden fixed bottom-4 right-4 z-[1100] w-[min(30rem,calc(100vw-2rem))] rounded-xl border border-blue-200 bg-white shadow-2xl" role="dialog" aria-labelledby="globalUploadQueueTitle" aria-live="polite">
+      <div class="flex items-center justify-between gap-3 border-b border-blue-100 bg-blue-600 px-4 py-3 text-white"><h2 id="globalUploadQueueTitle" class="font-semibold">Dateien hochladen</h2><div class="flex items-center gap-2"><button id="globalUploadQueueMinimize" type="button" class="rounded px-2 py-1 text-sm hover:bg-blue-700" aria-label="Minimieren">−</button><button id="globalUploadQueueClose" type="button" class="rounded px-2 py-1 text-sm hover:bg-blue-700" aria-label="Schließen">×</button></div></div>
+      <div class="p-4"><div id="globalUploadQueueSummary" class="text-sm font-medium text-gray-800"></div><div class="mt-2 h-2 overflow-hidden rounded bg-gray-200"><div id="globalUploadQueueProgress" class="h-full bg-blue-600 transition-all" style="width:0%"></div></div><div id="globalUploadQueueRows" class="mt-3 max-h-56 space-y-1 overflow-y-auto text-xs" tabindex="0"></div></div>
+    </div>
+    <button id="globalUploadQueueReopen" type="button" class="hidden fixed bottom-4 right-4 z-[1099] rounded-full bg-blue-600 px-4 py-3 font-semibold text-white shadow-lg hover:bg-blue-700">Upload-Queue öffnen</button>
+    {% endif %}
 
     <!-- Global Nav -->
     <nav class="bg-white shadow relative" aria-label="{{ _('nav.main_navigation') }}">
@@ -664,5 +671,9 @@
 
     <!-- Let child pages define extra scripts if needed -->
     {% block scripts %}{% endblock %}
+    {% if is_logged_in and upload_queue_owner %}
+    <script>window.uploadConfig = Object.assign({concurrency: {{ upload_concurrency | default(3) }}, queueDelayMs: {{ upload_queue_delay_ms | default(0) }}, queueOwner: {{ upload_queue_owner | tojson }}, maxFileSize: {{ upload_max_file_size | default(1073741824) }}, enableDeduplication: {{ upload_enable_deduplication | default(true) | tojson }}}, window.uploadConfig || {});</script>
+    <script src="/static/js/upload-bulk.js"></script>
+    {% endif %}
   </body>
 </html>
