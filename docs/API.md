@@ -1507,6 +1507,29 @@ on updates to retain the saved token. Saved connection tests read these tokens
 server-side and create no pages or notes. See [Notion](Notion.md) and
 [Evernote](Evernote.md) for provider setup and limitations.
 
+### Destination size handling
+
+Personal `EMAIL` and `NOTION` configs accept `size_policy` (`stop`, the default,
+or `link`); `EMAIL` additionally accepts `split` for PDFs. `optimize_pdf` is a
+boolean enabling lossless preparation. Email's optional positive integer
+`max_message_size_bytes` caps the full serialized message, not just the file.
+The SMTP-advertised cap still applies when lower.
+
+`size_policy_overrides` maps owned source integration IDs (strings) to either
+a policy string or `{"size_policy": "link", "optimize_pdf": true}`. Overrides
+are applied only using trusted document intake provenance; unknown historical
+sources use the destination default. Invalid policies, types, or source IDs
+return HTTP 400. Links use `document_url_base` or `PUBLIC_BASE_URL` and the
+authenticated `/files/{id}` page.
+
+`POST /api/files/{id}/retry-subtask?subtask_name=upload_to_user_integration_{destination_id}`
+retries only the selected active personal destination belonging to the document
+owner. Uncertain or fully accepted email delivery returns HTTP 409. Accepted
+parts are never automatically resent. No document processing or other destination
+is repeated. Provider results include `delivery_mode` (`original`, `optimized`,
+`multipart`, `link`, `split`, or `metadata`, depending on provider); email also
+reports `message_size_bytes` and `size_limit_bytes`.
+
 ### Quota Enforcement
 
 When creating an integration, the API checks the user's subscription tier:

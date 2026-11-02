@@ -2393,5 +2393,16 @@
   "onboarding.legal_accept": "Ich akzeptiere die",
   "onboarding.legal_terms": "Nutzungsbedingungen",
   "onboarding.legal_privacy": "Datenschutzerklärung",
-  "auth.privacy_acknowledge": "Ich habe die folgende Erklärung gelesen:"
+  "auth.privacy_acknowledge": "Ich habe die folgende Erklärung gelesen:",
+  "integrations.size_policy_label": "Wenn ein Dokument die Größenbegrenzung überschreitet",
+  "integrations.size_stop": "Anhalten und Größenbegrenzung anzeigen",
+  "integrations.size_link": "Stattdessen einen DocuElevate-Link senden",
+  "integrations.size_split": "PDF-Seiten in nummerierten E-Mails senden",
+  "integrations.size_optimize": "Kleinere PDF ohne Qualitätsverlust versuchen",
+  "integrations.size_policy_hint": "Das Original bleibt unverändert. Links erfordern Zugriff auf DocuElevate. Große PDFs werden für Notion automatisch in Teilen übertragen, innerhalb der Arbeitsplatzgrenze.",
+  "integrations.size_limit_label": "Maximale E-Mail-Größe in MiB (optional)",
+  "integrations.size_limit_hint": "Gilt für die gesamte E-Mail samt kodiertem Anhang. Der Mailserver kann eine kleinere Grenze vorgeben. Leer lassen, um seine gemeldete Grenze zu verwenden.",
+  "integrations.size_source_overrides": "Abweichende Regeln für einzelne Quellen",
+  "integrations.size_inherit": "Einstellung der Senke verwenden",
+  "integrations.notion_attach_pdf": "PDF anhängen (innerhalb der Größenbegrenzung des Notion-Arbeitsplatzes)"
 }

@@ -244,6 +244,57 @@ def _validate_integration_type(integration_type: str) -> None:
         )
 
 
+def _validate_destination_size_config(
+    integration_type: str,
+    config: dict[str, Any] | None,
+    db: Session | None = None,
+    owner_id: str | None = None,
+) -> None:
+    """Validate destination size policy fields before persisting config."""
+    if integration_type not in {IntegrationType.EMAIL, IntegrationType.NOTION} or not config:
+        return
+    policy = config.get("size_policy") or config.get("oversize_policy")
+    if policy is not None and str(policy).lower() not in {"stop", "link", "split"}:
+        raise HTTPException(status_code=400, detail="size_policy must be stop, link, or split")
+    if integration_type == IntegrationType.NOTION and policy is not None and str(policy).lower() == "split":
+        raise HTTPException(status_code=400, detail="Notion supports stop or link size policies only")
+    cap = config.get("max_message_size_bytes")
+    if cap is not None and (isinstance(cap, bool) or not isinstance(cap, int) or cap <= 0):
+        raise HTTPException(status_code=400, detail="max_message_size_bytes must be a positive integer")
+    overrides = config.get("size_policy_overrides")
+    if overrides is not None and not isinstance(overrides, dict):
+        raise HTTPException(status_code=400, detail="size_policy_overrides must be an object")
+    if overrides is not None:
+        for source_key, value in overrides.items():
+            if not isinstance(source_key, str) or not source_key.isdigit():
+                raise HTTPException(status_code=400, detail="size_policy_overrides keys must be source integration IDs")
+            selected = value.get("size_policy") if isinstance(value, dict) else value
+            if str(selected).lower() not in {"stop", "link", "split"}:
+                raise HTTPException(status_code=400, detail="size_policy_overrides contains an invalid policy")
+            if integration_type == IntegrationType.NOTION and str(selected).lower() == "split":
+                raise HTTPException(status_code=400, detail="Notion supports stop or link size policies only")
+            if isinstance(value, dict) and "optimize_pdf" in value and not isinstance(value["optimize_pdf"], bool):
+                raise HTTPException(status_code=400, detail="size_policy_overrides.optimize_pdf must be boolean")
+            if db is not None and owner_id is not None:
+                source = (
+                    db.query(UserIntegration)
+                    .filter(
+                        UserIntegration.id == int(source_key),
+                        UserIntegration.owner_id == owner_id,
+                        UserIntegration.direction == IntegrationDirection.SOURCE,
+                    )
+                    .first()
+                )
+                if source is None:
+                    raise HTTPException(
+                        status_code=400, detail="size_policy_overrides references an unknown source integration"
+                    )
+    if "lossless_optimize" in config and not isinstance(config["lossless_optimize"], bool):
+        raise HTTPException(status_code=400, detail="lossless_optimize must be boolean")
+    if "optimize_pdf" in config and not isinstance(config["optimize_pdf"], bool):
+        raise HTTPException(status_code=400, detail="optimize_pdf must be boolean")
+
+
 # ---------------------------------------------------------------------------
 # Serialisation helpers
 # ---------------------------------------------------------------------------
@@ -354,6 +405,7 @@ def create_integration(
     """
     _validate_direction(body.direction)
     _validate_integration_type(body.integration_type)
+    _validate_destination_size_config(body.integration_type, body.config, db, owner_id)
 
     _check_quota(db, owner_id, body.direction, body.integration_type)
 
@@ -436,6 +488,7 @@ def update_integration(
     if body.name is not None:
         integration.name = body.name
     if body.config is not None:
+        _validate_destination_size_config(integration.integration_type, body.config, db, owner_id)
         integration.config = json.dumps(body.config)
     if body.credentials is not None:
         integration.credentials = _encode_credentials(body.credentials)

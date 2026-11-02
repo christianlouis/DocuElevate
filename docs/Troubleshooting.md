@@ -342,3 +342,20 @@ If you continue to experience issues after trying these solutions:
    - [Configuration Guide](ConfigurationGuide.md) — All environment variables
    - [Configuration Troubleshooting](ConfigurationTroubleshooting.md) — Configuration-specific issues
    - [Deployment Guide](DeploymentGuide.md) — Infrastructure and deployment
+
+
+## Destination size limits
+
+- **SMTP 552 / Message size exceeds fixed limit:** The complete encoded email
+  exceeds the server's limit. Set the email destination's size limit and choose
+  link fallback or PDF page splitting. Raising an application limit cannot raise
+  the mail server's limit. Base64 encoding increases attachment size.
+- **Notion workspace upload limit:** Multipart uploads remove the former 20 MiB
+  transport restriction, but cannot exceed the workspace's actual file limit.
+  Choose link fallback, a smaller lossless copy, or a workspace with sufficient
+  capacity. The connection needs permission to read its bot workspace limits.
+- **Uncertain delivery outcome:** Check the destination before resending. Email
+  records sending/unknown parts and suppresses automatic repeats. A retry of
+  the selected destination does not restart other uploads or document processing.
+- **Source exception does not apply to an old document:** Historical intake may
+  lack a trustworthy source integration ID; the destination default applies.

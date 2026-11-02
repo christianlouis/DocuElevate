@@ -1441,6 +1441,32 @@ Notion requires a data source or database ID; PDF attachments are optional.
 Notion document links default to `PUBLIC_BASE_URL`, with an optional per-connection
 HTTPS base URL override. Per-user Evernote does not inherit the global settings below.
 
+### Size policies for personal destinations
+
+In **Integrations → Edit destination**, Email and Notion offer a size policy.
+The default is **Stop**. **Send a DocuElevate link instead** requires an HTTPS
+server URL and access to the document; it creates no public file share.
+Email additionally supports opt-in **PDF pages in numbered emails**. Every
+page is checked before the first message is sent. A single page that still
+exceeds the limit stops the whole attempt. Non-PDF files cannot be split.
+
+Email checks the entire serialized MIME message, including Base64 overhead,
+against the lower of the configured limit and SMTP's advertised `SIZE` limit.
+The optional limit is entered in MiB in the UI and stored in bytes. `SIZE 0`
+means no fixed advertised limit; a missing `SIZE` requires a configured limit
+for proactive checking. A server can still reject delivery with SMTP 552.
+The policy remains local to this destination and does not shrink other copies.
+
+**Try a smaller PDF without reducing quality** prepares a temporary lossless
+copy and uses it only when smaller. Originals and signed PDFs stay unchanged.
+Under **Different handling for selected sources**, choose exceptions to the
+destination default. Historical documents without trusted source provenance
+use the destination default.
+
+Email delivery records accepted, pending, and uncertain parts durably. A
+retry skips accepted parts; uncertain outcomes require inspection before any
+resend. Apply database migrations before starting updated workers.
+
 ### MCP client access
 
 The [read-only MCP adapter](MCP.md) runs as a separate local process. Configure

@@ -332,6 +332,7 @@ def _pull_user_integration_imap() -> None:
                         use_ssl=use_ssl,
                         delete_after_process=delete_after,
                         owner_id=integ.owner_id,
+                        source_integration_id=integ.id,
                         gmail_apply_labels=gmail_labels,
                         allowed_categories=allowed_categories,
                     )
@@ -396,6 +397,7 @@ def pull_inbox(
     use_ssl,
     delete_after_process,
     owner_id=None,
+    source_integration_id=None,
     gmail_apply_labels=True,
     allowed_categories=None,
 ):
@@ -509,6 +511,7 @@ def pull_inbox(
             fetch_attachments_and_enqueue(
                 email_message,
                 owner_id=owner_id,
+                source_integration_id=source_integration_id,
                 effective_mime_types=effective_mime_types,
                 effective_extensions=effective_extensions,
             )
@@ -549,6 +552,7 @@ def pull_inbox(
 def fetch_attachments_and_enqueue(
     email_message,
     owner_id: str | None = None,
+    source_integration_id: int | None = None,
     effective_mime_types: frozenset[str] | None = None,
     effective_extensions: frozenset[str] | None = None,
 ):
@@ -610,11 +614,11 @@ def fetch_attachments_and_enqueue(
 
         # If it's a PDF by MIME type or extension, process it directly
         if mime_type == "application/pdf" or is_pdf_by_extension:
-            process_document.delay(file_path, owner_id=owner_id)
+            process_document.delay(file_path, owner_id=owner_id, source_integration_id=source_integration_id)
             logger.info("Enqueued PDF for upload: %s (MIME: %s)", filename, mime_type)
         elif mime_type in effective_mime_types:
             # Other allowed files are sent for conversion
-            convert_to_pdf.delay(file_path, owner_id=owner_id)
+            convert_to_pdf.delay(file_path, owner_id=owner_id, source_integration_id=source_integration_id)
             logger.info("Enqueued file for conversion to PDF: %s", filename)
 
         has_attachment = True

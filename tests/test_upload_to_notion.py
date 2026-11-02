@@ -18,6 +18,17 @@ UPLOAD = "00000000-0000-4000-8000-000000000003"
 PAGE = "00000000-0000-4000-8000-000000000004"
 
 
+@pytest.fixture(autouse=True)
+def clear_workspace_cache():
+    from app.tasks.upload_to_notion import _WORKSPACE_LIMIT_CACHE
+
+    _WORKSPACE_LIMIT_CACHE.clear()
+
+
+def _workspace(limit=5 * 1024 * 1024 * 1024):
+    return _response(200, {"bot": {"workspace_limits": {"max_file_upload_size_in_bytes": limit}}})
+
+
 def _response(status: int, body: dict):
     response = Mock()
     response.status_code = status
@@ -116,6 +127,7 @@ def test_pdf_single_part_upload_is_marked_uploaded_and_attached(tmp_path):
     pdf = tmp_path / "doc.pdf"
     pdf.write_bytes(b"pdf")
     responses = [
+        _workspace(),
         _response(201, {"id": UPLOAD}),
         _response(200, {"id": UPLOAD, "status": "uploaded"}),
         _response(200, {"properties": {"Name": {"type": "title"}}}),
@@ -123,7 +135,7 @@ def test_pdf_single_part_upload_is_marked_uploaded_and_attached(tmp_path):
     ]
     with patch("app.tasks.upload_to_notion.requests.request", side_effect=responses) as request:
         upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
-    send = request.call_args_list[1]
+    send = request.call_args_list[2]
     assert "files" in send.kwargs and "Content-Type" not in send.kwargs["headers"]
     page = request.call_args_list[-1].kwargs["json"]
     assert page["children"][-1]["file"]["file_upload"]["id"] == UPLOAD
@@ -135,7 +147,7 @@ def test_pdf_upload_requires_uploaded_status(tmp_path):
     pdf.write_bytes(b"pdf")
     with patch(
         "app.tasks.upload_to_notion.requests.request",
-        side_effect=[_response(201, {"id": UPLOAD}), _response(200, {"id": UPLOAD, "status": "pending"})],
+        side_effect=[_workspace(), _response(201, {"id": UPLOAD}), _response(200, {"id": UPLOAD, "status": "pending"})],
     ):
         with pytest.raises(RuntimeError, match="marked uploaded"):
             upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
@@ -172,8 +184,10 @@ def test_oversized_pdf_fails_before_page_create(tmp_path):
     pdf = tmp_path / "large.pdf"
     with open(pdf, "wb") as stream:
         stream.truncate(20 * 1024 * 1024 + 1)
-    with pytest.raises(ValueError, match="20 MiB"):
-        upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
+    with patch("app.tasks.upload_to_notion.requests.request", return_value=_workspace(5 * 1024 * 1024)) as request:
+        with pytest.raises(ValueError, match="workspace upload limit"):
+            upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
+    assert request.call_count == 1
 
 
 def test_global_task_does_not_retry_uncertain_page_creation():
@@ -319,3 +333,74 @@ def test_global_task_records_sanitized_normal_failure(tmp_path):
             upload_to_notion_global.__wrapped__(str(pdf), 42)
     assert any(call.args[2] == "failure" and call.args[3] == "Notion upload failed" for call in progress.call_args_list)
     assert all("secret-token" not in str(call) for call in progress.call_args_list)
+
+
+def test_multipart_keeps_one_attachment_and_completes_before_page(tmp_path):
+    pdf = tmp_path / "large.pdf"
+    pdf.write_bytes(b"x" * (20 * 1024 * 1024 + 1))
+    responses = [_workspace(), _response(201, {"id": UPLOAD})]
+    responses += [_response(200, {"status": "pending"}) for _ in range(3)]
+    responses += [
+        _response(200, {"status": "uploaded"}),
+        _response(200, {"properties": {"Name": {"type": "title"}}}),
+        _response(200, {"id": PAGE}),
+    ]
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=responses) as request:
+        result = upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
+    calls = request.call_args_list
+    assert calls[1].kwargs["json"]["number_of_parts"] == 3
+    assert [calls[i].kwargs["data"]["part_number"] for i in range(2, 5)] == ["1", "2", "3"]
+    assert [len(calls[i].kwargs["files"]["file"][1]) for i in range(2, 5)] == [10 * 1024 * 1024, 10 * 1024 * 1024, 1]
+    assert calls[5].args[1].endswith("/complete")
+    assert result["delivery_mode"] == "multipart"
+    assert len([b for b in calls[-1].kwargs["json"]["children"] if b["type"] == "file"]) == 1
+
+
+def test_free_workspace_limit_applies_below_multipart_threshold(tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    with patch("app.tasks.upload_to_notion.requests.request", return_value=_workspace(2)) as request:
+        with pytest.raises(ValueError, match="workspace upload limit"):
+            upload_to_notion(str(pdf), {"data_source_id": DS, "attach_pdf": True}, {"api_token": "secret"}, "task")
+    assert request.call_count == 1
+
+
+def test_workspace_oversize_link_fallback_creates_no_upload(tmp_path):
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"pdf")
+    responses = [
+        _workspace(2),
+        _response(200, {"properties": {"Name": {"type": "title"}}}),
+        _response(200, {"id": PAGE}),
+    ]
+    with patch("app.tasks.upload_to_notion.requests.request", side_effect=responses) as request:
+        result = upload_to_notion(
+            str(pdf),
+            {
+                "data_source_id": DS,
+                "attach_pdf": True,
+                "size_policy": "link",
+                "document_url_base": "https://docs.example",
+            },
+            {"api_token": "secret"},
+            "task",
+            file_id=9,
+        )
+    assert result["delivery_mode"] == "link"
+    assert not any("file_uploads" in c.args[1] for c in request.call_args_list)
+    assert not any(b["type"] == "file" for b in request.call_args.kwargs["json"]["children"])
+
+
+def test_multipart_failure_never_creates_page(tmp_path):
+    from app.tasks.upload_to_notion import _upload_pdf
+
+    pdf = tmp_path / "large.pdf"
+    with pdf.open("wb") as stream:
+        stream.truncate(20 * 1024 * 1024 + 1)
+    with patch(
+        "app.tasks.upload_to_notion.requests.request",
+        side_effect=[_workspace(), _response(201, {"id": UPLOAD}), _response(500, {})],
+    ) as request:
+        with pytest.raises(RuntimeError):
+            _upload_pdf("secret", str(pdf))
+    assert request.call_count == 3

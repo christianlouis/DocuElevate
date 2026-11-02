@@ -107,6 +107,16 @@ class FileRecord(Base):
     # NULL means the file belongs to the shared/global space (single-user mode).
     owner_id = Column(String, nullable=True, index=True)
 
+    # Trusted source integration provenance.  This is populated only by the
+    # ingestion tasks (never from a delivery request), so destination
+    # size-policy overrides can safely target selected source integrations.
+    source_integration_id = Column(
+        Integer,
+        ForeignKey("user_integrations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Every document is bound to one Tribe inside one tenant before it can be
     # exposed.  Server defaults keep direct/offline record creation safe by
     # placing it in the non-member quarantine; normal ingestion assigns the
@@ -220,6 +230,36 @@ class FileRecord(Base):
 
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class DestinationDeliveryPart(Base):
+    """Idempotent ledger for size-policy delivery parts."""
+
+    __tablename__ = "destination_delivery_parts"
+    __table_args__ = (
+        UniqueConstraint(
+            "file_id",
+            "integration_id",
+            "content_hash",
+            "policy_hash",
+            "part_number",
+            name="uq_destination_delivery_part",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey(_FILES_ID_FK, ondelete="CASCADE"), nullable=False, index=True)
+    integration_id = Column(Integer, ForeignKey("user_integrations.id", ondelete="CASCADE"), nullable=False, index=True)
+    content_hash = Column(String(64), nullable=False)
+    policy_hash = Column(String(64), nullable=False)
+    part_number = Column(Integer, nullable=False)
+    part_count = Column(Integer, nullable=False)
+    filename = Column(String(255), nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    status = Column(String(16), nullable=False, default="pending", server_default="pending", index=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class DocumentIntake(Base):

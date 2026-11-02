@@ -15,7 +15,15 @@ from pypdf.errors import FileNotDecryptedError, PdfReadError
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import DocumentIntake, DropboxImportObject, FileRecord, Pipeline, PipelineStep
+from app.models import (
+    DocumentIntake,
+    DropboxImportObject,
+    FileRecord,
+    IntegrationDirection,
+    Pipeline,
+    PipelineStep,
+    UserIntegration,
+)
 from app.services.account_deletion import DeletionBlocked, assert_account_active
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
@@ -86,6 +94,39 @@ def _set_index_first_source_state(db: "Session", task_id: str, state: str, error
     imported = db.query(DropboxImportObject).filter(DropboxImportObject.task_id == task_id).first()
     if imported:
         imported.state = state
+
+
+def _trusted_source_integration_id(
+    db: "Session", task_id: str, owner_id: str | None, requested_id: int | None = None
+) -> int | None:
+    """Resolve source provenance through ingestion tasks or the import ledger.
+
+    The delivery config must never be able to nominate its own source.  Dropbox
+    corpus imports carry the integration relationship in
+    ``DropboxImportObject``; verify ownership again before copying it onto the
+    immutable file record.
+    """
+    if requested_id is not None:
+        integration = (
+            db.query(UserIntegration)
+            .filter(
+                UserIntegration.id == requested_id,
+                UserIntegration.owner_id == owner_id,
+                UserIntegration.direction == IntegrationDirection.SOURCE,
+                UserIntegration.is_active.is_(True),
+            )
+            .first()
+        )
+        return integration.id if integration else None
+    imported = db.query(DropboxImportObject).filter(DropboxImportObject.task_id == task_id).first()
+    if not imported or imported.integration_id is None:
+        return None
+    integration = (
+        db.query(UserIntegration)
+        .filter(UserIntegration.id == imported.integration_id, UserIntegration.owner_id == owner_id)
+        .first()
+    )
+    return integration.id if integration else None
 
 
 def _complete_index_first_document(
@@ -348,6 +389,7 @@ def process_document(
     force_cloud_ocr: bool = False,
     owner_id: str = None,
     index_only: bool = False,
+    source_integration_id: int | None = None,
 ):
     """
     Process a document file and trigger appropriate text extraction.
@@ -443,6 +485,7 @@ def process_document(
     # Profile OCR overrides resolved inside DB session.
     ocr_language: str | None = None
     with SessionLocal() as db:
+        source_integration_id = _trusted_source_integration_id(db, task_id, owner_id, source_integration_id)
         # When file_id is provided, we are reprocessing an existing file.
         # Skip the duplicate check and reuse the existing record.
         if file_id is not None:
@@ -494,6 +537,7 @@ def process_document(
                     owner_id=owner_id,
                     tenant_id=tenant_id,
                     tribe_id=tribe_id,
+                    source_integration_id=source_integration_id,
                 )
                 db.add(duplicate_record)
                 db.commit()
@@ -555,6 +599,7 @@ def process_document(
                 owner_id=owner_id,
                 tenant_id=tenant_id,
                 tribe_id=tribe_id,
+                source_integration_id=source_integration_id,
             )
             db.add(new_record)
             db.commit()
