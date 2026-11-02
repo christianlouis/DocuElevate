@@ -7,16 +7,27 @@ let config = {}, principal = 'single-user', csrfToken = '', owner = '';
 let queue = [], running = new Set(), capacities = new Map(), sockets = new Map(), swRequests = new Map(), nextRpc = 0;
 let activeUploads = 0, ready = Promise.resolve(), controllerInspectionTail = Promise.resolve();
 let refreshTimer = null;
+let pendingAdds = 0, phase = 'Initialisierung', pausedReason = '', lastCapacity = null, lastWebSocket = null;
+
+function timestamp() { return new Date().toISOString(); }
+function diagnostics() {
+  return { worker: 'bereit', phase, pausedReason, capacity: lastCapacity, websocket: lastWebSocket };
+}
+function rememberCapacity(batchId, capacity, source) {
+  if (!capacity) return;
+  lastCapacity = { slots: capacity.slots, maxBytes: capacity.max_bytes, source, batchId, at: timestamp() };
+}
+function rememberWebSocket(state) { lastWebSocket = { state, at: timestamp() }; }
 
 function status(message, extra = {}) {
   const priority = item => String(item.state || '').includes('failed') ? 0 : ['queued', 'needs_files', 'processing'].includes(item.state) ? 1 : 2;
   const visible = [...queue].sort((a, b) => priority(a) - priority(b)).slice(0, 100).map(({ file, ...item }) => item);
-  self.postMessage({ type: 'status', message, queue: visible, total: queue.length,
+  self.postMessage({ type: 'status', message, queue: visible, total: queue.length + pendingAdds,
     accepted: queue.filter(item => item.fileId != null).length,
     complete: queue.filter(item => ['complete', 'completed'].includes(item.state)).length,
     failed: queue.filter(item => String(item.state || '').includes('failed')).length,
     needsFiles: queue.filter(item => item.state === 'needs_files').length,
-    processing: queue.filter(item => item.state === 'processing').length, ...extra });
+    processing: queue.filter(item => item.state === 'processing').length, diagnostics: diagnostics(), ...extra });
 }
 function sw(op, data = {}) {
   return new Promise((resolve, reject) => {
@@ -36,7 +47,7 @@ async function api(url, options = {}) {
     let response;
     try { response = await fetch(url, { ...options, headers: { ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...options.headers } }); }
     catch (error) { await new Promise(resolve => setTimeout(resolve, backoff)); backoff = Math.min(backoff * 2, 30000); continue; }
-    if (response.status === 429) { status('Serverlimit erreicht – Upload pausiert.'); await new Promise(resolve => setTimeout(resolve, retryAfter(response, backoff))); backoff = Math.min(backoff * 2, 30000); continue; }
+    if (response.status === 429) { phase = 'pausiert'; pausedReason = 'Serverlimit erreicht'; status('Serverlimit erreicht – Upload pausiert.'); await new Promise(resolve => setTimeout(resolve, retryAfter(response, backoff))); backoff = Math.min(backoff * 2, 30000); continue; }
     if (response.status >= 500) { await new Promise(resolve => setTimeout(resolve, backoff)); backoff = Math.min(backoff * 2, 30000); continue; }
     if (!response.ok) { const error = new Error(`Upload request failed (${response.status})`); error.permanent = response.status < 500; throw error; }
     return response.json();
@@ -84,7 +95,7 @@ async function persist(items) { if (items.length) await sw('putMany', { items: i
 async function makeBatch(files) {
   const batch = await api('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client_batch_id: crypto.randomUUID(), total_files: files.length, total_bytes: files.reduce((sum, file) => sum + file.size, 0) }) });
   const items = files.map(file => ({ key: crypto.randomUUID(), batchId: batch.batch_id, file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
-  queue.push(...items); await persist(items); status(`${queue.length} Dateien in der Upload-Queue.`); return items;
+  queue.push(...items); await persist(items); return items;
 }
 function matchPendingFiles(files) {
   const pending = new Map();
@@ -103,10 +114,10 @@ function connectCapacity(batchId) {
   if (typeof WebSocket === 'undefined' || sockets.has(batchId)) return;
   const protocol = self.location?.protocol === 'https:' ? 'wss' : 'ws';
   const host = self.location?.host; if (!host) return;
-  const socket = new WebSocket(`${protocol}://${host}/api/uploads/events?batch_id=${encodeURIComponent(batchId)}`); sockets.set(batchId, socket);
-  socket.onopen = () => { socket._heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send('capacity'); }, 5000); };
-  socket.onmessage = event => { try { const message = JSON.parse(event.data); if (message.capacity) capacities.set(batchId, message.capacity); if (message.slots !== undefined) capacities.set(batchId, message); } catch (_) {} };
-  socket.onclose = () => { clearInterval(socket._heartbeat); if (sockets.get(batchId) === socket) sockets.delete(batchId); if (running.has(batchId)) setTimeout(() => connectCapacity(batchId), 5000); };
+  const socket = new WebSocket(`${protocol}://${host}/api/uploads/events?batch_id=${encodeURIComponent(batchId)}`); sockets.set(batchId, socket); rememberWebSocket('Verbindung wird aufgebaut');
+  socket.onopen = () => { rememberWebSocket('verbunden'); socket._heartbeat = setInterval(() => { if (socket.readyState === WebSocket.OPEN) socket.send('capacity'); }, 5000); };
+  socket.onmessage = event => { try { const message = JSON.parse(event.data); if (message.capacity) { capacities.set(batchId, message.capacity); rememberCapacity(batchId, message.capacity, 'WebSocket'); } if (message.slots !== undefined) { capacities.set(batchId, message); rememberCapacity(batchId, message, 'WebSocket'); } } catch (_) {} };
+  socket.onclose = () => { rememberWebSocket('getrennt'); clearInterval(socket._heartbeat); if (sockets.get(batchId) === socket) sockets.delete(batchId); if (running.has(batchId)) setTimeout(() => connectCapacity(batchId), 5000); };
 }
 async function acquireUploadSlot() {
   while (activeUploads >= Math.max(1, Number(config.concurrency || 3))) await new Promise(resolve => setTimeout(resolve, 100));
@@ -129,10 +140,11 @@ async function send(item) {
 }
 async function processBatch(items) {
   const batchId = items[0]?.batchId; if (!batchId || running.has(batchId)) return;
-  running.add(batchId); connectCapacity(batchId);
+  running.add(batchId); phase = 'Upload wird vorbereitet'; pausedReason = ''; connectCapacity(batchId);
   try {
     for (let offset = 0; offset < items.length; offset += WINDOW) {
       const group = items.slice(offset, offset + WINDOW);
+      phase = 'Dateien werden geprüft';
       for (const item of group.filter(item => item.file && !item.fileId)) {
         try { const result = await inspectFile(item); item.sha256 = result.sha256; item.mime = result.mime; }
         catch (error) { item.state = 'failed'; item.errorCode = 'file_inspection_failed'; status(String(error)); }
@@ -140,21 +152,24 @@ async function processBatch(items) {
       await persist(dedup(queue));
       const check = group.filter(item => item.state === 'queued' && item.file && item.sha256 && !item.duplicateOf);
       if (check.length) {
+        phase = 'Server prüft Dateien';
         const result = await api('/api/uploads/preflight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id: batchId, files: check.map(item => ({ client_id: item.key, sha256: item.sha256, size: item.size, mime: item.mime })) }) });
         for (const entry of result.files || []) { const item = check.find(candidate => candidate.key === entry.client_id); if (item && entry.state === 'duplicate') { item.state = 'duplicate'; item.fileId = entry.file_id; } }
       }
       await persist([...new Set([...group, ...dedup(queue)])]);
       for (;;) {
-        const capacity = capacities.get(batchId) || await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`);
-        capacities.set(batchId, capacity);
+        const pushedCapacity = capacities.get(batchId);
+        const capacity = pushedCapacity || await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`);
+        capacities.set(batchId, capacity); rememberCapacity(batchId, capacity, pushedCapacity ? 'WebSocket' : 'Server');
         const selected = selectReady(group, capacity);
-        if (!selected.length) { if (!group.some(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf)) break; capacities.delete(batchId); status('Server pausiert die Uploads – warte auf Kapazität…'); await new Promise(resolve => setTimeout(resolve, 2000)); continue; }
+        if (!selected.length) { if (!group.some(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf)) break; capacities.delete(batchId); phase = 'pausiert'; pausedReason = 'Server meldet keine freie Upload-Kapazität'; status('Server pausiert die Uploads – warte auf Kapazität…'); await new Promise(resolve => setTimeout(resolve, 2000)); continue; }
+        phase = 'Dateien werden übertragen'; pausedReason = '';
         await Promise.all(selected.map(send)); await persist([...new Set([...group, ...dedup(queue)])]);
       }
       status('Upload-Queue wird verarbeitet.');
     }
   } finally {
-    running.delete(batchId); const socket = sockets.get(batchId); if (socket) { clearInterval(socket._heartbeat); socket.close(); } sockets.delete(batchId); status('Upload-Queue aktualisiert.');
+    running.delete(batchId); phase = 'wartet auf weitere Dateien'; const socket = sockets.get(batchId); if (socket) { clearInterval(socket._heartbeat); socket.close(); } sockets.delete(batchId); status('Upload-Queue aktualisiert.');
     // A reselection can arrive while this batch is processing. The current
     // bounded window is a snapshot, so schedule those new entries afterwards.
     const waiting = queue.filter(item => item.batchId === batchId && item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf);
@@ -163,23 +178,23 @@ async function processBatch(items) {
 }
 async function add(files) {
   const count = Array.from(files || []).length;
-  if (count) status(`${count} Datei${count === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.`);
-  await ready;
-  const list = Array.from(files || []).filter(file => file && file.size <= (config.maxFileSize || 1024 * 1024 * 1024));
-  if (!list.length) return;
-  const { matched, fresh } = matchPendingFiles(list);
-  if (matched.length) {
-    await persist(matched);
-    for (const batch of new Map(matched.map(item => [item.batchId, null])).keys()) {
-      void processBatch(queue.filter(item => item.batchId === batch)).catch(error => status(`Upload pausiert: ${error.message || error}`));
+  if (count) { pendingAdds += count; phase = 'neue Dateien werden eingeordnet'; status(`${count} Datei${count === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.`); }
+  try {
+    await ready;
+    const list = Array.from(files || []).filter(file => file && file.size <= (config.maxFileSize || 1024 * 1024 * 1024));
+    if (!list.length) return;
+    const { matched, fresh } = matchPendingFiles(list);
+    if (matched.length) {
+      await persist(matched);
+      for (const batch of new Map(matched.map(item => [item.batchId, null])).keys()) {
+        void processBatch(queue.filter(item => item.batchId === batch)).catch(error => status(`Upload pausiert: ${error.message || error}`));
+      }
     }
-  }
-  if (fresh.length) {
-    const batch = await makeBatch(fresh);
-    void processBatch(batch).catch(error => status(`Upload pausiert: ${error.message || error}`));
-  }
+    if (fresh.length) { const batch = await makeBatch(fresh); void processBatch(batch).catch(error => status(`Upload pausiert: ${error.message || error}`)); }
+  } finally { if (count) { pendingAdds -= count; status('Upload-Queue aktualisiert.'); } }
 }
 async function restore() {
+  phase = 'gespeicherte Queue wird wiederhergestellt';
   const batches = await sw('listBatches');
   for (const batchId of batches || []) {
     const items = await sw('snapshot', { batchId });
@@ -199,10 +214,11 @@ async function restore() {
     } while (cursor !== null);
     await persist(changed);
   }
-  status('Queue wiederhergestellt.');
+  phase = 'wartet auf weitere Dateien'; status('Queue wiederhergestellt.');
   scheduleRefresh();
 }
 async function refreshPending() {
+  phase = 'Verarbeitungsstatus wird abgeglichen';
   for (const batchId of [...new Set(queue.filter(item => item.fileId && !['complete', 'completed'].includes(item.state)).map(item => item.batchId))]) {
     let cursor = null;
     do {
@@ -213,7 +229,7 @@ async function refreshPending() {
       await persist(changed); cursor = snapshot.next_cursor ?? null;
     } while (cursor !== null);
   }
-  status('Upload-Queue aktualisiert.');
+  phase = 'wartet auf weitere Dateien'; status('Upload-Queue aktualisiert.');
 }
 function scheduleRefresh() {
   if (!self.location?.host || refreshTimer || !queue.some(item => item.fileId && !['complete', 'completed'].includes(item.state))) return;
@@ -221,7 +237,7 @@ function scheduleRefresh() {
 }
 self.onmessage = event => {
   const message = event.data || {};
-  if (message.type === 'init') { config = message.config || {}; principal = message.principal || principal; csrfToken = message.csrf || ''; owner = message.owner || crypto.randomUUID(); ready = restore().catch(error => { status(String(error)); return false; }); return; }
+  if (message.type === 'init') { config = message.config || {}; principal = message.principal || principal; csrfToken = message.csrf || ''; owner = message.owner || crypto.randomUUID(); ready = restore().catch(error => { phase = 'Wiederherstellung fehlgeschlagen'; pausedReason = 'Gespeicherte Queue konnte nicht gelesen werden'; status(String(error)); return false; }).then(result => { self.postMessage({ type: 'ready', diagnostics: diagnostics() }); return result; }); return; }
   if (message.type === 'add') { void add(message.files).catch(error => status(String(error))); return; }
   if (message.type === 'swResponse') { const request = swRequests.get(message.id); if (!request) return; swRequests.delete(message.id); message.ok ? request.resolve(message.result) : request.reject(new Error(message.error || 'Queue error')); return; }
 };

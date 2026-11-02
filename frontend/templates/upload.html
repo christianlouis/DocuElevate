@@ -313,6 +313,7 @@
     e.preventDefault();
     dropZone.classList.remove("bg-gray-100");
 
+    window.beginUploadSelection?.();
     const files = await getFilesFromDataTransfer(e.dataTransfer);
     if (files.length) {
       // Create progress container

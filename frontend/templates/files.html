@@ -1496,6 +1496,7 @@
       dragCounter = 0;
       dropOverlay.classList.remove('active');
 
+      window.beginUploadSelection?.();
       const files = await getFilesFromDataTransfer(e.dataTransfer);
       if (files.length > 0) {
         processFiles(files);

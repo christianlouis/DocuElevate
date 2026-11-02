@@ -1,17 +1,52 @@
 /* HTTP carries bytes; the websocket only advertises capacity and status.
  * IndexedDB stores metadata, never a second copy of the selected corpus. */
 (function () {
+  const useDedicatedController = typeof Worker !== 'undefined' && !window.uploadQueueTestMode;
+  // The adapter is included by the base layout. Keep an accidental second tag
+  // from starting a second controller (and a competing upload worker).
+  if (useDedicatedController && window.__docuElevateUploadQueueStarted) return;
+  if (useDedicatedController) window.__docuElevateUploadQueueStarted = true;
   function globalPopup() {
     const panel = document.getElementById('globalUploadQueue');
     if (!panel) return null;
     const reopen = document.getElementById('globalUploadQueueReopen');
-    const show = () => { panel.classList.remove('hidden'); reopen?.classList.add('hidden'); };
-    const hide = () => { panel.classList.add('hidden'); reopen?.classList.remove('hidden'); };
+    const diagnosticsPanel = document.getElementById('globalUploadQueueDiagnosticsPanel');
+    const diagnosticsButton = document.getElementById('globalUploadQueueDiagnosticsButton');
+    const addFilesButton = document.getElementById('globalUploadQueueAddFiles');
+    const addFilesInput = document.getElementById('globalUploadQueueFileInput');
+    let minimized = false;
+    const show = () => { minimized = false; panel.classList.remove('hidden'); reopen?.classList.add('hidden'); };
+    const hide = () => { minimized = true; panel.classList.add('hidden'); reopen?.classList.remove('hidden'); };
     document.getElementById('globalUploadQueueMinimize')?.addEventListener('click', hide);
     document.getElementById('globalUploadQueueClose')?.addEventListener('click', hide);
     reopen?.addEventListener('click', show);
-    return { panel, show, render(payload, options = {}) {
+    addFilesButton?.addEventListener('click', () => { show(); addFilesInput?.click(); });
+    addFilesInput?.addEventListener('change', event => { const files = event.target?.files; if (files?.length) void window.processFiles?.(files); event.target.value = ''; });
+    const states = { queued: 'wartet auf Upload', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
+    const errors = { transfer_rejected: 'vom Server abgelehnt', network_retrying: 'Verbindung wird erneut versucht', file_inspection_failed: 'Datei konnte nicht geprüft werden' };
+    const renderDiagnostics = details => {
+      const list = document.getElementById('globalUploadQueueDiagnostics');
+      if (!list) return;
+      const entries = [
+        ['Service Worker', details.serviceWorker || 'wird geprüft'],
+        ['Controller', details.controller || 'noch nicht aktiv'],
+        ['Upload-Worker', details.worker || 'wird gestartet'],
+        ['Letzte Phase', details.phase || 'noch nicht gestartet'],
+        ['Pausiert weil', details.pausedReason || 'nein'],
+        ['Serverkapazität', details.capacity || 'noch nicht bekannt'],
+        ['WebSocket', details.websocket || 'noch nicht verbunden'],
+        ['Dauerhafter Speicher', details.persisted || 'wird geprüft'],
+        ['Speicherbelegung', details.storage || 'wird geprüft'],
+        ['Queue', details.queue || '0 Dateien'],
+      ];
+      list.replaceChildren();
+      for (const [label, value] of entries) { const term = document.createElement('dt'); term.className = 'font-medium'; term.textContent = label; const description = document.createElement('dd'); description.textContent = value; list.append(term, description); }
+    };
+    let diagnosticsHandler = null;
+    diagnosticsButton?.addEventListener('click', () => { show(); diagnosticsPanel?.classList.remove('hidden'); diagnosticsButton.setAttribute('aria-expanded', 'true'); void diagnosticsHandler?.(); });
+    return { panel, show, beginSelection() { show(); const summary = document.getElementById('globalUploadQueueSummary'); const notice = document.getElementById('globalUploadQueueNotice'); if (summary) summary.textContent = 'Dateien werden eingelesen'; if (notice) notice.textContent = 'Die Auswahl wird vorbereitet.'; }, renderDiagnostics, setDiagnosticsHandler(handler) { diagnosticsHandler = handler; }, render(payload, options = {}) {
       const summary = document.getElementById('globalUploadQueueSummary');
+      const notice = document.getElementById('globalUploadQueueNotice');
       const progress = document.getElementById('globalUploadQueueProgress');
       const rows = document.getElementById('globalUploadQueueRows');
       const queue = payload.queue || []; const total = Number(payload.total ?? queue.length);
@@ -20,16 +55,20 @@
       const complete = Number(payload.complete ?? queue.filter(item => ['complete', 'completed'].includes(item.state)).length);
       const needsFiles = Number(payload.needsFiles ?? queue.filter(item => item.state === 'needs_files').length);
       const processing = Number(payload.processing ?? queue.filter(item => item.state === 'processing').length);
-      if (summary) summary.textContent = `${accepted} angenommen · ${complete} verarbeitet · ${failed} fehlgeschlagen · ${needsFiles} erneut auswählen · ${processing} in Verarbeitung`;
+      if (summary) summary.textContent = `${total} insgesamt · ${accepted} angenommen · ${complete} verarbeitet · ${failed} fehlgeschlagen · ${needsFiles} erneut auswählen · ${processing} in Verarbeitung`;
+      if (notice) notice.textContent = payload.message || '';
       if (progress) progress.style.width = `${total ? Math.min(100, (complete / total) * 100) : 0}%`;
-      if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.errorCode || item.error ? `: ${item.errorCode || item.error}` : ''; row.textContent = `${item.name || 'Datei'} — ${item.state || 'offen'}${reason}`; rows.appendChild(row); } }
-      if (options.open) show();
+      if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.errorCode ? `: ${errors[item.errorCode] || 'Übertragungsfehler'}` : ''; row.textContent = `${item.name || 'Datei'} — ${states[item.state] || 'unbekannter Status'}${reason}`; rows.appendChild(row); } }
+      if (payload.diagnostics) renderDiagnostics(payload.diagnostics);
+      if (options.open && (!minimized || options.force)) show();
     }};
   }
   const popup = globalPopup();
-  if (typeof Worker !== 'undefined' && !window.uploadQueueTestMode) {
+  if (useDedicatedController) {
     const worker = new Worker('/static/js/upload-controller-worker.js');
     let registration;
+    let latestStatus = { total: 0, accepted: 0, complete: 0, failed: 0, needsFiles: 0, processing: 0 };
+    const diagnostic = { serviceWorker: 'wird gestartet', controller: 'noch nicht aktiv', worker: 'wird gestartet', phase: 'Initialisierung', pausedReason: '', capacity: 'noch nicht bekannt', websocket: 'noch nicht verbunden', persisted: 'wird geprüft', storage: 'wird geprüft', queue: '0 Dateien' };
     const owner = crypto.randomUUID();
     const csrf = () => typeof getCsrfToken === 'function' ? getCsrfToken() : '';
     function postSW(message) {
@@ -42,15 +81,39 @@
         controller.postMessage({ ...message, principal: window.uploadConfig?.queueOwner || 'single-user' }, [channel.port2]);
       });
     }
+    function diagnosticsFrom(payload = {}) {
+      const report = payload.diagnostics || {};
+      diagnostic.worker = report.worker || diagnostic.worker;
+      diagnostic.phase = report.phase || diagnostic.phase;
+      diagnostic.pausedReason = report.pausedReason || '';
+      diagnostic.capacity = report.capacity ? `${report.capacity.slots ?? '?'} Plätze, ${formatBytes(report.capacity.maxBytes)} (${report.capacity.source || 'Server'}, ${report.capacity.at || 'Zeit unbekannt'})` : diagnostic.capacity;
+      diagnostic.websocket = report.websocket ? `${report.websocket.state || 'unbekannt'} (${report.websocket.at || 'Zeit unbekannt'})` : diagnostic.websocket;
+      diagnostic.queue = `${payload.total ?? latestStatus.total} Dateien · ${payload.accepted ?? latestStatus.accepted} angenommen · ${payload.complete ?? latestStatus.complete} verarbeitet · ${payload.failed ?? latestStatus.failed} fehlgeschlagen`;
+      return diagnostic;
+    }
+    function formatBytes(value) { return Number.isFinite(Number(value)) ? `${(Number(value) / 1024 / 1024).toFixed(1)} MB` : 'unbegrenzt'; }
+    async function refreshDiagnostics() {
+      diagnostic.serviceWorker = registration ? `registriert (${registration.active?.state || registration.installing?.state || 'wartet'})` : 'nicht registriert';
+      diagnostic.controller = navigator.serviceWorker?.controller ? 'aktiv' : 'noch nicht aktiv (nach Neuladen verfügbar)';
+      try { diagnostic.persisted = navigator.storage?.persisted ? (await navigator.storage.persisted() ? 'angefordert und bestätigt' : 'nicht bestätigt') : 'Browser unterstützt keine Abfrage'; } catch (_) { diagnostic.persisted = 'konnte nicht abgefragt werden'; }
+      try { const estimate = await navigator.storage?.estimate?.(); diagnostic.storage = estimate ? `${formatBytes(estimate.usage)} von ${formatBytes(estimate.quota)}` : 'Browser unterstützt keine Abfrage'; } catch (_) { diagnostic.storage = 'konnte nicht abgefragt werden'; }
+      popup?.renderDiagnostics(diagnostic);
+    }
+    popup?.setDiagnosticsHandler(refreshDiagnostics);
     function render(payload) {
-      popup?.render(payload, { open: /wiederhergestellt|hinzugefügt/.test(payload.message || '') });
+      latestStatus = { ...latestStatus, ...payload };
+      const pending = Number(payload.total || 0) > Number(payload.complete || 0);
+      const newDrop = /hinzugefügt/.test(payload.message || '');
+      const opensForWork = pending && (/wiederhergestellt/.test(payload.message || '') || newDrop);
+      diagnosticsFrom(payload);
+      popup?.render({ ...payload, diagnostics: diagnostic }, { open: opensForWork, force: newDrop });
       const container = document.getElementById('uploadProgress');
       const status = document.getElementById('statusMessage');
       if (status) status.textContent = payload.message || '';
       if (!container || !payload.queue) return;
       container.replaceChildren();
-      const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'Duplikat', processing: 'in Verarbeitung', complete: 'verarbeitet', needs_files: 'Datei erneut auswählen', failed: 'fehlgeschlagen' };
-      for (const item of payload.queue.slice(0, 100)) { const row = document.createElement('div'); row.className = 'text-xs mb-1'; row.textContent = `${item.name} — ${states[item.state] || item.state}`; container.appendChild(row); }
+      const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
+      for (const item of payload.queue.slice(0, 100)) { const row = document.createElement('div'); row.className = 'text-xs mb-1'; row.textContent = `${item.name} — ${states[item.state] || 'unbekannter Status'}`; container.appendChild(row); }
       const accepted = payload.accepted ?? payload.queue.filter(item => item.fileId).length;
       if (status) status.textContent = `${accepted} von ${payload.total ?? payload.queue.length} Dateien sicher angenommen. ${payload.message || ''}`;
     }
@@ -58,20 +121,29 @@
       const message = event.data || {};
       if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
       if (message.type === 'status') render(message);
+      if (message.type === 'ready') { diagnostic.worker = 'bereit'; diagnosticsFrom(message); }
       if (message.type === 'accepted') window.onDocuElevateUploadQueued?.(message);
     };
     async function start() {
       if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
       registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready;
       if (navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
+      await refreshDiagnostics();
       worker.postMessage({ type: 'init', principal: window.uploadConfig?.queueOwner || 'single-user', owner, csrf: csrf(), config: window.uploadConfig || {} });
     }
     let startPromise;
     function ensureStarted() {
-      if (!startPromise) startPromise = start().catch(error => { render({ message: String(error), queue: [] }); throw error; });
+      if (!startPromise) startPromise = start().catch(error => { diagnostic.phase = 'nicht verfügbar'; diagnostic.pausedReason = 'Service Worker konnte nicht gestartet werden'; render({ message: String(error), queue: [] }); throw error; });
       return startPromise;
     }
-    window.processFiles = async files => { popup?.show(); await ensureStarted(); worker.postMessage({ type: 'add', files: Array.from(files || []) }); };
+    window.beginUploadSelection = () => popup?.beginSelection();
+    window.processFiles = async files => {
+      const added = Array.from(files || []);
+      if (!added.length) return;
+      const total = Number(latestStatus.total || 0) + added.length;
+      popup?.render({ ...latestStatus, total, message: `${added.length} Datei${added.length === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.`, diagnostics: diagnostic }, { open: true });
+      await ensureStarted(); worker.postMessage({ type: 'add', files: added });
+    };
     window.addEventListener('DOMContentLoaded', () => { void ensureStarted().catch(() => {}); });
     return;
   }
