@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.194.2 (2026-11-02)
+
+### Bug Fixes
+
+- Restore the global upload queue and add worker diagnostics
+  ([#1304](https://github.com/christianlouis/DocuElevate/pull/1304),
+  [`87490db`](https://github.com/christianlouis/DocuElevate/commit/87490dba6bdebe2bc64c7397840ab7e7f58b9418))
+
+
 ## v0.194.1 (2026-11-01)
 
 ### Bug Fixes
