@@ -7,7 +7,7 @@ let config = {}, principal = 'single-user', csrfToken = '', owner = '';
 let queue = [], running = new Set(), capacities = new Map(), sockets = new Map(), swRequests = new Map(), nextRpc = 0;
 let activeUploads = 0, ready = Promise.resolve(), controllerInspectionTail = Promise.resolve();
 let refreshTimer = null;
-let pendingAdds = 0, phase = 'Initialisierung', pausedReason = '', lastCapacity = null, lastWebSocket = null;
+let pendingAdds = 0, phase = 'Initialisierung', pausedReason = '', lastCapacity = null, lastWebSocket = null, processingHealth = null, restored = false;
 
 function timestamp() { return new Date().toISOString(); }
 function diagnostics() {
@@ -21,13 +21,29 @@ function rememberWebSocket(state) { lastWebSocket = { state, at: timestamp() }; 
 
 function status(message, extra = {}) {
   const priority = item => String(item.state || '').includes('failed') ? 0 : ['queued', 'needs_files', 'processing'].includes(item.state) ? 1 : 2;
-  const visible = [...queue].sort((a, b) => priority(a) - priority(b)).slice(0, 100).map(({ file, ...item }) => item);
+  const buckets = [[], [], []];
+  for (const item of queue) buckets[priority(item)].push(item);
+  const visible = buckets.flatMap(bucket => bucket.slice(0, 100)).slice(0, 100).map(({ file, ...item }) => item);
+  const counts = classify(queue);
   self.postMessage({ type: 'status', message, queue: visible, total: queue.length + pendingAdds,
-    accepted: queue.filter(item => item.fileId != null).length,
-    complete: queue.filter(item => ['complete', 'completed'].includes(item.state)).length,
-    failed: queue.filter(item => String(item.state || '').includes('failed')).length,
-    needsFiles: queue.filter(item => item.state === 'needs_files').length,
-    processing: queue.filter(item => item.state === 'processing').length, diagnostics: diagnostics(), ...extra });
+    accepted: counts.accepted, complete: counts.complete, failed: counts.failed,
+    needsFiles: counts.needsFiles, processing: counts.processing, counts: { ...counts, total: queue.length + pendingAdds }, processingHealth, diagnostics: diagnostics(), ...extra });
+}
+function classify(items) {
+  const counts = { needsFiles: 0, ready: 0, uploading: 0, waiting: 0, processing: 0, complete: 0, duplicate: 0, failed: 0, accepted: 0 };
+  for (const item of items) {
+    const state = String(item.state || '');
+    if (state === 'needs_files') counts.needsFiles += 1;
+    else if (state === 'queued' && !item.fileId) counts.ready += 1;
+    else if (state === 'uploading') counts.uploading += 1;
+    else if (state === 'accepted' || state === 'queued') counts.waiting += 1;
+    else if (state === 'processing') counts.processing += 1;
+    else if (state === 'complete' || state === 'completed') counts.complete += 1;
+    else if (state === 'duplicate') counts.duplicate += 1;
+    else if (state.includes('failed')) counts.failed += 1;
+  }
+  counts.accepted = counts.waiting + counts.processing + counts.complete + counts.duplicate;
+  return counts;
 }
 function sw(op, data = {}) {
   return new Promise((resolve, reject) => {
@@ -92,6 +108,34 @@ function dedup(items) {
   return changed;
 }
 async function persist(items) { if (items.length) await sw('putMany', { items: items.map(item => ({ key: item.key, batchId: item.batchId, name: item.name, size: item.size, lastModified: item.lastModified, state: item.state, error: item.error, errorCode: item.errorCode, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf })) }); }
+async function archiveEligible() {
+  if (!restored) { status('Queue wird noch wiederhergestellt.'); return 0; }
+  const eligible = queue.filter(item => ['complete', 'completed', 'duplicate'].includes(item.state) && !running.has(item.batchId));
+  if (!eligible.length) { status('Keine erledigten Einträge zum Ausblenden.'); return 0; }
+  const archived = await sw('archiveMany', { keys: eligible.map(item => item.key), states: ['complete', 'completed', 'duplicate'] });
+  const keys = new Set(Array.isArray(archived) ? archived : []);
+  queue = queue.filter(item => !keys.has(item.key));
+  status(`${keys.size} erledigte Einträge lokal ausgeblendet. Server-Dokumente bleiben erhalten.`);
+  return keys.size;
+}
+async function retryFailed() {
+  if (!restored) { status('Queue wird noch wiederhergestellt.'); return 0; }
+  const retryable = queue.filter(item => String(item.state || '').includes('failed') && item.fileId == null && !running.has(item.batchId));
+  for (const item of retryable) { item.state = item.file ? 'queued' : 'needs_files'; item.error = ''; item.errorCode = ''; }
+  await persist(retryable);
+  for (const batchId of new Set(retryable.filter(item => item.file).map(item => item.batchId))) void processBatch(queue.filter(item => item.batchId === batchId)).catch(error => status(`Upload pausiert: ${error.message || error}`));
+  status(retryable.length ? `${retryable.length} fehlgeschlagene Einträge für Wiederholung vorbereitet.` : 'Keine fehlgeschlagenen Einträge.');
+  return retryable.length;
+}
+async function discardUnsent() {
+  if (!restored) { status('Queue wird noch wiederhergestellt.'); return 0; }
+  const discardable = queue.filter(item => ['needs_files', 'failed', 'transfer_failed'].includes(item.state) && item.fileId == null && !running.has(item.batchId));
+  if (!discardable.length) { status('Keine nicht übertragenen Einträge zum Ausblenden.'); return 0; }
+  const archived = await sw('archiveMany', { keys: discardable.map(item => item.key), states: ['needs_files', 'failed', 'transfer_failed'], requireNoFileId: true });
+  const keys = new Set(Array.isArray(archived) ? archived : []); queue = queue.filter(item => !keys.has(item.key));
+  status(`${keys.size} nicht übertragene Einträge lokal ausgeblendet. Server-Dokumente bleiben erhalten.`);
+  return keys.size;
+}
 async function makeBatch(files) {
   const batch = await api('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client_batch_id: crypto.randomUUID(), total_files: files.length, total_bytes: files.reduce((sum, file) => sum + file.size, 0) }) });
   const items = files.map(file => ({ key: crypto.randomUUID(), batchId: batch.batch_id, file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
@@ -198,23 +242,30 @@ async function restore() {
   const batches = await sw('listBatches');
   for (const batchId of batches || []) {
     const items = await sw('snapshot', { batchId });
+    if (!items?.length) continue;
     const byClient = new Map((items || []).map(item => [item.key, item]));
     const changed = [];
     queue.push(...(items || []).map(item => ({ ...item, state: item.fileId ? item.state : (item.state === 'failed' || item.state === 'transfer_failed' ? item.state : 'needs_files') })));
     const restored = new Map(queue.filter(item => item.batchId === batchId).map(item => [item.key, item]));
     status('Queue wiederhergestellt. Bitte ursprüngliche Dateien erneut auswählen, um ausstehende Uploads fortzusetzen.');
+    const seenServer = new Set();
     let cursor = null;
     do {
       const snapshot = await api(`/api/uploads/batches/${encodeURIComponent(batchId)}?limit=${WINDOW}${cursor === null ? '' : `&cursor=${cursor}`}`);
+      if (snapshot.processing_health) processingHealth = snapshot.processing_health;
+      if (snapshot.capacity?.processing) processingHealth = snapshot.capacity.processing;
       for (const server of snapshot.items || []) {
+        if (server.client_id) seenServer.add(server.client_id);
         const item = restored.get(server.client_id) || byClient.get(server.client_id);
         if (item && server.file_id && (item.fileId !== server.file_id || server.state && item.state !== server.state || server.error && item.error !== server.error)) { item.fileId = server.file_id; item.state = server.state || item.state; item.error = server.error || server.error_message || item.error; changed.push(item); }
       }
       cursor = snapshot.next_cursor ?? null;
     } while (cursor !== null);
+    for (const item of restored.values()) if (item.fileId != null && item.state !== 'duplicate' && !item.duplicateOf && !seenServer.has(item.key)) { item.errorCode = 'server_status_missing'; item.error = 'Serverstatus nicht gefunden'; changed.push(item); }
+    try { const capacity = await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`); if (capacity.processing) processingHealth = capacity.processing; } catch (_) {}
     await persist(changed);
   }
-  phase = 'wartet auf weitere Dateien'; status('Queue wiederhergestellt.');
+  phase = 'wartet auf weitere Dateien'; restored = true; status('Queue wiederhergestellt.');
   scheduleRefresh();
 }
 async function refreshPending() {
@@ -223,11 +274,14 @@ async function refreshPending() {
     let cursor = null;
     do {
       const snapshot = await api(`/api/uploads/batches/${encodeURIComponent(batchId)}?limit=${WINDOW}${cursor === null ? '' : `&cursor=${cursor}`}`);
+      if (snapshot.processing_health) processingHealth = snapshot.processing_health;
+      if (snapshot.capacity?.processing) processingHealth = snapshot.capacity.processing;
       const byClient = new Map(queue.filter(item => item.batchId === batchId).map(item => [item.key, item]));
       const changed = [];
-      for (const server of snapshot.items || []) { const item = byClient.get(server.client_id); if (item && server.file_id && (item.state !== server.state || item.errorCode !== server.error_code)) { item.fileId = server.file_id; item.state = server.state || item.state; item.errorCode = server.error_code || item.errorCode; changed.push(item); } }
+      for (const server of snapshot.items || []) { const item = byClient.get(server.client_id); if (item && server.file_id && (item.state !== server.state || item.errorCode !== server.error_code || item.error !== (server.error || server.error_message))) { item.fileId = server.file_id; item.state = server.state || item.state; item.errorCode = server.error_code || item.errorCode; item.error = server.error || server.error_message || item.error; changed.push(item); } }
       await persist(changed); cursor = snapshot.next_cursor ?? null;
     } while (cursor !== null);
+    try { const capacity = await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`); if (capacity.processing) processingHealth = capacity.processing; } catch (_) {}
   }
   phase = 'wartet auf weitere Dateien'; status('Upload-Queue aktualisiert.');
 }
@@ -239,6 +293,7 @@ self.onmessage = event => {
   const message = event.data || {};
   if (message.type === 'init') { config = message.config || {}; principal = message.principal || principal; csrfToken = message.csrf || ''; owner = message.owner || crypto.randomUUID(); ready = restore().catch(error => { phase = 'Wiederherstellung fehlgeschlagen'; pausedReason = 'Gespeicherte Queue konnte nicht gelesen werden'; status(String(error)); return false; }).then(result => { self.postMessage({ type: 'ready', diagnostics: diagnostics() }); return result; }); return; }
   if (message.type === 'add') { void add(message.files).catch(error => status(String(error))); return; }
+  if (message.type === 'action') { const action = { archiveCompleted: archiveEligible, retryFailed, discardUnsent }[message.action]; if (action) void action().catch(error => status(`Queue-Aktion fehlgeschlagen: ${error.message || error}`)); return; }
   if (message.type === 'swResponse') { const request = swRequests.get(message.id); if (!request) return; swRequests.delete(message.id); message.ok ? request.resolve(message.result) : request.reject(new Error(message.error || 'Queue error')); return; }
 };
-if (self.UPLOAD_CONTROLLER_TEST) self.__uploadControllerTest = { add, restore, send, status, api, dedup, inspect: self.inspectUploadFile, matchPendingFiles, selectReady, state: () => ({ queue, activeUploads, running }) };
+if (self.UPLOAD_CONTROLLER_TEST) self.__uploadControllerTest = { add, restore, send, status, api, dedup, inspect: self.inspectUploadFile, matchPendingFiles, selectReady, classify, archiveEligible, retryFailed, discardUnsent, state: () => ({ queue, activeUploads, running }) };

@@ -14,6 +14,9 @@
     const diagnosticsButton = document.getElementById('globalUploadQueueDiagnosticsButton');
     const addFilesButton = document.getElementById('globalUploadQueueAddFiles');
     const addFilesInput = document.getElementById('globalUploadQueueFileInput');
+    const archiveButton = document.getElementById('globalUploadQueueArchiveCompleted');
+    const retryButton = document.getElementById('globalUploadQueueRetryFailed');
+    const discardButton = document.getElementById('globalUploadQueueDiscardUnsent');
     let minimized = false;
     const show = () => { minimized = false; panel.classList.remove('hidden'); reopen?.classList.add('hidden'); };
     const hide = () => { minimized = true; panel.classList.add('hidden'); reopen?.classList.remove('hidden'); };
@@ -21,9 +24,14 @@
     document.getElementById('globalUploadQueueClose')?.addEventListener('click', hide);
     reopen?.addEventListener('click', show);
     addFilesButton?.addEventListener('click', () => { show(); addFilesInput?.click(); });
+    let actionHandler = null;
+    archiveButton?.addEventListener('click', () => actionHandler?.('archiveCompleted'));
+    retryButton?.addEventListener('click', () => actionHandler?.('retryFailed'));
+    discardButton?.addEventListener('click', () => actionHandler?.('discardUnsent'));
     addFilesInput?.addEventListener('change', event => { const files = event.target?.files; if (files?.length) void window.processFiles?.(files); event.target.value = ''; });
     const states = { queued: 'wartet auf Upload', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
-    const errors = { transfer_rejected: 'vom Server abgelehnt', network_retrying: 'Verbindung wird erneut versucht', file_inspection_failed: 'Datei konnte nicht geprüft werden' };
+    const errors = { transfer_rejected: 'vom Server abgelehnt', network_retrying: 'Verbindung wird erneut versucht', file_inspection_failed: 'Datei konnte nicht geprüft werden', server_status_missing: 'Serverstatus nicht gefunden' };
+    const healthLabel = health => ({ healthy: 'läuft', stalled: 'steht möglicherweise still', unknown: 'unbekannt' }[String(health || '').toLowerCase()] || String(health || 'unbekannt'));
     const renderDiagnostics = details => {
       const list = document.getElementById('globalUploadQueueDiagnostics');
       if (!list) return;
@@ -50,18 +58,19 @@
       const progress = document.getElementById('globalUploadQueueProgress');
       const rows = document.getElementById('globalUploadQueueRows');
       const queue = payload.queue || []; const total = Number(payload.total ?? queue.length);
-      const accepted = Number(payload.accepted ?? queue.filter(item => item.fileId != null).length);
-      const failed = Number(payload.failed ?? queue.filter(item => String(item.state || '').includes('failed')).length);
-      const complete = Number(payload.complete ?? queue.filter(item => ['complete', 'completed'].includes(item.state)).length);
-      const needsFiles = Number(payload.needsFiles ?? queue.filter(item => item.state === 'needs_files').length);
-      const processing = Number(payload.processing ?? queue.filter(item => item.state === 'processing').length);
-      if (summary) summary.textContent = `${total} insgesamt · ${accepted} angenommen · ${complete} verarbeitet · ${failed} fehlgeschlagen · ${needsFiles} erneut auswählen · ${processing} in Verarbeitung`;
-      if (notice) notice.textContent = payload.message || '';
+      const counts = payload.counts || {};
+      const accepted = Number(payload.accepted ?? counts.accepted ?? queue.filter(item => item.fileId != null).length);
+      const failed = Number(payload.failed ?? counts.failed ?? queue.filter(item => String(item.state || '').includes('failed')).length);
+      const complete = Number(payload.complete ?? counts.complete ?? queue.filter(item => ['complete', 'completed'].includes(item.state)).length);
+      const needsFiles = Number(payload.needsFiles ?? counts.needsFiles ?? queue.filter(item => item.state === 'needs_files').length);
+      const processing = Number(payload.processing ?? counts.processing ?? queue.filter(item => item.state === 'processing').length);
+      if (summary) summary.textContent = `${total} insgesamt · ${Number(counts.needsFiles ?? needsFiles)} erneut auswählen · ${Number(counts.ready ?? 0)} bereit · ${Number(counts.uploading ?? 0)} übertragen · ${Number(counts.waiting ?? Math.max(0, accepted - complete - processing - Number(counts.duplicate || 0)))} serverseitig wartend · ${processing} in Verarbeitung · ${complete} verarbeitet · ${Number(counts.duplicate ?? 0)} Duplikate · ${failed} fehlgeschlagen`;
+      if (notice) notice.textContent = [payload.message, payload.processingHealth?.status ? `Verarbeitungs-Backlog: ${healthLabel(payload.processingHealth.status)}` : ''].filter(Boolean).join(' ');
       if (progress) progress.style.width = `${total ? Math.min(100, (complete / total) * 100) : 0}%`;
-      if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.errorCode ? `: ${errors[item.errorCode] || 'Übertragungsfehler'}` : ''; row.textContent = `${item.name || 'Datei'} — ${states[item.state] || 'unbekannter Status'}${reason}`; rows.appendChild(row); } }
+      if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.error ? `: ${item.error}` : (item.errorCode ? `: ${errors[item.errorCode] || 'Übertragungsfehler'}` : ''); row.textContent = `${item.name || 'Datei'} — ${states[item.state] || 'unbekannter Status'}${reason}`; rows.appendChild(row); } }
       if (payload.diagnostics) renderDiagnostics(payload.diagnostics);
       if (options.open && (!minimized || options.force)) show();
-    }};
+    }, setActionHandler(handler) { actionHandler = handler; }};
   }
   const popup = globalPopup();
   if (useDedicatedController) {
@@ -119,11 +128,12 @@
     }
     worker.onmessage = event => {
       const message = event.data || {};
-      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
+      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.keys ? { keys: message.keys } : {}), ...(message.states ? { states: message.states } : {}), ...(message.requireNoFileId ? { requireNoFileId: true } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
       if (message.type === 'status') render(message);
       if (message.type === 'ready') { diagnostic.worker = 'bereit'; diagnosticsFrom(message); }
       if (message.type === 'accepted') window.onDocuElevateUploadQueued?.(message);
     };
+    popup?.setActionHandler(action => worker.postMessage({ type: 'action', action }));
     async function start() {
       if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
       registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready;

@@ -156,6 +156,41 @@ test('controller status sends only visible rows plus aggregates', () => {
   assert.equal(update.accepted, 10);
 });
 
+test('controller exposes disjoint queue counters and archives only terminal local rows', async () => {
+  const operations = [];
+  const { api, worker } = controller({ swResults: { listBatches: [] }, onSW(message, respond) { operations.push(message); respond(message.op === 'listBatches' ? [] : ['done', 'duplicate']); } });
+  worker.onmessage({ data: { type: 'init', config: {}, owner: 'test-owner' } });
+  await new Promise(resolve => setImmediate(resolve));
+  api.state().queue.push(
+    { key: 'waiting', state: 'accepted', fileId: 1 },
+    { key: 'processing', state: 'processing', fileId: 2 },
+    { key: 'done', state: 'complete', fileId: 3 },
+    { key: 'duplicate', state: 'duplicate', fileId: 3 },
+    { key: 'needs', state: 'needs_files' },
+    { key: 'failed', state: 'failed' }
+  );
+  assert.equal(JSON.stringify(api.classify(api.state().queue)), JSON.stringify({ needsFiles: 1, ready: 0, uploading: 0, waiting: 1, processing: 1, complete: 1, duplicate: 1, failed: 1, accepted: 4 }));
+  await api.archiveEligible();
+  assert.deepEqual(Array.from(api.state().queue, item => item.key), ['waiting', 'processing', 'needs', 'failed']);
+  assert.equal(operations.at(-1).op, 'archiveMany');
+  assert.equal(JSON.stringify(operations.at(-1).states), JSON.stringify(['complete', 'completed', 'duplicate']));
+});
+
+test('retry keeps server-accepted failures untouched and reselects local failures', async () => {
+  const { api, worker } = controller({ swResults: { listBatches: [], putMany: true } });
+  worker.onmessage({ data: { type: 'init', config: {}, owner: 'test-owner' } });
+  await new Promise(resolve => setImmediate(resolve));
+  api.state().queue.push(
+    { key: 'server-failed', batchId: 'b1', state: 'failed', fileId: 44, error: 'OCR failed' },
+    { key: 'local-missing', batchId: 'b2', state: 'failed', error: 'network failed' }
+  );
+  await api.retryFailed();
+  const queue = api.state().queue;
+  assert.equal(queue.find(item => item.key === 'server-failed').state, 'failed');
+  assert.equal(queue.find(item => item.key === 'server-failed').error, 'OCR failed');
+  assert.equal(queue.find(item => item.key === 'local-missing').state, 'needs_files');
+});
+
 test('controller dedup prefers an admitted leader and handles 429 retry-after', async () => {
   let attempts = 0;
   const responses = [
@@ -193,6 +228,7 @@ test('controller restore reconciles accepted server files before marking missing
       putMany: true
     },
     fetch: async url => {
+      if (url.includes('/api/uploads/capacity')) return { ok: true, status: 200, json: async () => ({ slots: 1, max_bytes: 100, processing: { status: 'healthy' } }) };
       assert.match(url, /\/api\/uploads\/batches\/batch-1/);
       return { ok: true, status: 200, json: async () => ({ items: [{ client_id: 'client-1', file_id: 91, state: 'accepted' }], next_cursor: null }) };
     }
@@ -217,6 +253,7 @@ test('controller restore follows every snapshot cursor and keeps terminal failur
     },
     fetch: async url => {
       urls.push(url);
+      if (url.includes('/api/uploads/capacity')) return { ok: true, status: 200, json: async () => ({ slots: 1, max_bytes: 100 }) };
       return { ok: true, status: 200, json: async () => urls.length === 1
         ? { items: [{ client_id: 'first', file_id: 1, state: 'accepted' }], next_cursor: 101 }
         : { items: [{ client_id: 'second', file_id: 2, state: 'accepted' }], next_cursor: null } };
