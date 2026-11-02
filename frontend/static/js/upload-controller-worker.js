@@ -3,6 +3,7 @@
 importScripts('/static/js/upload-preflight-worker.js');
 
 const WINDOW = 200;
+const STATUS_RETRIES = 2;
 let config = {}, principal = 'single-user', csrfToken = '', owner = '';
 let queue = [], running = new Set(), capacities = new Map(), sockets = new Map(), swRequests = new Map(), nextRpc = 0;
 let activeUploads = 0, ready = Promise.resolve(), controllerInspectionTail = Promise.resolve();
@@ -59,14 +60,22 @@ function retryAfter(response, fallback) {
   const seconds = Number(value);
   return Number.isFinite(seconds) ? Math.max(0, seconds * 1000) : Math.max(0, Date.parse(value) - Date.now());
 }
-async function api(url, options = {}) {
-  let backoff = 500;
+async function api(url, options = {}, maxRetries = Infinity) {
+  let backoff = 500, retries = 0;
+  const retry = async error => {
+    if (retries >= maxRetries) throw error;
+    retries += 1; await new Promise(resolve => setTimeout(resolve, backoff)); backoff = Math.min(backoff * 2, 30000);
+  };
   for (;;) {
     let response;
     try { response = await fetch(url, { ...options, headers: { ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}), ...options.headers } }); }
-    catch (error) { await new Promise(resolve => setTimeout(resolve, backoff)); backoff = Math.min(backoff * 2, 30000); continue; }
-    if (response.status === 429) { phase = 'pausiert'; pausedReason = 'Serverlimit erreicht'; status('Serverlimit erreicht – Upload pausiert.'); await new Promise(resolve => setTimeout(resolve, retryAfter(response, backoff))); backoff = Math.min(backoff * 2, 30000); continue; }
-    if (response.status >= 500) { await new Promise(resolve => setTimeout(resolve, backoff)); backoff = Math.min(backoff * 2, 30000); continue; }
+    catch (error) { await retry(error); continue; }
+    if (response.status === 429) {
+      phase = 'pausiert'; pausedReason = 'Serverlimit erreicht'; status('Serverlimit erreicht – Upload pausiert.');
+      if (retries >= maxRetries) throw new Error('Upload request failed (429)');
+      retries += 1; await new Promise(resolve => setTimeout(resolve, maxRetries === Infinity ? retryAfter(response, backoff) : Math.min(5000, retryAfter(response, backoff)))); backoff = Math.min(backoff * 2, 30000); continue;
+    }
+    if (response.status >= 500) { await retry(new Error(`Upload request failed (${response.status})`)); continue; }
     if (!response.ok) {
       let detail = '';
       try {
@@ -78,6 +87,19 @@ async function api(url, options = {}) {
     }
     return response.json();
   }
+}
+function markStatusUnavailable(error) {
+  snapshotError = error.message || String(error);
+  processingHealth = { status: 'unknown', detail: 'Status derzeit nicht verfügbar' };
+}
+async function readStatus(url) {
+  try { return await api(url, {}, STATUS_RETRIES); }
+  catch (error) { markStatusUnavailable(error); throw error; }
+}
+async function readCapacity(batchId) {
+  const capacity = await readStatus(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`);
+  rememberCapacity(batchId, capacity, 'Server');
+  return capacity;
 }
 function signature(file) { return JSON.stringify([file.name, file.size, file.lastModified || 0]); }
 function inspectFile(item) {
@@ -239,7 +261,7 @@ async function processBatch(items) {
       let noProgress = 0;
       for (;;) {
         const pushedCapacity = capacities.get(batchId);
-        const capacity = pushedCapacity || await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`);
+        const capacity = pushedCapacity || await readCapacity(batchId);
         capacities.set(batchId, capacity); rememberCapacity(batchId, capacity, pushedCapacity ? 'WebSocket' : 'Server');
         const selected = selectReady(group, capacity);
         if (!selected.length) { if (!group.some(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf)) break; capacities.delete(batchId); phase = 'pausiert'; pausedReason = 'Server meldet keine freie Upload-Kapazität'; status('Server pausiert die Uploads – warte auf Kapazität…'); await new Promise(resolve => setTimeout(resolve, 2000)); continue; }
@@ -301,7 +323,7 @@ async function restore() {
     const seenServer = new Set();
     let cursor = null;
     do {
-      const snapshot = await api(`/api/uploads/batches/${encodeURIComponent(batchId)}?limit=${WINDOW}${cursor === null ? '' : `&cursor=${cursor}`}`);
+      const snapshot = await readStatus(`/api/uploads/batches/${encodeURIComponent(batchId)}?limit=${WINDOW}${cursor === null ? '' : `&cursor=${cursor}`}`);
       if (snapshot.processing_health) processingHealth = snapshot.processing_health;
       if (snapshot.capacity?.processing) processingHealth = snapshot.capacity.processing;
       snapshotError = '';
@@ -313,7 +335,7 @@ async function restore() {
       cursor = snapshot.next_cursor ?? null;
     } while (cursor !== null);
     for (const item of restored.values()) if (item.fileId != null && item.state !== 'duplicate' && !item.duplicateOf && !seenServer.has(item.key)) { item.errorCode = 'server_status_missing'; item.error = 'Serverstatus nicht gefunden'; changed.push(item); }
-    try { const capacity = await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`); rememberCapacity(batchId, capacity, 'Server'); } catch (_) {}
+    try { await readCapacity(batchId); } catch (_) {}
     await persist(changed);
   }
   phase = 'wartet auf weitere Dateien'; restored = true; status('Queue wiederhergestellt.');
@@ -322,10 +344,12 @@ async function restore() {
 async function refreshPending() {
   phase = 'Verarbeitungsstatus wird abgeglichen';
   try {
-    for (const batchId of [...new Set(queue.filter(item => item.fileId && !['complete', 'completed'].includes(item.state)).map(item => item.batchId))]) {
+    const durableBatches = [...new Set(queue.map(item => item.batchId).filter(Boolean))];
+    for (const batchId of durableBatches) await reconcileDurable(batchId);
+    for (const batchId of [...new Set(queue.filter(item => item.fileId && !['complete', 'completed'].includes(item.state)).map(item => item.batchId).filter(Boolean))]) {
       let cursor = null;
       do {
-        const snapshot = await api(`/api/uploads/batches/${encodeURIComponent(batchId)}?limit=${WINDOW}${cursor === null ? '' : `&cursor=${cursor}`}`);
+        const snapshot = await readStatus(`/api/uploads/batches/${encodeURIComponent(batchId)}?limit=${WINDOW}${cursor === null ? '' : `&cursor=${cursor}`}`);
         if (snapshot.processing_health) processingHealth = snapshot.processing_health;
         if (snapshot.capacity?.processing) processingHealth = snapshot.capacity.processing;
         snapshotError = '';
@@ -334,7 +358,7 @@ async function refreshPending() {
         for (const server of snapshot.items || []) { const item = byClient.get(server.client_id); if (item && server.file_id && (item.state !== server.state || item.errorCode !== server.error_code || item.error !== (server.error || server.error_message))) { item.fileId = server.file_id; item.state = server.state || item.state; item.errorCode = server.error_code || item.errorCode; item.error = server.error || server.error_message || item.error; changed.push(item); } }
         await persist(changed); cursor = snapshot.next_cursor ?? null;
       } while (cursor !== null);
-      try { const capacity = await api(`/api/uploads/capacity?batch_id=${encodeURIComponent(batchId)}`); rememberCapacity(batchId, capacity, 'Server'); } catch (_) {}
+      await readCapacity(batchId);
     }
     phase = 'wartet auf weitere Dateien'; status('Upload-Queue aktualisiert.');
   } catch (error) {
@@ -344,7 +368,7 @@ async function refreshPending() {
   }
 }
 function scheduleRefresh() {
-  if (!self.location?.host || refreshTimer || !queue.some(item => item.fileId && !['complete', 'completed'].includes(item.state))) return;
+  if (!self.location?.host || refreshTimer || !queue.length) return;
   refreshTimer = setTimeout(async () => { refreshTimer = null; try { await refreshPending(); } catch (_) {} scheduleRefresh(); }, 15000);
 }
 self.onmessage = event => {
@@ -354,4 +378,4 @@ self.onmessage = event => {
   if (message.type === 'action') { const action = { archiveCompleted: archiveEligible, retryFailed, discardUnsent }[message.action]; if (action) void action().catch(error => status(`Queue-Aktion fehlgeschlagen: ${error.message || error}`)); return; }
   if (message.type === 'swResponse') { const request = swRequests.get(message.id); if (!request) return; swRequests.delete(message.id); message.ok ? request.resolve(message.result) : request.reject(new Error(message.error || 'Queue error')); return; }
 };
-if (self.UPLOAD_CONTROLLER_TEST) self.__uploadControllerTest = { add, restore, send, status, api, dedup, inspect: self.inspectUploadFile, matchPendingFiles, selectReady, classify, archiveEligible, retryFailed, discardUnsent, processBatch, refreshPending, reconcileDurable, rememberCapacity, state: () => ({ queue, activeUploads, running }) };
+if (self.UPLOAD_CONTROLLER_TEST) self.__uploadControllerTest = { add, restore, send, status, api, readStatus, dedup, inspect: self.inspectUploadFile, matchPendingFiles, selectReady, classify, archiveEligible, retryFailed, discardUnsent, processBatch, refreshPending, reconcileDurable, rememberCapacity, scheduleRefresh, state: () => ({ queue, activeUploads, running }) };

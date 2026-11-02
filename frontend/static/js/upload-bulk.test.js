@@ -94,7 +94,7 @@ function serviceWorker(rows = []) {
   return { handle: context.self.__handle, records };
 }
 
-function modernAdapter() {
+function modernAdapter(onServiceWorkerMessage) {
   class Element {
     constructor() { this.className = ''; this.textContent = ''; this.children = []; this.listeners = {}; this.attributes = {}; this.style = {}; this.classList = { values: new Set(['hidden']), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), contains: value => this.classList.values.has(value) }; }
     addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
@@ -110,15 +110,23 @@ function modernAdapter() {
   const listeners = {};
   const workers = [];
   class FakeWorker { constructor(url) { this.url = url; this.messages = []; workers.push(this); } postMessage(message) { this.messages.push(message); } emit(data) { this.onmessage({ data }); } }
+  const serviceWorkerMessages = [];
+  const serviceWorkerController = { postMessage(message, ports) {
+    serviceWorkerMessages.push(message);
+    Promise.resolve(onServiceWorkerMessage?.(message)).then(
+      result => ports?.[0]?.postMessage({ ok: true, result }),
+      error => ports?.[0]?.postMessage({ ok: false, error: String(error) })
+    );
+  } };
   const context = {
     window: { uploadConfig: { concurrency: 3 }, addEventListener(type, listener) { listeners[type] = listener; } },
     document: { getElementById(id) { return elements[id] || null; }, createElement() { return new Element(); } },
-    navigator: { serviceWorker: { controller: {}, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
+    navigator: { serviceWorker: { controller: serviceWorkerController, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
     Worker: FakeWorker, crypto: { randomUUID: () => 'adapter-id' }, console, setTimeout, clearTimeout, MessageChannel: require('node:worker_threads').MessageChannel,
   };
   const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-bulk.js'), 'utf8');
   vm.runInNewContext(source, context);
-  return { ...context, elements, listeners, workers, runAgain() { vm.runInNewContext(source, context); } };
+  return { ...context, elements, listeners, workers, serviceWorkerMessages, runAgain() { vm.runInNewContext(source, context); } };
 }
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -233,6 +241,25 @@ test('controller exposes disjoint queue counters and archives only terminal loca
   assert.deepEqual(Array.from(api.state().queue, item => item.key), ['waiting', 'processing', 'needs', 'failed']);
   assert.equal(operations.at(-1).op, 'archiveMany');
   assert.equal(operations.at(-1).kind, 'completed');
+});
+
+test('completed archive kind survives the controller, adapter, and service-worker handoff', async () => {
+  const operations = [];
+  const { api, worker: controllerWorker } = controller({ onSW(message, respond) { operations.push(message); respond(message.op === 'listBatches' ? [] : ['done']); } });
+  controllerWorker.onmessage({ data: { type: 'init', config: {}, owner: 'test-owner' } });
+  await flush();
+  api.state().queue.push({ key: 'done', state: 'complete', fileId: 9 });
+  await api.archiveEligible();
+  const durable = serviceWorker([{ key: 'done', principal: 'single-user', batchId: 'batch-a', state: 'complete', fileId: 9 }]);
+  const adapter = modernAdapter(message => durable.handle(message));
+  adapter.listeners.DOMContentLoaded();
+  for (let i = 0; i < 3; i++) await flush();
+  const worker = adapter.workers[0];
+  worker.emit({ ...operations.at(-1), type: 'sw', id: 'archive-roundtrip' });
+  for (let i = 0; i < 3; i++) await flush();
+  assert.equal(adapter.serviceWorkerMessages.find(message => message.op === 'archiveMany').kind, 'completed');
+  assert.deepEqual(Array.from(worker.messages.at(-1).result), ['done']);
+  assert.ok(durable.records.get('done').archivedAt);
 });
 
 test('retry keeps server-accepted failures untouched and reselects local failures', async () => {
@@ -592,6 +619,14 @@ test('controller records upload progress, inspection failures, response details,
   const { api, messages } = controller({ FormData: Body, onSW(message, respond) {
     operations.push(message);
     if (message.op === 'lease') return respond(true);
+    if (message.op === 'snapshot') {
+      const snapshots = {
+        'batch-a': [{ key: 'uploading', batchId: 'batch-a', state: 'accepted', fileId: 7 }],
+        'batch-b': [{ key: 'broken', batchId: 'batch-b', state: 'failed' }],
+        missing: [{ key: 'accepted', batchId: 'missing', state: 'accepted', fileId: 8 }]
+      };
+      return respond(snapshots[message.batchId] || []);
+    }
     respond(true);
   }, fetch: async (url) => {
     if (url === '/api/uploads/files') return { ok: true, status: 202, json: async () => ({ file_id: 7, state: 'accepted' }) };
@@ -630,6 +665,45 @@ test('a failed lease reconciles an archived row instead of spinning a stale queu
   assert.equal(await api.send(stale), false);
   assert.equal(api.state().queue.length, 0);
   assert.equal(stale.state, 'archived');
+});
+
+test('periodic durable reconciliation removes another tab’s unsent archive without server status calls', async () => {
+  const snapshots = [
+    [{ key: 'unsent', batchId: 'local-batch', state: 'needs_files' }],
+    []
+  ];
+  let fetches = 0, scheduled;
+  const { api, worker } = controller({
+    setTimeout(callback, delay) { scheduled = { callback, delay }; return 1; },
+    onSW(message, respond) { return respond(message.op === 'snapshot' ? snapshots.shift() : true); },
+    fetch: async () => { fetches += 1; throw new Error('all-unsent queues must not call the server'); }
+  });
+  api.state().queue.push({ key: 'unsent', batchId: 'local-batch', state: 'needs_files' });
+  await api.refreshPending();
+  assert.equal(api.state().queue.length, 1);
+  await api.refreshPending();
+  assert.equal(api.state().queue.length, 0);
+  assert.equal(fetches, 0);
+  api.state().queue.push({ key: 'another-unsent', batchId: 'local-batch', state: 'needs_files' });
+  worker.location = { host: 'localhost' };
+  api.scheduleRefresh();
+  assert.equal(scheduled.delay, 15000);
+});
+
+test('status reads are bounded and mark processing health unknown when capacity is unavailable', async () => {
+  let calls = 0;
+  const { api, messages } = controller({
+    setTimeout(callback) { queueMicrotask(callback); return 1; },
+    onSW(message, respond) { return respond(message.op === 'snapshot' ? [{ key: 'accepted', batchId: 'batch-a', state: 'accepted', fileId: 1 }] : true); },
+    fetch: async () => { calls += 1; return { ok: false, status: 503, headers: { get: () => null } }; }
+  });
+  api.state().queue.push({ key: 'accepted', batchId: 'batch-a', state: 'accepted', fileId: 1 });
+  await assert.rejects(api.refreshPending(), /503/);
+  assert.equal(calls, 3);
+  const update = messages.at(-1);
+  assert.equal(update.processingHealth.status, 'unknown');
+  assert.match(update.snapshotError, /503/);
+  assert.match(update.message, /konnte nicht aktualisiert werden/);
 });
 
 test('service worker archives only fixed contracts and preserves tombstone, lease, owner, and accepted-write invariants', async () => {

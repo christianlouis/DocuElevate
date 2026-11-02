@@ -29,7 +29,7 @@
     retryButton?.addEventListener('click', () => actionHandler?.('retryFailed'));
     discardButton?.addEventListener('click', () => actionHandler?.('discardUnsent'));
     addFilesInput?.addEventListener('change', event => { const files = event.target?.files; if (files?.length) void window.processFiles?.(files); event.target.value = ''; });
-    const states = { queued: 'wartet auf Upload', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
+    const states = { queued: 'wartet auf Upload', uploading: 'wird übertragen', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
     const errors = { transfer_rejected: 'vom Server abgelehnt', network_retrying: 'Verbindung wird erneut versucht', file_inspection_failed: 'Datei konnte nicht geprüft werden', server_status_missing: 'Serverstatus nicht gefunden' };
     const healthLabel = health => ({ healthy: 'läuft', stalled: 'steht möglicherweise still', unknown: 'unbekannt' }[String(health || '').toLowerCase()] || String(health || 'unbekannt'));
     const renderDiagnostics = details => {
@@ -64,7 +64,7 @@
       const complete = Number(payload.complete ?? counts.complete ?? queue.filter(item => ['complete', 'completed'].includes(item.state)).length);
       const needsFiles = Number(payload.needsFiles ?? counts.needsFiles ?? queue.filter(item => item.state === 'needs_files').length);
       const processing = Number(payload.processing ?? counts.processing ?? queue.filter(item => item.state === 'processing').length);
-      if (summary) summary.textContent = `${total} insgesamt · ${Number(counts.needsFiles ?? needsFiles)} erneut auswählen · ${Number(counts.ready ?? 0)} bereit · ${Number(counts.uploading ?? 0)} übertragen · ${Number(counts.waiting ?? Math.max(0, accepted - complete - processing - Number(counts.duplicate || 0)))} serverseitig wartend · ${processing} in Verarbeitung · ${complete} verarbeitet · ${Number(counts.duplicate ?? 0)} Duplikate · ${failed} fehlgeschlagen`;
+      if (summary) summary.textContent = `${total} insgesamt · ${Number(counts.needsFiles ?? needsFiles)} erneut auswählen · ${Number(counts.ready ?? 0)} bereit · ${Number(counts.uploading ?? 0)} werden übertragen · ${Number(counts.waiting ?? Math.max(0, accepted - complete - processing - Number(counts.duplicate || 0)))} serverseitig wartend · ${processing} in Verarbeitung · ${complete} verarbeitet · ${Number(counts.duplicate ?? 0)} Duplikate · ${failed} fehlgeschlagen`;
       if (notice) notice.textContent = [payload.message, payload.snapshotError ? `Letzter Statusabgleich fehlgeschlagen: ${payload.snapshotError}` : '', payload.processingHealth?.status ? `Verarbeitungs-Backlog: ${healthLabel(payload.processingHealth.status)}` : ''].filter(Boolean).join(' ');
       if (progress) progress.style.width = `${total ? Math.min(100, (complete / total) * 100) : 0}%`;
       if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.error ? `: ${item.error}` : (item.errorCode ? `: ${errors[item.errorCode] || 'Übertragungsfehler'}` : ''); row.textContent = `${item.name || 'Datei'} — ${states[item.state] || 'unbekannter Status'}${reason}`; rows.appendChild(row); } }
@@ -121,14 +121,14 @@
       if (status) status.textContent = payload.message || '';
       if (!container || !payload.queue) return;
       container.replaceChildren();
-      const states = { queued: 'wartet', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
+      const states = { queued: 'wartet', uploading: 'wird übertragen', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
       for (const item of payload.queue.slice(0, 100)) { const row = document.createElement('div'); row.className = 'text-xs mb-1'; row.textContent = `${item.name} — ${states[item.state] || 'unbekannter Status'}`; container.appendChild(row); }
       const accepted = payload.accepted ?? payload.queue.filter(item => item.fileId).length;
       if (status) status.textContent = `${accepted} von ${payload.total ?? payload.queue.length} Dateien sicher angenommen. ${payload.message || ''}`;
     }
     worker.onmessage = event => {
       const message = event.data || {};
-      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.keys ? { keys: message.keys } : {}), ...(message.states ? { states: message.states } : {}), ...(message.requireNoFileId ? { requireNoFileId: true } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
+      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.keys ? { keys: message.keys } : {}), ...(message.states ? { states: message.states } : {}), ...(message.kind ? { kind: message.kind } : {}), ...(message.requireNoFileId ? { requireNoFileId: true } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
       if (message.type === 'status') render(message);
       if (message.type === 'ready') { diagnostic.worker = 'bereit'; diagnosticsFrom(message); }
       if (message.type === 'accepted') window.onDocuElevateUploadQueued?.(message);
