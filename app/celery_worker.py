@@ -31,7 +31,6 @@ from app.tasks.dispatch_uploads import (  # noqa: F401
     dispatch_upload_item,
     dispatch_upload_outbox,
     reconcile_upload_states,
-    scheduler_heartbeat,
 )
 from app.tasks.document_bridge import deliver_document_bridge  # noqa: F401
 from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import  # noqa: F401
@@ -83,13 +82,6 @@ logger = logging.getLogger(__name__)
 
 register_settings_reload_signal()
 
-celery.conf.task_routes = {
-    "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
-    "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
-    "app.tasks.*": {"queue": "default"},
-}
-
-
 @celery.task
 def test_task():
     return "Celery is working!"
@@ -102,17 +94,12 @@ celery.conf.beat_schedule = {
     "dispatch-bulk-upload-outbox": {
         "task": "app.tasks.dispatch_uploads.dispatch_upload_outbox",
         "schedule": 5.0,
-        "options": {"expires": 4},
+        "options": {"expires": 60},
     },
     "reconcile-bulk-upload-status": {
         "task": "app.tasks.dispatch_uploads.reconcile_upload_states",
         "schedule": 5.0,
-        "options": {"expires": 4},
-    },
-    "scheduler-heartbeat": {
-        "task": "app.tasks.dispatch_uploads.scheduler_heartbeat",
-        "schedule": 10.0,
-        "options": {"expires": 9},
+        "options": {"expires": 60},
     },
     # IMAP polling — always enabled because per-user IMAP integrations may
     # exist in the database even when no system-level IMAP hosts are configured.

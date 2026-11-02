@@ -13,28 +13,17 @@ from app.database import SessionLocal
 from app.models import FileProcessingStep, FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
+from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, mark_fresh
 
 logger = logging.getLogger(__name__)
 CLAIM_SECONDS = 120
 SMALL_BATCH_FILES = 100
 AGING_SECONDS = 15 * 60
 MAX_DISPATCH_PER_TICK = 10
-SCHEDULER_HEARTBEAT_KEY = "docuelevate:scheduler:heartbeat"
-SCHEDULER_HEARTBEAT_TTL = 30
 
 
 def _priority(batch: UploadBatch | None) -> int:
     return 2 if batch and batch.total_files <= SMALL_BATCH_FILES else 6
-
-
-@celery.task(name="app.tasks.dispatch_uploads.scheduler_heartbeat")
-def scheduler_heartbeat() -> bool:
-    """Publish a short-lived heartbeat proving that Beat is dispatching work."""
-    import redis
-
-    client = redis.from_url(celery.conf.broker_url, socket_connect_timeout=2, socket_timeout=2)
-    client.set(SCHEDULER_HEARTBEAT_KEY, datetime.now(timezone.utc).isoformat(), ex=SCHEDULER_HEARTBEAT_TTL)
-    return True
 
 
 @celery.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
@@ -150,6 +139,7 @@ def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
             row.claim_expires_at = now + timedelta(seconds=CLAIM_SECONDS)
             claims.append((row.id, token))
         db.commit()
+    mark_fresh(DISPATCHER_KEY)
     for outbox_id, token in claims:
         dispatch_upload_item.delay(outbox_id, token)
     return len(claims)
@@ -189,9 +179,11 @@ def reconcile_upload_states(limit: int = 100) -> int:
             .all()
         )
         if not candidates:
+            mark_fresh(RECONCILER_KEY)
             return 0
         if db.get(UploadCapacity, 1) is None:
             logger.error("bulk capacity ledger is missing; leaving items reserved")
+            mark_fresh(RECONCILER_KEY)
             return 0
         released_files = released_bytes = 0
         for item_id, size, current_state, succeeded in candidates:
@@ -210,6 +202,7 @@ def reconcile_upload_states(limit: int = 100) -> int:
                 released_bytes += int(size)
         if not released_files:
             db.rollback()
+            mark_fresh(RECONCILER_KEY)
             return 0
         # Do not read-modify-write the singleton: concurrent reconcilers may
         # complete independent rows.  This conditional SQL decrement is atomic.
@@ -228,4 +221,5 @@ def reconcile_upload_states(limit: int = 100) -> int:
             )
         )
         db.commit()
+        mark_fresh(RECONCILER_KEY)
         return released_files

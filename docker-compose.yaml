@@ -149,7 +149,20 @@ services:
 
   beat:
     <<: *docuelevate-service
-    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info", "--scheduler=celery.beat:Scheduler"]
+    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info", "--scheduler=app.scheduler:HeartbeatScheduler"]
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  upload-maintenance-worker:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "upload_maintenance"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully

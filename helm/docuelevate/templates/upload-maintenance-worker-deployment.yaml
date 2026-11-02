@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-upload-maintenance
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: upload-maintenance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: upload-maintenance
+  template:
+    metadata:
+      labels:
+        {{- include "docuelevate.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: upload-maintenance
+    spec:
+      serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
+      containers:
+        - name: upload-maintenance
+          image: {{ include "docuelevate.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "-Q", "upload_maintenance"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "docuelevate.fullname" . }}-config
+            - secretRef:
+                name: {{ include "docuelevate.secretName" . }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

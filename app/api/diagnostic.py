@@ -13,12 +13,12 @@ from sqlalchemy import text
 from app.auth import require_login
 from app.config import settings
 from app.database import engine
+from app.utils.upload_health import SCHEDULER_KEY, freshness
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 _DEFAULT_REDIS_URL = "redis://localhost:6379/0"
-_SCHEDULER_HEARTBEAT_KEY = "docuelevate:scheduler:heartbeat"
 
 router = APIRouter()
 
@@ -87,14 +87,12 @@ async def readiness_probe() -> JSONResponse:
 @router.get("/diagnostic/healthz/scheduler")
 async def scheduler_probe() -> JSONResponse:
     """Probe the dedicated Beat heartbeat without taking the API offline."""
-    try:
-        client = redis_lib.from_url(settings.redis_url or _DEFAULT_REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
-        heartbeat = client.get(_SCHEDULER_HEARTBEAT_KEY)
-        if heartbeat:
-            return JSONResponse(content={"status": "ok"}, status_code=200)
-        return JSONResponse(content={"status": "stalled", "detail": "scheduler heartbeat missing"}, status_code=503)
-    except Exception as exc:
-        return JSONResponse(content={"status": "error", "detail": str(exc)}, status_code=503)
+    status = freshness(SCHEDULER_KEY)
+    if status == "healthy":
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+    if status == "stalled":
+        return JSONResponse(content={"status": status, "detail": "scheduler heartbeat missing or stale"}, status_code=503)
+    return JSONResponse(content={"status": status, "detail": "scheduler heartbeat unavailable"}, status_code=503)
 
 
 @router.get("/diagnostic/health")

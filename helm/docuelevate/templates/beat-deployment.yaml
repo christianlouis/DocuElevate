@@ -7,6 +7,8 @@ metadata:
     {{- include "docuelevate.labels" . | nindent 4 }}
     app.kubernetes.io/component: beat
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
@@ -23,7 +25,7 @@ spec:
         - name: beat
           image: {{ include "docuelevate.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info", "--scheduler=celery.beat:Scheduler"]
+          command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info", "--scheduler=app.scheduler:HeartbeatScheduler"]
           envFrom:
             - configMapRef:
                 name: {{ include "docuelevate.fullname" . }}-config
