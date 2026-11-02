@@ -18,7 +18,6 @@
     };
   </script>
   <script src="/static/js/upload.js"></script>
-  <script src="/static/js/upload-bulk.js"></script>
   <style>
     /* Drop overlay styles - covers entire page for drag-and-drop anywhere */
     .drop-overlay {
@@ -1464,9 +1463,6 @@
 
     // ===== Drag-and-Drop Upload Functionality =====
     const dropOverlay = document.getElementById('dropOverlay');
-    const uploadModal = document.getElementById('uploadModal');
-    const uploadStatusMessage = document.getElementById('uploadStatusMessage');
-    const uploadProgressContainer = document.getElementById('uploadProgressContainer');
 
     let dragCounter = 0; // Track nested drag events
 
@@ -1500,13 +1496,10 @@
       dragCounter = 0;
       dropOverlay.classList.remove('active');
 
+      window.beginUploadSelection?.();
       const files = await getFilesFromDataTransfer(e.dataTransfer);
       if (files.length > 0) {
-        // Show upload modal
-        uploadModal.classList.add('active');
-
-        // Process the dropped files (queue-based, with adaptive throttling)
-        processFiles(files, uploadProgressContainer, uploadStatusMessage);
+        processFiles(files);
       }
     });
 
@@ -1518,9 +1511,6 @@
       }, 2000);
     });
 
-    function closeUploadModal() {
-      uploadModal.classList.remove('active');
-    }
 
     // ---- Full-Text Search (Meilisearch) ----
     let _searchDebounceTimer = null;
