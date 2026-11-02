@@ -35,6 +35,65 @@ function controller(overrides = {}) {
   return { api: context.self.__uploadControllerTest, messages, worker: context.self };
 }
 
+function serviceWorker(rows = []) {
+  const records = new Map(rows.map(row => [row.key, { ...row }]));
+  function requestFor(tx, value) {
+    tx.pending += 1;
+    const request = { result: null, onsuccess: null };
+    queueMicrotask(() => {
+      request.result = value(); request.onsuccess?.({ target: request });
+      tx.pending -= 1; tx.complete();
+    });
+    return request;
+  }
+  function makeStore(tx) {
+    const matches = (row, query) => query?.type === 'only'
+      ? row.principal === query.key[0] && row.batchId === query.key[1]
+      : !query || (row.principal >= query.lower[0] && row.principal <= query.upper[0]);
+    return {
+      get(key) { return requestFor(tx, () => records.get(key)); },
+      put(value) { records.set(value.key, { ...value }); },
+      index() { return {
+        getAll(query) { return requestFor(tx, () => [...records.values()].filter(row => matches(row, query)).map(row => ({ ...row }))); },
+        openKeyCursor(query) {
+          const keys = [...new Map([...records.values()].filter(row => row.batchId && matches(row, query)).map(row => [`${row.principal}\0${row.batchId}`, [row.principal, row.batchId]])).values()];
+          const request = { result: null, onsuccess: null }; let offset = 0; tx.pending += 1;
+          const emit = () => {
+            request.result = offset < keys.length ? { key: keys[offset], continue() { offset += 1; queueMicrotask(emit); } } : null;
+            request.onsuccess?.({ target: request });
+            if (!request.result) { tx.pending -= 1; tx.complete(); }
+          };
+          queueMicrotask(emit); return request;
+        }
+      }; }
+    };
+  }
+  const db = {
+    objectStoreNames: { contains() { return true; } }, close() {},
+    transaction() {
+      const tx = { pending: 0, started: false, finished: false, oncomplete: null, onerror: null, onabort: null,
+        objectStore() { return makeStore(tx); },
+        complete() { if (!tx.started || tx.pending || tx.finished) return; tx.finished = true; queueMicrotask(() => tx.oncomplete?.()); }
+      };
+      return tx;
+    }
+  };
+  const context = {
+    Date, IDBKeyRange: { only(key) { return { type: 'only', key }; }, bound(lower, upper) { return { type: 'bound', lower, upper }; } },
+    indexedDB: { open() { const request = { result: db, onupgradeneeded: null, onsuccess: null, onerror: null, transaction: { objectStore() { return makeStore({ pending: 0, complete() {} }); } } }; queueMicrotask(() => request.onsuccess?.({ target: request })); return request; } },
+    self: { addEventListener() {} }
+  };
+  const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-queue-sw.js'), 'utf8');
+  vm.runInNewContext(`${source}\nself.__handle = handle;`, context);
+  const originalTransaction = db.transaction;
+  db.transaction = (...args) => {
+    const tx = originalTransaction(...args);
+    queueMicrotask(() => { tx.started = true; tx.complete(); });
+    return tx;
+  };
+  return { handle: context.self.__handle, records };
+}
+
 function modernAdapter() {
   class Element {
     constructor() { this.className = ''; this.textContent = ''; this.children = []; this.listeners = {}; this.attributes = {}; this.style = {}; this.classList = { values: new Set(['hidden']), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), contains: value => this.classList.values.has(value) }; }
@@ -173,7 +232,7 @@ test('controller exposes disjoint queue counters and archives only terminal loca
   await api.archiveEligible();
   assert.deepEqual(Array.from(api.state().queue, item => item.key), ['waiting', 'processing', 'needs', 'failed']);
   assert.equal(operations.at(-1).op, 'archiveMany');
-  assert.equal(JSON.stringify(operations.at(-1).states), JSON.stringify(['complete', 'completed', 'duplicate']));
+  assert.equal(operations.at(-1).kind, 'completed');
 });
 
 test('retry keeps server-accepted failures untouched and reselects local failures', async () => {
@@ -336,6 +395,7 @@ test('controller reselects only unaccepted recovered entries and retains duplica
   const { api } = controller();
   api.state().queue.push(
     { key: 'accepted', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'accepted', fileId: 91 },
+    { key: 'server-failed', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'failed', fileId: 92 },
     { key: 'waiting-a', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'needs_files' },
     { key: 'waiting-b', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'needs_files' }
   );
@@ -346,8 +406,10 @@ test('controller reselects only unaccepted recovered entries and retains duplica
   assert.deepEqual(Array.from(matched, item => item.key), ['waiting-a', 'waiting-b']);
   assert.equal(queue[0].state, 'accepted');
   assert.equal(queue[0].fileId, 91);
-  assert.equal(queue[1].file, file);
+  assert.equal(queue[1].state, 'failed');
+  assert.equal(queue[1].fileId, 92);
   assert.equal(queue[2].file, file);
+  assert.equal(queue[3].file, file);
 });
 
 test('zero server capacity is preserved as a pause signal', () => {
@@ -522,6 +584,77 @@ test('a lost HTTP acceptance response retries the same client identity and commi
   assert.equal(item.fileId, 91);
   assert.ok(operations.some(op => op.op === 'putMany' && op.items[0].fileId === 91));
   assert.equal(operations.at(-1).op, 'release');
+});
+
+test('controller records upload progress, inspection failures, response details, and stale snapshots', async () => {
+  class Body { append() {} }
+  const operations = [];
+  const { api, messages } = controller({ FormData: Body, onSW(message, respond) {
+    operations.push(message);
+    if (message.op === 'lease') return respond(true);
+    respond(true);
+  }, fetch: async (url) => {
+    if (url === '/api/uploads/files') return { ok: true, status: 202, json: async () => ({ file_id: 7, state: 'accepted' }) };
+    if (url.includes('/batches/')) return { ok: false, status: 400, json: async () => ({ detail: 'batch no longer exists' }) };
+    return { ok: true, status: 200, json: async () => ({}) };
+  } });
+  const uploaded = { key: 'uploading', batchId: 'batch-a', file: {}, name: 'a.pdf', sha256: 'a', state: 'queued' };
+  assert.equal(await api.send(uploaded), true);
+  assert.ok(operations.some(operation => operation.op === 'putMany' && operation.items[0].state === 'uploading'));
+  await assert.rejects(api.api('/api/uploads/batches/batch-a'), /batch no longer exists/);
+
+  const broken = { key: 'broken', batchId: 'batch-b', name: 'broken.pdf', file: { name: 'broken.pdf', type: '', size: 1, slice() { return { arrayBuffer: async () => { throw new Error('cannot inspect'); } }; } }, size: 1, state: 'queued' };
+  api.state().queue.push(broken);
+  await api.processBatch([broken]);
+  assert.equal(broken.state, 'failed');
+  assert.match(broken.error, /cannot inspect/);
+
+  api.state().queue.push({ key: 'accepted', batchId: 'missing', state: 'accepted', fileId: 8 });
+  await assert.rejects(api.refreshPending(), /batch no longer exists/);
+  const refreshStatus = messages.at(-1);
+  assert.match(refreshStatus.message, /konnte nicht aktualisiert werden/);
+  assert.match(refreshStatus.snapshotError, /batch no longer exists/);
+  api.rememberCapacity('batch-a', { slots: 1, max_bytes: 10, processing: { status: 'stalled' } }, 'Server');
+  api.status('capacity received');
+  assert.equal(messages.at(-1).processingHealth.status, 'stalled');
+});
+
+test('a failed lease reconciles an archived row instead of spinning a stale queued upload', async () => {
+  const { api } = controller({ onSW(message, respond) {
+    if (message.op === 'lease') return respond(false);
+    if (message.op === 'snapshot') return respond([]);
+    respond(true);
+  } });
+  const stale = { key: 'archived-by-other-tab', batchId: 'batch-a', file: {}, state: 'queued' };
+  api.state().queue.push(stale);
+  assert.equal(await api.send(stale), false);
+  assert.equal(api.state().queue.length, 0);
+  assert.equal(stale.state, 'archived');
+});
+
+test('service worker archives only fixed contracts and preserves tombstone, lease, owner, and accepted-write invariants', async () => {
+  const now = Date.now();
+  const worker = serviceWorker([
+    { key: 'complete', principal: 'owner-a', batchId: 'b', state: 'complete', fileId: 1 },
+    { key: 'accepted', principal: 'owner-a', batchId: 'b', state: 'accepted', fileId: 101 },
+    { key: 'server-failed', principal: 'owner-a', batchId: 'b', state: 'failed', fileId: 103 },
+    { key: 'unsent', principal: 'owner-a', batchId: 'b', state: 'failed' },
+    { key: 'leased', principal: 'owner-a', batchId: 'b', state: 'complete', fileId: 4, leaseOwner: 'other-tab', leaseUntil: now + 60_000 },
+    { key: 'other-owner', principal: 'owner-b', batchId: 'b', state: 'complete', fileId: 5 }
+  ]);
+  const owner = { principal: 'owner-a' };
+  assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'archiveMany', kind: 'completed', keys: ['complete', 'accepted', 'leased'] })), ['complete']);
+  assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'archiveMany', kind: 'unsent', keys: ['unsent', 'server-failed'] })), ['unsent']);
+  await assert.rejects(worker.handle({ ...owner, op: 'archiveMany', kind: 'anything', keys: ['accepted'] }), /Invalid archive kind/);
+  assert.equal(await worker.handle({ ...owner, op: 'lease', key: 'complete', owner: 'late-tab' }), false);
+  await worker.handle({ ...owner, op: 'putMany', items: [{ key: 'complete', batchId: 'b', state: 'queued' }] });
+  assert.deepEqual(Object.keys(worker.records.get('complete')).sort(), ['archivedAt', 'key', 'principal', 'updatedAt']);
+  assert.equal(await worker.handle({ principal: 'owner-b', op: 'lease', key: 'accepted', owner: 'other-owner' }), false);
+  assert.equal(await worker.handle({ ...owner, op: 'lease', key: 'accepted', owner: 'owner-a' }), true);
+  await worker.handle({ ...owner, op: 'putMany', items: [{ key: 'accepted', batchId: 'b', state: 'queued' }] });
+  assert.equal(worker.records.get('accepted').fileId, 101);
+  assert.equal(worker.records.get('accepted').state, 'accepted');
+  assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'snapshot', batchId: 'b' }), row => row.key).sort(), ['accepted', 'leased', 'server-failed']);
 });
 
 test('service worker discovers durable batches when local pointers are missing and isolates owners', async () => {

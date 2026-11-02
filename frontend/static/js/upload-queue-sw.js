@@ -47,7 +47,9 @@ async function handle(message) {
   }
   if (message.op === 'archiveMany') {
     if (!Array.isArray(message.keys) || message.keys.length > 100000) throw new Error('Invalid archive request');
-    const allowed = new Set(message.states || ['complete', 'completed', 'duplicate']);
+    const allowed = message.kind === 'completed' ? new Set(['complete', 'completed', 'duplicate'])
+      : message.kind === 'unsent' ? new Set(['needs_files', 'failed', 'transfer_failed']) : null;
+    if (!allowed) throw new Error('Invalid archive kind');
     return transaction('readwrite', (store, result) => {
       const archived = [];
       result(archived);
@@ -56,10 +58,10 @@ async function handle(message) {
         request.onsuccess = () => {
           const item = request.result;
           if (!item || item.principal !== message.principal || item.archivedAt || !allowed.has(item.state) || item.leaseUntil > now) return;
-          if (message.requireNoFileId && item.fileId != null) return;
-          item.archivedAt = now;
-          item.updatedAt = now;
-          store.put(item);
+          if (message.kind === 'unsent' && item.fileId != null) return;
+          // Keep a small tombstone so late writes and leases stay rejected,
+          // without retaining a completed batch in the ownerBatch index.
+          store.put({ key: item.key, principal: item.principal, archivedAt: now, updatedAt: now });
           archived.push(key);
           result(archived);
         };
