@@ -126,11 +126,13 @@ def _inject_global_context(ctx: dict) -> None:
         # Scope durable upload metadata to the authenticated owner on every page.
         if ctx["is_logged_in"]:
             from app.utils.user_scope import get_current_owner_id
+
             owner_id = get_current_owner_id(req)
             if owner_id or not getattr(settings, "multi_user_enabled", False):
-                ctx.setdefault("upload_queue_owner", hashlib.sha256(
-                    str(owner_id or "single-user").encode(), usedforsecurity=False
-                ).hexdigest())
+                ctx.setdefault(
+                    "upload_queue_owner",
+                    hashlib.sha256(str(owner_id or "single-user").encode(), usedforsecurity=False).hexdigest(),
+                )
                 ctx.setdefault("upload_concurrency", settings.upload_concurrency)
                 ctx.setdefault("upload_queue_delay_ms", settings.upload_queue_delay_ms)
                 ctx.setdefault("upload_max_file_size", settings.max_upload_size)
