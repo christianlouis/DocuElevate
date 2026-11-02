@@ -2,6 +2,7 @@
 Base setup for views, containing shared functionality and imports.
 """
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -122,6 +123,20 @@ def _inject_global_context(ctx: dict) -> None:
             session_user = req.session.get("user")
         # When auth is disabled every visitor is effectively "logged in"
         ctx.setdefault("is_logged_in", not getattr(settings, "auth_enabled", True) or session_user is not None)
+        # Scope durable upload metadata to the authenticated owner on every page.
+        if ctx["is_logged_in"]:
+            from app.utils.user_scope import get_current_owner_id
+
+            owner_id = get_current_owner_id(req)
+            if owner_id or not getattr(settings, "multi_user_enabled", False):
+                ctx.setdefault(
+                    "upload_queue_owner",
+                    hashlib.sha256(str(owner_id or "single-user").encode(), usedforsecurity=False).hexdigest(),
+                )
+                ctx.setdefault("upload_concurrency", settings.upload_concurrency)
+                ctx.setdefault("upload_queue_delay_ms", settings.upload_queue_delay_ms)
+                ctx.setdefault("upload_max_file_size", settings.max_upload_size)
+                ctx.setdefault("upload_enable_deduplication", settings.enable_deduplication)
 
         # --- Hydrate session language from DB (once per session) ---
         # If the session doesn't have a preferred_language yet but the user

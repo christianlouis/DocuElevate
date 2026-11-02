@@ -12,13 +12,17 @@ function helpers(overrides = {}) {
 
 function controller(overrides = {}) {
   const messages = [];
-  const { swResults = {}, ...contextOverrides } = overrides;
+  const { swResults = {}, onSW, ...contextOverrides } = overrides;
   const context = {
     self: { UPLOAD_CONTROLLER_TEST: true, postMessage(value) {
       messages.push(value);
-      if (value.type === 'sw') queueMicrotask(() => context.self.onmessage({ data: {
-        type: 'swResponse', id: value.id, ok: true, result: swResults[value.op] ?? true
-      } }));
+      if (value.type === 'sw') {
+        const respond = result => queueMicrotask(() => context.self.onmessage({ data: {
+          type: 'swResponse', id: value.id, ok: true, result
+        } }));
+        if (onSW) onSW(value, respond);
+        else respond(swResults[value.op] ?? true);
+      }
     } },
     crypto: { randomUUID: (() => { let n = 0; return () => `id-${++n}`; })() },
     fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }),
@@ -30,6 +34,109 @@ function controller(overrides = {}) {
   vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, 'upload-controller-worker.js'), 'utf8'), context);
   return { api: context.self.__uploadControllerTest, messages, worker: context.self };
 }
+
+function modernAdapter() {
+  class Element {
+    constructor() { this.className = ''; this.textContent = ''; this.children = []; this.listeners = {}; this.attributes = {}; this.style = {}; this.classList = { values: new Set(['hidden']), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), contains: value => this.classList.values.has(value) }; }
+    addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+    dispatch(type, event = {}) { for (const listener of this.listeners[type] || []) listener({ preventDefault() {}, ...event }); }
+    replaceChildren(...children) { this.children = children; }
+    append(...children) { this.children.push(...children); }
+    appendChild(child) { this.children.push(child); return child; }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    click() { this.dispatch('click'); }
+  }
+  const ids = ['globalUploadQueue', 'globalUploadQueueReopen', 'globalUploadQueueMinimize', 'globalUploadQueueClose', 'globalUploadQueueAddFiles', 'globalUploadQueueFileInput', 'globalUploadQueueDiagnosticsButton', 'globalUploadQueueDiagnosticsPanel', 'globalUploadQueueDiagnostics', 'globalUploadQueueSummary', 'globalUploadQueueNotice', 'globalUploadQueueProgress', 'globalUploadQueueRows'];
+  const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
+  const listeners = {};
+  const workers = [];
+  class FakeWorker { constructor(url) { this.url = url; this.messages = []; workers.push(this); } postMessage(message) { this.messages.push(message); } emit(data) { this.onmessage({ data }); } }
+  const context = {
+    window: { uploadConfig: { concurrency: 3 }, addEventListener(type, listener) { listeners[type] = listener; } },
+    document: { getElementById(id) { return elements[id] || null; }, createElement() { return new Element(); } },
+    navigator: { serviceWorker: { controller: {}, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
+    Worker: FakeWorker, crypto: { randomUUID: () => 'adapter-id' }, console, setTimeout, clearTimeout, MessageChannel: require('node:worker_threads').MessageChannel,
+  };
+  const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-bulk.js'), 'utf8');
+  vm.runInNewContext(source, context);
+  return { ...context, elements, listeners, workers, runAgain() { vm.runInNewContext(source, context); } };
+}
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test('modern adapter keeps an empty restored queue hidden, honors minimize, and localizes rows', async () => {
+  const adapter = modernAdapter();
+  adapter.listeners.DOMContentLoaded();
+  for (let i = 0; i < 5; i++) await flush();
+  const worker = adapter.workers[0];
+  assert.equal(worker.url, '/static/js/upload-controller-worker.js');
+  assert.ok(worker.messages.some(message => message.type === 'init'));
+  worker.emit({ type: 'status', message: 'Queue wiederhergestellt.', queue: [], total: 0, complete: 0 });
+  assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), true);
+  worker.emit({ type: 'status', message: 'Queue wiederhergestellt.', queue: [{ name: 'scan.pdf', state: 'needs_files' }], total: 1, needsFiles: 1, complete: 0 });
+  assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), false);
+  assert.match(adapter.elements.globalUploadQueueSummary.textContent, /1 insgesamt/);
+  assert.match(adapter.elements.globalUploadQueueRows.children[0].textContent, /Originaldatei erneut auswählen/);
+  adapter.elements.globalUploadQueueMinimize.dispatch('click');
+  worker.emit({ type: 'status', message: 'Upload-Queue aktualisiert.', queue: [{ name: 'scan.pdf', state: 'needs_files' }], total: 1, needsFiles: 1, complete: 0 });
+  assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), true);
+  worker.emit({ type: 'status', message: 'Queue wiederhergestellt.', queue: [{ name: 'scan.pdf', state: 'needs_files' }], total: 1, needsFiles: 1, complete: 0 });
+  assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), true);
+  worker.emit({ type: 'status', message: '1 Datei zur Upload-Queue hinzugefügt.', queue: [{ name: 'scan.pdf', state: 'needs_files' }], total: 2, needsFiles: 1, complete: 0 });
+  assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), false);
+  const reselected = { name: 'scan.pdf', type: 'application/pdf', size: 2, lastModified: 1 };
+  adapter.elements.globalUploadQueueFileInput.files = [reselected];
+  adapter.elements.globalUploadQueueFileInput.dispatch('change', { target: adapter.elements.globalUploadQueueFileInput });
+  for (let i = 0; i < 3; i++) await flush();
+  assert.ok(worker.messages.some(message => message.type === 'add' && message.files[0] === reselected));
+});
+
+test('modern adapter exposes a manual diagnostic GUI even when the queue is empty', async () => {
+  const adapter = modernAdapter();
+  adapter.elements.globalUploadQueueDiagnosticsButton.dispatch('click');
+  for (let i = 0; i < 4; i++) await flush();
+  assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), false);
+  assert.equal(adapter.elements.globalUploadQueueDiagnosticsPanel.classList.contains('hidden'), false);
+  assert.equal(adapter.elements.globalUploadQueueDiagnosticsButton.attributes['aria-expanded'], 'true');
+  const diagnosticText = adapter.elements.globalUploadQueueDiagnostics.children.map(child => child.textContent).join(' ');
+  assert.match(diagnosticText, /Service Worker/);
+  assert.match(diagnosticText, /Upload-Worker/);
+  assert.match(diagnosticText, /Dauerhafter Speicher/);
+});
+
+test('modern adapter starts one controller even if the base script is accidentally included twice', () => {
+  const adapter = modernAdapter();
+  adapter.runAgain();
+  assert.equal(adapter.workers.length, 1);
+  assert.equal(adapter.elements.globalUploadQueueMinimize.listeners.click.length, 1);
+});
+
+test('controller reports a valid 6000-file drop before delayed restore or batch API work', () => {
+  let holdRestore;
+  const { worker, messages } = controller({ onSW(message, respond) {
+    if (message.op === 'listBatches') { holdRestore = respond; return; }
+    respond(true);
+  } });
+  worker.onmessage({ data: { type: 'init', config: { maxFileSize: 1024 }, owner: 'test-owner' } });
+  worker.onmessage({ data: { type: 'add', files: Array.from({ length: 6000 }, (_, index) => ({ name: `${index}.pdf`, type: 'application/pdf', size: 1, lastModified: index })) } });
+  const immediate = messages.find(message => message.type === 'status' && /hinzugefügt/.test(message.message));
+  assert.equal(immediate.total, 6000);
+  assert.equal(immediate.diagnostics.phase, 'neue Dateien werden eingeordnet');
+  assert.ok(holdRestore, 'restore is intentionally held before any batch API request');
+});
+
+test('templates load the legacy page adapter before the global worker adapter exactly once', () => {
+  const base = fs.readFileSync(require('node:path').join(__dirname, '../../templates/base.html'), 'utf8');
+  const upload = fs.readFileSync(require('node:path').join(__dirname, '../../templates/upload.html'), 'utf8');
+  const files = fs.readFileSync(require('node:path').join(__dirname, '../../templates/files.html'), 'utf8');
+  assert.ok(base.indexOf('{% block scripts %}') < base.indexOf('/static/js/upload-bulk.js'));
+  assert.equal((base.match(/upload-bulk\.js/g) || []).length, 1);
+  assert.ok(upload.indexOf('/static/js/upload.js') >= 0 && !upload.includes('/static/js/upload-bulk.js'));
+  assert.ok(files.indexOf('/static/js/upload.js') >= 0 && !files.includes('/static/js/upload-bulk.js'));
+  assert.match(base, /globalUploadQueueDiagnosticsButton/);
+  assert.match(base, /globalUploadQueueAddFiles/);
+  assert.match(base, /globalUploadQueueFileInput/);
+});
 
 test('preflight windows cover every item without an oversized request', () => {
   const { windows } = helpers();
