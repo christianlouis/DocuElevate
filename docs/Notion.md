@@ -36,9 +36,22 @@ PDF** to upload the source as a private Notion file block.
 
 Pages contain the source filename, available summary and tags, the document date when
 available (otherwise a clearly labelled processed date), and a stable private
-DocuElevate link. PDF attachments use Notion's single-part upload flow and are
-limited to 20 MiB; Notion workspace limits may be lower. Oversized files fail
-before page creation. Redirects are
+DocuElevate link. PDF attachments up to 20 MiB use Notion's single-part flow;
+larger PDFs use 10 MiB multipart chunks, completed before page creation. They
+remain one complete file in Notion. Every upload checks the workspace limit
+reported by `/v1/users/me` (cached for five minutes): 5 MiB on free workspaces,
+up to 5 GiB on eligible paid workspaces. The workspace's actual value controls.
+See Notion's [file limits](https://developers.notion.com/guides/data-apis/working-with-files-and-media)
+and [multipart upload flow](https://developers.notion.com/guides/data-apis/sending-larger-files).
+
+For personal destinations, choose **Stop** or **Send a DocuElevate link instead**
+when the file exceeds that limit. Link fallback requires a file ID and configured
+HTTPS DocuElevate URL; readers must authenticate and have document access.
+An unavailable workspace-limit lookup does not silently switch to a link.
+Optionally try lossless PDF optimization first; signed PDFs are left untouched.
+The original file is never rewritten. Source-specific settings override the
+destination default when trusted source provenance is available.
+Oversized files with the stop policy fail before page creation. Redirects are
 not followed, requests have bounded connect/read timeouts, and connection
 tests perform no writes. If page creation has an uncertain outcome, the task
 is not retried automatically. Retrying it manually can create a duplicate;

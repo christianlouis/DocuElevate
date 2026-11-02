@@ -821,3 +821,18 @@ If you encounter issues while using DocuElevate, please refer to the [Troublesho
 ### Delete your account
 
 Open **Profile → Delete account** in the web or mobile application and enter the displayed confirmation phrase. This permanently removes the account and its managed DocuElevate data. Legal holds can block deletion; a temporary cleanup failure requires retry. Exported copies and backups have separate retention rules. See [Account deletion](AccountDeletion.md).
+
+
+### Large documents in Email and Notion destinations
+
+Edit the destination under **Integrations** to choose what happens when a file
+is too large: stop with a clear error, send an authenticated DocuElevate link,
+or (for email PDFs) send numbered pages in separate messages. You can try a
+smaller PDF without reducing quality and set exceptions for individual sources.
+Your original document remains unchanged. Notion transfers large attachments
+in parts automatically, while preserving one complete file in the workspace.
+
+For email, the limit includes the encoded attachment and the rest of the message.
+If a split delivery stops, retry just that destination from the document details.
+Already accepted parts are skipped. An uncertain delivery must be checked at the
+destination before resending, to prevent duplicate messages.

@@ -145,6 +145,7 @@ def convert_to_pdf(
     original_filename: Optional[str] = None,
     owner_id: Optional[str] = None,
     file_id: Optional[int] = None,
+    source_integration_id: Optional[int] = None,
 ) -> Optional[str]:
     """
     Converts a file to PDF using Gotenberg's API.
@@ -365,9 +366,15 @@ def convert_to_pdf(
                     original_filename=pdf_original_filename,
                     file_id=file_id,
                     owner_id=owner_id,
+                    source_integration_id=source_integration_id,
                 )
             else:
-                process_document.delay(converted_file_path, file_id=file_id, owner_id=owner_id)
+                process_document.delay(
+                    converted_file_path,
+                    file_id=file_id,
+                    owner_id=owner_id,
+                    source_integration_id=source_integration_id,
+                )
 
             return converted_file_path
         else:

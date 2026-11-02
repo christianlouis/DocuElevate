@@ -2544,5 +2544,16 @@
   "onboarding.legal_accept": "I accept the",
   "onboarding.legal_terms": "Terms of Service",
   "onboarding.legal_privacy": "Privacy Policy",
-  "auth.privacy_acknowledge": "I have read the"
+  "auth.privacy_acknowledge": "I have read the",
+  "integrations.size_policy_label": "When a document exceeds the destination limit",
+  "integrations.size_stop": "Stop and show the size limit",
+  "integrations.size_link": "Send a DocuElevate link instead",
+  "integrations.size_split": "Send PDF pages in numbered emails",
+  "integrations.size_optimize": "Try a smaller PDF without reducing quality",
+  "integrations.size_policy_hint": "The original stays unchanged. Links require access to DocuElevate. Notion uploads large PDFs automatically in parts, within the workspace limit.",
+  "integrations.size_limit_label": "Email size limit in MiB (optional)",
+  "integrations.size_limit_hint": "Includes the full email and encoded attachment. The mail server may impose a smaller limit. Leave blank to use its advertised limit.",
+  "integrations.size_source_overrides": "Different handling for selected sources",
+  "integrations.size_inherit": "Use destination settings",
+  "integrations.notion_attach_pdf": "Attach the PDF (within the Notion workspace limit)"
 }

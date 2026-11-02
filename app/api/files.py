@@ -1521,6 +1521,40 @@ def retry_subtask(
         if subtask_name in pipeline_step_names:
             return _retry_pipeline_step(file_record, subtask_name, db)
 
+        # Personal destinations can be retried without repeating document processing.
+        personal_destination_id = None
+        if subtask_name.startswith("upload_to_user_integration_"):
+            from app.models import DestinationDeliveryPart, IntegrationDirection, UserIntegration
+            from app.tasks.upload_to_user_integration import upload_to_user_integration
+
+            suffix = subtask_name.removeprefix("upload_to_user_integration_")
+            if not suffix.isdecimal():
+                raise HTTPException(status_code=400, detail="Invalid destination task name")
+            personal_destination_id = int(suffix)
+            destination = (
+                db.query(UserIntegration)
+                .filter(
+                    UserIntegration.id == personal_destination_id,
+                    UserIntegration.owner_id == file_record.owner_id,
+                    UserIntegration.direction == IntegrationDirection.DESTINATION,
+                    UserIntegration.is_active.is_(True),
+                )
+                .first()
+            )
+            if destination is None:
+                raise HTTPException(status_code=404, detail="Active destination not found for this document")
+            parts = (
+                db.query(DestinationDeliveryPart)
+                .filter_by(file_id=file_id, integration_id=personal_destination_id)
+                .all()
+            )
+            if any(part.status in {"unknown", "sending"} for part in parts):
+                raise HTTPException(
+                    status_code=409, detail="Delivery outcome is uncertain; check the destination before retrying"
+                )
+            if parts and all(part.status == "accepted" for part in parts):
+                raise HTTPException(status_code=409, detail="This document was already delivered to this destination")
+
         # Map subtask names to their corresponding Celery tasks
         from app.tasks.upload_to_dropbox import upload_to_dropbox
         from app.tasks.upload_to_email import upload_to_email
@@ -1547,6 +1581,9 @@ def retry_subtask(
             "upload_to_sftp": upload_to_sftp,
             "upload_to_email": upload_to_email,
         }
+
+        if personal_destination_id is not None:
+            task_map[subtask_name] = upload_to_user_integration
 
         if subtask_name not in task_map:
             all_valid = sorted(list(task_map.keys()) + sorted(pipeline_step_names))
@@ -1607,7 +1644,10 @@ def retry_subtask(
         logger.info(f"Found processed file for upload retry at: {file_path!r}")
         # Queue the specific upload task
         upload_task = task_map[subtask_name]
-        task = upload_task.delay(file_path, file_id)
+        if personal_destination_id is not None:
+            task = upload_task.delay(file_path, personal_destination_id, file_id=file_id)
+        else:
+            task = upload_task.delay(file_path, file_id)
 
         logger.info(f"Retrying upload subtask: FileID={file_record.id}, Subtask={subtask_name}, TaskID={task.id}")
 

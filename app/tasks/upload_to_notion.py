@@ -1,8 +1,12 @@
 """Per-user Notion destination integration."""
 
+import hashlib
 import json
 import logging
+import math
 import os
+import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -20,7 +24,9 @@ NOTION_API_URL = "https://api.notion.com"
 NOTION_VERSION = "2026-03-11"
 _TIMEOUT = (10, 30)
 _MAX_RICH_TEXT = 1900
-_MAX_PDF_BYTES = 20 * 1024 * 1024
+_MAX_SINGLE_PART_BYTES = 20 * 1024 * 1024
+_NOTION_PART_BYTES = 10 * 1024 * 1024
+_WORKSPACE_LIMIT_CACHE: dict[str, tuple[float, int]] = {}
 
 
 class NotionTransportError(RuntimeError):
@@ -29,6 +35,10 @@ class NotionTransportError(RuntimeError):
 
 class NotionPageCreationUncertain(RuntimeError):
     """A page may have been created even though its result was not available."""
+
+
+class NotionWorkspaceLimitError(ValueError):
+    """The PDF exceeds the workspace upload limit."""
 
 
 def _request(method: str, path: str, token: str, **kwargs: Any) -> requests.Response:
@@ -150,28 +160,78 @@ def _document_url(cfg: dict[str, Any], file_id: int | None) -> str:
     return f"{base}/files/{file_id}"
 
 
-def _upload_pdf(token: str, file_path: str) -> str:
+def _workspace_upload_limit(token: str) -> int:
+    """Return the bot workspace upload limit, cached per token without storing it."""
+    cache_key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    cached = _WORKSPACE_LIMIT_CACHE.get(cache_key)
+    if cached is not None and time.monotonic() - cached[0] < 300:
+        return cached[1]
+    response = _request("GET", "/v1/users/me", token)
+    if not _success(response):
+        raise _error(response)
+    limits = _json(response).get("bot", {}).get("workspace_limits")
+    limit = limits.get("max_file_upload_size_in_bytes") if isinstance(limits, dict) else None
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+        raise RuntimeError("Notion workspace upload limit was not provided")
+    if len(_WORKSPACE_LIMIT_CACHE) >= 128:
+        _WORKSPACE_LIMIT_CACHE.clear()
+    _WORKSPACE_LIMIT_CACHE[cache_key] = (time.monotonic(), limit)
+    return limit
+
+
+def _upload_pdf(token: str, file_path: str, *, filename: str | None = None) -> str:
     if not file_path.lower().endswith(".pdf"):
         raise ValueError("Only PDF attachments are supported")
-    if os.path.getsize(file_path) > _MAX_PDF_BYTES:
-        raise ValueError("Notion PDF attachment exceeds the 20 MiB limit")
-    filename = os.path.basename(file_path)
+    file_size = os.path.getsize(file_path)
+    filename = filename or os.path.basename(file_path)
+    multi_part = file_size > _MAX_SINGLE_PART_BYTES
+    if file_size > _workspace_upload_limit(token):
+        raise NotionWorkspaceLimitError("Notion PDF attachment exceeds the workspace upload limit")
     created = _request(
         "POST",
         "/v1/file_uploads",
         token,
-        json={"mode": "single_part", "filename": filename, "content_type": "application/pdf"},
+        json={
+            "mode": "multi_part" if multi_part else "single_part",
+            "filename": filename,
+            "content_type": "application/pdf",
+            **({"number_of_parts": math.ceil(file_size / _NOTION_PART_BYTES)} if multi_part else {}),
+        },
     )
     if not _success(created):
         raise _error(created)
     upload_id = _uuid(_json(created).get("id"), "file upload ID")
+    if not multi_part:
+        with open(file_path, "rb") as stream:
+            sent = _request(
+                "POST",
+                f"/v1/file_uploads/{upload_id}/send",
+                token,
+                files={"file": (filename, stream, "application/pdf")},
+            )
+        if not _success(sent):
+            raise _error(sent)
+        if _json(sent).get("status") != "uploaded":
+            raise RuntimeError("Notion file upload was not marked uploaded")
+        return upload_id
+
     with open(file_path, "rb") as stream:
-        sent = _request(
-            "POST", f"/v1/file_uploads/{upload_id}/send", token, files={"file": (filename, stream, "application/pdf")}
-        )
-    if not _success(sent):
-        raise _error(sent)
-    if _json(sent).get("status") != "uploaded":
+        part_number = 1
+        while chunk := stream.read(_NOTION_PART_BYTES):
+            sent = _request(
+                "POST",
+                f"/v1/file_uploads/{upload_id}/send",
+                token,
+                data={"part_number": str(part_number)},
+                files={"file": (filename, chunk, "application/pdf")},
+            )
+            if not _success(sent):
+                raise _error(sent)
+            part_number += 1
+    completed = _request("POST", f"/v1/file_uploads/{upload_id}/complete", token)
+    if not _success(completed):
+        raise _error(completed)
+    if _json(completed).get("status") != "uploaded":
         raise RuntimeError("Notion file upload was not marked uploaded")
     return upload_id
 
@@ -208,7 +268,37 @@ def upload_to_notion(
     filename = os.path.basename(file_path)
     title = (_text(metadata.get("title")) or _text(metadata.get("filename")) or filename)[:200]
     document_url = _document_url(cfg, file_id)
-    attachment_id = _upload_pdf(token, file_path) if cfg.get("attach_pdf") else None
+    attachment_id = None
+    delivery_mode = "metadata"
+    policy = str(cfg.get("size_policy") or cfg.get("oversize_policy") or "stop").lower()
+    if policy not in {"stop", "link"}:
+        raise ValueError("Notion size policy must be stop or link")
+    if cfg.get("attach_pdf"):
+        upload_path = file_path
+        temporary_path = None
+        try:
+            if cfg.get("optimize_pdf") or cfg.get("lossless_optimize"):
+                from app.utils.pdf_delivery import optimize_pdf_bytes
+
+                optimized = optimize_pdf_bytes(file_path)
+                if optimized is not None:
+                    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temporary:
+                        temporary.write(optimized)
+                        temporary_path = temporary.name
+                    upload_path = temporary_path
+                    delivery_mode = "optimized"
+            attachment_id = _upload_pdf(token, upload_path, filename=filename)
+            if delivery_mode != "optimized":
+                delivery_mode = "multipart" if os.path.getsize(upload_path) > _MAX_SINGLE_PART_BYTES else "original"
+        except NotionWorkspaceLimitError:
+            if policy != "link":
+                raise
+            if not document_url:
+                raise ValueError("Notion link fallback requires a configured HTTPS URL and file ID") from None
+            delivery_mode = "link"
+        finally:
+            if temporary_path:
+                os.unlink(temporary_path)
     schema_response = _request("GET", f"/v1/data_sources/{data_source_id}", token)
     if not _success(schema_response):
         raise _error(schema_response)
@@ -265,10 +355,17 @@ def upload_to_notion(
         raise NotionPageCreationUncertain(
             "Notion page creation outcome is unknown; inspect Notion before retrying"
         ) from exc
-    return {"status": "Completed", "notion_page_id": page_id, "notion_url": body.get("url")}
+    return {
+        "status": "Completed",
+        "notion_page_id": page_id,
+        "notion_url": body.get("url"),
+        "delivery_mode": delivery_mode,
+    }
 
 
-@celery.task(base=UploadTaskWithRetry, bind=True, dont_autoretry_for=(NotionPageCreationUncertain,))
+@celery.task(
+    base=UploadTaskWithRetry, bind=True, dont_autoretry_for=(NotionPageCreationUncertain, NotionWorkspaceLimitError)
+)
 def upload_to_notion_global(self, file_path: str, file_id: int | None = None):
     """Queue the existing provider implementation for the global destination."""
     task_id = self.request.id

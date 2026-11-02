@@ -50,21 +50,22 @@ RCLONE      credentials = {"rclone_conf"}   (full rclone config file text)
 """
 
 import ftplib  # nosec B402
+import hashlib
 import json
 import logging
 import os
 import subprocess  # nosec B404
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
-from app.models import IntegrationType, UserIntegration
+from app.models import DestinationDeliveryPart, FileRecord, IntegrationDirection, IntegrationType, UserIntegration
 from app.tasks.retry_config import UploadTaskWithRetry
 from app.tasks.upload_to_evernote import upload_to_evernote_integration
-from app.tasks.upload_to_notion import NotionPageCreationUncertain, upload_to_notion
+from app.tasks.upload_to_notion import NotionPageCreationUncertain, NotionWorkspaceLimitError, upload_to_notion
 from app.utils.dropbox_credentials import resolve_dropbox_oauth_credentials
 from app.utils.encryption import decrypt_value
 from app.utils.logging import log_task_progress
@@ -73,6 +74,70 @@ logger = logging.getLogger(__name__)
 
 # Maximum characters to store in UserIntegration.last_error
 _MAX_ERROR_LENGTH = 500
+
+
+class DestinationSizeLimitError(ValueError):
+    """A destination cannot accept the serialized delivery size."""
+
+
+class DestinationDeliveryUncertain(RuntimeError):
+    """SMTP outcome is not safe to replay automatically."""
+
+
+def _smtp_refusal_error(refused: dict[Any, Any]) -> Exception:
+    """Classify recipient refusal without ever falling back or retrying inline."""
+    if any(str(value[0]) == "552" for value in refused.values() if isinstance(value, tuple) and value):
+        return DestinationSizeLimitError("SMTP refused the message as too large")
+    return DestinationDeliveryUncertain("SMTP returned refused recipients; delivery outcome is uncertain")
+
+
+def _email_content_hash(file_path: str) -> str:
+    """Return the immutable source-content identity used by the email ledger."""
+    with open(file_path, "rb") as original:
+        return hashlib.sha256(original.read()).hexdigest()
+
+
+def _assert_email_delivery_plan_is_safe(
+    *, file_id: int, integration_id: int, content_hash: str, policy_hash: str
+) -> None:
+    """Do not create a different email plan after a delivery may have happened.
+
+    A split plan and its original/link alternatives intentionally have distinct
+    policy hashes.  Looking up only the new hash would therefore permit a
+    changed cap or mode to duplicate pages already accepted under the old plan.
+    """
+    with SessionLocal() as db:
+        prior_rows = (
+            db.query(DestinationDeliveryPart)
+            .filter_by(file_id=file_id, integration_id=integration_id, content_hash=content_hash)
+            .filter(DestinationDeliveryPart.status.in_(("accepted", "sending", "unknown")))
+            .all()
+        )
+        if any(row.policy_hash != policy_hash for row in prior_rows):
+            raise DestinationDeliveryUncertain(
+                "Email delivery plan changed after a prior delivery attempt; resend suppressed"
+            )
+
+
+def _effective_size_config(cfg: dict[str, Any], file_record: FileRecord | None) -> dict[str, Any]:
+    """Apply a source override only when provenance came from the DB ledger."""
+    if file_record is None or file_record.source_integration_id is None:
+        return cfg
+    overrides = cfg.get("size_policy_overrides")
+    if not isinstance(overrides, dict):
+        return cfg
+    override = overrides.get(str(file_record.source_integration_id))
+    if override is None:
+        override = overrides.get(file_record.source_integration_id)
+    if isinstance(override, str):
+        override = {"size_policy": override}
+    if not isinstance(override, dict):
+        return cfg
+    merged = dict(cfg)
+    for key in ("size_policy", "oversize_policy", "optimize_pdf", "lossless_optimize"):
+        if key in override:
+            merged[key] = override[key]
+    return merged
 
 
 def _user_facing_upload_error(integration_type: str, error_message: str) -> str:
@@ -565,12 +630,14 @@ def _upload_email(
     task_id: str,
     *,
     file_id: int | None = None,
+    integration_id: int | None = None,
 ) -> dict[str, Any]:
     """Send *file_path* as an email attachment using per-user SMTP credentials."""
     import smtplib
     from email.mime.application import MIMEApplication
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
+    from email.policy import SMTP as SMTP_POLICY
     from email.utils import parseaddr
 
     host = cfg.get("host") or ""
@@ -594,19 +661,337 @@ def _upload_email(
     if not parsed_sender or parsed_sender != sender or "@" not in parsed_sender:
         raise ValueError("Email integration requires a valid sender address in config")
 
-    msg = MIMEMultipart()
-    msg["From"] = f"{sender_name} <{sender}>" if sender_name else sender
-    msg["To"] = recipient
-    msg["Subject"] = f"Document: {filename}"
-    body = f"Please find the attached document: {filename}"
-    if file_id is not None:
-        body += f"\n\nView it in DocuElevate: https://app.docuelevate.org/files/{file_id}"
-    msg.attach(MIMEText(body, "plain"))
+    def _message(
+        *,
+        attach: bool,
+        link: bool = False,
+        attachment_bytes: bytes | None = None,
+        subject_suffix: str = "",
+        attachment_name: str | None = None,
+    ):
+        msg = MIMEMultipart()
+        msg["From"] = f"{sender_name} <{sender}>" if sender_name else sender
+        msg["To"] = recipient
+        msg["Subject"] = f"Document: {filename}{subject_suffix}"
+        body = f"Please find the attached document: {filename}" if attach else f"Document: {filename}"
+        if link:
+            base = str(
+                cfg.get("public_url_base") or cfg.get("document_url_base") or getattr(settings, "public_base_url", "")
+            ).rstrip("/")
+            parsed = urlsplit(base)
+            if (
+                parsed.scheme != "https"
+                or not parsed.netloc
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("Email link fallback requires a configured HTTPS public URL")
+            if file_id is None:
+                raise ValueError("Email link fallback requires a file ID")
+            body += f"\n\nView it in DocuElevate: {base}/files/{file_id}"
+        elif file_id is not None:
+            body += f"\n\nView it in DocuElevate: https://app.docuelevate.org/files/{file_id}"
+        msg.attach(MIMEText(body, "plain"))
+        if attach:
+            if attachment_bytes is None:
+                with open(file_path, "rb") as fh:
+                    attachment_bytes = fh.read()
+            attachment_name = attachment_name or filename
+            part = MIMEApplication(attachment_bytes, Name=attachment_name)
+            part["Content-Disposition"] = f'attachment; filename="{attachment_name}"'
+            msg.attach(part)
+        return msg
 
-    with open(file_path, "rb") as fh:
-        part = MIMEApplication(fh.read(), Name=filename)
-    part["Content-Disposition"] = f'attachment; filename="{filename}"'
-    msg.attach(part)
+    policy = str(cfg.get("size_policy") or cfg.get("oversize_policy") or "stop").lower()
+    if policy not in {"stop", "link", "split"}:
+        raise ValueError("Email size policy must be stop, link, or split")
+    optimized_bytes = None
+    if (cfg.get("lossless_optimize") or cfg.get("optimize_pdf")) and filename.lower().endswith(".pdf"):
+        from app.utils.pdf_delivery import optimize_pdf_bytes
+
+        optimized_bytes = optimize_pdf_bytes(file_path)
+    msg = _message(attach=True, attachment_bytes=optimized_bytes)
+    serialized = msg.as_bytes(policy=SMTP_POLICY)
+    delivery_mode = "optimized" if optimized_bytes is not None else "original"
+    configured_cap = cfg.get("max_message_size_bytes")
+    if configured_cap is not None and (isinstance(configured_cap, bool) or not isinstance(configured_cap, int)):
+        raise ValueError("Email max_message_size_bytes must be an integer")
+    if configured_cap is not None and configured_cap <= 0:
+        raise ValueError("Email max_message_size_bytes must be positive")
+
+    content_hash = _email_content_hash(file_path) if file_id is not None and integration_id is not None else None
+
+    def _policy_hash(*, mode: str, part_count: int = 1) -> str:
+        return hashlib.sha256(
+            json.dumps(
+                {
+                    "policy": policy,
+                    "mode": mode,
+                    "optimize_pdf": bool(cfg.get("optimize_pdf") or cfg.get("lossless_optimize")),
+                    "part_count": part_count,
+                },
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+    def _set_ledger_status(row_id: int | None, status: str, error: Exception | None = None) -> None:
+        if row_id is None:
+            return
+        with SessionLocal() as db:
+            values: dict[str, Any] = {"status": status}
+            if error is not None:
+                values["error"] = str(error)[:500]
+            db.query(DestinationDeliveryPart).filter_by(id=row_id).update(values)
+            db.commit()
+
+    sent_parts = 0
+    already_accepted_parts = 0
+
+    def _send(smtp):
+        nonlocal msg, serialized, delivery_mode, sent_parts, already_accepted_parts
+        advertised = getattr(smtp, "esmtp_features", {}).get("size")
+        limit = configured_cap
+        if advertised and str(advertised).isdigit() and int(advertised) > 0:
+            limit = min(limit, int(advertised)) if limit else int(advertised)
+        if limit and len(serialized) > limit:
+            if policy == "link":
+                msg = _message(attach=False, link=True)
+                serialized = msg.as_bytes(policy=SMTP_POLICY)
+                delivery_mode = "link"
+                if len(serialized) > limit:
+                    raise DestinationSizeLimitError("Email link message still exceeds the SMTP size limit")
+            elif policy == "split":
+                if not filename.lower().endswith(".pdf"):
+                    raise DestinationSizeLimitError("Email splitting is supported for PDF attachments only")
+                from io import BytesIO
+
+                from pypdf import PdfReader, PdfWriter
+
+                reader = PdfReader(file_path)
+                split_messages = []
+                for page_number, page in enumerate(reader.pages, start=1):
+                    writer = PdfWriter()
+                    writer.add_page(page)
+                    output = BytesIO()
+                    writer.write(output)
+                    part_message = _message(
+                        attach=True,
+                        attachment_bytes=output.getvalue(),
+                        subject_suffix=f" (part {page_number}/{len(reader.pages)})",
+                        attachment_name=f"{os.path.splitext(filename)[0]}-part-{page_number}-of-{len(reader.pages)}.pdf",
+                    )
+                    part_bytes = part_message.as_bytes(policy=SMTP_POLICY)
+                    if len(part_bytes) > limit:
+                        raise DestinationSizeLimitError(
+                            f"Email PDF part {page_number} still exceeds the SMTP size limit"
+                        )
+                    split_messages.append((part_message, part_bytes))
+                if not split_messages:
+                    raise DestinationSizeLimitError("Email PDF contains no pages to split")
+                if file_id is None or integration_id is None:
+                    raise DestinationSizeLimitError("Email splitting requires a persisted file and destination ID")
+                if content_hash is None:
+                    raise ValueError("Email delivery content hash is missing")
+                policy_hash = _policy_hash(mode="split", part_count=len(split_messages))
+                _assert_email_delivery_plan_is_safe(
+                    file_id=file_id,
+                    integration_id=integration_id,
+                    content_hash=content_hash,
+                    policy_hash=policy_hash,
+                )
+                with SessionLocal() as db:
+                    for index, (_part_message, part_bytes) in enumerate(split_messages, start=1):
+                        row = (
+                            db.query(DestinationDeliveryPart)
+                            .filter_by(
+                                file_id=file_id,
+                                integration_id=integration_id,
+                                content_hash=content_hash,
+                                policy_hash=policy_hash,
+                                part_number=index,
+                            )
+                            .first()
+                        )
+                        if row is not None:
+                            if row.status in {"unknown", "sending"}:
+                                raise DestinationDeliveryUncertain(
+                                    f"Delivery part {index} has an unknown prior outcome; resend suppressed"
+                                )
+                            continue
+                        row = DestinationDeliveryPart(
+                            file_id=file_id,
+                            integration_id=integration_id,
+                            content_hash=content_hash,
+                            policy_hash=policy_hash,
+                            part_number=index,
+                            part_count=len(split_messages),
+                            filename=f"{os.path.splitext(filename)[0]}-part-{index}-of-{len(split_messages)}.pdf",
+                            size_bytes=len(part_bytes),
+                            status="pending",
+                        )
+                        db.add(row)
+                        db.commit()
+                for index, (part_message, part_bytes) in enumerate(split_messages, start=1):
+                    with SessionLocal() as db:
+                        row = (
+                            db.query(DestinationDeliveryPart)
+                            .filter_by(
+                                file_id=file_id,
+                                integration_id=integration_id,
+                                content_hash=content_hash,
+                                policy_hash=policy_hash,
+                                part_number=index,
+                            )
+                            .first()
+                        )
+                        if row is None:
+                            raise DestinationDeliveryUncertain(f"Delivery part {index} ledger row is missing")
+                        if row.status == "accepted":
+                            already_accepted_parts += 1
+                            continue
+                        if row.status in {"unknown", "sending"}:
+                            raise DestinationDeliveryUncertain(
+                                f"Delivery part {index} has an unknown prior outcome; resend suppressed"
+                            )
+                        claimed = (
+                            db.query(DestinationDeliveryPart)
+                            .filter(
+                                DestinationDeliveryPart.id == row.id,
+                                DestinationDeliveryPart.status == "pending",
+                            )
+                            .update({"status": "sending"}, synchronize_session=False)
+                        )
+                        db.commit()
+                        if claimed != 1:
+                            raise DestinationDeliveryUncertain(
+                                f"Concurrent delivery claim prevented sending part {index}"
+                            )
+                        row_id = row.id
+                    try:
+                        refused = smtp.sendmail(part_message["From"], [recipient], part_bytes.decode("ascii"))
+                        if refused:
+                            raise _smtp_refusal_error(refused)
+                    except DestinationSizeLimitError as exc:
+                        _set_ledger_status(row_id, "pending", exc)
+                        raise
+                    except DestinationDeliveryUncertain as exc:
+                        _set_ledger_status(row_id, "unknown", exc)
+                        raise
+                    except smtplib.SMTPRecipientsRefused as exc:
+                        refusal = _smtp_refusal_error(exc.recipients)
+                        if isinstance(refusal, DestinationSizeLimitError):
+                            _set_ledger_status(row_id, "pending", refusal)
+                            raise refusal from exc
+                        _set_ledger_status(row_id, "unknown", refusal)
+                        raise refusal from exc
+                    except smtplib.SMTPResponseException as exc:
+                        if exc.smtp_code == 552:
+                            size_error = DestinationSizeLimitError("SMTP rejected a split message as too large")
+                            _set_ledger_status(row_id, "pending", size_error)
+                            raise size_error from exc
+                        uncertain = DestinationDeliveryUncertain("SMTP delivery outcome is unknown; resend suppressed")
+                        _set_ledger_status(row_id, "unknown", uncertain)
+                        raise uncertain from exc
+                    except Exception as exc:
+                        uncertain = DestinationDeliveryUncertain("SMTP delivery outcome is unknown; resend suppressed")
+                        _set_ledger_status(row_id, "unknown", uncertain)
+                        raise uncertain from exc
+                    _set_ledger_status(row_id, "accepted")
+                    sent_parts += 1
+                msg = split_messages[-1][0] if split_messages else msg
+                serialized = split_messages[-1][1] if split_messages else serialized
+                delivery_mode = "split"
+                return limit
+            else:
+                raise DestinationSizeLimitError("Serialized email exceeds the SMTP size limit")
+        try:
+            ledger_id = None
+            if file_id is not None and integration_id is not None:
+                if content_hash is None:
+                    raise ValueError("Email delivery content hash is missing")
+                policy_hash = _policy_hash(mode=delivery_mode)
+                _assert_email_delivery_plan_is_safe(
+                    file_id=file_id,
+                    integration_id=integration_id,
+                    content_hash=content_hash,
+                    policy_hash=policy_hash,
+                )
+                with SessionLocal() as db:
+                    row = (
+                        db.query(DestinationDeliveryPart)
+                        .filter_by(
+                            file_id=file_id,
+                            integration_id=integration_id,
+                            content_hash=content_hash,
+                            policy_hash=policy_hash,
+                            part_number=1,
+                        )
+                        .first()
+                    )
+                    if row is not None and row.status in {"unknown", "sending"}:
+                        raise DestinationDeliveryUncertain("Prior email outcome is unknown; resend suppressed")
+                    if row is not None and row.status == "accepted":
+                        already_accepted_parts += 1
+                        return limit
+                    if row is None:
+                        row = DestinationDeliveryPart(
+                            file_id=file_id,
+                            integration_id=integration_id,
+                            content_hash=content_hash,
+                            policy_hash=policy_hash,
+                            part_number=1,
+                            part_count=1,
+                            filename=filename,
+                            size_bytes=len(serialized),
+                            status="pending",
+                        )
+                        db.add(row)
+                        db.commit()
+                    claimed = (
+                        db.query(DestinationDeliveryPart)
+                        .filter(
+                            DestinationDeliveryPart.id == row.id,
+                            DestinationDeliveryPart.status == "pending",
+                        )
+                        .update({"status": "sending"}, synchronize_session=False)
+                    )
+                    db.commit()
+                    if claimed != 1:
+                        raise DestinationDeliveryUncertain("Concurrent email delivery claim prevented resend")
+                    ledger_id = row.id
+            refused = smtp.sendmail(msg["From"], [recipient], serialized.decode("ascii"))
+            if refused:
+                raise _smtp_refusal_error(refused)
+            _set_ledger_status(ledger_id, "accepted")
+            sent_parts += 1
+        except DestinationSizeLimitError as exc:
+            _set_ledger_status(ledger_id, "pending", exc)
+            raise
+        except DestinationDeliveryUncertain as exc:
+            _set_ledger_status(ledger_id, "unknown", exc)
+            raise
+        except smtplib.SMTPRecipientsRefused as exc:
+            refusal = _smtp_refusal_error(exc.recipients)
+            if isinstance(refusal, DestinationSizeLimitError):
+                _set_ledger_status(ledger_id, "pending", refusal)
+                raise refusal from exc
+            _set_ledger_status(ledger_id, "unknown", refusal)
+            raise refusal from exc
+        except smtplib.SMTPResponseException as exc:
+            if exc.smtp_code == 552:
+                size_error = DestinationSizeLimitError("SMTP rejected the serialized message as too large")
+                _set_ledger_status(ledger_id, "pending", size_error)
+                raise size_error from exc
+            uncertain = DestinationDeliveryUncertain("SMTP delivery outcome is unknown; resend suppressed")
+            _set_ledger_status(ledger_id, "unknown", uncertain)
+            raise uncertain from exc
+        except Exception as exc:
+            uncertain = DestinationDeliveryUncertain("SMTP delivery outcome is unknown; resend suppressed")
+            _set_ledger_status(ledger_id, "unknown", uncertain)
+            raise uncertain from exc
+        return limit
 
     if use_tls:
         import ssl
@@ -614,19 +999,29 @@ def _upload_email(
         tls_context = ssl.create_default_context()
         with smtplib.SMTP(host, port, timeout=30) as smtp:
             smtp.starttls(context=tls_context)
+            smtp.ehlo()
             if username and password:
                 smtp.login(username, password)
-            smtp.sendmail(msg["From"], [recipient], msg.as_string())
+            limit = _send(smtp)
     else:
         # Plaintext SMTP — only use when explicitly configured and TLS is unavailable.
         # Credentials and content will be transmitted without encryption.
         with smtplib.SMTP(host, port, timeout=30) as smtp:  # nosec B608
+            smtp.ehlo()
             if username and password:
                 smtp.login(username, password)
-            smtp.sendmail(msg["From"], [recipient], msg.as_string())
+            limit = _send(smtp)
 
     logger.info("[%s] Email upload complete: sent to %s", task_id, recipient)
-    return {"status": "Completed", "recipient": recipient}
+    return {
+        "status": "Completed",
+        "recipient": recipient,
+        "delivery_mode": delivery_mode,
+        "message_size_bytes": len(serialized),
+        "size_limit_bytes": limit,
+        "sent_parts": sent_parts,
+        "already_accepted_parts": already_accepted_parts,
+    }
 
 
 def _upload_rclone(file_path: str, cfg: dict[str, Any], creds: dict[str, Any], task_id: str) -> dict[str, Any]:
@@ -883,7 +1278,16 @@ _UPLOAD_HANDLERS[IntegrationType.EVERNOTE] = upload_to_evernote_integration
 # ---------------------------------------------------------------------------
 
 
-@celery.task(base=UploadTaskWithRetry, bind=True, dont_autoretry_for=(NotionPageCreationUncertain,))
+@celery.task(
+    base=UploadTaskWithRetry,
+    bind=True,
+    dont_autoretry_for=(
+        NotionPageCreationUncertain,
+        NotionWorkspaceLimitError,
+        DestinationSizeLimitError,
+        DestinationDeliveryUncertain,
+    ),
+)
 def upload_to_user_integration(self, file_path: str, integration_id: int, file_id: int | None = None) -> dict[str, Any]:
     """Upload *file_path* to the destination described by the given UserIntegration record.
 
@@ -935,9 +1339,22 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
             )
             raise ValueError(error_msg)
 
+        # Dispatch is only valid for enabled destination records.  The
+        # type checks retain compatibility with older mock-shaped unit rows;
+        # persisted SQL values are always bool/str here.
+        if integration.is_active is False:
+            raise ValueError(f"UserIntegration {integration_id} is inactive")
+        if isinstance(integration.direction, str) and integration.direction != IntegrationDirection.DESTINATION:
+            raise ValueError(f"UserIntegration {integration_id} is not a destination integration")
+
         itype = integration.integration_type
         int_name = integration.name
         owner_id = integration.owner_id
+        file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id is not None else None
+        if file_id is not None and file_record is None:
+            raise ValueError(f"FileRecord {file_id} not found")
+        if file_record is not None and file_record.owner_id != owner_id:
+            raise ValueError("File does not belong to the destination owner")
 
         # Parse config (non-sensitive) and decrypt credentials (sensitive)
         try:
@@ -950,6 +1367,8 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
             creds: dict[str, Any] = json.loads(raw_creds) if raw_creds else {}
         except json.JSONDecodeError as exc:
             raise ValueError(f"Integration {integration_id} has invalid JSON in credentials: {exc}") from exc
+
+        cfg = _effective_size_config(cfg, file_record)
 
     handler = _UPLOAD_HANDLERS.get(itype)
     if handler is None:
@@ -987,7 +1406,7 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         elif itype == IntegrationType.EVERNOTE:
             result = handler(file_path, cfg, creds, task_id, file_id=file_id)
         elif itype == IntegrationType.EMAIL:
-            result = handler(file_path, cfg, creds, task_id, file_id=file_id)
+            result = handler(file_path, cfg, creds, task_id, file_id=file_id, integration_id=integration_id)
         else:
             result = handler(file_path, cfg, creds, task_id)
 
@@ -1003,7 +1422,14 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
             task_id,
             f"upload_to_user_integration_{integration_id}",
             "success",
-            f"Uploaded to {itype} '{int_name}': {filename}",
+            f"Uploaded to {itype} '{int_name}': {filename}"
+            + (
+                f" ({result.get('delivery_mode')}, {result.get('message_size_bytes')} bytes)"
+                if isinstance(result, dict)
+                and result.get("delivery_mode")
+                and isinstance(result.get("message_size_bytes"), int)
+                else ""
+            ),
             file_id=file_id,
         )
         return result

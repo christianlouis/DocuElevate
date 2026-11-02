@@ -153,7 +153,13 @@ def _is_allowed_file(filename: str) -> bool:
     return ext in ALLOWED_EXTENSIONS or filename.lower().endswith(".pdf")
 
 
-def _enqueue_file(file_path: str, *, filename: str | None = None, owner_id: str | None = None) -> None:
+def _enqueue_file(
+    file_path: str,
+    *,
+    filename: str | None = None,
+    owner_id: str | None = None,
+    source_integration_id: int | None = None,
+) -> None:
     """Enqueue a local file path for document processing.
 
     Args:
@@ -166,11 +172,12 @@ def _enqueue_file(file_path: str, *, filename: str | None = None, owner_id: str 
     _, ext = os.path.splitext(fname)
     mime_check = ext.lower() in {".pdf"}
 
+    source_kwargs = {"source_integration_id": source_integration_id} if source_integration_id is not None else {}
     if mime_check or fname.lower().endswith(".pdf"):
-        process_document.delay(file_path, owner_id=owner_id)
+        process_document.delay(file_path, owner_id=owner_id, **source_kwargs)
         logger.info("Enqueued for processing: %s", fname)
     else:
-        convert_to_pdf.delay(file_path, owner_id=owner_id)
+        convert_to_pdf.delay(file_path, owner_id=owner_id, **source_kwargs)
         logger.info("Enqueued for PDF conversion: %s", fname)
 
 
@@ -1371,6 +1378,7 @@ def _scan_user_watch_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan a user-configured local watch folder, attributing files to *owner_id*.
 
@@ -1422,7 +1430,7 @@ def _scan_user_watch_folder(
             logger.error("Failed to copy %s to workdir: %s", abs_path, exc)
             continue
 
-        _enqueue_file(dest_path, owner_id=owner_id)
+        _enqueue_file(dest_path, owner_id=owner_id, source_integration_id=source_integration_id)
         _mark_processed(cache, abs_path)
         count += 1
 
@@ -1450,6 +1458,7 @@ def _scan_user_s3_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan an S3 bucket prefix using per-user credentials.
 
@@ -1532,7 +1541,7 @@ def _scan_user_s3_folder(
                     os.remove(dest_path)
                 continue
 
-            _enqueue_file(dest_path, filename=filename, owner_id=owner_id)
+            _enqueue_file(dest_path, filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
             _mark_processed(cache, cache_key)
             count += 1
 
@@ -1552,6 +1561,7 @@ def _scan_user_dropbox_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan a Dropbox folder using per-user credentials.
 
@@ -1633,7 +1643,7 @@ def _scan_user_dropbox_folder(
                 os.remove(dest_path)
             continue
 
-        _enqueue_file(dest_path, filename=filename, owner_id=owner_id)
+        _enqueue_file(dest_path, filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
         _mark_processed(cache, cache_key)
         count += 1
 
@@ -1653,6 +1663,7 @@ def _scan_user_google_drive_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan a Google Drive folder using per-user OAuth or service-account credentials.
 
@@ -1780,7 +1791,7 @@ def _scan_user_google_drive_folder(
                     os.remove(dest_path)
                 continue
 
-            _enqueue_file(dest_path, filename=filename, owner_id=owner_id)
+            _enqueue_file(dest_path, filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
             _mark_processed(cache, cache_key)
             count += 1
 
@@ -1804,6 +1815,7 @@ def _scan_user_onedrive_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan a OneDrive folder using per-user OAuth credentials.
 
@@ -1903,7 +1915,7 @@ def _scan_user_onedrive_folder(
                     os.remove(dest_path)
                 continue
 
-            _enqueue_file(dest_path, filename=filename, owner_id=owner_id)
+            _enqueue_file(dest_path, filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
             _mark_processed(cache, cache_key)
             count += 1
 
@@ -1930,6 +1942,7 @@ def _scan_user_nextcloud_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan a Nextcloud folder using per-user WebDAV credentials.
 
@@ -2028,7 +2041,7 @@ def _scan_user_nextcloud_folder(
                 os.remove(dest_path)
             continue
 
-        _enqueue_file(dest_path, filename=filename, owner_id=owner_id)
+        _enqueue_file(dest_path, filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
         _mark_processed(cache, cache_key)
         count += 1
 
@@ -2049,6 +2062,7 @@ def _scan_user_webdav_folder(
     cache: dict[str, str],
     delete_after: bool,
     owner_id: str,
+    source_integration_id: int | None = None,
 ) -> int:
     """Scan a WebDAV folder using per-user credentials.
 
@@ -2145,7 +2159,7 @@ def _scan_user_webdav_folder(
                 os.remove(dest_path)
             continue
 
-        _enqueue_file(dest_path, filename=filename, owner_id=owner_id)
+        _enqueue_file(dest_path, filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
         _mark_processed(cache, cache_key)
         count += 1
 
@@ -2252,7 +2266,7 @@ def _pull_user_integration_watch_folders() -> dict:
                             db.commit()
                             continue
 
-                        n = _scan_user_watch_folder(folder_path, cache, delete_after, integ.owner_id)
+                        n = _scan_user_watch_folder(folder_path, cache, delete_after, integ.owner_id, integ.id)
                     elif source_type == "dropbox" and cfg.get("true_up_existing"):
                         # The durable corpus importer performs the initial
                         # recursive true-up and then reuses Dropbox's cursor
@@ -2266,7 +2280,7 @@ def _pull_user_integration_watch_folders() -> dict:
                         raw_creds = decrypt_value(integ.credentials) if integ.credentials else None
                         creds = _json.loads(raw_creds) if raw_creds else {}
                         handler = _USER_WF_CLOUD_HANDLERS[source_type]
-                        n = handler(cfg, creds, cache, delete_after, integ.owner_id)
+                        n = handler(cfg, creds, cache, delete_after, integ.owner_id, integ.id)
                     else:
                         logger.warning(
                             "Watch folder integration %d (owner %s): unknown source_type '%s' — skipping.",
