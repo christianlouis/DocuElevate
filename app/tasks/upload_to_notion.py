@@ -1,10 +1,11 @@
 """Per-user Notion destination integration."""
 
-import hashlib
+import hmac
 import json
 import logging
 import math
 import os
+import secrets
 import tempfile
 import time
 import uuid
@@ -27,6 +28,7 @@ _MAX_RICH_TEXT = 1900
 _MAX_SINGLE_PART_BYTES = 20 * 1024 * 1024
 _NOTION_PART_BYTES = 10 * 1024 * 1024
 _WORKSPACE_LIMIT_CACHE: dict[str, tuple[float, int]] = {}
+_WORKSPACE_CACHE_KEY = secrets.token_bytes(32)
 
 
 class NotionTransportError(RuntimeError):
@@ -162,7 +164,7 @@ def _document_url(cfg: dict[str, Any], file_id: int | None) -> str:
 
 def _workspace_upload_limit(token: str) -> int:
     """Return the bot workspace upload limit, cached per token without storing it."""
-    cache_key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    cache_key = hmac.new(_WORKSPACE_CACHE_KEY, token.encode("utf-8"), "sha256").hexdigest()
     cached = _WORKSPACE_LIMIT_CACHE.get(cache_key)
     if cached is not None and time.monotonic() - cached[0] < 300:
         return cached[1]

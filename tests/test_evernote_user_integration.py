@@ -122,7 +122,8 @@ def test_user_dispatcher_invokes_evernote_handler(tmp_path):
         credentials=json.dumps({"auth_token": "USER-TOKEN"}),
     )
     db = MagicMock()
-    db.query.return_value.filter.return_value.first.side_effect = [row, row]
+    file_record = SimpleNamespace(owner_id="owner@example.com", source_integration_id=None)
+    db.query.return_value.filter.return_value.first.side_effect = [row, file_record, row]
     with (
         patch("app.tasks.upload_to_user_integration.SessionLocal") as session_local,
         patch("app.tasks.upload_to_user_integration.log_task_progress"),

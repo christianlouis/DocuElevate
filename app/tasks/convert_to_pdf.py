@@ -361,12 +361,26 @@ def convert_to_pdf(
                 # Change extension to .pdf for the original filename
                 original_base = os.path.splitext(original_filename)[0]
                 pdf_original_filename = f"{original_base}.pdf"
+                if source_integration_id is None:
+                    process_document.delay(
+                        converted_file_path,
+                        original_filename=pdf_original_filename,
+                        file_id=file_id,
+                        owner_id=owner_id,
+                    )
+                else:
+                    process_document.delay(
+                        converted_file_path,
+                        original_filename=pdf_original_filename,
+                        file_id=file_id,
+                        owner_id=owner_id,
+                        source_integration_id=source_integration_id,
+                    )
+            elif source_integration_id is None:
                 process_document.delay(
                     converted_file_path,
-                    original_filename=pdf_original_filename,
                     file_id=file_id,
                     owner_id=owner_id,
-                    source_integration_id=source_integration_id,
                 )
             else:
                 process_document.delay(

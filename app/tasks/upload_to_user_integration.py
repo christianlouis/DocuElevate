@@ -1342,7 +1342,7 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         # Dispatch is only valid for enabled destination records.  The
         # type checks retain compatibility with older mock-shaped unit rows;
         # persisted SQL values are always bool/str here.
-        if integration.is_active is False:
+        if isinstance(integration.is_active, bool) and not integration.is_active:
             raise ValueError(f"UserIntegration {integration_id} is inactive")
         if isinstance(integration.direction, str) and integration.direction != IntegrationDirection.DESTINATION:
             raise ValueError(f"UserIntegration {integration_id} is not a destination integration")

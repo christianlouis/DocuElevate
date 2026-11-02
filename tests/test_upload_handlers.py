@@ -732,6 +732,7 @@ class TestUploadEmail:
         _write_file(fp)
 
         mock_smtp_instance = MagicMock()
+        mock_smtp_instance.sendmail.return_value = {}
         mock_smtp_class = MagicMock(return_value=mock_smtp_instance)
         mock_smtp_instance.__enter__ = MagicMock(return_value=mock_smtp_instance)
         mock_smtp_instance.__exit__ = MagicMock(return_value=False)
@@ -764,6 +765,7 @@ class TestUploadEmail:
         _write_file(fp)
 
         mock_smtp_instance = MagicMock()
+        mock_smtp_instance.sendmail.return_value = {}
         mock_smtp_class = MagicMock(return_value=mock_smtp_instance)
         mock_smtp_instance.__enter__ = MagicMock(return_value=mock_smtp_instance)
         mock_smtp_instance.__exit__ = MagicMock(return_value=False)
@@ -787,6 +789,7 @@ class TestUploadEmail:
         fp = str(tmp_path / "doc.pdf")
         _write_file(fp, b"pdf payload")
         smtp = MagicMock()
+        smtp.sendmail.return_value = {}
         smtp.__enter__ = MagicMock(return_value=smtp)
         smtp.__exit__ = MagicMock(return_value=False)
 
@@ -813,6 +816,7 @@ class TestUploadEmail:
         fp = str(tmp_path / "doc.pdf")
         _write_file(fp, b"pdf payload")
         smtp = MagicMock()
+        smtp.sendmail.return_value = {}
         smtp.__enter__ = MagicMock(return_value=smtp)
         smtp.__exit__ = MagicMock(return_value=False)
 
