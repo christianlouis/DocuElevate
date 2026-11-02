@@ -11,7 +11,7 @@ from celery import shared_task
 
 from app.config import settings
 from app.tasks.process_document import process_document
-from app.tasks.retry_config import mark_bulk_terminal_failure
+from app.tasks.retry_config import mark_bulk_processing, mark_bulk_terminal_failure
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
@@ -160,6 +160,7 @@ def convert_to_pdf(
             keeps one user-visible document and preserves its immutable source.
     """
     task_id = self.request.id
+    mark_bulk_processing(file_id)
     logger.info(f"[{task_id}] Starting PDF conversion: {file_path}")
 
     def progress(step: str, status: str, message: str, **kwargs: Any) -> None:

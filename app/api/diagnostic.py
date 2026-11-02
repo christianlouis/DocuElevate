@@ -18,6 +18,7 @@ from app.database import engine
 logger = logging.getLogger(__name__)
 
 _DEFAULT_REDIS_URL = "redis://localhost:6379/0"
+_SCHEDULER_HEARTBEAT_KEY = "docuelevate:scheduler:heartbeat"
 
 router = APIRouter()
 
@@ -81,6 +82,19 @@ async def readiness_probe() -> JSONResponse:
     http_status = 503 if not db_ok else 200
     overall = "ready" if db_ok else "not_ready"
     return JSONResponse(content={"status": overall, "checks": checks}, status_code=http_status)
+
+
+@router.get("/diagnostic/healthz/scheduler")
+async def scheduler_probe() -> JSONResponse:
+    """Probe the dedicated Beat heartbeat without taking the API offline."""
+    try:
+        client = redis_lib.from_url(settings.redis_url or _DEFAULT_REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
+        heartbeat = client.get(_SCHEDULER_HEARTBEAT_KEY)
+        if heartbeat:
+            return JSONResponse(content={"status": "ok"}, status_code=200)
+        return JSONResponse(content={"status": "stalled", "detail": "scheduler heartbeat missing"}, status_code=503)
+    except Exception as exc:
+        return JSONResponse(content={"status": "error", "detail": str(exc)}, status_code=503)
 
 
 @router.get("/diagnostic/health")

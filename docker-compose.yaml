@@ -149,7 +149,7 @@ services:
 
   beat:
     <<: *docuelevate-service
-    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info", "--scheduler=celery.beat:Scheduler"]
     depends_on:
       bootstrap:
         condition: service_completed_successfully

@@ -27,7 +27,12 @@ from app.tasks.classify_document import classify_document_task  # noqa: F401
 from app.tasks.compute_embedding import backfill_missing_embeddings, compute_document_embedding  # noqa: F401
 from app.tasks.convert_to_pdf import convert_to_pdf  # noqa: F401
 from app.tasks.convert_to_pdfa import convert_to_pdfa  # noqa: F401
-from app.tasks.dispatch_uploads import dispatch_upload_item, dispatch_upload_outbox, reconcile_upload_states  # noqa: F401
+from app.tasks.dispatch_uploads import (  # noqa: F401
+    dispatch_upload_item,
+    dispatch_upload_outbox,
+    reconcile_upload_states,
+    scheduler_heartbeat,
+)
 from app.tasks.document_bridge import deliver_document_bridge  # noqa: F401
 from app.tasks.dropbox_corpus_import import run_dropbox_corpus_import  # noqa: F401
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf  # noqa: F401
@@ -103,6 +108,11 @@ celery.conf.beat_schedule = {
         "task": "app.tasks.dispatch_uploads.reconcile_upload_states",
         "schedule": 5.0,
         "options": {"expires": 4},
+    },
+    "scheduler-heartbeat": {
+        "task": "app.tasks.dispatch_uploads.scheduler_heartbeat",
+        "schedule": 10.0,
+        "options": {"expires": 9},
     },
     # IMAP polling — always enabled because per-user IMAP integrations may
     # exist in the database even when no system-level IMAP hosts are configured.

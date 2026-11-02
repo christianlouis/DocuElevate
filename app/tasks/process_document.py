@@ -27,7 +27,7 @@ from app.models import (
 from app.services.account_deletion import DeletionBlocked, assert_account_active
 from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
 from app.tasks.process_with_ocr import process_with_ocr
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import BaseTaskWithRetry, mark_bulk_processing, mark_bulk_terminal_failure
 from app.utils import get_unique_filepath_with_counter, hash_file, log_task_progress, remove_nul_bytes
 from app.utils.pdf_security import (
     ENCRYPTED_PDF_ERROR_CODE,
@@ -434,6 +434,7 @@ def process_document(
         index_only = False
 
     task_id = self.request.id
+    mark_bulk_processing(file_id)
     logger.info(f"[{task_id}] Starting document processing: {original_local_file}")
     log_task_progress(
         task_id,
@@ -451,6 +452,7 @@ def process_document(
             "File not found",
             detail=f"File not found on disk: {original_local_file}",
         )
+        mark_bulk_terminal_failure(file_id, f"File not found on disk: {original_local_file}")
         return {"error": "File not found"}
 
     # 0. Check for duplicate files (if enabled)

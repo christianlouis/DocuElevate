@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import uuid
+import redis as redis_lib
 from typing import Annotated, Any
 
 from fastapi import (
@@ -29,6 +30,7 @@ from app.api.intake import _authenticate_intake
 from app.config import settings
 from app.database import SessionLocal, get_db
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
+from app.tasks.dispatch_uploads import SCHEDULER_HEARTBEAT_KEY
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file, upload_root
 from app.utils.filename_utils import sanitize_filename
@@ -245,12 +247,32 @@ def capacity(request: Request, db: Db, batch_id: str, x_docuelevate_intake_secre
     principal, _ = _principal(request, x_docuelevate_intake_secret)
     batch, ledger = _batch(db, batch_id, principal), _capacity(db)
     available = _available_capacity(ledger)
+    aggregates = dict(
+        db.query(UploadItem.state, func.count(UploadItem.id))
+        .filter(UploadItem.batch_id == batch.id)
+        .group_by(UploadItem.state)
+        .all()
+    )
+    try:
+        heartbeat = redis_lib.from_url(settings.redis_url, socket_connect_timeout=1, socket_timeout=1).get(
+            SCHEDULER_HEARTBEAT_KEY
+        )
+        scheduler_status = "healthy" if heartbeat else "stalled"
+    except Exception:
+        scheduler_status = "unavailable"
     return {
         "batch_id": batch.id,
         "slots": _capacity_slots(available),
         "max_bytes": available,
         "used_bytes": ledger.reserved_bytes,
         "retry_after": 30 if not available else 0,
+        "queue": {
+            "queued": sum(aggregates.get(state, 0) for state in ("accepted", "queued")),
+            "processing": aggregates.get("processing", 0),
+            "complete": aggregates.get("complete", 0),
+            "failed": aggregates.get("failed", 0),
+        },
+        "scheduler": {"status": scheduler_status},
     }
 
 

@@ -28,6 +28,21 @@ from celery import Task
 logger = logging.getLogger(__name__)
 
 
+def mark_bulk_processing(file_id: int | None) -> None:
+    """Mark an accepted bulk item as processing when its pipeline starts."""
+    if file_id is None:
+        return
+    from app.database import SessionLocal
+    from app.models import UploadItem
+
+    with SessionLocal() as db:
+        db.query(UploadItem).filter(
+            UploadItem.file_id == file_id,
+            UploadItem.state.in_(("accepted", "queued")),
+        ).update({"state": "processing"}, synchronize_session=False)
+        db.commit()
+
+
 def mark_bulk_terminal_failure(file_id: int | None, error: str) -> None:
     """Persist a terminal bulk failure; the reconciler releases capacity."""
     if file_id is None:
