@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.0 (2026-11-02)
+
+### Features
+
+- Handle Email and Notion size limits per destination and source
+  ([#1305](https://github.com/christianlouis/DocuElevate/pull/1305),
+  [`80dd86e`](https://github.com/christianlouis/DocuElevate/commit/80dd86e8a4786ebe4032bd71d40bd92d1fedc9d5))
+
+
 ## v0.194.2 (2026-11-02)
 
 ### Bug Fixes
