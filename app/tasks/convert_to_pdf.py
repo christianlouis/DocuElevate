@@ -129,7 +129,9 @@ def _build_filename(file_path: str, original_filename: Optional[str], file_ext: 
         Filename to send to Gotenberg.
     """
     if original_filename and os.path.splitext(original_filename)[1]:
-        return original_filename
+        if not file_ext or os.path.splitext(original_filename)[1].lower() == file_ext.lower():
+            return original_filename
+        return f"{os.path.splitext(original_filename)[0]}{file_ext}"
 
     base_name = os.path.basename(file_path)
     if file_ext and not base_name.lower().endswith(file_ext):

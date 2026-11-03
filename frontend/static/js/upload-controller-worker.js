@@ -135,6 +135,8 @@ async function readCapacity(batchId) {
   return capacity;
 }
 function signature(file) { return JSON.stringify([file.name, file.size, file.lastModified || 0]); }
+function validSha256(value) { return /^[0-9a-f]{64}$/i.test(String(value || '')); }
+function validClientId(value) { return typeof value === 'string' && value.trim().length > 0; }
 function inspectFile(item) {
   const task = controllerInspectionTail.then(() => self.inspectUploadFile({ id: item.key, file: item.file, name: item.name, mime: item.file.type }));
   controllerInspectionTail = task.catch(() => {});
@@ -146,7 +148,7 @@ function selectReady(items, capacity) {
   const selected = []; let bytes = 0;
   for (const item of items) {
     if (selected.length >= limit) break;
-    if (item.state !== 'queued' || !item.file || item.fileId || item.duplicateOf || bytes + item.size > maxBytes) continue;
+    if (item.state !== 'queued' || !item.file || item.fileId || item.duplicateOf || !validClientId(item.key) || !validSha256(item.sha256) || bytes + item.size > maxBytes) continue;
     selected.push(item); bytes += item.size;
   }
   return selected;
@@ -173,8 +175,9 @@ function dedup(items) {
   return changed;
 }
 async function persist(items, value = context()) {
+  items = items.filter(item => validClientId(item.key));
   if (!items.length || !current(value)) return { ignored: true, generation: clearGeneration };
-  const result = await sw('putMany', { generation: value.generation, items: items.map(item => ({ key: item.key, batchId: item.batchId, name: item.name, size: item.size, lastModified: item.lastModified, state: item.state, error: item.error, errorCode: item.errorCode, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf })) });
+  const result = await sw('putMany', { generation: value.generation, items: items.map(item => ({ key: item.key, batchId: item.batchId, name: item.name, size: item.size, lastModified: item.lastModified, state: item.state, error: item.error, errorCode: item.errorCode, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf, tryAnyway: Boolean(item.tryAnyway) })) });
   if (result?.generation != null) clearGeneration = Math.max(clearGeneration, Number(result.generation));
   return result || { ignored: false, generation: clearGeneration };
 }
@@ -259,18 +262,18 @@ async function clearQueue() {
     releaseClear();
   }
 }
-async function makeBatch(files, value = context()) {
+async function makeBatch(files, value = context(), tryAnyway = false) {
   const requestKey = `batch:${crypto.randomUUID()}`, controller = beginRequest(requestKey);
   let batch;
   try { batch = await api('/api/uploads/batches', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ client_batch_id: crypto.randomUUID(), total_files: files.length, total_bytes: files.reduce((sum, file) => sum + file.size, 0) }) }); }
   finally { endRequest(requestKey, controller); }
   if (!current(value)) return [];
-  const items = files.map(file => ({ key: crypto.randomUUID(), batchId: batch.batch_id, file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
+  const items = files.map(file => ({ key: crypto.randomUUID(), batchId: batch.batch_id, file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued', tryAnyway }));
   queue.push(...items); const result = await persist(items, value);
   if (!current(value) || result?.ignored) { queue = queue.filter(item => !items.includes(item)); return []; }
   return items;
 }
-function matchPendingFiles(files) {
+function matchPendingFiles(files, tryAnyway = false) {
   const pending = new Map();
   for (const item of queue) {
     if (!['needs_files', 'failed', 'transfer_failed'].includes(item.state) || item.fileId != null) continue;
@@ -279,7 +282,7 @@ function matchPendingFiles(files) {
   const matched = [], fresh = [];
   for (const file of files) {
     const key = signature(file), candidates = pending.get(key), item = candidates?.shift();
-    if (item) { item.file = file; item.state = 'queued'; matched.push(item); if (!candidates.length) pending.delete(key); } else fresh.push(file);
+    if (item) { item.file = file; item.state = 'queued'; item.tryAnyway = Boolean(tryAnyway); matched.push(item); if (!candidates.length) pending.delete(key); } else fresh.push(file);
   }
   return { matched, fresh };
 }
@@ -308,7 +311,11 @@ async function reconcileDurable(batchId, value = context()) {
     const durable = stored.get(item.key);
     if (!durable) { item.state = 'archived'; continue; }
     const needsFiles = item.state === 'needs_files' && !item.file && durable.fileId == null;
+    const localSha = item.sha256, localMime = item.mime, localOverride = item.tryAnyway;
     Object.assign(item, durable, { file: item.file });
+    if (!validSha256(durable.sha256) && validSha256(localSha)) item.sha256 = localSha;
+    if (!durable.mime && localMime) item.mime = localMime;
+    if (item.file && !item.fileId && localOverride) item.tryAnyway = true;
     // Durable queued is authoritative for ownership, but it cannot recreate
     // browser bytes after a reload. Keep the actionable UI projection.
     if (needsFiles) item.state = 'needs_files';
@@ -331,17 +338,48 @@ async function send(item, value = context()) {
   try {
     await acquireUploadSlot(value, controller.signal); acquired = true;
     if (!currentItem(value, item)) return false;
+    if (!validClientId(item.key)) {
+      item.state = 'failed'; item.errorCode = 'file_inspection_failed'; item.error = 'Ungültiger lokaler Eintrag. Bitte entfernen und die Datei erneut auswählen.';
+      status(item.error); return false;
+    }
+    if (!validSha256(item.sha256)) {
+      if (item.file) {
+        try {
+          const inspected = await inspectFile(item);
+          if (!currentItem(value, item)) return false;
+          if (!validSha256(inspected.sha256)) throw new Error('Datei konnte nicht sicher geprüft werden');
+          item.sha256 = inspected.sha256; item.mime = inspected.mime;
+        } catch (error) {
+          if (!currentItem(value, item)) return false;
+          item.state = 'failed'; item.errorCode = 'file_inspection_failed'; item.error = error.message || 'Datei konnte nicht sicher geprüft werden';
+          await persist([item], value); return false;
+        }
+        await persist([item], value);
+      } else {
+        item.state = 'needs_files'; item.errorCode = 'file_inspection_failed'; item.error = 'Originaldatei muss erneut ausgewählt werden';
+        await persist([item], value); return false;
+      }
+    }
+    if (!currentItem(value, item) || !item.file || item.fileId || item.duplicateOf) return false;
     leased = await sw('lease', { key: item.key, owner, ttl: 60000 });
     if (!currentItem(value, item)) return false;
     if (!leased) {
       try { await reconcileDurable(item.batchId, value); } catch (error) { if (current(value)) status(`Lokale Queue konnte nicht abgeglichen werden: ${error.message || error}`); }
       return false;
     }
+    if (!item.file || item.fileId || item.duplicateOf) return false;
     renewal = setInterval(() => currentItem(value, item) && sw('lease', { key: item.key, owner, ttl: 60000 }).catch(() => {}), 10000);
     item.state = 'uploading'; item.error = ''; item.errorCode = ''; await persist([item], value);
     if (!currentItem(value, item)) return false;
+    // No await between this guard and constructing the request: reconciliation
+    // may have run while acquiring the lease or persisting the uploading state.
+    if (!item.file || item.fileId || item.duplicateOf) return false;
+    if (!validClientId(item.key) || !validSha256(item.sha256)) {
+      item.state = 'failed'; item.errorCode = 'file_inspection_failed'; item.error = 'Upload-Daten sind unvollständig. Bitte erneut versuchen.';
+      await persist([item], value); return false;
+    }
     status('Dateien werden übertragen.');
-    const body = new FormData(); body.append('file', item.file); body.append('batch_id', item.batchId); body.append('client_id', item.key); body.append('sha256', item.sha256);
+    const body = new FormData(); body.append('file', item.file); body.append('batch_id', item.batchId); body.append('client_id', item.key); body.append('sha256', item.sha256); if (item.tryAnyway) body.append('inspect_content', 'true');
     const result = await api('/api/uploads/files', { method: 'POST', body, signal: controller.signal });
     if (!currentItem(value, item)) return false;
     item.fileId = result.file_id; item.state = result.duplicate ? 'duplicate' : result.state || 'accepted'; item.file = null;
@@ -372,13 +410,18 @@ async function processBatch(items, value = context()) {
       const group = items.slice(offset, offset + WINDOW);
       phase = 'Dateien werden geprüft';
       for (const item of group.filter(item => item.file && !item.fileId)) {
-        try { const result = await inspectFile(item); item.sha256 = result.sha256; item.mime = result.mime; }
+        try {
+          if (!validClientId(item.key)) throw new Error('Ungültiger lokaler Eintrag. Bitte entfernen und die Datei erneut auswählen.');
+          const result = await inspectFile(item);
+          if (!validSha256(result.sha256)) throw new Error('Datei konnte nicht sicher geprüft werden');
+          item.sha256 = result.sha256; item.mime = result.mime;
+        }
         catch (error) { if (!currentItem(value, item)) break; item.state = 'failed'; item.errorCode = 'file_inspection_failed'; item.error = error.message || String(error); status(item.error); }
       }
       if (!current(value)) break;
       await persist(dedup(queue), value);
       if (!current(value)) break;
-      const check = group.filter(item => item.state === 'queued' && item.file && item.sha256 && !item.duplicateOf);
+      const check = group.filter(item => item.state === 'queued' && item.file && validSha256(item.sha256) && !item.duplicateOf);
       if (check.length) {
         phase = 'Server prüft Dateien';
         const requestKey = `batch:${batchId}:${value.epoch}:${offset}`, controller = beginRequest(requestKey);
@@ -397,7 +440,7 @@ async function processBatch(items, value = context()) {
         if (!current(value)) break;
         capacities.set(batchId, capacity); rememberCapacity(batchId, capacity, pushedCapacity ? 'WebSocket' : 'Server');
         const selected = selectReady(group, capacity);
-        if (!selected.length) { if (!group.some(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf)) break; capacities.delete(batchId); phase = 'pausiert'; pausedReason = 'Server meldet keine freie Upload-Kapazität'; status('Server pausiert die Uploads – warte auf Kapazität…'); await wait(2000); continue; }
+        if (!selected.length) { if (!group.some(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf && validSha256(item.sha256))) break; capacities.delete(batchId); phase = 'pausiert'; pausedReason = 'Server meldet keine freie Upload-Kapazität'; status('Server pausiert die Uploads – warte auf Kapazität…'); await wait(2000); continue; }
         const pendingBefore = group.filter(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf).length;
         phase = 'Dateien werden übertragen'; pausedReason = '';
         const results = await Promise.all(selected.map(item => send(item, value))); if (!current(value)) break; await persist([...new Set([...group, ...dedup(queue)])], value);
@@ -427,7 +470,7 @@ async function processBatch(items, value = context()) {
     }
   }
 }
-async function add(files) {
+async function add(files, tryAnyway = false) {
   const arrivalEpoch = queueEpoch;
   const count = Array.from(files || []).length;
   if (count) { pendingAdds += count; phase = 'neue Dateien werden eingeordnet'; status(`${count} Datei${count === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.`); }
@@ -451,7 +494,7 @@ async function add(files) {
     const value = context();
     const list = Array.from(files || []).filter(file => file && file.size <= (config.maxFileSize || 1024 * 1024 * 1024));
     if (!list.length) return;
-    const { matched, fresh } = matchPendingFiles(list);
+    const { matched, fresh } = matchPendingFiles(list, tryAnyway);
     if (matched.length) {
       await persist(matched, value);
       if (!current(value)) return;
@@ -459,7 +502,7 @@ async function add(files) {
         void processBatch(queue.filter(item => item.batchId === batch), value).catch(error => current(value) && status(`Upload pausiert: ${error.message || error}`));
       }
     }
-    if (fresh.length) { const batch = await makeBatch(fresh, value); if (current(value)) void processBatch(batch, value).catch(error => current(value) && status(`Upload pausiert: ${error.message || error}`)); }
+    if (fresh.length) { const batch = await makeBatch(fresh, value, tryAnyway); if (current(value)) void processBatch(batch, value).catch(error => current(value) && status(`Upload pausiert: ${error.message || error}`)); }
   } finally { if (count) { pendingAdds -= count; status('Upload-Queue aktualisiert.'); } }
 }
 async function restore() {
@@ -523,7 +566,7 @@ function scheduleRefresh(value = context()) {
 self.onmessage = event => {
   const message = event.data || {};
   if (message.type === 'init') { config = message.config || {}; principal = message.principal || principal; csrfToken = message.csrf || ''; owner = message.owner || crypto.randomUUID(); ready = restore().catch(error => { phase = 'Wiederherstellung fehlgeschlagen'; pausedReason = 'Gespeicherte Queue konnte nicht gelesen werden'; status(String(error)); return false; }).then(result => { if (result) void refreshPending(context()).catch(() => {}); self.postMessage({ type: 'ready', diagnostics: diagnostics() }); return result; }); return; }
-  if (message.type === 'add') { void add(message.files).catch(error => status(String(error))); return; }
+  if (message.type === 'add') { void add(message.files, Boolean(message.tryAnyway)).catch(error => status(String(error))); return; }
   if (message.type === 'action') {
     if (actionBusy) { feedback('Eine Queue-Aktion wird bereits ausgeführt.', true); return; }
     let action;
