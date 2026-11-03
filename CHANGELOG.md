@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.3 (2026-11-03)
+
+### Bug Fixes
+
+- Preserve upload hashes and precheck unsupported files
+  ([`95665e2`](https://github.com/christianlouis/DocuElevate/commit/95665e2a830f94af9b05dd4cc0a7fb5f2e1678a6))
+
+
 ## v0.195.2 (2026-11-03)
 
 ### Bug Fixes
