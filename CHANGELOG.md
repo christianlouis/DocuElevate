@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.2 (2026-11-03)
+
+### Bug Fixes
+
+- Make large upload queues removable and show clear progress
+  ([#1307](https://github.com/christianlouis/DocuElevate/pull/1307),
+  [`94f06f1`](https://github.com/christianlouis/DocuElevate/commit/94f06f18fb4e35013919297e1e775a671e837f3e))
+
+
 ## v0.195.1 (2026-11-03)
 
 ### Bug Fixes
