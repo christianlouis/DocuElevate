@@ -4,10 +4,13 @@ Validates exponential backoff, jitter, per-task-type policies, and
 settings-level overrides for the Celery retry base classes.
 """
 
+from contextlib import nullcontext
 from unittest.mock import patch
 
 import pytest
 
+from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem
+from app.tasks import dispatch_uploads
 from app.tasks.retry_config import (
     DEFAULT_RETRY_DELAYS,
     BaseTaskWithRetry,
@@ -15,6 +18,8 @@ from app.tasks.retry_config import (
     UploadTaskWithRetry,
     _parse_delay_string,
     compute_countdown,
+    mark_bulk_processing,
+    mark_bulk_terminal_failure,
 )
 
 # ---------------------------------------------------------------------------
@@ -110,6 +115,50 @@ class TestParseDelayString:
 def test_default_retry_delays_values():
     """DEFAULT_RETRY_DELAYS must be [60, 300, 900] as per the spec."""
     assert DEFAULT_RETRY_DELAYS == [60, 300, 900]
+
+
+@pytest.mark.requires_db
+def test_bulk_markers_are_noops_for_legacy_tasks_without_an_upload_item(db_session, monkeypatch):
+    """Every legacy task may pass a file ID without creating bulk state."""
+    record = FileRecord(filehash="a" * 64, local_filename="/tmp/legacy.pdf", file_size=1, mime_type="application/pdf")
+    db_session.add(record)
+    db_session.commit()
+    monkeypatch.setattr("app.database.SessionLocal", lambda: nullcontext(db_session))
+
+    mark_bulk_processing(record.id)
+    mark_bulk_terminal_failure(record.id, "legacy failure")
+
+    assert db_session.query(UploadItem).count() == 0
+
+
+@pytest.mark.requires_db
+def test_missing_bulk_file_is_released_once_after_terminal_failure(db_session, monkeypatch):
+    batch = UploadBatch(
+        id="missing-file", principal_id="p", client_batch_id="missing-file", total_files=1, total_bytes=9
+    )
+    record = FileRecord(filehash="b" * 64, local_filename="/tmp/missing.pdf", file_size=9, mime_type="application/pdf")
+    db_session.add_all((batch, record, UploadCapacity(id=1, reserved_files=1, reserved_bytes=9)))
+    db_session.flush()
+    item = UploadItem(
+        batch_id=batch.id,
+        client_id="missing-file",
+        principal_id="p",
+        file_id=record.id,
+        sha256="b" * 64,
+        filename="missing.pdf",
+        size=9,
+        state="queued",
+    )
+    db_session.add(item)
+    db_session.commit()
+    monkeypatch.setattr("app.database.SessionLocal", lambda: nullcontext(db_session))
+    monkeypatch.setattr(dispatch_uploads, "SessionLocal", lambda: nullcontext(db_session))
+
+    mark_bulk_terminal_failure(record.id, "File not found")
+    assert dispatch_uploads.reconcile_upload_states.run() == 1
+    assert dispatch_uploads.reconcile_upload_states.run() == 0
+    assert db_session.get(UploadCapacity, 1).reserved_files == 0
+    assert db_session.get(UploadCapacity, 1).reserved_bytes == 0
 
 
 # ---------------------------------------------------------------------------

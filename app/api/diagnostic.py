@@ -13,6 +13,7 @@ from sqlalchemy import text
 from app.auth import require_login
 from app.config import settings
 from app.database import engine
+from app.utils.upload_health import SCHEDULER_KEY, freshness
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -81,6 +82,19 @@ async def readiness_probe() -> JSONResponse:
     http_status = 503 if not db_ok else 200
     overall = "ready" if db_ok else "not_ready"
     return JSONResponse(content={"status": overall, "checks": checks}, status_code=http_status)
+
+
+@router.get("/diagnostic/healthz/scheduler")
+async def scheduler_probe() -> JSONResponse:
+    """Probe the dedicated Beat heartbeat without taking the API offline."""
+    status = freshness(SCHEDULER_KEY)
+    if status == "healthy":
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+    if status == "stalled":
+        return JSONResponse(
+            content={"status": status, "detail": "scheduler heartbeat missing or stale"}, status_code=503
+        )
+    return JSONResponse(content={"status": status, "detail": "scheduler heartbeat unavailable"}, status_code=503)
 
 
 @router.get("/diagnostic/health")

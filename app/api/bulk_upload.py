@@ -33,6 +33,7 @@ from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
 from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file, upload_root
 from app.utils.filename_utils import sanitize_filename
 from app.utils.tribe_scope import ensure_document_scope
+from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, SCHEDULER_KEY, freshness
 
 router = APIRouter(prefix="/uploads", tags=["bulk-uploads"])
 Db = Annotated[Session, Depends(get_db)]
@@ -116,6 +117,8 @@ def _snapshot(db: Session, batch: UploadBatch, cursor: int | None = None, limit:
                 "sha256": item.sha256,
                 "size": item.size,
                 "filename": item.filename,
+                "error_code": "processing_failed" if item.state == "failed" and item.error else None,
+                "error_message": item.error,
             }
             for item in items
         ],
@@ -245,12 +248,46 @@ def capacity(request: Request, db: Db, batch_id: str, x_docuelevate_intake_secre
     principal, _ = _principal(request, x_docuelevate_intake_secret)
     batch, ledger = _batch(db, batch_id, principal), _capacity(db)
     available = _available_capacity(ledger)
+    aggregates = dict(
+        db.query(UploadItem.state, func.count(UploadItem.id))
+        .filter(UploadItem.batch_id == batch.id)
+        .group_by(UploadItem.state)
+        .all()
+    )
+    processing_counts = {
+        "queued": sum(aggregates.get(state, 0) for state in ("accepted", "queued")),
+        "processing": aggregates.get("processing", 0),
+        "complete": aggregates.get("complete", 0),
+        "failed": aggregates.get("failed", 0),
+    }
+    scheduler_status = freshness(SCHEDULER_KEY)
+    dispatcher_status = freshness(DISPATCHER_KEY)
+    reconciler_status = freshness(RECONCILER_KEY)
+    statuses = (scheduler_status, dispatcher_status, reconciler_status)
+    # A partially visible control plane is not healthy: callers must see an
+    # unavailable component rather than masking it with two fresh markers.
+    processing_status = (
+        "stalled"
+        if "stalled" in statuses
+        else ("healthy" if all(status == "healthy" for status in statuses) else "unknown")
+    )
     return {
         "batch_id": batch.id,
         "slots": _capacity_slots(available),
         "max_bytes": available,
         "used_bytes": ledger.reserved_bytes,
         "retry_after": 30 if not available else 0,
+        "processing": {
+            "status": processing_status,
+            "scheduler": scheduler_status,
+            "dispatcher": dispatcher_status,
+            "reconciler": reconciler_status,
+            **processing_counts,
+        },
+        # Keep the original shape for older clients while exposing the richer
+        # processing health contract above.
+        "queue": processing_counts,
+        "scheduler": {"status": scheduler_status},
     }
 
 

@@ -13,6 +13,7 @@ from app.database import SessionLocal
 from app.models import FileProcessingStep, FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import process_document
+from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, mark_fresh
 
 logger = logging.getLogger(__name__)
 CLAIM_SECONDS = 120
@@ -140,6 +141,10 @@ def dispatch_upload_outbox(limit: int = MAX_DISPATCH_PER_TICK) -> int:
         db.commit()
     for outbox_id, token in claims:
         dispatch_upload_item.delay(outbox_id, token)
+    # The marker certifies a completed control-plane tick, not merely that it
+    # began claiming rows.  A publication failure is retried and must remain
+    # visible to the capacity endpoint.
+    mark_fresh(DISPATCHER_KEY)
     return len(claims)
 
 
@@ -177,9 +182,11 @@ def reconcile_upload_states(limit: int = 100) -> int:
             .all()
         )
         if not candidates:
+            mark_fresh(RECONCILER_KEY)
             return 0
         if db.get(UploadCapacity, 1) is None:
             logger.error("bulk capacity ledger is missing; leaving items reserved")
+            mark_fresh(RECONCILER_KEY)
             return 0
         released_files = released_bytes = 0
         for item_id, size, current_state, succeeded in candidates:
@@ -198,6 +205,7 @@ def reconcile_upload_states(limit: int = 100) -> int:
                 released_bytes += int(size)
         if not released_files:
             db.rollback()
+            mark_fresh(RECONCILER_KEY)
             return 0
         # Do not read-modify-write the singleton: concurrent reconcilers may
         # complete independent rows.  This conditional SQL decrement is atomic.
@@ -216,4 +224,5 @@ def reconcile_upload_states(limit: int = 100) -> int:
             )
         )
         db.commit()
+        mark_fresh(RECONCILER_KEY)
         return released_files

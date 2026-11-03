@@ -149,7 +149,34 @@ services:
 
   beat:
     <<: *docuelevate-service
-    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "app.celery_worker", "beat", "--loglevel=info", "--scheduler=app.scheduler:HeartbeatScheduler"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "from app.utils.upload_health import SCHEDULER_KEY, freshness; raise SystemExit(freshness(SCHEDULER_KEY) != 'healthy')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  upload-maintenance-worker:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "--hostname=upload-maintenance@%h", "-Q", "upload_maintenance"]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - celery -A app.celery_worker inspect ping --destination="upload-maintenance@$$HOSTNAME" --timeout=5 && python -c "from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, freshness; raise SystemExit(0 if freshness(DISPATCHER_KEY) == freshness(RECONCILER_KEY) == 'healthy' else 1)"
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     depends_on:
       bootstrap:
         condition: service_completed_successfully

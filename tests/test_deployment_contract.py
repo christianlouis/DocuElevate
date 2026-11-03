@@ -63,12 +63,27 @@ def test_helm_processes_use_the_configurable_runtime_secret():
         "worker-deployment.yaml",
         "knowledge-research-worker-deployment.yaml",
         "search-index-worker-deployment.yaml",
+        "beat-deployment.yaml",
+        "upload-maintenance-worker-deployment.yaml",
         "migration-job.yaml",
     ]
     for template in templates:
         content = (CHART / "templates" / template).read_text(encoding="utf-8")
         assert 'include "docuelevate.secretName"' in content
         assert 'include "docuelevate.fullname" . }}-secret' not in content
+
+
+def test_helm_upload_control_plane_has_configurable_resources_and_health_checks():
+    values = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
+    beat = (CHART / "templates" / "beat-deployment.yaml").read_text(encoding="utf-8")
+    maintenance = (CHART / "templates" / "upload-maintenance-worker-deployment.yaml").read_text(encoding="utf-8")
+
+    assert values["beat"]["resources"]["limits"]["memory"] == "512Mi"
+    assert values["uploadMaintenanceWorker"]["resources"]["limits"]["memory"] == "512Mi"
+    assert ".Values.imagePullSecrets" in beat and ".Values.beat.podSecurityContext" in beat
+    assert ".Values.beat.livenessProbe" in beat
+    assert ".Values.uploadMaintenanceWorker.readinessProbe" in maintenance
+    assert "--hostname=upload-maintenance@%h" in maintenance
 
 
 def test_helm_resolves_broker_and_result_backend_to_a_primary_route():

@@ -1,7 +1,7 @@
 /* Durable metadata and cross-tab leases. Browser lifetime is not a job runner:
  * the page resumes HTTP transfers, while this worker owns queue transactions. */
 const DB_NAME = 'docuelevate-upload-queue';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 function openDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -37,9 +37,33 @@ async function handle(message) {
           const previous = request.result;
           if (previous && previous.principal !== message.principal) return;
           // A metadata update must never clear another tab's lease.
+          if (previous?.archivedAt) return;
           store.put({ ...previous, ...item, principal: message.principal, updatedAt: now,
             leaseOwner: previous?.leaseOwner, leaseUntil: previous?.leaseUntil,
             ...(previous?.fileId && !item.fileId ? { fileId: previous.fileId, state: previous.state } : {}) });
+        };
+      }
+    });
+  }
+  if (message.op === 'archiveMany') {
+    if (!Array.isArray(message.keys) || message.keys.length > 100000) throw new Error('Invalid archive request');
+    const allowed = message.kind === 'completed' ? new Set(['complete', 'completed', 'duplicate'])
+      : message.kind === 'unsent' ? new Set(['needs_files', 'failed', 'transfer_failed']) : null;
+    if (!allowed) throw new Error('Invalid archive kind');
+    return transaction('readwrite', (store, result) => {
+      const archived = [];
+      result(archived);
+      for (const key of message.keys) {
+        const request = store.get(key);
+        request.onsuccess = () => {
+          const item = request.result;
+          if (!item || item.principal !== message.principal || item.archivedAt || !allowed.has(item.state) || item.leaseUntil > now) return;
+          if (message.kind === 'unsent' && item.fileId != null) return;
+          // Keep a small tombstone so late writes and leases stay rejected,
+          // without retaining a completed batch in the ownerBatch index.
+          store.put({ key: item.key, principal: item.principal, archivedAt: now, updatedAt: now });
+          archived.push(key);
+          result(archived);
         };
       }
     });
@@ -58,14 +82,14 @@ async function handle(message) {
   });
   if (message.op === 'snapshot') return transaction('readonly', (store, result) => {
     const request = store.index('ownerBatch').getAll(IDBKeyRange.only([message.principal, message.batchId]));
-    request.onsuccess = () => result(request.result.filter(item => item.principal === message.principal && item.batchId === message.batchId));
+    request.onsuccess = () => result(request.result.filter(item => item.principal === message.principal && item.batchId === message.batchId && !item.archivedAt));
   });
   if (message.op === 'lease' || message.op === 'release') return transaction('readwrite', (store, result) => {
     result(false);
     const request = store.get(message.key);
     request.onsuccess = () => {
       const item = request.result;
-      if (!item || item.principal !== message.principal) return;
+      if (!item || item.principal !== message.principal || item.archivedAt) return;
       if (message.op === 'lease') {
         if (item.leaseUntil > now && item.leaseOwner !== message.owner) return;
         item.leaseOwner = message.owner; item.leaseUntil = now + Math.min(60000, message.ttl || 60000);

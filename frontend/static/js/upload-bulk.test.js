@@ -35,7 +35,66 @@ function controller(overrides = {}) {
   return { api: context.self.__uploadControllerTest, messages, worker: context.self };
 }
 
-function modernAdapter() {
+function serviceWorker(rows = []) {
+  const records = new Map(rows.map(row => [row.key, { ...row }]));
+  function requestFor(tx, value) {
+    tx.pending += 1;
+    const request = { result: null, onsuccess: null };
+    queueMicrotask(() => {
+      request.result = value(); request.onsuccess?.({ target: request });
+      tx.pending -= 1; tx.complete();
+    });
+    return request;
+  }
+  function makeStore(tx) {
+    const matches = (row, query) => query?.type === 'only'
+      ? row.principal === query.key[0] && row.batchId === query.key[1]
+      : !query || (row.principal >= query.lower[0] && row.principal <= query.upper[0]);
+    return {
+      get(key) { return requestFor(tx, () => records.get(key)); },
+      put(value) { records.set(value.key, { ...value }); },
+      index() { return {
+        getAll(query) { return requestFor(tx, () => [...records.values()].filter(row => matches(row, query)).map(row => ({ ...row }))); },
+        openKeyCursor(query) {
+          const keys = [...new Map([...records.values()].filter(row => row.batchId && matches(row, query)).map(row => [`${row.principal}\0${row.batchId}`, [row.principal, row.batchId]])).values()];
+          const request = { result: null, onsuccess: null }; let offset = 0; tx.pending += 1;
+          const emit = () => {
+            request.result = offset < keys.length ? { key: keys[offset], continue() { offset += 1; queueMicrotask(emit); } } : null;
+            request.onsuccess?.({ target: request });
+            if (!request.result) { tx.pending -= 1; tx.complete(); }
+          };
+          queueMicrotask(emit); return request;
+        }
+      }; }
+    };
+  }
+  const db = {
+    objectStoreNames: { contains() { return true; } }, close() {},
+    transaction() {
+      const tx = { pending: 0, started: false, finished: false, oncomplete: null, onerror: null, onabort: null,
+        objectStore() { return makeStore(tx); },
+        complete() { if (!tx.started || tx.pending || tx.finished) return; tx.finished = true; queueMicrotask(() => tx.oncomplete?.()); }
+      };
+      return tx;
+    }
+  };
+  const context = {
+    Date, IDBKeyRange: { only(key) { return { type: 'only', key }; }, bound(lower, upper) { return { type: 'bound', lower, upper }; } },
+    indexedDB: { open() { const request = { result: db, onupgradeneeded: null, onsuccess: null, onerror: null, transaction: { objectStore() { return makeStore({ pending: 0, complete() {} }); } } }; queueMicrotask(() => request.onsuccess?.({ target: request })); return request; } },
+    self: { addEventListener() {} }
+  };
+  const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-queue-sw.js'), 'utf8');
+  vm.runInNewContext(`${source}\nself.__handle = handle;`, context);
+  const originalTransaction = db.transaction;
+  db.transaction = (...args) => {
+    const tx = originalTransaction(...args);
+    queueMicrotask(() => { tx.started = true; tx.complete(); });
+    return tx;
+  };
+  return { handle: context.self.__handle, records };
+}
+
+function modernAdapter(onServiceWorkerMessage) {
   class Element {
     constructor() { this.className = ''; this.textContent = ''; this.children = []; this.listeners = {}; this.attributes = {}; this.style = {}; this.classList = { values: new Set(['hidden']), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), contains: value => this.classList.values.has(value) }; }
     addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
@@ -51,15 +110,23 @@ function modernAdapter() {
   const listeners = {};
   const workers = [];
   class FakeWorker { constructor(url) { this.url = url; this.messages = []; workers.push(this); } postMessage(message) { this.messages.push(message); } emit(data) { this.onmessage({ data }); } }
+  const serviceWorkerMessages = [];
+  const serviceWorkerController = { postMessage(message, ports) {
+    serviceWorkerMessages.push(message);
+    Promise.resolve(onServiceWorkerMessage?.(message)).then(
+      result => ports?.[0]?.postMessage({ ok: true, result }),
+      error => ports?.[0]?.postMessage({ ok: false, error: String(error) })
+    );
+  } };
   const context = {
     window: { uploadConfig: { concurrency: 3 }, addEventListener(type, listener) { listeners[type] = listener; } },
     document: { getElementById(id) { return elements[id] || null; }, createElement() { return new Element(); } },
-    navigator: { serviceWorker: { controller: {}, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
+    navigator: { serviceWorker: { controller: serviceWorkerController, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
     Worker: FakeWorker, crypto: { randomUUID: () => 'adapter-id' }, console, setTimeout, clearTimeout, MessageChannel: require('node:worker_threads').MessageChannel,
   };
   const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-bulk.js'), 'utf8');
   vm.runInNewContext(source, context);
-  return { ...context, elements, listeners, workers, runAgain() { vm.runInNewContext(source, context); } };
+  return { ...context, elements, listeners, workers, serviceWorkerMessages, runAgain() { vm.runInNewContext(source, context); } };
 }
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -156,6 +223,68 @@ test('controller status sends only visible rows plus aggregates', () => {
   assert.equal(update.accepted, 10);
 });
 
+test('controller ignores hostile or unknown action names', () => {
+  const { worker, messages } = controller();
+  for (const action of ['constructor', 'toString', '__proto__', 'unknown']) {
+    assert.doesNotThrow(() => worker.onmessage({ data: { type: 'action', action } }));
+  }
+  assert.deepEqual(messages, []);
+});
+
+test('controller exposes disjoint queue counters and archives only terminal local rows', async () => {
+  const operations = [];
+  const { api, worker } = controller({ swResults: { listBatches: [] }, onSW(message, respond) { operations.push(message); respond(message.op === 'listBatches' ? [] : ['done', 'duplicate']); } });
+  worker.onmessage({ data: { type: 'init', config: {}, owner: 'test-owner' } });
+  await new Promise(resolve => setImmediate(resolve));
+  api.state().queue.push(
+    { key: 'waiting', state: 'accepted', fileId: 1 },
+    { key: 'processing', state: 'processing', fileId: 2 },
+    { key: 'done', state: 'complete', fileId: 3 },
+    { key: 'duplicate', state: 'duplicate', fileId: 3 },
+    { key: 'needs', state: 'needs_files' },
+    { key: 'failed', state: 'failed' }
+  );
+  assert.equal(JSON.stringify(api.classify(api.state().queue)), JSON.stringify({ needsFiles: 1, ready: 0, uploading: 0, waiting: 1, processing: 1, complete: 1, duplicate: 1, failed: 1, accepted: 4 }));
+  await api.archiveEligible();
+  assert.deepEqual(Array.from(api.state().queue, item => item.key), ['waiting', 'processing', 'needs', 'failed']);
+  assert.equal(operations.at(-1).op, 'archiveMany');
+  assert.equal(operations.at(-1).kind, 'completed');
+});
+
+test('completed archive kind survives the controller, adapter, and service-worker handoff', async () => {
+  const operations = [];
+  const { api, worker: controllerWorker } = controller({ onSW(message, respond) { operations.push(message); respond(message.op === 'listBatches' ? [] : ['done']); } });
+  controllerWorker.onmessage({ data: { type: 'init', config: {}, owner: 'test-owner' } });
+  await flush();
+  api.state().queue.push({ key: 'done', state: 'complete', fileId: 9 });
+  await api.archiveEligible();
+  const durable = serviceWorker([{ key: 'done', principal: 'single-user', batchId: 'batch-a', state: 'complete', fileId: 9 }]);
+  const adapter = modernAdapter(message => durable.handle(message));
+  adapter.listeners.DOMContentLoaded();
+  for (let i = 0; i < 3; i++) await flush();
+  const worker = adapter.workers[0];
+  worker.emit({ ...operations.at(-1), type: 'sw', id: 'archive-roundtrip' });
+  for (let i = 0; i < 3; i++) await flush();
+  assert.equal(adapter.serviceWorkerMessages.find(message => message.op === 'archiveMany').kind, 'completed');
+  assert.deepEqual(Array.from(worker.messages.at(-1).result), ['done']);
+  assert.ok(durable.records.get('done').archivedAt);
+});
+
+test('retry keeps server-accepted failures untouched and reselects local failures', async () => {
+  const { api, worker } = controller({ swResults: { listBatches: [], putMany: true } });
+  worker.onmessage({ data: { type: 'init', config: {}, owner: 'test-owner' } });
+  await new Promise(resolve => setImmediate(resolve));
+  api.state().queue.push(
+    { key: 'server-failed', batchId: 'b1', state: 'failed', fileId: 44, error: 'OCR failed' },
+    { key: 'local-missing', batchId: 'b2', state: 'failed', error: 'network failed' }
+  );
+  await api.retryFailed();
+  const queue = api.state().queue;
+  assert.equal(queue.find(item => item.key === 'server-failed').state, 'failed');
+  assert.equal(queue.find(item => item.key === 'server-failed').error, 'OCR failed');
+  assert.equal(queue.find(item => item.key === 'local-missing').state, 'needs_files');
+});
+
 test('controller dedup prefers an admitted leader and handles 429 retry-after', async () => {
   let attempts = 0;
   const responses = [
@@ -193,6 +322,7 @@ test('controller restore reconciles accepted server files before marking missing
       putMany: true
     },
     fetch: async url => {
+      if (url.includes('/api/uploads/capacity')) return { ok: true, status: 200, json: async () => ({ slots: 1, max_bytes: 100, processing: { status: 'healthy' } }) };
       assert.match(url, /\/api\/uploads\/batches\/batch-1/);
       return { ok: true, status: 200, json: async () => ({ items: [{ client_id: 'client-1', file_id: 91, state: 'accepted' }], next_cursor: null }) };
     }
@@ -217,6 +347,7 @@ test('controller restore follows every snapshot cursor and keeps terminal failur
     },
     fetch: async url => {
       urls.push(url);
+      if (url.includes('/api/uploads/capacity')) return { ok: true, status: 200, json: async () => ({ slots: 1, max_bytes: 100 }) };
       return { ok: true, status: 200, json: async () => urls.length === 1
         ? { items: [{ client_id: 'first', file_id: 1, state: 'accepted' }], next_cursor: 101 }
         : { items: [{ client_id: 'second', file_id: 2, state: 'accepted' }], next_cursor: null } };
@@ -299,6 +430,7 @@ test('controller reselects only unaccepted recovered entries and retains duplica
   const { api } = controller();
   api.state().queue.push(
     { key: 'accepted', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'accepted', fileId: 91 },
+    { key: 'server-failed', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'failed', fileId: 92 },
     { key: 'waiting-a', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'needs_files' },
     { key: 'waiting-b', batchId: 'batch-a', name: 'same.pdf', size: 3, lastModified: 1, state: 'needs_files' }
   );
@@ -309,8 +441,10 @@ test('controller reselects only unaccepted recovered entries and retains duplica
   assert.deepEqual(Array.from(matched, item => item.key), ['waiting-a', 'waiting-b']);
   assert.equal(queue[0].state, 'accepted');
   assert.equal(queue[0].fileId, 91);
-  assert.equal(queue[1].file, file);
+  assert.equal(queue[1].state, 'failed');
+  assert.equal(queue[1].fileId, 92);
   assert.equal(queue[2].file, file);
+  assert.equal(queue[3].file, file);
 });
 
 test('zero server capacity is preserved as a pause signal', () => {
@@ -485,6 +619,124 @@ test('a lost HTTP acceptance response retries the same client identity and commi
   assert.equal(item.fileId, 91);
   assert.ok(operations.some(op => op.op === 'putMany' && op.items[0].fileId === 91));
   assert.equal(operations.at(-1).op, 'release');
+});
+
+test('controller records upload progress, inspection failures, response details, and stale snapshots', async () => {
+  class Body { append() {} }
+  const operations = [];
+  const { api, messages } = controller({ FormData: Body, onSW(message, respond) {
+    operations.push(message);
+    if (message.op === 'lease') return respond(true);
+    if (message.op === 'snapshot') {
+      const snapshots = {
+        'batch-a': [{ key: 'uploading', batchId: 'batch-a', state: 'accepted', fileId: 7 }],
+        'batch-b': [{ key: 'broken', batchId: 'batch-b', state: 'failed' }],
+        missing: [{ key: 'accepted', batchId: 'missing', state: 'accepted', fileId: 8 }]
+      };
+      return respond(snapshots[message.batchId] || []);
+    }
+    respond(true);
+  }, fetch: async (url) => {
+    if (url === '/api/uploads/files') return { ok: true, status: 202, json: async () => ({ file_id: 7, state: 'accepted' }) };
+    if (url.includes('/batches/')) return { ok: false, status: 400, json: async () => ({ detail: 'batch no longer exists' }) };
+    return { ok: true, status: 200, json: async () => ({}) };
+  } });
+  const uploaded = { key: 'uploading', batchId: 'batch-a', file: {}, name: 'a.pdf', sha256: 'a', state: 'queued' };
+  assert.equal(await api.send(uploaded), true);
+  assert.ok(operations.some(operation => operation.op === 'putMany' && operation.items[0].state === 'uploading'));
+  await assert.rejects(api.api('/api/uploads/batches/batch-a'), /batch no longer exists/);
+
+  const broken = { key: 'broken', batchId: 'batch-b', name: 'broken.pdf', file: { name: 'broken.pdf', type: '', size: 1, slice() { return { arrayBuffer: async () => { throw new Error('cannot inspect'); } }; } }, size: 1, state: 'queued' };
+  api.state().queue.push(broken);
+  await api.processBatch([broken]);
+  assert.equal(broken.state, 'failed');
+  assert.match(broken.error, /cannot inspect/);
+
+  api.state().queue.push({ key: 'accepted', batchId: 'missing', state: 'accepted', fileId: 8 });
+  await assert.rejects(api.refreshPending(), /batch no longer exists/);
+  const refreshStatus = messages.at(-1);
+  assert.match(refreshStatus.message, /konnte nicht aktualisiert werden/);
+  assert.match(refreshStatus.snapshotError, /batch no longer exists/);
+  api.rememberCapacity('batch-a', { slots: 1, max_bytes: 10, processing: { status: 'stalled' } }, 'Server');
+  api.status('capacity received');
+  assert.equal(messages.at(-1).processingHealth.status, 'stalled');
+});
+
+test('a failed lease reconciles an archived row instead of spinning a stale queued upload', async () => {
+  const { api } = controller({ onSW(message, respond) {
+    if (message.op === 'lease') return respond(false);
+    if (message.op === 'snapshot') return respond([]);
+    respond(true);
+  } });
+  const stale = { key: 'archived-by-other-tab', batchId: 'batch-a', file: {}, state: 'queued' };
+  api.state().queue.push(stale);
+  assert.equal(await api.send(stale), false);
+  assert.equal(api.state().queue.length, 0);
+  assert.equal(stale.state, 'archived');
+});
+
+test('periodic durable reconciliation removes another tab’s unsent archive without server status calls', async () => {
+  const snapshots = [
+    [{ key: 'unsent', batchId: 'local-batch', state: 'needs_files' }],
+    []
+  ];
+  let fetches = 0, scheduled;
+  const { api, worker } = controller({
+    setTimeout(callback, delay) { scheduled = { callback, delay }; return 1; },
+    onSW(message, respond) { return respond(message.op === 'snapshot' ? snapshots.shift() : true); },
+    fetch: async () => { fetches += 1; throw new Error('all-unsent queues must not call the server'); }
+  });
+  api.state().queue.push({ key: 'unsent', batchId: 'local-batch', state: 'needs_files' });
+  await api.refreshPending();
+  assert.equal(api.state().queue.length, 1);
+  await api.refreshPending();
+  assert.equal(api.state().queue.length, 0);
+  assert.equal(fetches, 0);
+  api.state().queue.push({ key: 'another-unsent', batchId: 'local-batch', state: 'needs_files' });
+  worker.location = { host: 'localhost' };
+  api.scheduleRefresh();
+  assert.equal(scheduled.delay, 15000);
+});
+
+test('status reads are bounded and mark processing health unknown when capacity is unavailable', async () => {
+  let calls = 0;
+  const { api, messages } = controller({
+    setTimeout(callback) { queueMicrotask(callback); return 1; },
+    onSW(message, respond) { return respond(message.op === 'snapshot' ? [{ key: 'accepted', batchId: 'batch-a', state: 'accepted', fileId: 1 }] : true); },
+    fetch: async () => { calls += 1; return { ok: false, status: 503, headers: { get: () => null } }; }
+  });
+  api.state().queue.push({ key: 'accepted', batchId: 'batch-a', state: 'accepted', fileId: 1 });
+  await assert.rejects(api.refreshPending(), /503/);
+  assert.equal(calls, 3);
+  const update = messages.at(-1);
+  assert.equal(update.processingHealth.status, 'unknown');
+  assert.match(update.snapshotError, /503/);
+  assert.match(update.message, /konnte nicht aktualisiert werden/);
+});
+
+test('service worker archives only fixed contracts and preserves tombstone, lease, owner, and accepted-write invariants', async () => {
+  const now = Date.now();
+  const worker = serviceWorker([
+    { key: 'complete', principal: 'owner-a', batchId: 'b', state: 'complete', fileId: 1 },
+    { key: 'accepted', principal: 'owner-a', batchId: 'b', state: 'accepted', fileId: 101 },
+    { key: 'server-failed', principal: 'owner-a', batchId: 'b', state: 'failed', fileId: 103 },
+    { key: 'unsent', principal: 'owner-a', batchId: 'b', state: 'failed' },
+    { key: 'leased', principal: 'owner-a', batchId: 'b', state: 'complete', fileId: 4, leaseOwner: 'other-tab', leaseUntil: now + 60_000 },
+    { key: 'other-owner', principal: 'owner-b', batchId: 'b', state: 'complete', fileId: 5 }
+  ]);
+  const owner = { principal: 'owner-a' };
+  assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'archiveMany', kind: 'completed', keys: ['complete', 'accepted', 'leased'] })), ['complete']);
+  assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'archiveMany', kind: 'unsent', keys: ['unsent', 'server-failed'] })), ['unsent']);
+  await assert.rejects(worker.handle({ ...owner, op: 'archiveMany', kind: 'anything', keys: ['accepted'] }), /Invalid archive kind/);
+  assert.equal(await worker.handle({ ...owner, op: 'lease', key: 'complete', owner: 'late-tab' }), false);
+  await worker.handle({ ...owner, op: 'putMany', items: [{ key: 'complete', batchId: 'b', state: 'queued' }] });
+  assert.deepEqual(Object.keys(worker.records.get('complete')).sort(), ['archivedAt', 'key', 'principal', 'updatedAt']);
+  assert.equal(await worker.handle({ principal: 'owner-b', op: 'lease', key: 'accepted', owner: 'other-owner' }), false);
+  assert.equal(await worker.handle({ ...owner, op: 'lease', key: 'accepted', owner: 'owner-a' }), true);
+  await worker.handle({ ...owner, op: 'putMany', items: [{ key: 'accepted', batchId: 'b', state: 'queued' }] });
+  assert.equal(worker.records.get('accepted').fileId, 101);
+  assert.equal(worker.records.get('accepted').state, 'accepted');
+  assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'snapshot', batchId: 'b' }), row => row.key).sort(), ['accepted', 'leased', 'server-failed']);
 });
 
 test('service worker discovers durable batches when local pointers are missing and isolates owners', async () => {
