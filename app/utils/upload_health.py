@@ -14,14 +14,14 @@ DISPATCHER_KEY = "docuelevate:upload-health:dispatcher"
 RECONCILER_KEY = "docuelevate:upload-health:reconciler"
 
 
-def _client():
+def _client() -> redis.Redis:
     # Health markers are operational state, not broker traffic.  Keep them on
     # the established REDIS_URL so a non-Redis broker (for example AMQP) does
     # not make upload health unknowable.
     return redis.from_url(settings.redis_url, socket_connect_timeout=2, socket_timeout=2)
 
 
-def mark_fresh(key: str, client=None) -> None:
+def mark_fresh(key: str, client: redis.Redis | None = None) -> None:
     try:
         (client or _client()).set(key, datetime.now(timezone.utc).isoformat(), ex=HEARTBEAT_TTL)
     except Exception:
@@ -29,7 +29,7 @@ def mark_fresh(key: str, client=None) -> None:
         return
 
 
-def freshness(key: str, client=None) -> str:
+def freshness(key: str, client: redis.Redis | None = None) -> str:
     try:
         value = (client or _client()).get(key)
     except Exception:

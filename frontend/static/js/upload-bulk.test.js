@@ -223,6 +223,14 @@ test('controller status sends only visible rows plus aggregates', () => {
   assert.equal(update.accepted, 10);
 });
 
+test('controller ignores hostile or unknown action names', () => {
+  const { worker, messages } = controller();
+  for (const action of ['constructor', 'toString', '__proto__', 'unknown']) {
+    assert.doesNotThrow(() => worker.onmessage({ data: { type: 'action', action } }));
+  }
+  assert.deepEqual(messages, []);
+});
+
 test('controller exposes disjoint queue counters and archives only terminal local rows', async () => {
   const operations = [];
   const { api, worker } = controller({ swResults: { listBatches: [] }, onSW(message, respond) { operations.push(message); respond(message.op === 'listBatches' ? [] : ['done', 'duplicate']); } });

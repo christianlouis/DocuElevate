@@ -375,7 +375,15 @@ self.onmessage = event => {
   const message = event.data || {};
   if (message.type === 'init') { config = message.config || {}; principal = message.principal || principal; csrfToken = message.csrf || ''; owner = message.owner || crypto.randomUUID(); ready = restore().catch(error => { phase = 'Wiederherstellung fehlgeschlagen'; pausedReason = 'Gespeicherte Queue konnte nicht gelesen werden'; status(String(error)); return false; }).then(result => { self.postMessage({ type: 'ready', diagnostics: diagnostics() }); return result; }); return; }
   if (message.type === 'add') { void add(message.files).catch(error => status(String(error))); return; }
-  if (message.type === 'action') { const action = { archiveCompleted: archiveEligible, retryFailed, discardUnsent }[message.action]; if (action) void action().catch(error => status(`Queue-Aktion fehlgeschlagen: ${error.message || error}`)); return; }
+  if (message.type === 'action') {
+    let action;
+    if (message.action === 'archiveCompleted') action = archiveEligible;
+    else if (message.action === 'retryFailed') action = retryFailed;
+    else if (message.action === 'discardUnsent') action = discardUnsent;
+    else return;
+    void action().catch(error => status(`Queue-Aktion fehlgeschlagen: ${error.message || error}`));
+    return;
+  }
   if (message.type === 'swResponse') { const request = swRequests.get(message.id); if (!request) return; swRequests.delete(message.id); message.ok ? request.resolve(message.result) : request.reject(new Error(message.error || 'Queue error')); return; }
 };
 if (self.UPLOAD_CONTROLLER_TEST) self.__uploadControllerTest = { add, restore, send, status, api, readStatus, dedup, inspect: self.inspectUploadFile, matchPendingFiles, selectReady, classify, archiveEligible, retryFailed, discardUnsent, processBatch, refreshPending, reconcileDurable, rememberCapacity, scheduleRefresh, state: () => ({ queue, activeUploads, running }) };
