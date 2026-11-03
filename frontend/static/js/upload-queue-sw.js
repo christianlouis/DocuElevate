@@ -2,6 +2,7 @@
  * the page resumes HTTP transfers, while this worker owns queue transactions. */
 const DB_NAME = 'docuelevate-upload-queue';
 const DB_VERSION = 5;
+const CLEAR_KEY = principal => `__clear__:${principal}`;
 function openDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -25,31 +26,78 @@ async function transaction(mode, callback) {
     tx.onabort = () => { db.close(); reject(tx.error || new Error('Queue transaction aborted')); };
   });
 }
+async function notifyQueueChange(message, result) {
+  // Notify only after the transaction commits. A sleeping/old tab still cannot
+  // revive cleared rows: the generation fence and tombstones enforce that.
+  try {
+    const clients = await self.clients?.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients || []) client.postMessage({
+      type: 'uploadQueueChanged', principal: message.principal, owner: message.owner,
+      cleared: message.op === 'clearAll', generation: result.generation,
+      keys: Array.isArray(result) ? result : []
+    });
+  } catch (_) { /* Durable state remains authoritative if a tab has closed. */ }
+  return result;
+}
 async function handle(message) {
   if (typeof message.principal !== 'string' || !message.principal) throw new Error('Queue owner required');
   const now = Date.now();
   if (message.op === 'putMany') {
     if (!Array.isArray(message.items) || message.items.length > 100000) throw new Error('Invalid queue metadata');
-    return transaction('readwrite', store => {
-      for (const item of message.items) {
-        const request = store.get(item.key);
-        request.onsuccess = () => {
-          const previous = request.result;
-          if (previous && previous.principal !== message.principal) return;
-          // A metadata update must never clear another tab's lease.
-          if (previous?.archivedAt) return;
-          store.put({ ...previous, ...item, principal: message.principal, updatedAt: now,
-            leaseOwner: previous?.leaseOwner, leaseUntil: previous?.leaseUntil,
-            ...(previous?.fileId && !item.fileId ? { fileId: previous.fileId, state: previous.state } : {}) });
-        };
-      }
+    return transaction('readwrite', (store, result) => {
+      const fenceRequest = store.get(CLEAR_KEY(message.principal));
+      fenceRequest.onsuccess = () => {
+        const fence = fenceRequest.result;
+        const generation = Number(message.generation || 0);
+        const current = Number(fence?.clearGeneration || 0);
+        result({ ignored: generation !== current, generation: current });
+        if (generation !== current) return;
+        for (const item of message.items) {
+          const request = store.get(item.key);
+          request.onsuccess = () => {
+            const previous = request.result;
+            if (previous && previous.principal !== message.principal) return;
+            // A metadata update must never clear another tab's lease.
+            if (previous?.archivedAt) return;
+            store.put({ ...previous, ...item, principal: message.principal, updatedAt: now,
+              leaseOwner: previous?.leaseOwner, leaseUntil: previous?.leaseUntil,
+              generation,
+              ...(previous?.fileId && !item.fileId ? { fileId: previous.fileId, state: previous.state } : {}) });
+          };
+        }
+      };
     });
   }
+  if (message.op === 'clearAll') return transaction('readwrite', (store, result) => {
+    const fenceRequest = store.get(CLEAR_KEY(message.principal));
+    fenceRequest.onsuccess = () => {
+      const generation = Number(fenceRequest.result?.clearGeneration || 0) + 1;
+      let count = 0;
+      // Read the owner's live metadata in one request. A cursor round trip per
+      // row makes a 50,000-file clear take tens of seconds in Chromium.
+      const rows = store.index('ownerBatch').getAll(
+        IDBKeyRange.bound([message.principal, ''], [message.principal, '\uffff'])
+      );
+      rows.onsuccess = () => {
+        for (const item of rows.result) {
+          if (item.principal !== message.principal || item.archivedAt || item.key === CLEAR_KEY(message.principal)) continue;
+          count += 1;
+          store.put({ key: item.key, principal: item.principal, archivedAt: now, updatedAt: now, generation });
+        }
+        store.put({ key: CLEAR_KEY(message.principal), principal: message.principal, clearGeneration: generation, updatedAt: now });
+        result({ generation, count });
+      };
+    };
+  }).then(result => notifyQueueChange(message, result));
+  if (message.op === 'clearState') return transaction('readonly', (store, result) => {
+    const request = store.get(CLEAR_KEY(message.principal));
+    request.onsuccess = () => result({ protocol: 2, generation: Number(request.result?.clearGeneration || 0) });
+  });
   if (message.op === 'archiveMany') {
     if (!Array.isArray(message.keys) || message.keys.length > 100000) throw new Error('Invalid archive request');
     const allowed = message.kind === 'completed' ? new Set(['complete', 'completed', 'duplicate'])
-      : message.kind === 'unsent' ? new Set(['needs_files', 'failed', 'transfer_failed']) : null;
-    if (!allowed) throw new Error('Invalid archive kind');
+      : message.kind === 'unsent' ? new Set(['needs_files', 'queued', 'uploading', 'failed', 'transfer_failed']) : null;
+    if (!allowed && message.kind !== 'local') throw new Error('Invalid archive kind');
     return transaction('readwrite', (store, result) => {
       const archived = [];
       result(archived);
@@ -57,7 +105,8 @@ async function handle(message) {
         const request = store.get(key);
         request.onsuccess = () => {
           const item = request.result;
-          if (!item || item.principal !== message.principal || item.archivedAt || !allowed.has(item.state) || item.leaseUntil > now) return;
+          if (!item || item.principal !== message.principal || item.archivedAt || (allowed && !allowed.has(item.state))) return;
+          if (item.leaseUntil > now && (message.kind !== 'local' || !message.owner || item.leaseOwner !== message.owner)) return;
           if (message.kind === 'unsent' && item.fileId != null) return;
           // Keep a small tombstone so late writes and leases stay rejected,
           // without retaining a completed batch in the ownerBatch index.
@@ -66,7 +115,7 @@ async function handle(message) {
           result(archived);
         };
       }
-    });
+    }).then(result => notifyQueueChange(message, result));
   }
   if (message.op === 'listBatches') return transaction('readonly', (store, result) => {
     const batches = new Set();
@@ -76,7 +125,7 @@ async function handle(message) {
     request.onsuccess = () => {
       const cursor = request.result;
       if (!cursor) return result([...batches]);
-      batches.add(cursor.key[1]);
+      if (typeof cursor.key[1] === 'string' && cursor.key[1]) batches.add(cursor.key[1]);
       cursor.continue();
     };
   });

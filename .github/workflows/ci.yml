@@ -162,7 +162,7 @@ jobs:
           -m "not e2e"
 
       - name: Run browser upload queue tests
-        run: node --test frontend/static/js/upload-bulk.test.js
+        run: node --test frontend/static/js/upload-*.test.js
 
       - name: Upload Unified Coverage to Codecov
         if: always()
