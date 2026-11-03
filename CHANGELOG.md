@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.1 (2026-11-03)
+
+### Bug Fixes
+
+- Recover bulk upload scheduling and queue cleanup
+  ([#1306](https://github.com/christianlouis/DocuElevate/pull/1306),
+  [`4177718`](https://github.com/christianlouis/DocuElevate/commit/4177718f6572d74e05a7c04398ba39c0962f0983))
+
+
 ## v0.195.0 (2026-11-02)
 
 ### Features
