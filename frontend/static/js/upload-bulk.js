@@ -17,6 +17,9 @@
     const archiveButton = document.getElementById('globalUploadQueueArchiveCompleted');
     const retryButton = document.getElementById('globalUploadQueueRetryFailed');
     const discardButton = document.getElementById('globalUploadQueueDiscardUnsent');
+    const clearButton = document.getElementById('globalUploadQueueClear');
+    const actionFeedback = document.getElementById('globalUploadQueueActionFeedback');
+    const actionButtons = [archiveButton, retryButton, discardButton, clearButton].filter(Boolean);
     let minimized = false;
     const show = () => { minimized = false; panel.classList.remove('hidden'); reopen?.classList.add('hidden'); };
     const hide = () => { minimized = true; panel.classList.add('hidden'); reopen?.classList.remove('hidden'); };
@@ -25,9 +28,12 @@
     reopen?.addEventListener('click', show);
     addFilesButton?.addEventListener('click', () => { show(); addFilesInput?.click(); });
     let actionHandler = null;
-    archiveButton?.addEventListener('click', () => actionHandler?.('archiveCompleted'));
-    retryButton?.addEventListener('click', () => actionHandler?.('retryFailed'));
-    discardButton?.addEventListener('click', () => actionHandler?.('discardUnsent'));
+    const runAction = (action, keys) => { if (actionBusy) return; if (!actionHandler) { if (actionFeedback) actionFeedback.textContent = 'Queue-Aktionen sind in diesem Browser nicht verfügbar.'; return; } actionBusy = true; actionButtons.forEach(button => { button.disabled = true; }); if (actionFeedback) actionFeedback.textContent = 'Aktion wird ausgeführt …'; actionHandler?.(action, keys); };
+    archiveButton?.addEventListener('click', () => runAction('archiveCompleted'));
+    retryButton?.addEventListener('click', () => runAction('retryFailed'));
+    discardButton?.addEventListener('click', () => runAction('discardUnsent'));
+    clearButton?.addEventListener('click', () => { if (typeof window.confirm === 'function' && !window.confirm('Lokale Queue leeren? Server-Dokumente bleiben erhalten; ausstehende lokale Übertragungen werden beendet.')) return; runAction('clearQueue'); });
+    let actionBusy = false;
     addFilesInput?.addEventListener('change', event => { const files = event.target?.files; if (files?.length) void window.processFiles?.(files); event.target.value = ''; });
     const states = { queued: 'wartet auf Upload', uploading: 'wird übertragen', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
     const errors = { transfer_rejected: 'vom Server abgelehnt', network_retrying: 'Verbindung wird erneut versucht', file_inspection_failed: 'Datei konnte nicht geprüft werden', server_status_missing: 'Serverstatus nicht gefunden' };
@@ -55,7 +61,6 @@
     return { panel, show, beginSelection() { show(); const summary = document.getElementById('globalUploadQueueSummary'); const notice = document.getElementById('globalUploadQueueNotice'); if (summary) summary.textContent = 'Dateien werden eingelesen'; if (notice) notice.textContent = 'Die Auswahl wird vorbereitet.'; }, renderDiagnostics, setDiagnosticsHandler(handler) { diagnosticsHandler = handler; }, render(payload, options = {}) {
       const summary = document.getElementById('globalUploadQueueSummary');
       const notice = document.getElementById('globalUploadQueueNotice');
-      const progress = document.getElementById('globalUploadQueueProgress');
       const rows = document.getElementById('globalUploadQueueRows');
       const queue = payload.queue || []; const total = Number(payload.total ?? queue.length);
       const counts = payload.counts || {};
@@ -64,28 +69,81 @@
       const complete = Number(payload.complete ?? counts.complete ?? queue.filter(item => ['complete', 'completed'].includes(item.state)).length);
       const needsFiles = Number(payload.needsFiles ?? counts.needsFiles ?? queue.filter(item => item.state === 'needs_files').length);
       const processing = Number(payload.processing ?? counts.processing ?? queue.filter(item => item.state === 'processing').length);
-      if (summary) summary.textContent = `${total} insgesamt · ${Number(counts.needsFiles ?? needsFiles)} erneut auswählen · ${Number(counts.ready ?? 0)} bereit · ${Number(counts.uploading ?? 0)} werden übertragen · ${Number(counts.waiting ?? Math.max(0, accepted - complete - processing - Number(counts.duplicate || 0)))} serverseitig wartend · ${processing} in Verarbeitung · ${complete} verarbeitet · ${Number(counts.duplicate ?? 0)} Duplikate · ${failed} fehlgeschlagen`;
+      if (summary) {
+        const groups = [
+          [needsFiles, 'erneut auswählen'], [Number(counts.ready || 0), 'bereit'],
+          [Number(counts.uploading || 0), 'werden übertragen'],
+          [Number(counts.waiting ?? Math.max(0, accepted - complete - processing - Number(counts.duplicate || 0))), 'serverseitig wartend'],
+          [processing, 'in Verarbeitung'], [complete, 'verarbeitet'],
+          [Number(counts.duplicate || 0), 'Duplikate'], [failed, 'fehlgeschlagen']
+        ];
+        summary.textContent = `${total} insgesamt` + (total ? `\n${groups.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}`).join(' · ')}` : ' · Lokale Liste ist leer');
+      }
       if (notice) notice.textContent = [payload.message, payload.snapshotError ? `Letzter Statusabgleich fehlgeschlagen: ${payload.snapshotError}` : '', payload.processingHealth?.status ? `Verarbeitungs-Backlog: ${healthLabel(payload.processingHealth.status)}` : ''].filter(Boolean).join(' ');
-      if (progress) progress.style.width = `${total ? Math.min(100, (complete / total) * 100) : 0}%`;
-      if (rows) { rows.replaceChildren(); const rank = item => (String(item.state).includes('failed') ? 0 : ['queued','needs_files','processing'].includes(item.state) ? 1 : 2); for (const item of [...queue].sort((a,b) => rank(a)-rank(b)).slice(0, 100)) { const row = document.createElement('div'); row.className = 'rounded border px-2 py-1'; const reason = item.error ? `: ${item.error}` : (item.errorCode ? `: ${errors[item.errorCode] || 'Übertragungsfehler'}` : ''); row.textContent = `${item.name || 'Datei'} — ${states[item.state] || 'unbekannter Status'}${reason}`; rows.appendChild(row); } }
+      const acceptedTotal = Math.max(0, accepted);
+      const processed = complete + Number(counts.duplicate ?? 0);
+      const processingBase = Math.max(acceptedTotal, processed);
+      const transferProgress = document.getElementById('globalUploadQueueTransferProgress');
+      const processingProgress = document.getElementById('globalUploadQueueProcessingProgress');
+      const transferLabel = document.getElementById('globalUploadQueueTransferLabel');
+      const processingLabel = document.getElementById('globalUploadQueueProcessingLabel');
+      if (transferProgress) transferProgress.style.width = `${total ? Math.min(100, (acceptedTotal / total) * 100) : 0}%`;
+      if (processingProgress) processingProgress.style.width = `${processingBase ? Math.min(100, (processed / processingBase) * 100) : 0}%`;
+      if (transferProgress) { transferProgress.setAttribute('aria-valuemax', '100'); transferProgress.setAttribute('aria-valuenow', String(total ? Math.min(100, acceptedTotal / total * 100) : 0)); transferProgress.setAttribute('aria-valuetext', `${acceptedTotal} von ${total}`); }
+      if (processingProgress) { processingProgress.setAttribute('aria-valuemax', '100'); processingProgress.setAttribute('aria-valuenow', String(processingBase ? Math.min(100, processed / processingBase * 100) : 0)); processingProgress.setAttribute('aria-valuetext', `${processed} von ${processingBase}`); }
+      if (transferLabel) transferLabel.textContent = `${acceptedTotal} von ${total}`;
+      if (processingLabel) processingLabel.textContent = `${processed} von ${processingBase}`;
+      if (actionFeedback && payload.actionFeedback?.message) actionFeedback.textContent = payload.actionFeedback.message;
+      if (payload.actionFeedback && typeof payload.actionFeedback.busy === 'boolean') { actionBusy = payload.actionFeedback.busy; actionButtons.forEach(button => { button.disabled = actionBusy; }); }
+      if (rows) {
+        rows.replaceChildren();
+        const rank = item => String(item.state).includes('failed') ? 0 : ['queued', 'needs_files', 'processing'].includes(item.state) ? 1 : 2;
+        const shown = [...queue].sort((a, b) => rank(a) - rank(b)).slice(0, 100);
+        for (const item of shown) {
+          const row = document.createElement('div');
+          row.className = 'flex items-center justify-between gap-2 rounded border px-2 py-1';
+          const reason = item.errorCode === 'unsupported_type' || /\(415\)/.test(item.error || '')
+            ? ': Dateityp wird nicht unterstützt (HTTP 415)'
+            : item.error ? `: ${item.error}` : item.errorCode ? `: ${errors[item.errorCode] || 'Übertragungsfehler'}` : '';
+          row.textContent = `${item.name || 'Datei'} — ${states[item.state] || 'unbekannter Status'}${reason}`;
+          if (item.key) {
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'shrink-0 rounded border border-gray-300 px-2 py-1 text-[11px] text-gray-700';
+            remove.textContent = 'Entfernen';
+            remove.setAttribute('aria-label', `${item.name || 'Datei'} aus der lokalen Liste entfernen`);
+            remove.disabled = actionBusy;
+            remove.addEventListener('click', () => runAction('removeItems', [item.key]));
+            row.appendChild(remove);
+          }
+          rows.appendChild(row);
+        }
+        if (total > shown.length) {
+          const more = document.createElement('div');
+          more.className = 'pt-1 text-center text-gray-500';
+          more.textContent = `${shown.length} von ${total} Einträgen angezeigt – Fehler und ausstehende Dateien zuerst`;
+          rows.appendChild(more);
+        }
+      }
       if (payload.diagnostics) renderDiagnostics(payload.diagnostics);
       if (options.open && (!minimized || options.force)) show();
     }, setActionHandler(handler) { actionHandler = handler; }};
   }
   const popup = globalPopup();
   if (useDedicatedController) {
-    const worker = new Worker('/static/js/upload-controller-worker.js');
+    const worker = new Worker('/static/js/upload-controller-worker.js?v=queue-actions-2');
     let registration;
+    let latestRevision = -1;
     let latestStatus = { total: 0, accepted: 0, complete: 0, failed: 0, needsFiles: 0, processing: 0 };
     const diagnostic = { serviceWorker: 'wird gestartet', controller: 'noch nicht aktiv', worker: 'wird gestartet', phase: 'Initialisierung', pausedReason: '', capacity: 'noch nicht bekannt', websocket: 'noch nicht verbunden', persisted: 'wird geprüft', storage: 'wird geprüft', queue: '0 Dateien' };
     const owner = crypto.randomUUID();
     const csrf = () => typeof getCsrfToken === 'function' ? getCsrfToken() : '';
     function postSW(message) {
       return new Promise((resolve, reject) => {
-        const controller = navigator.serviceWorker?.controller || registration?.active;
+        const controller = registration?.active?.postMessage ? registration.active : navigator.serviceWorker?.controller;
         if (!controller) return reject(new Error('Persistent upload queue is unavailable'));
         const channel = new MessageChannel();
-        const timer = setTimeout(() => { channel.port1.close(); reject(new Error('Queue acknowledgement timed out')); }, 10000);
+        const timer = setTimeout(() => { channel.port1.close(); reject(new Error('Die lokale Queue antwortet nicht. Bitte die Seite neu laden.')); }, ['clearAll', 'archiveMany'].includes(message.op) ? 60000 : 10000);
         channel.port1.onmessage = event => { clearTimeout(timer); channel.port1.close(); event.data?.ok ? resolve(event.data.result) : reject(new Error(event.data?.error || 'Queue error')); };
         controller.postMessage({ ...message, principal: window.uploadConfig?.queueOwner || 'single-user' }, [channel.port2]);
       });
@@ -110,6 +168,10 @@
     }
     popup?.setDiagnosticsHandler(refreshDiagnostics);
     function render(payload) {
+      if (Number.isFinite(payload.revision)) {
+        if (payload.revision <= latestRevision) return;
+        latestRevision = payload.revision;
+      }
       latestStatus = { ...latestStatus, ...payload };
       const pending = Number(payload.total || 0) > Number(payload.complete || 0);
       const newDrop = /hinzugefügt/.test(payload.message || '');
@@ -128,22 +190,52 @@
     }
     worker.onmessage = event => {
       const message = event.data || {};
-      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.keys ? { keys: message.keys } : {}), ...(message.states ? { states: message.states } : {}), ...(message.kind ? { kind: message.kind } : {}), ...(message.requireNoFileId ? { requireNoFileId: true } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
+      if (message.type === 'sw') postSW({ op: message.op, ...(message.batchId ? { batchId: message.batchId } : {}), ...(message.items ? { items: message.items } : {}), ...(message.generation != null ? { generation: message.generation } : {}), ...(message.keys ? { keys: message.keys } : {}), ...(message.states ? { states: message.states } : {}), ...(message.kind ? { kind: message.kind } : {}), ...(message.requireNoFileId ? { requireNoFileId: true } : {}), ...(message.key ? { key: message.key } : {}), ...(message.owner ? { owner: message.owner } : {}), ...(message.ttl ? { ttl: message.ttl } : {}) }).then(result => worker.postMessage({ type: 'swResponse', id: message.id, ok: true, result })).catch(error => worker.postMessage({ type: 'swResponse', id: message.id, ok: false, error: String(error) }));
       if (message.type === 'status') render(message);
       if (message.type === 'ready') { diagnostic.worker = 'bereit'; diagnosticsFrom(message); }
       if (message.type === 'accepted') window.onDocuElevateUploadQueued?.(message);
     };
-    popup?.setActionHandler(action => worker.postMessage({ type: 'action', action }));
+    navigator.serviceWorker?.addEventListener?.('message', event => {
+      const message = event.data;
+      if (message?.type === 'uploadQueueChanged' && message.principal === (window.uploadConfig?.queueOwner || 'single-user')) {
+        worker.postMessage({ ...message, type: 'queueChanged' });
+      }
+    });
+    popup?.setActionHandler(async (action, keys) => {
+      try {
+        await ensureStarted();
+        worker.postMessage({ type: 'action', action, ...(keys?.length ? { keys } : {}) });
+      } catch (error) {
+        popup?.render({ ...latestStatus, actionFeedback: { busy: false, message: `Aktion nicht ausgeführt: ${error.message || error}` } });
+      }
+    });
+    async function waitForActivation(candidate) {
+      if (!candidate || candidate.state === 'activated') return;
+      await new Promise((resolve, reject) => {
+        const finish = error => { clearTimeout(timer); candidate.removeEventListener('statechange', changed); error ? reject(error) : resolve(); };
+        const changed = () => {
+          if (candidate.state === 'activated') finish();
+          if (candidate.state === 'redundant') finish(new Error('Queue-Aktualisierung fehlgeschlagen. Bitte die Seite neu laden.'));
+        };
+        const timer = setTimeout(() => finish(new Error('Queue-Aktualisierung dauert zu lange. Bitte die Seite neu laden.')), 15000);
+        candidate.addEventListener('statechange', changed);
+        changed();
+      });
+    }
     async function start() {
       if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
-      registration = await navigator.serviceWorker.register('/upload-queue-sw.js', { scope: '/' }); await navigator.serviceWorker.ready;
+      registration = await navigator.serviceWorker.register('/upload-queue-sw.js?v=queue-actions-2', { scope: '/', updateViaCache: 'none' });
+      await waitForActivation(registration.installing || registration.waiting || registration.active);
+      await navigator.serviceWorker.ready;
+      const handshake = await postSW({ op: 'clearState' });
+      if (handshake?.protocol !== 2) throw new Error('Die lokale Queue muss aktualisiert werden. Bitte die Seite neu laden.');
       if (navigator.storage?.persist) await navigator.storage.persist().catch(() => false);
       await refreshDiagnostics();
       worker.postMessage({ type: 'init', principal: window.uploadConfig?.queueOwner || 'single-user', owner, csrf: csrf(), config: window.uploadConfig || {} });
     }
     let startPromise;
     function ensureStarted() {
-      if (!startPromise) startPromise = start().catch(error => { diagnostic.phase = 'nicht verfügbar'; diagnostic.pausedReason = 'Service Worker konnte nicht gestartet werden'; render({ message: String(error), queue: [] }); throw error; });
+      if (!startPromise) startPromise = start().catch(error => { diagnostic.phase = 'nicht verfügbar'; diagnostic.pausedReason = 'Service Worker konnte nicht gestartet werden'; render({ ...latestStatus, message: String(error), actionFeedback: { busy: false, message: `Queue nicht verfügbar: ${error.message || error}` } }); throw error; });
       return startPromise;
     }
     window.beginUploadSelection = () => popup?.beginSelection();

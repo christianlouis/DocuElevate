@@ -14,6 +14,7 @@ function controller(overrides = {}) {
   const messages = [];
   const { swResults = {}, onSW, ...contextOverrides } = overrides;
   const context = {
+    AbortController, DOMException,
     self: { UPLOAD_CONTROLLER_TEST: true, postMessage(value) {
       messages.push(value);
       if (value.type === 'sw') {
@@ -53,6 +54,20 @@ function serviceWorker(rows = []) {
     return {
       get(key) { return requestFor(tx, () => records.get(key)); },
       put(value) { records.set(value.key, { ...value }); },
+      openCursor() {
+        const keys = [...records.keys()];
+        const request = { result: null, onsuccess: null }; let offset = 0; tx.pending += 1;
+        const emit = () => {
+          request.result = offset < keys.length ? {
+            value: { ...records.get(keys[offset]) },
+            update(value) { records.set(keys[offset], { ...value }); },
+            continue() { offset += 1; queueMicrotask(emit); }
+          } : null;
+          request.onsuccess?.({ target: request });
+          if (!request.result) { tx.pending -= 1; tx.complete(); }
+        };
+        queueMicrotask(emit); return request;
+      },
       index() { return {
         getAll(query) { return requestFor(tx, () => [...records.values()].filter(row => matches(row, query)).map(row => ({ ...row }))); },
         openKeyCursor(query) {
@@ -105,7 +120,7 @@ function modernAdapter(onServiceWorkerMessage) {
     setAttribute(name, value) { this.attributes[name] = value; }
     click() { this.dispatch('click'); }
   }
-  const ids = ['globalUploadQueue', 'globalUploadQueueReopen', 'globalUploadQueueMinimize', 'globalUploadQueueClose', 'globalUploadQueueAddFiles', 'globalUploadQueueFileInput', 'globalUploadQueueDiagnosticsButton', 'globalUploadQueueDiagnosticsPanel', 'globalUploadQueueDiagnostics', 'globalUploadQueueSummary', 'globalUploadQueueNotice', 'globalUploadQueueProgress', 'globalUploadQueueRows'];
+  const ids = ['globalUploadQueue', 'globalUploadQueueReopen', 'globalUploadQueueMinimize', 'globalUploadQueueClose', 'globalUploadQueueAddFiles', 'globalUploadQueueFileInput', 'globalUploadQueueDiagnosticsButton', 'globalUploadQueueDiagnosticsPanel', 'globalUploadQueueDiagnostics', 'globalUploadQueueSummary', 'globalUploadQueueNotice', 'globalUploadQueueProgress', 'globalUploadQueueRows', 'globalUploadQueueClear', 'globalUploadQueueActionFeedback'];
   const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
   const listeners = {};
   const workers = [];
@@ -113,13 +128,13 @@ function modernAdapter(onServiceWorkerMessage) {
   const serviceWorkerMessages = [];
   const serviceWorkerController = { postMessage(message, ports) {
     serviceWorkerMessages.push(message);
-    Promise.resolve(onServiceWorkerMessage?.(message)).then(
+    Promise.resolve(onServiceWorkerMessage?.(message) ?? (message.op === 'clearState' ? { protocol: 2, generation: 0 } : undefined)).then(
       result => ports?.[0]?.postMessage({ ok: true, result }),
       error => ports?.[0]?.postMessage({ ok: false, error: String(error) })
     );
   } };
   const context = {
-    window: { uploadConfig: { concurrency: 3 }, addEventListener(type, listener) { listeners[type] = listener; } },
+    window: { uploadConfig: { concurrency: 3 }, confirm: () => true, addEventListener(type, listener) { listeners[type] = listener; } },
     document: { getElementById(id) { return elements[id] || null; }, createElement() { return new Element(); } },
     navigator: { serviceWorker: { controller: serviceWorkerController, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
     Worker: FakeWorker, crypto: { randomUUID: () => 'adapter-id' }, console, setTimeout, clearTimeout, MessageChannel: require('node:worker_threads').MessageChannel,
@@ -136,7 +151,7 @@ test('modern adapter keeps an empty restored queue hidden, honors minimize, and 
   adapter.listeners.DOMContentLoaded();
   for (let i = 0; i < 5; i++) await flush();
   const worker = adapter.workers[0];
-  assert.equal(worker.url, '/static/js/upload-controller-worker.js');
+  assert.equal(worker.url, '/static/js/upload-controller-worker.js?v=queue-actions-2');
   assert.ok(worker.messages.some(message => message.type === 'init'));
   worker.emit({ type: 'status', message: 'Queue wiederhergestellt.', queue: [], total: 0, complete: 0 });
   assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), true);
@@ -171,11 +186,51 @@ test('modern adapter exposes a manual diagnostic GUI even when the queue is empt
   assert.match(diagnosticText, /Dauerhafter Speicher/);
 });
 
+test('modern adapter wires the durable local queue clear action', async () => {
+  const adapter = modernAdapter();
+  adapter.elements.globalUploadQueueClear.dispatch('click');
+  for (let i = 0; i < 8; i++) await flush();
+  assert.equal(adapter.workers[0].messages.at(-1)?.action, 'clearQueue');
+});
+
 test('modern adapter starts one controller even if the base script is accidentally included twice', () => {
   const adapter = modernAdapter();
   adapter.runAgain();
   assert.equal(adapter.workers.length, 1);
   assert.equal(adapter.elements.globalUploadQueueMinimize.listeners.click.length, 1);
+});
+
+test('adapter waits for the updated service worker to activate before restoring or clearing', async () => {
+  const adapter = modernAdapter();
+  let changed;
+  const installing = { state: 'installing', addEventListener(type, listener) { changed = listener; }, removeEventListener() {} };
+  const registration = { installing, active: { postMessage() { throw new Error('old worker must not receive new operations'); } } };
+  adapter.navigator.serviceWorker.register = async () => registration;
+  adapter.elements.globalUploadQueueClear.dispatch('click');
+  for (let i = 0; i < 3; i++) await flush();
+  assert.equal(adapter.workers[0].messages.length, 0);
+  registration.active = adapter.navigator.serviceWorker.controller;
+  installing.state = 'activated'; changed();
+  for (let i = 0; i < 8; i++) await flush();
+  assert.ok(adapter.workers[0].messages.some(message => message.type === 'init'));
+  assert.ok(adapter.workers[0].messages.some(message => message.action === 'clearQueue'));
+});
+
+test('adapter reports an incompatible worker instead of leaving an action busy or pretending it succeeded', async () => {
+  const adapter = modernAdapter(message => message.op === 'clearState' ? { protocol: 1 } : undefined);
+  adapter.elements.globalUploadQueueClear.dispatch('click');
+  for (let i = 0; i < 8; i++) await flush();
+  assert.equal(adapter.workers[0].messages.some(message => message.type === 'action'), false);
+  assert.equal(adapter.elements.globalUploadQueueClear.disabled, false);
+  assert.match(adapter.elements.globalUploadQueueActionFeedback.textContent, /Aktion nicht ausgeführt/);
+});
+
+test('a late status cannot replace a newer empty queue snapshot', () => {
+  const adapter = modernAdapter();
+  adapter.workers[0].emit({ type: 'status', revision: 2, total: 0, queue: [] });
+  adapter.workers[0].emit({ type: 'status', revision: 1, total: 96, queue: [{ name: 'old.pdf', state: 'accepted' }] });
+  assert.match(adapter.elements.globalUploadQueueSummary.textContent, /^0 insgesamt/);
+  assert.equal(adapter.elements.globalUploadQueueRows.children.length, 0);
 });
 
 test('controller reports a valid 6000-file drop before delayed restore or batch API work', () => {
@@ -328,6 +383,10 @@ test('controller restore reconciles accepted server files before marking missing
     }
   });
   await api.restore();
+  // Local restore is deliberately usable before the network is available;
+  // this explicit refresh verifies the later server reconciliation.
+  assert.equal(api.state().queue[0].state, 'needs_files');
+  await api.refreshPending();
   const item = api.state().queue[0];
   assert.equal(item.fileId, 91);
   assert.equal(item.state, 'accepted');
@@ -354,6 +413,8 @@ test('controller restore follows every snapshot cursor and keeps terminal failur
     }
   });
   await api.restore();
+  assert.equal(api.state().queue.length, 3);
+  await api.refreshPending();
   const queue = api.state().queue;
   assert.match(urls[1], /cursor=101/);
   assert.equal(queue.find(item => item.key === 'first').fileId, 1);
@@ -737,6 +798,50 @@ test('service worker archives only fixed contracts and preserves tombstone, leas
   assert.equal(worker.records.get('accepted').fileId, 101);
   assert.equal(worker.records.get('accepted').state, 'accepted');
   assert.deepEqual(Array.from(await worker.handle({ ...owner, op: 'snapshot', batchId: 'b' }), row => row.key).sort(), ['accepted', 'leased', 'server-failed']);
+});
+
+test('legacy queued and interrupted uploads can be hidden without touching active leases or admitted files', async () => {
+  const worker = serviceWorker([
+    { key: 'legacy', principal: 'a', batchId: 'b', state: 'queued' },
+    { key: 'interrupted', principal: 'a', batchId: 'b', state: 'uploading' },
+    { key: 'active', principal: 'a', batchId: 'b', state: 'queued', leaseUntil: Date.now() + 60000, leaseOwner: 'other' },
+    { key: 'admitted', principal: 'a', batchId: 'b', state: 'queued', fileId: 9 }
+  ]);
+  const archived = await worker.handle({ op: 'archiveMany', principal: 'a', kind: 'unsent', keys: ['legacy', 'interrupted', 'active', 'admitted'] });
+  assert.deepEqual(Array.from(archived).sort(), ['interrupted', 'legacy']);
+  assert.deepEqual(Array.from(await worker.handle({ op: 'snapshot', principal: 'a', batchId: 'b' }), item => item.key).sort(), ['active', 'admitted']);
+});
+
+test('clear is owner-scoped, fences late new keys, survives reload and allows a subsequent selection', async () => {
+  const rows = Array.from({ length: 1000 }, (_, i) => ({ key: `a-${i}`, principal: 'a', batchId: 'b', state: i % 2 ? 'accepted' : 'queued', ...(i % 2 ? { fileId: i } : {}) }));
+  rows.push({ key: 'private', principal: 'other', batchId: 'b', state: 'accepted', fileId: 1001 });
+  const worker = serviceWorker(rows);
+  const result = await worker.handle({ op: 'clearAll', principal: 'a', owner: 'tab-a' });
+  assert.equal(result.count, 1000);
+  assert.equal(result.generation, 1);
+  assert.equal((await worker.handle({ op: 'clearState', principal: 'a' })).generation, 1);
+  assert.equal((await worker.handle({ op: 'listBatches', principal: 'a' })).length, 0);
+  const stale = await worker.handle({ op: 'putMany', principal: 'a', generation: 0, items: [{ key: 'late-batch-key', batchId: 'late', state: 'queued' }] });
+  assert.equal(stale.ignored, true);
+  assert.equal(worker.records.has('late-batch-key'), false);
+  const fresh = await worker.handle({ op: 'putMany', principal: 'a', generation: 1, items: [{ key: 'new-selection', batchId: 'new', state: 'queued' }] });
+  assert.equal(fresh.ignored, false);
+  await worker.handle({ op: 'putMany', principal: 'a', generation: 1, items: [{ key: 'a-1', batchId: 'b', state: 'queued' }] });
+  assert.equal((await worker.handle({ op: 'snapshot', principal: 'a', batchId: 'b' })).length, 0);
+  assert.equal((await worker.handle({ op: 'snapshot', principal: 'a', batchId: 'new' })).length, 1);
+  assert.equal(worker.records.get('private').fileId, 1001);
+});
+
+test('individual removal handles waiting and rejected entries and respects another tab’s active lease', async () => {
+  const worker = serviceWorker([
+    { key: 'waiting', principal: 'a', batchId: 'b', state: 'accepted', fileId: 1 },
+    { key: 'rejected', principal: 'a', batchId: 'b', state: 'transfer_failed' },
+    { key: 'mine', principal: 'a', batchId: 'b', state: 'uploading', leaseOwner: 'me', leaseUntil: Date.now() + 60000 },
+    { key: 'theirs', principal: 'a', batchId: 'b', state: 'uploading', leaseOwner: 'other', leaseUntil: Date.now() + 60000 }
+  ]);
+  const result = await worker.handle({ op: 'archiveMany', principal: 'a', owner: 'me', kind: 'local', keys: ['waiting', 'rejected', 'mine', 'theirs'] });
+  assert.deepEqual(Array.from(result).sort(), ['mine', 'rejected', 'waiting']);
+  assert.equal(await worker.handle({ op: 'lease', principal: 'a', key: 'mine', owner: 'me' }), false);
 });
 
 test('service worker discovers durable batches when local pointers are missing and isolates owners', async () => {
