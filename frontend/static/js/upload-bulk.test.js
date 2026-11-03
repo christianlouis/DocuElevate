@@ -111,7 +111,7 @@ function serviceWorker(rows = []) {
 
 function modernAdapter(onServiceWorkerMessage) {
   class Element {
-    constructor() { this.className = ''; this.textContent = ''; this.children = []; this.listeners = {}; this.attributes = {}; this.style = {}; this.classList = { values: new Set(['hidden']), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), contains: value => this.classList.values.has(value) }; }
+    constructor() { this.className = ''; this.textContent = ''; this.children = []; this.listeners = {}; this.attributes = {}; this.style = {}; this.classList = { values: new Set(['hidden']), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), toggle: (value, force) => { const next = force === undefined ? !this.classList.values.has(value) : Boolean(force); if (next) this.classList.values.add(value); else this.classList.values.delete(value); return next; }, contains: value => this.classList.values.has(value) }; }
     addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
     dispatch(type, event = {}) { for (const listener of this.listeners[type] || []) listener({ preventDefault() {}, ...event }); }
     replaceChildren(...children) { this.children = children; }
@@ -120,7 +120,7 @@ function modernAdapter(onServiceWorkerMessage) {
     setAttribute(name, value) { this.attributes[name] = value; }
     click() { this.dispatch('click'); }
   }
-  const ids = ['globalUploadQueue', 'globalUploadQueueReopen', 'globalUploadQueueMinimize', 'globalUploadQueueClose', 'globalUploadQueueAddFiles', 'globalUploadQueueFileInput', 'globalUploadQueueDiagnosticsButton', 'globalUploadQueueDiagnosticsPanel', 'globalUploadQueueDiagnostics', 'globalUploadQueueSummary', 'globalUploadQueueNotice', 'globalUploadQueueProgress', 'globalUploadQueueRows', 'globalUploadQueueClear', 'globalUploadQueueActionFeedback'];
+  const ids = ['globalUploadQueue', 'globalUploadQueueReopen', 'globalUploadQueueMinimize', 'globalUploadQueueClose', 'globalUploadQueueAddFiles', 'globalUploadQueueFileInput', 'globalUploadQueueDiagnosticsButton', 'globalUploadQueueDiagnosticsPanel', 'globalUploadQueueDiagnostics', 'globalUploadQueueSummary', 'globalUploadQueueNotice', 'globalUploadQueueProgress', 'globalUploadQueueRows', 'globalUploadQueueClear', 'globalUploadQueueActionFeedback', 'globalUploadQueueSkipped', 'globalUploadQueueSkippedRows', 'globalUploadQueueSkippedTitle', 'globalUploadQueueClearSkipped'];
   const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
   const listeners = {};
   const workers = [];
@@ -137,7 +137,7 @@ function modernAdapter(onServiceWorkerMessage) {
     window: { uploadConfig: { concurrency: 3 }, confirm: () => true, addEventListener(type, listener) { listeners[type] = listener; } },
     document: { getElementById(id) { return elements[id] || null; }, createElement() { return new Element(); } },
     navigator: { serviceWorker: { controller: serviceWorkerController, async register() { return { active: { state: 'activated' } }; }, ready: Promise.resolve() }, storage: { async persist() { return true; }, async persisted() { return true; }, async estimate() { return { usage: 1024, quota: 4096 }; } } },
-    Worker: FakeWorker, crypto: { randomUUID: () => 'adapter-id' }, console, setTimeout, clearTimeout, MessageChannel: require('node:worker_threads').MessageChannel,
+    Worker: FakeWorker, crypto: { randomUUID: (() => { let id = 0; return () => `adapter-${++id}`; })() }, console, setTimeout, clearTimeout, MessageChannel: require('node:worker_threads').MessageChannel,
   };
   const source = fs.readFileSync(require('node:path').join(__dirname, 'upload-bulk.js'), 'utf8');
   vm.runInNewContext(source, context);
@@ -151,7 +151,7 @@ test('modern adapter keeps an empty restored queue hidden, honors minimize, and 
   adapter.listeners.DOMContentLoaded();
   for (let i = 0; i < 5; i++) await flush();
   const worker = adapter.workers[0];
-  assert.equal(worker.url, '/static/js/upload-controller-worker.js?v=queue-actions-2');
+  assert.equal(worker.url, '/static/js/upload-controller-worker.js?v=queue-actions-3');
   assert.ok(worker.messages.some(message => message.type === 'init'));
   worker.emit({ type: 'status', message: 'Queue wiederhergestellt.', queue: [], total: 0, complete: 0 });
   assert.equal(adapter.elements.globalUploadQueue.classList.contains('hidden'), true);
@@ -198,6 +198,51 @@ test('modern adapter starts one controller even if the base script is accidental
   adapter.runAgain();
   assert.equal(adapter.workers.length, 1);
   assert.equal(adapter.elements.globalUploadQueueMinimize.listeners.click.length, 1);
+});
+
+test('adapter precheck skips unsupported files before worker add and forwards explicit override', async () => {
+  const adapter = modernAdapter();
+  adapter.window.uploadConfig = {
+    allowedExtensions: ['.pdf', '.jpg', '.png', '.gif'],
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/gif'],
+    maxFileSize: 10,
+  };
+  const unsupported = { name: 'archive.zip', type: 'application/zip', size: 2 };
+  const missingSuffix = { name: 'scan', type: 'application/pdf', size: 2 };
+  const oversized = { name: 'large.pdf', type: 'application/pdf', size: 11 };
+  await adapter.window.processFiles([unsupported, missingSuffix, oversized]);
+  for (let i = 0; i < 6; i++) await flush();
+  assert.equal(adapter.workers[0].messages.some(message => message.type === 'add'), false);
+  assert.equal(adapter.elements.globalUploadQueueSkippedTitle.textContent, 'Übersprungen (3)');
+  assert.equal(adapter.elements.globalUploadQueueSkippedRows.children.length, 3);
+  assert.deepEqual(adapter.elements.globalUploadQueueSkippedRows.children[2].children[1].children.map(button => button.textContent), ['Entfernen']);
+
+  const accepted = { name: 'photo.JPG', type: 'image/jpg', size: 2 };
+  await adapter.window.processFiles([accepted]);
+  for (let i = 0; i < 6; i++) await flush();
+  assert.ok(adapter.workers[0].messages.some(message => message.type === 'add' && message.files[0] === accepted));
+
+  const override = { name: 'unknown.bin', type: 'application/octet-stream', size: 2 };
+  await adapter.window.processFiles([override], { tryAnyway: true });
+  for (let i = 0; i < 6; i++) await flush();
+  assert.ok(adapter.workers[0].messages.some(message => message.type === 'add' && message.tryAnyway === true && message.files[0] === override));
+  adapter.elements.globalUploadQueueSkippedRows.children[0].children[1].children[1].click();
+  assert.equal(adapter.elements.globalUploadQueueSkippedTitle.textContent, 'Übersprungen (2)');
+  adapter.elements.globalUploadQueueClearSkipped.click();
+  assert.equal(adapter.elements.globalUploadQueueSkipped.classList.contains('hidden'), true);
+});
+
+test('clearing the queue cancels a selection awaiting controller startup', async () => {
+  let release;
+  const handshake = new Promise(resolve => { release = resolve; });
+  const adapter = modernAdapter(message => message.op === 'clearState' ? handshake : undefined);
+  const pending = adapter.window.processFiles([{ name: 'scan.pdf', type: 'application/pdf', size: 1 }]);
+  adapter.elements.globalUploadQueueClear.click();
+  release({ protocol: 2, generation: 0 });
+  await pending;
+  for (let i = 0; i < 6; i++) await flush();
+  assert.equal(adapter.workers[0].messages.some(message => message.type === 'add'), false);
+  assert.ok(adapter.workers[0].messages.some(message => message.action === 'clearQueue'));
 });
 
 test('adapter waits for the updated service worker to activate before restoring or clearing', async () => {
@@ -357,16 +402,80 @@ test('controller dedup prefers an admitted leader and handles 429 retry-after', 
 test('controller capacity selection honors both slots and byte headroom', () => {
   const { api } = controller();
   const selected = api.selectReady([
-    { key: 'too-big', state: 'queued', file: {}, size: 11, sha256: 'a' },
-    { key: 'fits', state: 'queued', file: {}, size: 5, sha256: 'b' },
-    { key: 'next', state: 'queued', file: {}, size: 5, sha256: 'c' }
+    { key: 'too-big', state: 'queued', file: {}, size: 11, sha256: 'a'.repeat(64) },
+    { key: 'fits', state: 'queued', file: {}, size: 5, sha256: 'b'.repeat(64) },
+    { key: 'next', state: 'queued', file: {}, size: 5, sha256: 'c'.repeat(64) }
   ], { slots: 2, max_bytes: 10 });
   assert.deepEqual(Array.from(selected, item => item.key), ['fits', 'next']);
   const fitted = api.selectReady([
-    { key: 'first', state: 'queued', file: {}, size: 8, sha256: 'a' },
-    { key: 'second', state: 'queued', file: {}, size: 5, sha256: 'b' }
+    { key: 'first', state: 'queued', file: {}, size: 8, sha256: 'a'.repeat(64) },
+    { key: 'second', state: 'queued', file: {}, size: 5, sha256: 'b'.repeat(64) }
   ], { slots: 2, max_bytes: 10 });
   assert.deepEqual(Array.from(fitted, item => item.key), ['first']);
+});
+
+test('durable reconciliation cannot erase a freshly computed hash', async () => {
+  const hash = 'a'.repeat(64);
+  const { api } = controller({ swResults: { snapshot: [{ key: 'local', batchId: 'batch-race', state: 'queued', sha256: undefined }] } });
+  const item = { key: 'local', batchId: 'batch-race', state: 'queued', file: {}, size: 1, sha256: hash };
+  api.state().queue.push(item);
+  await api.reconcileDurable('batch-race');
+  assert.equal(item.sha256, hash);
+  assert.equal(Array.from(api.selectReady([item], { slots: 1, max_bytes: 10 }), entry => entry.key).join(','), 'local');
+});
+
+test('refresh during a hashing window preserves hashes and explicit overrides through upload', async () => {
+  let finishSecond, inspections = 0;
+  const posted = [];
+  const rows = ['first', 'second'].map(key => ({ key, batchId: 'race', state: 'queued', sha256: undefined, tryAnyway: false }));
+  const { api, worker } = controller({
+    swResults: { snapshot: rows },
+    FormData: class { constructor() { this.fields = {}; } append(key, value) { this.fields[key] = value; } },
+    fetch: async (url, options) => {
+      if (url === '/api/uploads/files') posted.push(options.body.fields);
+      return { ok: true, status: 200, json: async () => url.includes('/capacity') ? { slots: 2, max_bytes: 10 } : url.includes('/preflight') ? { files: [] } : { file_id: posted.length, state: 'accepted' } };
+    },
+  });
+  worker.inspectUploadFile = async () => ++inspections === 1
+    ? { sha256: 'a'.repeat(64), mime: 'application/pdf' }
+    : new Promise(resolve => { finishSecond = resolve; });
+  const items = rows.map(row => ({ ...row, file: { type: 'application/pdf' }, size: 1, tryAnyway: true }));
+  api.state().queue.push(...items);
+  const processing = api.processBatch(items);
+  for (let i = 0; i < 10 && !finishSecond; i++) await flush();
+  assert.equal(typeof finishSecond, 'function');
+  await api.reconcileDurable('race');
+  finishSecond({ sha256: 'b'.repeat(64), mime: 'application/pdf' });
+  await processing;
+  assert.equal(posted.length, 2);
+  assert.deepEqual(posted.map(body => body.sha256), ['a'.repeat(64), 'b'.repeat(64)]);
+  assert.ok(posted.every(body => body.client_id && body.inspect_content === 'true'));
+});
+
+test('send repairs missing hashes and never posts incomplete or failed metadata', async () => {
+  for (const scenario of ['repair', 'inspection-throws', 'no-file', 'no-client-id', 'late-corruption']) {
+    const posted = [];
+    const item = { key: scenario === 'no-client-id' ? '' : scenario, batchId: 'guard', state: 'queued', size: 1, file: scenario === 'no-file' ? null : {}, sha256: scenario === 'late-corruption' || scenario === 'no-client-id' ? 'c'.repeat(64) : undefined };
+    const { api, worker } = controller({
+      onSW(message, respond) {
+        if (scenario === 'late-corruption' && message.op === 'putMany' && item.state === 'uploading') item.sha256 = undefined;
+        respond(true);
+      },
+      FormData: class { constructor() { this.fields = {}; } append(key, value) { this.fields[key] = value; } },
+      fetch: async (_url, options) => { posted.push(options.body.fields); return { ok: true, status: 202, json: async () => ({ file_id: 1, state: 'accepted' }) }; },
+    });
+    worker.inspectUploadFile = async () => {
+      if (scenario === 'inspection-throws') throw new Error('Unreadable file');
+      return { sha256: 'd'.repeat(64), mime: 'application/pdf' };
+    };
+    api.state().queue.push(item);
+    const sent = await api.send(item);
+    assert.equal(sent, scenario === 'repair', scenario);
+    assert.equal(posted.length, scenario === 'repair' ? 1 : 0, scenario);
+    assert.equal(item.state, scenario === 'repair' ? 'accepted' : scenario === 'no-file' ? 'needs_files' : 'failed', scenario);
+    if (posted.length) assert.equal(posted[0].sha256, 'd'.repeat(64));
+    assert.equal(api.state().activeUploads, 0, scenario);
+  }
 });
 
 test('controller restore reconciles accepted server files before marking missing bytes', async () => {
@@ -566,7 +675,7 @@ test('accepts a drop while another upload is running instead of blocking or repl
   const file = { name: 'later.pdf', size: 3, lastModified: 1 };
   await queue.enqueue([file]);
   assert.equal(queue.pendingAdds.length, 1);
-  assert.equal(queue.pendingAdds[0][0], file);
+  assert.equal(queue.pendingAdds[0].files[0], file);
   assert.equal(queue.running, true);
 });
 
@@ -729,7 +838,7 @@ test('a failed lease reconciles an archived row instead of spinning a stale queu
     if (message.op === 'snapshot') return respond([]);
     respond(true);
   } });
-  const stale = { key: 'archived-by-other-tab', batchId: 'batch-a', file: {}, state: 'queued' };
+  const stale = { key: 'archived-by-other-tab', batchId: 'batch-a', file: {}, sha256: 'a'.repeat(64), state: 'queued' };
   api.state().queue.push(stale);
   assert.equal(await api.send(stale), false);
   assert.equal(api.state().queue.length, 0);

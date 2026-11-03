@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import uuid
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import (
@@ -30,7 +31,15 @@ from app.config import settings
 from app.database import SessionLocal, get_db
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem, UploadOutbox
 from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
-from app.utils.bulk_upload import extension_mime, normalize_mime, safe_path, sniff_mime, stream_to_file, upload_root
+from app.utils.bulk_upload import (
+    _sync_directory,
+    extension_mime,
+    normalize_mime,
+    safe_path,
+    sniff_mime,
+    stream_to_file,
+    upload_root,
+)
 from app.utils.filename_utils import sanitize_filename
 from app.utils.tribe_scope import ensure_document_scope
 from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, SCHEDULER_KEY, freshness
@@ -299,6 +308,7 @@ def upload_file(
     batch_id: str = Form(...),
     client_id: str = Form(...),
     sha256: str = Form(...),
+    inspect_content: bool = Form(False),
     x_docuelevate_intake_secret: str | None = Header(default=None),
 ):
     principal, owner = _principal(request, x_docuelevate_intake_secret)
@@ -328,7 +338,7 @@ def upload_file(
     ext, supplied = os.path.splitext(filename)[1].lower(), normalize_mime(file.content_type)
     allowed_mimes = {value.lower() for value in ALLOWED_MIME_TYPES}
     generic_mime = supplied in {"", "application/octet-stream"}
-    if ext not in ALLOWED_EXTENSIONS or (not generic_mime and supplied not in allowed_mimes):
+    if not inspect_content and (ext not in ALLOWED_EXTENSIONS or (not generic_mime and supplied not in allowed_mimes)):
         raise HTTPException(415, "unsupported document type")
     size_hint = _upload_size(file)
     if size_hint is None or size_hint > settings.max_upload_size:
@@ -358,22 +368,49 @@ def upload_file(
         # Never let a browser supplied MIME type turn arbitrary bytes into a
         # PDF.  OOXML containers are likewise checked by sniff_mime's ZIP
         # signature before their declared content type is retained.
-        if ext == ".pdf" and not header.startswith(b"%PDF-"):
+        if not inspect_content and ext == ".pdf" and not header.startswith(b"%PDF-"):
             raise ValueError("PDF signature is missing")
         expected_mime = extension_mime(filename)
-        if ext in {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"} and not header.startswith(b"PK\x03\x04"):
+        if (
+            not inspect_content
+            and ext in {".docx", ".docm", ".xlsx", ".xlsm", ".pptx", ".pptm"}
+            and not header.startswith(b"PK\x03\x04")
+        ):
             raise ValueError("OOXML ZIP signature is missing")
         if generic_mime:
             supplied = expected_mime or supplied
-        if expected_mime and supplied not in {"", "application/octet-stream", expected_mime}:
+        if not inspect_content and expected_mime and supplied not in {"", "application/octet-stream", expected_mime}:
             raise ValueError("declared MIME is incompatible with extension")
         # sniff_mime may intentionally preserve a non-generic browser value;
         # canonicalize aliases before the allow-list check and persisted value.
+        if inspect_content:
+            # Override is a request to inspect bytes, never a request to trust
+            # the browser's MIME claim. Keep detection deliberately narrow.
+            if header.startswith(b"%PDF-"):
+                mime = "application/pdf"
+            elif header.startswith(b"\xff\xd8\xff"):
+                mime = "image/jpeg"
+            elif header.startswith(b"\x89PNG\r\n\x1a\n"):
+                mime = "image/png"
+            elif header.startswith((b"GIF87a", b"GIF89a")):
+                mime = "image/gif"
+            else:
+                raise HTTPException(415, "unsupported content type")
         mime = normalize_mime(mime)
         if mime in {"", "application/octet-stream"} and expected_mime:
             mime = expected_mime
         if mime.lower() not in allowed_mimes:
             raise ValueError("unsupported content type")
+        storage_filename = filename
+        if inspect_content:
+            suffix_by_mime = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif"}
+            suffix = suffix_by_mime.get(mime.lower())
+            if suffix and ext != suffix:
+                storage_filename = f"{Path(filename).stem or 'document'}{suffix}"
+                target_suffix = safe_path(batch.id, str(uuid.uuid4()), storage_filename)
+                target.replace(target_suffix)
+                target = target_suffix
+                _sync_directory(target.parent)
         duplicate = (
             _owner_file_query(db, owner, actual).order_by(FileRecord.id.asc()).first()
             if settings.enable_deduplication

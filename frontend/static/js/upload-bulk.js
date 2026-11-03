@@ -6,6 +6,21 @@
   // from starting a second controller (and a competing upload worker).
   if (useDedicatedController && window.__docuElevateUploadQueueStarted) return;
   if (useDedicatedController) window.__docuElevateUploadQueueStarted = true;
+  const MIME_ALIASES = { 'image/jpg': 'image/jpeg', 'text/rtf': 'application/rtf' };
+  function uploadTypePrecheck(file, config = window.uploadConfig || {}) {
+    const name = String(file?.name || '');
+    const extension = name.includes('.') ? `.${name.split('.').pop().toLowerCase()}` : '';
+    const mime = String(file?.type || '').split(';', 1)[0].trim().toLowerCase();
+    const normalizedMime = MIME_ALIASES[mime] || mime;
+    const extensions = new Set((config.allowedExtensions || []).map(value => String(value).toLowerCase()));
+    const mimes = new Set((config.allowedMimeTypes || []).map(value => String(value).toLowerCase()));
+    if (!extensions.size || !mimes.size) return { ok: true };
+    const generic = !normalizedMime || normalizedMime === 'application/octet-stream';
+    if (!extension || !extensions.has(extension)) return { ok: false, reason: extension ? 'Dateiendung wird nicht unterstützt' : 'Datei hat keine unterstützte Dateiendung' };
+    if (!generic && normalizedMime && !mimes.has(normalizedMime)) return { ok: false, reason: 'Gemeldeter Dateityp wird nicht unterstützt' };
+    return { ok: true };
+  }
+  let skippedCandidates = [], selectionGeneration = 0;
   function globalPopup() {
     const panel = document.getElementById('globalUploadQueue');
     if (!panel) return null;
@@ -19,7 +34,8 @@
     const discardButton = document.getElementById('globalUploadQueueDiscardUnsent');
     const clearButton = document.getElementById('globalUploadQueueClear');
     const actionFeedback = document.getElementById('globalUploadQueueActionFeedback');
-    const actionButtons = [archiveButton, retryButton, discardButton, clearButton].filter(Boolean);
+    const clearSkippedButton = document.getElementById('globalUploadQueueClearSkipped');
+    const actionButtons = [archiveButton, retryButton, discardButton, clearButton, clearSkippedButton].filter(Boolean);
     let minimized = false;
     const show = () => { minimized = false; panel.classList.remove('hidden'); reopen?.classList.add('hidden'); };
     const hide = () => { minimized = true; panel.classList.add('hidden'); reopen?.classList.remove('hidden'); };
@@ -32,8 +48,29 @@
     archiveButton?.addEventListener('click', () => runAction('archiveCompleted'));
     retryButton?.addEventListener('click', () => runAction('retryFailed'));
     discardButton?.addEventListener('click', () => runAction('discardUnsent'));
-    clearButton?.addEventListener('click', () => { if (typeof window.confirm === 'function' && !window.confirm('Lokale Queue leeren? Server-Dokumente bleiben erhalten; ausstehende lokale Übertragungen werden beendet.')) return; runAction('clearQueue'); });
+    clearButton?.addEventListener('click', () => { if (typeof window.confirm === 'function' && !window.confirm('Lokale Queue leeren? Server-Dokumente bleiben erhalten; ausstehende lokale Übertragungen werden beendet.')) return; skippedCandidates = []; selectionGeneration += 1; renderSkipped(); runAction('clearQueue'); });
+    clearSkippedButton?.addEventListener('click', () => { skippedCandidates = []; renderSkipped(); });
     let actionBusy = false;
+    function renderSkipped() {
+      const section = document.getElementById('globalUploadQueueSkipped');
+      const rows = document.getElementById('globalUploadQueueSkippedRows');
+      if (!section || !rows) return;
+      section.classList.toggle('hidden', !skippedCandidates.length);
+      const title = document.getElementById('globalUploadQueueSkippedTitle');
+      if (title) title.textContent = `Übersprungen (${skippedCandidates.length})`;
+      rows.replaceChildren();
+      for (const candidate of skippedCandidates.slice(0, 100)) {
+        const row = document.createElement('div'); row.className = 'flex items-center justify-between gap-2 rounded border border-amber-200 px-2 py-1';
+        row.append(`${candidate.file.name} — ${candidate.reason}`);
+        const actions = document.createElement('span'); actions.className = 'shrink-0 flex gap-1';
+        const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'rounded border border-amber-400 px-2 py-1 text-[11px] text-amber-800'; retry.textContent = 'Trotzdem versuchen'; retry.disabled = Boolean(candidate.sizeBlocked);
+        retry.addEventListener('click', () => { const current = skippedCandidates.find(item => item.id === candidate.id); if (!current || current.sizeBlocked) return; skippedCandidates = skippedCandidates.filter(item => item.id !== candidate.id); renderSkipped(); void window.processFiles?.([current.file], { tryAnyway: true }); });
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'rounded border border-gray-300 px-2 py-1 text-[11px] text-gray-700'; remove.textContent = 'Entfernen'; remove.addEventListener('click', () => { skippedCandidates = skippedCandidates.filter(item => item.id !== candidate.id); renderSkipped(); });
+        if (!candidate.sizeBlocked) actions.append(retry);
+        actions.append(remove); row.append(actions); rows.append(row);
+      }
+      if (skippedCandidates.length > 100) { const more = document.createElement('div'); more.className = 'pt-1 text-center text-gray-500'; more.textContent = `${skippedCandidates.length - 100} weitere übersprungene Dateien`; rows.append(more); }
+    }
     addFilesInput?.addEventListener('change', event => { const files = event.target?.files; if (files?.length) void window.processFiles?.(files); event.target.value = ''; });
     const states = { queued: 'wartet auf Upload', uploading: 'wird übertragen', accepted: 'angenommen', duplicate: 'bereits vorhanden', processing: 'in Verarbeitung', complete: 'verarbeitet', completed: 'verarbeitet', needs_files: 'Originaldatei erneut auswählen', failed: 'fehlgeschlagen', transfer_failed: 'Übertragung fehlgeschlagen' };
     const errors = { transfer_rejected: 'vom Server abgelehnt', network_retrying: 'Verbindung wird erneut versucht', file_inspection_failed: 'Datei konnte nicht geprüft werden', server_status_missing: 'Serverstatus nicht gefunden' };
@@ -125,13 +162,14 @@
           rows.appendChild(more);
         }
       }
+      renderSkipped();
       if (payload.diagnostics) renderDiagnostics(payload.diagnostics);
       if (options.open && (!minimized || options.force)) show();
     }, setActionHandler(handler) { actionHandler = handler; }};
   }
   const popup = globalPopup();
   if (useDedicatedController) {
-    const worker = new Worker('/static/js/upload-controller-worker.js?v=queue-actions-2');
+    const worker = new Worker('/static/js/upload-controller-worker.js?v=queue-actions-3');
     let registration;
     let latestRevision = -1;
     let latestStatus = { total: 0, accepted: 0, complete: 0, failed: 0, needsFiles: 0, processing: 0 };
@@ -224,7 +262,7 @@
     }
     async function start() {
       if (!navigator.serviceWorker) throw new Error('This browser needs Service Worker support for resumable uploads');
-      registration = await navigator.serviceWorker.register('/upload-queue-sw.js?v=queue-actions-2', { scope: '/', updateViaCache: 'none' });
+      registration = await navigator.serviceWorker.register('/upload-queue-sw.js?v=queue-actions-3', { scope: '/', updateViaCache: 'none' });
       await waitForActivation(registration.installing || registration.waiting || registration.active);
       await navigator.serviceWorker.ready;
       const handshake = await postSW({ op: 'clearState' });
@@ -239,12 +277,22 @@
       return startPromise;
     }
     window.beginUploadSelection = () => popup?.beginSelection();
-    window.processFiles = async files => {
-      const added = Array.from(files || []);
+    window.processFiles = async (files, options = {}) => {
+      const candidates = Array.from(files || []), generation = selectionGeneration;
+      const added = candidates.filter(file => {
+        if (!file) return false;
+        if (file.size > (window.uploadConfig?.maxFileSize || 1024 * 1024 * 1024)) { skippedCandidates.push({ id: crypto.randomUUID(), file, sizeBlocked: true, reason: 'Datei ist zu groß (nicht überschreibbar)' }); return false; }
+        if (options.tryAnyway) return true;
+        const check = uploadTypePrecheck(file);
+        if (!check.ok) skippedCandidates.push({ id: crypto.randomUUID(), file, reason: check.reason });
+        return check.ok;
+      });
+      popup?.render({ ...latestStatus, skipped: skippedCandidates.length, message: added.length ? `${added.length} Datei${added.length === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.` : 'Nicht unterstützte Dateien wurden übersprungen.', diagnostics: diagnostic }, { open: true });
       if (!added.length) return;
       const total = Number(latestStatus.total || 0) + added.length;
       popup?.render({ ...latestStatus, total, message: `${added.length} Datei${added.length === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.`, diagnostics: diagnostic }, { open: true });
-      await ensureStarted(); worker.postMessage({ type: 'add', files: added });
+      await ensureStarted(); if (generation !== selectionGeneration) return;
+      worker.postMessage({ type: 'add', files: added, tryAnyway: Boolean(options.tryAnyway), generation });
     };
     window.addEventListener('DOMContentLoaded', () => { void ensureStarted().catch(() => {}); });
     return;
@@ -383,7 +431,7 @@
   window.addEventListener('pagehide', shutdownPreflightWorker);
   function metadata(item, batchId) {
     return { key: item.key, batchId: item.batchId || batchId, name: item.name, size: item.size, lastModified: item.lastModified,
-      state: item.state, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf };
+      state: item.state, sha256: item.sha256, mime: item.mime, fileId: item.fileId, duplicateOf: item.duplicateOf, tryAnyway: Boolean(item.tryAnyway) };
   }
   class Queue {
     constructor(container, status) {
@@ -464,13 +512,13 @@
       socket.onclose = () => { if (this.socket === socket) clearInterval(this.heartbeat); if (this.socket === socket) this.wsTimer = setTimeout(() => this.connectEvents(), 5000); };
     }
     async enqueue(files, options = {}) {
-      const list = Array.from(files || []).filter(file => file && file.size <= (window.uploadConfig?.maxFileSize || MAX_FILE_SIZE) && _isAcceptedFile(file));
+      const list = Array.from(files || []).filter(file => file && file.size <= (window.uploadConfig?.maxFileSize || MAX_FILE_SIZE) && (options.tryAnyway || uploadTypePrecheck(file).ok));
       if (!list.length) return;
       if (this.running) {
         // Keep the drop zone live. The active scheduler finishes its current
         // batch, then starts this addition as a separate server batch.
-        this.pendingAdds.push(list);
-        this.message(`${this.pendingAdds.reduce((count, batch) => count + batch.length, 0)} weitere Dateien vorgemerkt.`);
+        this.pendingAdds.push({ files: list, tryAnyway: Boolean(options.tryAnyway) });
+        this.message(`${this.pendingAdds.reduce((count, batch) => count + batch.files.length, 0)} weitere Dateien vorgemerkt.`);
         return;
       }
       this.running = true;
@@ -478,12 +526,13 @@
         await ensureSW();
         if (!options.append && this.batchId && this.queue.some(item => !item.fileId)) {
           await this.refresh(); this.queue = matchReselected(this.queue, list);
+          for (const item of this.queue) if (list.includes(item.file) && !item.fileId) item.tryAnyway = Boolean(options.tryAnyway);
           if (!this.queue.some(item => item.file && !item.fileId)) {
             this.message('Die Auswahl passt nicht zur offenen Queue. Bitte die ursprünglichen Dateien erneut auswählen.'); return;
           }
         } else {
           this.socket?.close(); this.batchId = null;
-          const additions = list.map(file => ({ key: crypto.randomUUID(), file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued' }));
+          const additions = list.map(file => ({ key: crypto.randomUUID(), file, name: file.name, size: file.size, lastModified: file.lastModified || 0, state: 'queued', tryAnyway: Boolean(options.tryAnyway) }));
           this.queue = [...this.queue, ...additions];
           const clientBatchId = crypto.randomUUID();
           const batch = await json('/api/uploads/batches', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -523,7 +572,7 @@
       finally {
         this.running = false;
         const next = this.pendingAdds.shift();
-        if (next?.length) void this.enqueue(next, { append: true });
+        if (next?.files.length) void this.enqueue(next.files, { append: true, tryAnyway: next.tryAnyway });
       }
     }
     async send(item) {
@@ -531,7 +580,7 @@
       const renewal = setInterval(() => postSW({ op: 'lease', key: item.key, owner, ttl: 60000 }).catch(() => {}), 10000);
       try {
         const body = new FormData(); body.append('file', item.file); body.append('batch_id', item.batchId || this.batchId);
-        body.append('client_id', item.key); body.append('sha256', item.sha256);
+        body.append('client_id', item.key); body.append('sha256', item.sha256); if (item.tryAnyway) body.append('inspect_content', 'true');
         const result = await json('/api/uploads/files', { method: 'POST', body });
         item.fileId = result.file_id; item.state = result.duplicate ? 'duplicate' : result.state || 'accepted';
         await this.persist([item]);
@@ -555,14 +604,26 @@
     }
   }
   window.PersistentBulkUploadQueue = Queue;
-  window.processFiles = async (files, container, status) => {
+  window.processFiles = async (files, container, status, options = {}) => {
+    if (container && typeof container === 'object' && Object.prototype.hasOwnProperty.call(container, 'tryAnyway')) { options = container; container = undefined; status = undefined; }
+    const candidates = Array.from(files || []);
+    const added = candidates.filter(file => {
+      if (!file) return false;
+      if (file.size > (window.uploadConfig?.maxFileSize || MAX_FILE_SIZE)) { skippedCandidates.push({ id: crypto.randomUUID(), file, sizeBlocked: true, reason: 'Datei ist zu groß (nicht überschreibbar)' }); return false; }
+      if (options.tryAnyway) return true;
+      const check = uploadTypePrecheck(file);
+      if (!check.ok) skippedCandidates.push({ id: crypto.randomUUID(), file, reason: check.reason });
+      return check.ok;
+    });
+    popup?.render({ total: (window.docuElevateUploadQueue?.queue?.length || 0) + added.length, message: added.length ? `${added.length} Datei${added.length === 1 ? '' : 'en'} zur Upload-Queue hinzugefügt.` : 'Nicht unterstützte Dateien wurden übersprungen.' }, { open: true });
+    if (!added.length) return;
     popup?.show();
     let queue = window.docuElevateUploadQueue;
     if (!queue) { queue = new Queue(container, status); window.docuElevateUploadQueue = queue; await queue.restore(); }
     if (container) queue.container = container;
     if (status) queue.status = status;
     if (queue.ready) await queue.ready;
-    return queue.enqueue(files);
+    return queue.enqueue(added, options);
   };
   window.addEventListener('DOMContentLoaded', () => {
     const queue = new Queue(document.getElementById('uploadProgress'), document.getElementById('statusMessage'));

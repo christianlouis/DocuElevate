@@ -137,6 +137,10 @@ def _inject_global_context(ctx: dict) -> None:
                 ctx.setdefault("upload_queue_delay_ms", settings.upload_queue_delay_ms)
                 ctx.setdefault("upload_max_file_size", settings.max_upload_size)
                 ctx.setdefault("upload_enable_deduplication", settings.enable_deduplication)
+                from app.utils.allowed_types import ALLOWED_EXTENSIONS, ALLOWED_MIME_TYPES
+
+                ctx.setdefault("upload_allowed_extensions", sorted(ALLOWED_EXTENSIONS))
+                ctx.setdefault("upload_allowed_mime_types", sorted(ALLOWED_MIME_TYPES))
 
         # --- Hydrate session language from DB (once per session) ---
         # If the session doesn't have a preferred_language yet but the user

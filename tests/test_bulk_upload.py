@@ -20,10 +20,63 @@ from app.utils.bulk_upload import sniff_mime, stream_to_file
 from app.utils.upload_health import DISPATCHER_KEY
 
 
+@pytest.fixture(autouse=True)
+def _ample_upload_disk(monkeypatch):
+    """Keep ordinary upload contracts independent of the host filesystem."""
+    monkeypatch.setattr(
+        bulk_upload.shutil,
+        "disk_usage",
+        lambda _path: shutil._ntuple_diskusage(total=10**12, used=10**9, free=999 * 10**9),
+    )
+
+
 def _batch(client, key: str = "queue-owner:batch") -> str:
     response = client.post("/api/uploads/batches", json={"client_batch_id": key, "total_files": 2, "total_bytes": 64})
     assert response.status_code == 201, response.text
     return response.json()["batch_id"]
+
+
+def test_inspect_content_recovers_renamed_pdf_but_rejects_binary(client, db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    monkeypatch.setattr(bulk_upload.shutil, "disk_usage", lambda _path: shutil._ntuple_diskusage(10**9, 1, 9 * 10**8))
+    batch_id = _batch(client, "queue-owner:inspect-content")
+    pdf = b"%PDF-1.7 renamed"
+    fields = {
+        "batch_id": batch_id,
+        "client_id": "renamed",
+        "sha256": hashlib.sha256(pdf).hexdigest(),
+        "inspect_content": "true",
+    }
+    response = client.post(
+        "/api/uploads/files", data=fields, files={"file": ("renamed.docx", pdf, "application/octet-stream")}
+    )
+    assert response.status_code == 202, response.text
+    assert list((tmp_path / "bulk_uploads" / batch_id).glob("*.pdf"))
+    binary = b"not a document"
+    rejected = client.post(
+        "/api/uploads/files",
+        data={**fields, "client_id": "binary", "sha256": hashlib.sha256(binary).hexdigest()},
+        files={"file": ("binary.pdf", binary, "application/pdf")},
+    )
+    assert rejected.status_code == 415
+    for client_id, name, content in (
+        ("archive", "archive.pdf", b"PK\x03\x04not-a-document"),
+        ("video", "video.pdf", b"\x00\x00\x00\x18ftypmp42not-a-document"),
+    ):
+        rejected = client.post(
+            "/api/uploads/files",
+            data={**fields, "client_id": client_id, "sha256": hashlib.sha256(content).hexdigest()},
+            files={"file": (name, content, "application/pdf")},
+        )
+        assert rejected.status_code == 415, rejected.text
+        assert len(list((tmp_path / "bulk_uploads" / batch_id).iterdir())) == 1
+    assert db_session.query(UploadItem).count() == 1
+
+
+def test_conversion_uses_detected_suffix_for_recovered_name():
+    from app.tasks.convert_to_pdf import _build_filename
+
+    assert _build_filename("/tmp/id.pdf", "renamed.docx", ".pdf") == "renamed.pdf"
 
 
 def test_accept_is_durable_and_idempotent(client, db_session, monkeypatch, tmp_path):
@@ -237,6 +290,8 @@ def test_rejects_mime_mismatch_before_writing(client, monkeypatch, tmp_path):
         ("generic.pdf", "application/octet-stream", b"%PDF-1.7 generic", "application/pdf"),
         ("missing.pdf", None, b"%PDF-1.7 missing", "application/pdf"),
         ("photo.jpg", "image/jpg", b"\xff\xd8\xff\xe0jpeg", "image/jpeg"),
+        ("photo.png", "image/png", b"\x89PNG\r\n\x1a\nimage", "image/png"),
+        ("photo.gif", "image/gif", b"GIF89aimage", "image/gif"),
     ],
 )
 def test_accepts_generic_or_aliased_mime_for_real_file_signatures(
@@ -269,6 +324,78 @@ def test_accepts_generic_mime_for_signed_docx(client, monkeypatch, tmp_path):
         files={"file": ("report.docx", payload, "application/octet-stream")},
     )
     assert response.status_code == 202, response.text
+
+
+@pytest.mark.parametrize(
+    ("filename", "content", "expected_suffix"),
+    [
+        ("renamed.bin", b"%PDF-1.7 recovered", ".pdf"),
+        ("missing-suffix", b"%PDF-1.7 recovered", ".pdf"),
+        ("renamed.data", b"\xff\xd8\xff\xe0jpeg", ".jpg"),
+        ("renamed.data", b"\x89PNG\r\n\x1a\nimage", ".png"),
+        ("renamed.data", b"GIF89aimage", ".gif"),
+    ],
+)
+def test_inspect_override_detects_signature_and_stores_detected_suffix(
+    client, db_session, monkeypatch, tmp_path, filename, content, expected_suffix
+):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, f"queue-owner:override-{expected_suffix}")
+    response = client.post(
+        "/api/uploads/files",
+        data={
+            "batch_id": batch_id,
+            "client_id": f"override-{expected_suffix}",
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "inspect_content": "true",
+        },
+        files={"file": (filename, content, "application/octet-stream")},
+    )
+    assert response.status_code == 202, response.text
+    record = db_session.get(FileRecord, response.json()["file_id"])
+    assert record.original_filename == filename
+    assert record.local_filename.endswith(expected_suffix)
+    assert len(list((tmp_path / "bulk_uploads" / batch_id).iterdir())) == 1
+
+
+@pytest.mark.parametrize("failure", ["hash", "size", "capacity", "signature", "rename_sync"])
+def test_content_override_preserves_guards_and_cleans_rejections(client, db_session, monkeypatch, tmp_path, failure):
+    monkeypatch.setattr(settings, "workdir", str(tmp_path))
+    batch_id = _batch(client, f"queue-owner:override-guard-{failure}")
+    content = b"%PDF-1.7 guarded"
+    expected_status = 422
+    if failure == "size":
+        monkeypatch.setattr(settings, "max_upload_size", 4)
+        expected_status = 413
+    elif failure == "capacity":
+        monkeypatch.setattr(bulk_upload.shutil, "disk_usage", lambda _: shutil._ntuple_diskusage(100, 99, 1))
+        expected_status = 429
+    elif failure == "signature":
+        content = b"\x89PNGtruncated"
+        expected_status = 415
+    elif failure == "rename_sync":
+        expected_status = 507
+
+        def fail_sync(_path):
+            raise OSError("synthetic sync failure")
+
+        monkeypatch.setattr(bulk_upload, "_sync_directory", fail_sync)
+    response = client.post(
+        "/api/uploads/files",
+        data={
+            "batch_id": batch_id,
+            "client_id": failure,
+            "sha256": "0" * 64 if failure == "hash" else hashlib.sha256(content).hexdigest(),
+            "inspect_content": "true",
+        },
+        files={"file": ("renamed.bin", content, "video/quicktime")},
+    )
+    assert response.status_code == expected_status, response.text
+    assert not list((tmp_path / "bulk_uploads" / batch_id).glob("*"))
+    assert db_session.query(UploadItem).count() == 0
+    assert db_session.query(UploadOutbox).count() == 0
+    ledger = db_session.get(UploadCapacity, 1)
+    assert ledger is None or ledger.reserved_bytes == 0
 
 
 def test_ooxml_signature_and_generic_browser_mime_are_compatible(tmp_path):

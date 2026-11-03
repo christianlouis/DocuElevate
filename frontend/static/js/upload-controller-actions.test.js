@@ -19,7 +19,7 @@ function controller(options = {}) {
         queueMicrotask(() => self.onmessage({ data: { type: 'swResponse', id: message.id, ok: true, result: defaults[message.op] } }));
       } else Promise.resolve(result).then(value => self.onmessage({ data: { type: 'swResponse', id: message.id, ok: true, result: value } }), error => self.onmessage({ data: { type: 'swResponse', id: message.id, ok: false, error: error.message } }));
     },
-    inspectUploadFile: async () => ({ sha256: 'hash', mime: 'application/pdf' }),
+    inspectUploadFile: async () => ({ sha256: 'a'.repeat(64), mime: 'application/pdf' }),
   };
   const context = { self, console, crypto: { randomUUID: (() => { let i = 0; return () => `id-${++i}`; })() }, setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask, FormData: class { append() {} }, fetch: options.fetch || (async () => { throw new Error('offline'); }), importScripts() {}, TextEncoder, AbortController };
   vm.runInNewContext(source, context, { filename: 'upload-controller-worker.js' });
