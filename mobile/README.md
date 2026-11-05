@@ -105,11 +105,11 @@ No code changes are needed to point the app at a different server.  The server U
 ## Authentication Flow
 
 1. User enters the DocuElevate server URL on the login screen
-2. The app opens the server's `/login?mobile=1&redirect_uri=docuelevate://callback` URL in the system browser
-3. The user authenticates (SSO / local login)
-4. The server redirects back to `docuelevate://callback`
-5. The app exchanges the browser session for a permanent API token via `POST /api/mobile/generate-token`
-6. The token is stored in the device's secure keychain (`expo-secure-store`)
+2. The app makes an unauthenticated `GET /api/mobile/whoami` preflight. A `401` or `403` confirms that the server supports mobile login; a `404` stops the flow before opening the browser.
+3. The app opens the server's `/login?mobile=1&redirect_uri=docuelevate://callback` URL in the system browser
+4. The user authenticates (SSO / local login)
+5. The server redirects back to `docuelevate://callback?token=<token>`
+6. The app verifies the callback target and stores the returned token in the device's secure keychain (`expo-secure-store`)
 
 ## Push Notifications
 
@@ -159,11 +159,31 @@ The app registers itself as a share target so any file can be sent directly to D
 
 ### iOS – how it works
 
-`app.json` declares `CFBundleDocumentTypes` in the iOS `infoPlist` section.  This tells iOS which file types the app can receive, causing it to appear in the share sheet when the user shares a matching file.  When the user taps **DocuElevate** in the share sheet, iOS passes the file path to the app via `application:openURL:options:`.  The URL may arrive as a standard `file://` path or under the app's custom `docuelevate://` scheme.
+The standalone native iOS Share Extension is the primary share path. It receives PDFs, mail text, URLs, and supported files in its own process, stages up to 10 items, and shows a review before the user presses **Upload**. It sends files to the direct HTTPS `/api/ui-upload` endpoint using the scoped shared Keychain credential and reports success only after a queued task receipt or duplicate receipt. Raw `.eml` files are rejected before upload with guidance to share mail text, a PDF attachment, or print the mail as PDF. The extension is not implemented by `CFBundleDocumentTypes`.
 
-The root layout (`app/_layout.tsx`) listens for incoming URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start).  If the URL uses the `docuelevate://` scheme it is automatically rewritten to `file://` before being forwarded.  Incoming files are stored in `ShareContext` and automatically uploaded by `UploadScreen`.
+To test the native extension repeatedly, use an EAS simulator build such as:
 
-#### Handling "unmatched route" errors from "Open In…"
+```bash
+eas build --profile simulator-test --platform ios
+```
+
+The `simulator-test` profile contains a development client. Install the resulting artifact on the target simulator, start Metro with `npx expo start --dev-client`, connect the app, and sign in before exercising the iOS Share Sheet. Expo Go does not contain or validate the native Share Extension.
+
+To use the native share extension:
+
+1. Ensure the app is installed on the device.
+2. Open a supported file or select mail text/attachment in Files, Mail, Safari, or another sharing app. Raw `.eml` files are intentionally rejected before upload; share the mail text, share a PDF attachment, or print the mail as PDF and retry. The native extension is limited to 10 items; iOS may cancel the share before launch when more than 10 files are selected.
+3. Tap the **Share** button → find **DocuElevate** in the share sheet.
+4. Review the staged items in the native extension and press **Upload**. The app reports success only after the server returns a queued task or duplicate receipt.
+
+
+#### iOS fallback: Open With and deep links
+
+`app.json` declares `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` for the fallback Open With/deep-link path. It lets iOS open a matching file in the main app via `application:openURL:options:`; it is not the native Share Extension implementation. The URL may arrive as a standard `file://` path or under the app's custom `docuelevate://` scheme.
+
+The root layout (`app/_layout.tsx`) listens for incoming URLs via `Linking.addEventListener` (warm start) and `Linking.getInitialURL()` (cold start). If the URL uses the `docuelevate://` scheme it is rewritten to `file://` before being forwarded. Incoming files are stored in `ShareContext` and uploaded by `UploadScreen`.
+
+##### Handling "unmatched route" errors from "Open In…"
 
 iOS sometimes delivers the file path under the `docuelevate://` scheme:
 
@@ -173,20 +193,10 @@ docuelevate://private/var/mobile/Library/Mobile Documents/…/Invoice.pdf
 
 expo-router strips the scheme and tries to match `/private/var/mobile/…` as an in-app route.  The catch-all `app/+not-found.tsx` intercepts this, detects the filesystem-path pattern, adds the file directly to `ShareContext`, and redirects to the Upload tab.  `UploadScreen` picks up the pending file and begins uploading automatically.  The `Linking` listener in the root layout may also fire for the same URL; `ShareContext` deduplicates by URI to prevent double uploads.
 
-**Supported iOS file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
+**Registered Open With file types:** PDF, images (JPEG / PNG / GIF / BMP / TIFF / WebP), plain text, Word (`.docx`, `.doc`), Excel (`.xlsx`, `.xls`), PowerPoint (`.pptx`, `.ppt`), and any other file (`public.data`).
 
-To use the share sheet:
 
-1. Ensure the app is installed on the device.
-2. Open any supported file in Files, Mail, Safari, etc.
-3. Tap the **Share** button → find **DocuElevate** in the share sheet.
-4. The file is uploaded immediately.
-
-> **Note:** `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` means DocuElevate appears in the share sheet as an option but does **not** become the default app for any file type.
-
-#### iOS Action Extension (future enhancement)
-
-Apps like DeepL ("Translate in DeepL") appear as **Action Extensions** in the iOS share sheet, which requires a separate Xcode target and native Swift code.  This is planned as a future enhancement.  The current `CFBundleDocumentTypes` approach places DocuElevate in the "Open With" row of the share sheet.
+> **Note:** `CFBundleDocumentTypes` with `LSHandlerRank: Alternate` supports the fallback Open With path and does **not** make DocuElevate the default app for any file type.
 
 ### Android – how it works
 
@@ -210,6 +220,10 @@ The mobile app uses the following backend endpoints:
 Authentication uses `Authorization: Bearer <api_token>` on all requests.
 
 ## Troubleshooting
+
+### Mobile login says the server is unsupported
+
+The app checks `/api/mobile/whoami` before opening the browser. If that endpoint returns `404`, update the DocuElevate server to a release with mobile API support and try again. Network errors are reported separately; check the URL and that the server is reachable from the device.
 
 ### `Session expired Local session` when running `eas build`
 
