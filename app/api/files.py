@@ -1939,9 +1939,8 @@ async def ui_upload(
 
     # Extract just the filename without any path components to prevent path traversal
     # First, use basename to remove any directory components
-    base_filename = os.path.basename(file.filename)
     # Then sanitize the filename to remove special characters and ensure filesystem compatibility
-    safe_filename = sanitize_filename(base_filename)
+    safe_filename = sanitize_filename(file.filename)
 
     # Generate a unique filename with UUID to prevent overwriting and filename conflicts
     unique_id = str(uuid.uuid4())
