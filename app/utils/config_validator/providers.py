@@ -429,6 +429,9 @@ def get_provider_status() -> dict[str, dict[str, object]]:
     }
 
     # Add Uptime Kuma configuration
+    uptime_kuma_url = getattr(settings, "uptime_kuma_url", None)
+    from app.tasks.uptime_kuma_tasks import _safe_endpoint
+
     providers["Uptime Kuma"] = {
         "name": "Uptime Kuma",
         "icon": "fa-solid fa-heart-pulse",
@@ -436,9 +439,11 @@ def get_provider_status() -> dict[str, dict[str, object]]:
         "enabled": True,
         "description": "Server monitoring and status page",
         "details": {
-            "url": getattr(settings, "uptime_kuma_url", "Not set"),
+            "url": _safe_endpoint(uptime_kuma_url) if uptime_kuma_url else "Not set",
             "ping_interval": getattr(settings, "uptime_kuma_ping_interval", "Not set"),
         },
+        "testable": True,
+        "test_endpoint": "/api/diagnostic/test-uptime-kuma",
     }
 
     # Check WebDAV configuration

@@ -232,3 +232,12 @@ async def test_notification(request: Request):
     except Exception as e:
         logger.exception(f"Error sending test notification: {e}")
         return {"status": "error", "message": f"Error sending notification: {str(e)}"}
+
+
+@router.get("/diagnostic/test-uptime-kuma")
+@require_login
+async def test_uptime_kuma(request: Request):
+    """Run a safe, bounded Uptime Kuma connection test for the status dashboard."""
+    from app.tasks.uptime_kuma_tasks import check_uptime_kuma
+
+    return check_uptime_kuma()

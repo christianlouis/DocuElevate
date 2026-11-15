@@ -261,3 +261,23 @@ class TestTestNotification:
 
         # Response should have been processed
         assert response.status_code == 200
+
+
+@pytest.mark.unit
+class TestTestUptimeKuma:
+    """Tests for the status-dashboard Uptime Kuma connection action."""
+
+    @patch("app.tasks.uptime_kuma_tasks.check_uptime_kuma")
+    def test_returns_safe_connection_status(self, mock_check, client):
+        mock_check.return_value = {
+            "status": "error",
+            "configured": True,
+            "endpoint": "https://uptime.example.com",
+            "attempts": 1,
+            "http_status": 401,
+            "message": "Check the push URL and monitor configuration.",
+        }
+        response = client.get("/api/diagnostic/test-uptime-kuma")
+        assert response.status_code == 200
+        assert response.json()["http_status"] == 401
+        assert "private-token" not in response.text
