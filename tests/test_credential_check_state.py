@@ -76,6 +76,21 @@ def test_redaction_covers_bearer_and_url_credentials():
     assert "user:password" not in redacted
 
 
+def test_task_does_not_read_legacy_json(monkeypatch):
+    from app.tasks.check_credentials import check_credentials
+
+    monkeypatch.setattr(
+        "app.tasks.check_credentials.get_failure_state",
+        lambda: (_ for _ in ()).throw(AssertionError("legacy JSON must not be read")),
+    )
+    monkeypatch.setattr("app.tasks.check_credentials.get_provider_status", lambda: {})
+    monkeypatch.setattr("app.tasks.check_credentials.validate_storage_configs", lambda: {})
+
+    result = check_credentials.run()
+
+    assert result["failures"] == 0
+
+
 def test_malformed_legacy_state_is_ignored_when_seeding(db_session, monkeypatch):
     monkeypatch.setattr(
         "app.database.SessionLocal",
