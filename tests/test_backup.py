@@ -31,6 +31,7 @@ def _write_archive(path: Path, payload: bytes = b"SELECT 1;") -> str:
         archive.write(payload)
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
