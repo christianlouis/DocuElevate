@@ -227,7 +227,14 @@ class TestBackupTaskHelpers:
 
         published = tmp_path / "backup_hourly.db.gz"
         published.write_bytes(b"published")
-        with patch("app.tasks.backup_tasks.Path.stat", side_effect=FileNotFoundError):
+        real_stat = Path.stat
+
+        def stat_with_published_race(path, *args, **kwargs):
+            if path == published:
+                raise FileNotFoundError(path)
+            return real_stat(path, *args, **kwargs)
+
+        with patch("app.tasks.backup_tasks.Path.stat", new=stat_with_published_race):
             with patch("app.tasks.backup_tasks.shutil.disk_usage") as usage:
                 usage.return_value = MagicMock(total=10_000, used=1_000, free=9_000)
                 snapshot = _backup_storage_snapshot(tmp_path)
