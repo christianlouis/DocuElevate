@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.7 (2026-11-15)
+
+### Bug Fixes
+
+- Make Uptime Kuma failures actionable
+  ([#1315](https://github.com/christianlouis/DocuElevate/pull/1315),
+  [`4058749`](https://github.com/christianlouis/DocuElevate/commit/4058749d1aa66e3abe73fc1249c96385edbdf874))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f00bab6`](https://github.com/christianlouis/DocuElevate/commit/f00bab60afde65ef7408e58f8a830b75ac408bbd))
+
+
 ## Unreleased
 
 
