@@ -54,6 +54,29 @@ def test_deletion_preserves_other_owner_shared_path_and_fences(deletion_db, monk
         assert_account_active(db, "alice")
 
 
+def test_deletion_removes_owner_imap_ledger_and_cursors_only(deletion_db, monkeypatch):
+    from app.models import ImapMessageLedger, ImapScanCursor
+
+    monkeypatch.setattr("app.services.account_deletion._delete_external_indexes", lambda owner, ids: None)
+    db, root = deletion_db
+    db.add_all(
+        [
+            ImapMessageLedger(owner_key="alice", mailbox_key="alice-mailbox", uidvalidity="1", uid=1),
+            ImapMessageLedger(owner_key="bob", mailbox_key="bob-mailbox", uidvalidity="1", uid=1),
+            ImapScanCursor(mailbox_key="alice-mailbox", uidvalidity="1", last_uid=1),
+            ImapScanCursor(mailbox_key="bob-mailbox", uidvalidity="1", last_uid=1),
+        ]
+    )
+    db.commit()
+
+    delete_account(db, "alice", confirmation="DELETE MY ACCOUNT", workdir=root)
+
+    assert db.query(ImapMessageLedger).filter_by(owner_key="alice").count() == 0
+    assert db.query(ImapScanCursor).filter_by(mailbox_key="alice-mailbox").count() == 0
+    assert db.query(ImapMessageLedger).filter_by(owner_key="bob").count() == 1
+    assert db.query(ImapScanCursor).filter_by(mailbox_key="bob-mailbox").count() == 1
+
+
 def test_legal_hold_fails_closed_before_mutation(deletion_db):
     db, root = deletion_db
     path = root / "held.pdf"

@@ -187,6 +187,25 @@ services:
       api:
         condition: service_healthy
 
+  imap-worker:
+    <<: *docuelevate-service
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=1", "--hostname=imap@%h", "-Q", "imap_polling"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.celery_worker inspect ping --destination=imap@$$HOSTNAME --timeout=5"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
   knowledge-research-worker:
     <<: *docuelevate-service
     profiles: ["scale"]

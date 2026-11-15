@@ -256,12 +256,55 @@ uploadMaintenanceWorker:
       command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=upload-maintenance@$(hostname) --timeout=5"]
     initialDelaySeconds: 30
     periodSeconds: 15
+    timeoutSeconds: 10
     failureThreshold: 3
   readinessProbe:
     exec:
       command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=upload-maintenance@$(hostname) --timeout=5 && python -c \"from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, freshness; raise SystemExit(0 if freshness(DISPATCHER_KEY) == freshness(RECONCILER_KEY) == 'healthy' else 1)\""]
     initialDelaySeconds: 20
     periodSeconds: 10
+    timeoutSeconds: 10
+    failureThreshold: 3
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop: ["ALL"]
+
+# Dedicated single-process consumer for bounded IMAP polling.  It shares the
+# persistent workdir so staged attachments survive worker restarts.
+imapWorker:
+  enabled: true
+  replicaCount: 1
+  concurrency: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    exec:
+      command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=imap@$(hostname) --timeout=5"]
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    exec:
+      command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=imap@$(hostname) --timeout=5"]
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 10
     failureThreshold: 3
   podAnnotations: {}
   nodeSelector: {}

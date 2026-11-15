@@ -409,6 +409,16 @@ DocuElevate can automatically pull document attachments from IMAP mailboxes — 
 
 > **For HP Scanners (Scan to Email)**: If your scanner is set up to email scanned documents to a dedicated mailbox, configure that mailbox in DocuElevate using the settings below. DocuElevate will automatically retrieve the scanned PDFs from the inbox and process them. You do **not** need to configure DocuElevate as an email server — it acts as an email *client* that reads from your existing mailbox.
 
+#### Catch-up and recovery
+
+Each poll searches **all UIDs** in the selected folder, including old and already-read messages. Gmail uses its localized All Mail folder; other servers use INBOX. Mail is fetched with `BODY.PEEK[]`, preserving its read state. A durable database ledger records the owner, mailbox, UIDVALIDITY and UID with no age-based expiry. UIDVALIDITY changes start a new UID namespace.
+
+Catch-up is bounded to 50 unfinished messages per mailbox per poll. A persisted cursor tracks progress, batches alternate between new messages and evenly distributed retries, and mailbox ordering rotates between polls. The durable attempt count also alternates which group leads when a poll can attempt only one message. This keeps retries moving even while new mail arrives. Attachment payloads are durably staged before publication; failed or interrupted handoffs are reconciled and reuse their reserved document record. The ledger describes successful inspection and handoff, not completion of OCR or destination delivery. When deduplication is enabled, existing documents are matched by attachment hash within the same owner when that hash is available. Messages without accepted attachments are recorded as inspected without changing their flags, labels or deletion state.
+
+IMAP socket operations time out after 30 seconds. The polling task has a 240-second soft limit, a 270-second hard limit and an atomically acquired 300-second lock. Attachment consumers use 480/540-second task limits with a 600-second recovery lease. Run these tasks with Celery's prefork pool so hard limits are enforced.
+
+Polling uses the dedicated `imap_polling` queue; attachment processing uses `document_processor`. Workers consuming both queues must share the same durable `WORKDIR` volume, including `imap-staging`, and the same database. Apply database migrations before starting the new poller. The former `processed_mails.json` cache is no longer used to decide which messages to ingest. A legacy `imap_lock=locked` without an expiry is recovered atomically on the next poll.
+
 #### System-Level IMAP Configuration
 
 | **Variable**                  | **Description**                                              | **Example**       |
