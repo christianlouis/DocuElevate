@@ -717,6 +717,31 @@ class TestBackupTaskHelpers:
         assert status == "failed"
         assert "isolated sqlite restore verification failed" in detail.lower()
 
+        sentinel = tmp_path / "sentinel.db"
+        sqlite3.connect(sentinel).close()
+        malicious = tmp_path / "malicious.db.gz"
+        _write_archive(
+            malicious,
+            f"ATTACH DATABASE '{sentinel}' AS outside;\nCREATE TABLE outside.pwned (id INTEGER);\n".encode(),
+        )
+        status, detail = _verify_sqlite_archive(malicious)
+        assert status == "failed"
+        assert "attach" in detail.lower() or "not authorized" in detail.lower()
+        with sqlite3.connect(sentinel) as connection:
+            assert connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='pwned'"
+            ).fetchone() is None
+
+    def test_sqlite_restore_verification_rejects_oversized_dump(self, tmp_path):
+        """Verification bounds decompressed SQL before executing it."""
+        from app.tasks.backup_tasks import _verify_sqlite_archive
+
+        archive = tmp_path / "oversized.db.gz"
+        _write_archive(archive, b"A" * (64 * 1024 * 1024 + 1))
+        status, detail = _verify_sqlite_archive(archive)
+        assert status == "failed"
+        assert "64 mib" in detail.lower()
+
     def test_corrupt_archive_cannot_evict_verified_archive(self, tmp_path, db_session):
         """Retention marks corruption failed and keeps the verified recovery point."""
         from app.tasks.backup_tasks import _apply_retention
@@ -981,6 +1006,39 @@ class TestCreateBackupTask:
         assert result["filename"].endswith(".db.gz")
         assert (backup_dir / result["filename"]).is_file()
         assert not list(backup_dir.glob(".*.partial"))
+
+    def test_failed_restore_verification_keeps_archive_local_and_skips_upload(self, tmp_path):
+        """A failed optional restore check cannot replace or publish a recovery point."""
+        from app.tasks.backup_tasks import create_backup
+
+        db_file = tmp_path / "test.db"
+        sqlite3.connect(db_file).close()
+        backup_dir = tmp_path / "backups"
+
+        with (
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+            patch("app.tasks.backup_tasks._db_path", return_value=db_file),
+            patch("app.tasks.backup_tasks._backup_dir", return_value=backup_dir),
+            patch("app.tasks.backup_tasks._verify_sqlite_archive", return_value=("failed", "bad restore")),
+            patch("app.tasks.backup_tasks._upload_remote") as upload,
+            patch("app.tasks.backup_tasks._apply_retention"),
+            patch("app.tasks.backup_tasks.SessionLocal") as mock_sl,
+        ):
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            mock_settings.backup_enabled = True
+            mock_settings.backup_restore_verification_enabled = True
+            mock_settings.database_url = f"sqlite:///{db_file}"
+            mock_db = MagicMock()
+            mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
+            mock_sl.return_value.__exit__ = MagicMock(return_value=False)
+            result = create_backup("hourly")
+
+        assert result["status"] == "error"
+        upload.assert_not_called()
+        candidate = mock_db.add.call_args.args[0]
+        assert candidate.status == "failed"
+        assert candidate.verification_status == "failed"
+        assert (backup_dir / candidate.filename).is_file()
 
     def test_successful_backup_postgresql(self, tmp_path):
         """create_backup creates a .pgsql.gz archive for PostgreSQL databases."""
