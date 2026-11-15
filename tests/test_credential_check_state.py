@@ -1,9 +1,10 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import sessionmaker
 
 from app.models import CredentialCheckState
-from app.tasks.check_credentials import _record_credential_result
+from app.tasks.check_credentials import _redact_message, _record_credential_result
 
 
 def test_credential_state_is_shared_and_notification_is_thresholded(db_session, monkeypatch):
@@ -38,6 +39,41 @@ def test_concurrent_failures_have_one_notification_claim(db_session, monkeypatch
     assert sum(should_notify for _snapshot, should_notify in results) == 1
     state = db_session.query(CredentialCheckState).filter_by(service_name="Dropbox").one()
     assert state.failure_count == 8
+
+
+def test_notification_claim_expires_after_cooldown(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.database.SessionLocal",
+        sessionmaker(autocommit=False, autoflush=False, bind=db_session.get_bind()),
+    )
+
+    _record_credential_result("Dropbox", False, {})
+    state = db_session.query(CredentialCheckState).filter_by(service_name="Dropbox").one()
+    state.last_notified_at = datetime.now(timezone.utc) - timedelta(hours=2)
+    db_session.commit()
+
+    assert _record_credential_result("Dropbox", False, {})[1] is True
+
+
+def test_legacy_non_mapping_is_ignored_when_seeding(db_session, monkeypatch):
+    monkeypatch.setattr(
+        "app.database.SessionLocal",
+        sessionmaker(autocommit=False, autoflush=False, bind=db_session.get_bind()),
+    )
+
+    snapshot, should_notify = _record_credential_result("OneDrive", False, {"OneDrive": "invalid"})
+
+    assert should_notify is True
+    assert snapshot["count"] == 1
+
+
+def test_redaction_covers_bearer_and_url_credentials():
+    message = "Authorization: Bearer bearer-secret https://user:password@example.test"
+
+    redacted = _redact_message(message)
+
+    assert "bearer-secret" not in redacted
+    assert "user:password" not in redacted
 
 
 def test_malformed_legacy_state_is_ignored_when_seeding(db_session, monkeypatch):

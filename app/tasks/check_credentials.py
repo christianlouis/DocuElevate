@@ -76,6 +76,8 @@ def save_failure_state(state):
 def _redact_message(message):
     """Keep provider diagnostics useful without persisting likely secrets."""
     text = str(message or "Unknown error")
+    text = re.sub(r"(?i)(authorization\s*:\s*bearer\s+)[^\s,]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(?i)(https?://)([^/@\s]+):([^/@\s]+)@", r"\1[REDACTED]@", text)
     return re.sub(
         r"(?i)(api[_ -]?key|token|secret|password)([\s:=\"']+)[^,\s}\"']+",
         r"\1\2[REDACTED]",
@@ -121,6 +123,8 @@ def _record_credential_result(service_name, success, legacy_state):
                 )
                 if state is None:
                     previous = legacy_state.get(service_name, {})
+                    if not isinstance(previous, dict):
+                        previous = {}
                     try:
                         previous_count = int(previous.get("count", 0) or 0)
                     except (TypeError, ValueError):
@@ -164,7 +168,7 @@ def _record_credential_result(service_name, success, legacy_state):
         except SQLAlchemyError as exc:
             if db is not None:
                 db.rollback()
-            logger.error("Shared credential state unavailable for %s: %s", service_name, _redact_message(exc))
+            logger.error("Shared credential state unavailable for %s (%s)", service_name, type(exc).__name__)
             return None, False
         finally:
             if db is not None:
@@ -349,7 +353,7 @@ def check_credentials():
                     logger.info(f"{service_name} has recovered after {previous_count} failures")
 
         except Exception as e:
-            logger.error("Error checking %s credentials: %s", service_name, _redact_message(e))
+            logger.error("Error checking %s credentials (%s)", service_name, type(e).__name__)
             failures.append(service_name)
             error_message = f"Exception during credential check: {_redact_message(e)}"
 
