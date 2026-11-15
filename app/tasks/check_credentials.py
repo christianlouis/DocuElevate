@@ -4,7 +4,9 @@ import json
 import logging
 import os
 import re
+from contextlib import nullcontext
 from datetime import datetime, timezone
+from threading import Lock
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -45,6 +47,8 @@ logger = logging.getLogger(__name__)
 
 # Path to store failure counts
 FAILURE_STATE_FILE = os.path.join(settings.workdir, "credential_failures.json")
+CREDENTIAL_NOTIFICATION_COOLDOWN_SECONDS = 3600
+_SQLITE_STATE_LOCK = Lock()
 
 
 def get_failure_state():
@@ -54,7 +58,7 @@ def get_failure_state():
             with open(FAILURE_STATE_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
-        logger.error(f"Error reading failure state file: {e}")
+        logger.error("Error reading failure state file: %s", _redact_message(e))
 
     # Default empty state
     return {}
@@ -79,6 +83,14 @@ def _redact_message(message):
     )
 
 
+def _cooldown_elapsed(last_notified_at, now):
+    if last_notified_at is None:
+        return True
+    if last_notified_at.tzinfo is None:
+        last_notified_at = last_notified_at.replace(tzinfo=timezone.utc)
+    return (now - last_notified_at).total_seconds() >= CREDENTIAL_NOTIFICATION_COOLDOWN_SECONDS
+
+
 def _record_credential_result(service_name, success, legacy_state):
     """Atomically update shared state and decide whether one notification is due.
 
@@ -93,54 +105,66 @@ def _record_credential_result(service_name, success, legacy_state):
         db = None
         try:
             db = SessionLocal()
-            state = (
-                db.query(CredentialCheckState)
-                .with_for_update()
-                .filter(CredentialCheckState.service_name == service_name)
-                .one_or_none()
-            )
-            if state is None:
-                previous = legacy_state.get(service_name, {})
-                try:
-                    previous_count = int(previous.get("count", 0) or 0)
-                except (TypeError, ValueError):
-                    previous_count = 0
-                state = CredentialCheckState(
-                    service_name=service_name,
-                    failure_count=previous_count,
-                    recovered=bool(previous.get("recovered", False)),
+            dialect = db.get_bind().dialect.name
+            lock = _SQLITE_STATE_LOCK if dialect == "sqlite" else nullcontext()
+            with lock:
+                if dialect == "sqlite":
+                    # SQLite has no row-level SELECT FOR UPDATE.  Serialize the
+                    # short state transition so local/test workers cannot lose
+                    # increments; PostgreSQL uses the row lock below.
+                    db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                state = (
+                    db.query(CredentialCheckState)
+                    .with_for_update()
+                    .filter(CredentialCheckState.service_name == service_name)
+                    .one_or_none()
                 )
-                db.add(state)
-                db.flush()
+                if state is None:
+                    previous = legacy_state.get(service_name, {})
+                    try:
+                        previous_count = int(previous.get("count", 0) or 0)
+                    except (TypeError, ValueError):
+                        previous_count = 0
+                    state = CredentialCheckState(
+                        service_name=service_name,
+                        failure_count=previous_count,
+                        recovered=bool(previous.get("recovered", False)),
+                    )
+                    db.add(state)
+                    db.flush()
 
-            should_notify = False
-            if success:
-                if state.failure_count > 0:
-                    state.failure_count = 0
-                    state.recovered = True
-            else:
-                state.failure_count += 1
-                should_notify = state.failure_count <= 3 or state.recovered
-                state.recovered = False
-                if should_notify:
-                    state.last_notified_at = datetime.now(timezone.utc)
+                should_notify = False
+                now = datetime.now(timezone.utc)
+                if success:
+                    if state.failure_count > 0:
+                        state.failure_count = 0
+                        state.recovered = True
+                else:
+                    state.failure_count += 1
+                    cooldown_elapsed = _cooldown_elapsed(state.last_notified_at, now)
+                    should_notify = cooldown_elapsed or state.recovered
+                    state.recovered = False
+                    if should_notify:
+                        state.last_notified_at = now
 
-            snapshot = {
-                "count": state.failure_count,
-                "recovered": state.recovered,
-                "last_notified": (int(state.last_notified_at.timestamp()) if state.last_notified_at else 0),
-            }
-            db.commit()
-            return snapshot, should_notify
+                snapshot = {
+                    "count": state.failure_count,
+                    "recovered": state.recovered,
+                    "last_notified": (int(state.last_notified_at.timestamp()) if state.last_notified_at else 0),
+                }
+                db.commit()
+                return snapshot, should_notify
         except IntegrityError:
-            db.rollback()
+            if db is not None:
+                db.rollback()
             if attempt == 0:
                 continue
             logger.error("Credential state insert raced for %s; state update skipped", service_name)
             return None, False
-        except SQLAlchemyError:
-            db.rollback()
-            logger.exception("Shared credential state unavailable for %s", service_name)
+        except SQLAlchemyError as exc:
+            if db is not None:
+                db.rollback()
+            logger.error("Shared credential state unavailable for %s: %s", service_name, _redact_message(exc))
             return None, False
         finally:
             if db is not None:
@@ -217,8 +241,9 @@ def check_credentials():
     """Check all configured credentials and notify if any are invalid"""
     logger.info("Starting credential check task")
 
-    # Read legacy state only to seed a newly-created database row.
-    failure_state = get_failure_state()
+    # State is shared in the database.  Do not read the legacy JSON on every
+    # invocation; it is retained only for explicit one-time migration callers.
+    failure_state = {}
 
     # Track failures
     failures = []
@@ -324,7 +349,7 @@ def check_credentials():
                     logger.info(f"{service_name} has recovered after {previous_count} failures")
 
         except Exception as e:
-            logger.error(f"Error checking {service_name} credentials: {e}", exc_info=True)
+            logger.error("Error checking %s credentials: %s", service_name, _redact_message(e))
             failures.append(service_name)
             error_message = f"Exception during credential check: {_redact_message(e)}"
 
