@@ -153,9 +153,7 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
             ):
                 return False, "PostgreSQL backup does not contain a recognizable SQL dump."
         elif suffix.endswith(".mysql.gz"):
-            if b"MySQL dump" not in sample or not any(
-                marker in sample for marker in (b"CREATE ", b"INSERT ")
-            ):
+            if b"MySQL dump" not in sample or not any(marker in sample for marker in (b"CREATE ", b"INSERT ")):
                 return False, "MySQL backup does not contain a recognizable SQL dump."
     except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile) as exc:
         return False, f"Local backup archive is unreadable: {exc}"
