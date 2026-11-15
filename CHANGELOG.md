@@ -10,6 +10,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.6 (2026-11-15)
+
+### Bug Fixes
+
+- Account for partial and first backup storage
+  ([#1314](https://github.com/christianlouis/DocuElevate/pull/1314),
+  [`dafc754`](https://github.com/christianlouis/DocuElevate/commit/dafc754f9333cddd3c30227d6fdc7db556724ccc))
+
+### Chores
+
+- Consolidate compatible dependency updates
+  ([#1312](https://github.com/christianlouis/DocuElevate/pull/1312),
+  [`7a2402d`](https://github.com/christianlouis/DocuElevate/commit/7a2402db778c5d967880cd9a7404ca003645c369))
+
+- Update LiteLLM to filelock-compatible release
+  ([#1316](https://github.com/christianlouis/DocuElevate/pull/1316),
+  [`0699faa`](https://github.com/christianlouis/DocuElevate/commit/0699faae64c9a7a24a7128a981f8a2fb277b76fa))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`2e2d1bb`](https://github.com/christianlouis/DocuElevate/commit/2e2d1bb6103fbe8e1fd8e342ca272ea5fdd855cc))
+
+
 ## Unreleased
 
 ### Chores
