@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import redis
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
+from sqlalchemy import func
 
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
@@ -99,6 +100,10 @@ def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
 LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
 POLL_BATCH_SIZE = 50
+# Never ask an IMAP server for an unbounded UID SEARCH response.  Gmail can
+# have millions of messages and imaplib cannot parse responses larger than its
+# line buffer.  The durable cursor makes these windows resumable.
+UID_SCAN_WINDOW = 1000
 POLL_BUDGET_SECONDS = 240
 POLL_CHECKPOINT_TTL_SECONDS = 24 * 60 * 60
 POLL_CHECKPOINT_PREFIX = "docuelevate:imap:last_success:"
@@ -627,6 +632,56 @@ def _extract_uidvalidity(mail, select_data=None) -> str:
     return "unknown"
 
 
+def _extract_uidnext(mail, select_data=None) -> int | None:
+    """Read UIDNEXT so a scan window never advances into future UIDs."""
+
+    def valid_value(value):
+        if isinstance(value, bool) or value is None:
+            return None
+        if isinstance(value, bytes):
+            try:
+                value = value.decode("ascii")
+            except UnicodeDecodeError:
+                return None
+        if isinstance(value, int):
+            number = value
+        else:
+            value = str(value)
+            if not value or any(char not in "0123456789" for char in value):
+                return None
+            number = int(value)
+        return number if 1 <= number <= 4_294_967_296 else None
+
+    try:
+        response = mail.response("UIDNEXT")
+        if response and response[0] not in ("UIDNEXT", b"UIDNEXT"):
+            response = None
+        values = response[1] if response and len(response) > 1 else []
+        if isinstance(values, (bytes, str, int)):
+            values = [values]
+        if values:
+            value = valid_value(values[0])
+            if value is not None:
+                return value
+    except (TypeError, ValueError, IndexError):
+        pass
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not read IMAP UIDNEXT response")
+    if isinstance(select_data, dict):
+        value = select_data.get("UIDNEXT", select_data.get(b"UIDNEXT"))
+        if isinstance(value, (list, tuple)):
+            value = value[0] if value else None
+        try:
+            value = valid_value(value)
+            if value is not None:
+                return value
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def _fair_poll_batch(new_uids, retry_uids, *, batch_size, retry_first):
     """Interleave new work and retries, preserving progress under short polls.
 
@@ -734,7 +789,7 @@ def pull_inbox(
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
                 return False
-            status, search_data = mail.uid("search", None, "ALL")
+            status, search_data = ("OK", [b""])
         else:
             # Read-only INBOX/ALL scan: do not depend on Seen state or dates.
             selected_folder = "INBOX"
@@ -744,7 +799,7 @@ def pull_inbox(
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
                 return False
-            status, search_data = mail.uid("search", None, "ALL")
+            status, search_data = ("OK", [b""])
 
         if status != "OK":
             logger.warning("Search failed on mailbox %s. Status=%s", mailbox_key, status)
@@ -752,7 +807,6 @@ def pull_inbox(
             mail.logout()
             return False
 
-        msg_numbers = search_data[0].split()
         uidvalidity = _extract_uidvalidity(mail, select_data)
         if uidvalidity == "unknown":
             logger.error("Mailbox %s did not provide UIDVALIDITY; refusing unsafe scan", mailbox_key)
@@ -774,36 +828,66 @@ def pull_inbox(
             cursor = scan_cursor.last_uid if scan_cursor else 0
         finally:
             db.close()
-        ordered = sorted(int(value) for value in msg_numbers)
+        # Search only a bounded UID window.  A full ``UID SEARCH ALL`` is not
+        # safe for large Gmail All Mail folders: the server response can exceed
+        # imaplib's maximum line length before the durable ledger is consulted.
+        window_start = max(cursor + 1, 1)
+        uidnext = _extract_uidnext(mail, select_data)
+        if uidnext is None:
+            logger.warning("Mailbox %s did not provide a valid UIDNEXT snapshot; refusing scan", mailbox_key)
+            mail.close()
+            mail.logout()
+            return False
+        window_end = min(window_start + UID_SCAN_WINDOW - 1, 4294967295)
+        window_end = min(window_end, uidnext - 1)
+        if window_start > window_end:
+            ordered = []
+            status, search_data = "OK", [b""]
+        else:
+            status, search_data = mail.uid("search", None, "UID", f"{window_start}:{window_end}")
+        if status != "OK":
+            logger.warning("Bounded UID search failed on mailbox %s. Status=%s", mailbox_key, status)
+            mail.close()
+            mail.logout()
+            return False
+        ordered = sorted(
+            int(value)
+            for value in search_data[0].split()
+            if window_start <= int(value) <= window_end
+        )
         from app.models import ImapMessageLedger
 
         db = _get_db_session()
         try:
-            completed_uids = {
-                row[0]
-                for row in db.query(ImapMessageLedger.uid)
-                .filter_by(
-                    owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), state="completed"
-                )
-                .all()
-            }
+            completed_query = db.query(ImapMessageLedger.uid).filter_by(
+                owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), state="completed"
+            )
+            if ordered:
+                completed_query = completed_query.filter(ImapMessageLedger.uid.in_(ordered))
+            else:
+                completed_query = completed_query.filter(ImapMessageLedger.uid == -1)
+            completed_uids = {row[0] for row in completed_query.all()}
             retry_rows = (
                 db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts)
                 .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
-                .filter(ImapMessageLedger.state != "completed")
+                .filter(~ImapMessageLedger.state.in_(("completed", "vanished")))
+                .order_by(ImapMessageLedger.attempts.asc(), ImapMessageLedger.uid.asc())
+                .limit(POLL_BATCH_SIZE * 4)
                 .all()
             )
-            total_attempts = sum(
-                attempts or 0
-                for (attempts,) in db.query(ImapMessageLedger.attempts)
+            total_attempts = (
+                db.query(func.coalesce(func.sum(ImapMessageLedger.attempts), 0))
                 .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
-                .all()
+                .scalar()
+                or 0
             )
         finally:
             db.close()
-        unfinished = [uid for uid in ordered if uid not in completed_uids]
-        new_uids = [uid for uid in unfinished if uid > cursor]
-        retry_uids = [uid for uid in unfinished if uid <= cursor]
+        # ``ordered`` contains only the current bounded window.  Retries come
+        # from the durable ledger and therefore remain eligible even when they
+        # are below the current scan cursor.
+        new_uids = [uid for uid in ordered if uid not in completed_uids and uid > cursor]
+        retry_uids = [uid for uid, _attempts in retry_rows if uid not in completed_uids]
         retry_attempts = {uid: attempts or 0 for uid, attempts in retry_rows}
         # Lowest-attempt failures lead so permanent failures rotate rather than
         # repeatedly consuming the retry share ahead of their peers.
@@ -817,6 +901,27 @@ def pull_inbox(
             # deadline permits only the first selected message.
             retry_first=(total_attempts % 2 == 0),
         )
+        selected_uids = list(dict.fromkeys(selected_uids))
+        # Once a successful bounded search contains no unclaimed UID, the
+        # entire window is known to be safe to skip.  This prevents sparse UID
+        # gaps from pinning a mailbox forever while never skipping a returned
+        # message that still needs an attempt.
+        if uidnext is not None and not new_uids and window_end > cursor:
+            db = _get_db_session()
+            try:
+                scan_cursor = (
+                    db.query(ImapScanCursor)
+                    .filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                    .first()
+                )
+                if scan_cursor is None:
+                    scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                    db.add(scan_cursor)
+                scan_cursor.last_uid = max(scan_cursor.last_uid or 0, window_end)
+                db.commit()
+                cursor = max(cursor, window_end)
+            finally:
+                db.close()
         msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
         deleted_any = False
@@ -850,8 +955,19 @@ def pull_inbox(
 
             raw_email = next((item[1] for item in msg_data if isinstance(item, tuple) and len(item) > 1), None)
             if not raw_email:
-                had_failure = True
-                _ledger_finish(ledger_id, state="failed", error="empty fetch response")
+                absence_status, absence_data = mail.uid("search", None, "UID", f"{uid}:{uid}")
+                absent = (
+                    absence_status == "OK"
+                    and not any(
+                        str(value) == str(uid)
+                        for value in (absence_data[0].split() if absence_data else [])
+                    )
+                )
+                if absent:
+                    _ledger_finish(ledger_id, state="vanished", error="UID absent after empty fetch response")
+                else:
+                    had_failure = True
+                    _ledger_finish(ledger_id, state="failed", error="empty fetch response")
                 continue
             email_message = email.message_from_bytes(raw_email)
             msg_id = email_message.get("Message-ID")
