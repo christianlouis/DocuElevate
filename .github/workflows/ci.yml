@@ -67,8 +67,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: 'pip'
-      # djLint 1.40.9 crashes while pickling its multiprocessing config on
-      # Python 3.11; keep CI on the last verified release until upstream fixes it.
+      # The H043/H053 template migration is validated against djLint 1.46.4.
       - run: pip install djlint==1.46.4
       - run: djlint frontend/templates/ --lint
 
@@ -186,6 +185,7 @@ jobs:
         run: |
           node --test frontend/static/js/upload-*.test.js
           node --test tests/test_dom_text_runtime.cjs
+          node --test tests/test_google_drive_oauth_selector.cjs
 
       - name: Upload Unified Coverage to Codecov
         if: always()
