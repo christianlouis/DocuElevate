@@ -5,7 +5,7 @@ redis  # Message broker for Celery
 sqlalchemy  # Database ORM
 psycopg[binary]>=3.3.4,<4.0  # PostgreSQL driver for HA database deployments
 pydantic  # Data validation
-cryptography>=41.0.0  # Encryption for sensitive settings in database
+cryptography>=50.0.2  # Encryption for sensitive settings in database
 openai  # GPT integration for metadata extraction
 tiktoken>=0.13.0  # Token counting for OpenAI embedding context limits
 pypdf>=6.14.2  # PDF processing for text extraction, metadata editing and rotation (upgraded from PyPDF2 to fix CVE-2023-36464)
