@@ -30,6 +30,7 @@ import logging
 import os
 import shutil
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -61,6 +62,8 @@ _AUTO_BACKUP_BUDGET_DIVISOR = 4
 _AUTO_MIN_FREE_DIVISOR = 10
 _AUTO_MIN_FREE_CAP_BYTES = 1024 * 1024 * 1024
 _AUTO_MIN_FREE_FLOOR_BYTES = 64 * 1024 * 1024
+_FIRST_BACKUP_MIN_BYTES = 64 * 1024 * 1024
+_STALE_PARTIAL_SECONDS = 24 * 60 * 60
 
 
 def _backup_dir() -> Path:
@@ -136,7 +139,9 @@ def _adaptive_cleanup_enabled() -> bool:
 def _backup_storage_snapshot(directory: Path) -> dict[str, int]:
     """Return current filesystem and archive usage without exposing paths."""
     usage = shutil.disk_usage(directory)
-    backup_bytes = sum(path.stat().st_size for path in directory.glob("backup_*.gz") if path.is_file())
+    published_bytes = sum(path.stat().st_size for path in directory.glob("backup_*.gz") if path.is_file())
+    partial_bytes = sum(path.stat().st_size for path in directory.glob(".backup_*.partial") if path.is_file())
+    backup_bytes = published_bytes + partial_bytes
     configured_budget = _configured_non_negative_int("backup_max_local_bytes")
     configured_min_free = _configured_non_negative_int("backup_min_free_bytes")
     max_local_bytes = configured_budget or max(1, usage.total // _AUTO_BACKUP_BUDGET_DIVISOR)
@@ -149,6 +154,7 @@ def _backup_storage_snapshot(directory: Path) -> dict[str, int]:
         "used_bytes": usage.used,
         "free_bytes": usage.free,
         "backup_bytes": backup_bytes,
+        "partial_bytes": partial_bytes,
         "max_local_bytes": max_local_bytes,
         "min_free_bytes": min_free_bytes,
     }
@@ -165,6 +171,7 @@ def backup_storage_status() -> dict[str, int | bool | str | None]:
             "used_bytes": 0,
             "free_bytes": 0,
             "backup_bytes": 0,
+            "partial_bytes": 0,
             "max_local_bytes": 0,
             "min_free_bytes": 0,
             "healthy": False,
@@ -190,7 +197,35 @@ def _estimated_backup_bytes(db: object, backup_type: str) -> int:
         if isinstance(size, (int, float)) and size > 0:
             # Leave headroom for normal database growth and gzip ratio changes.
             return int(size * 1.25)
-    return 0
+    # A first backup has no historical compressed size to extrapolate from.
+    # Reserve a non-zero floor so a nearly-full volume cannot start a dump that
+    # exhausts the filesystem before its final archive is available.
+    db_path = _db_path()
+    if db_path is not None:
+        try:
+            return max(_FIRST_BACKUP_MIN_BYTES, int(db_path.stat().st_size * 1.25))
+        except OSError:
+            pass
+    return _FIRST_BACKUP_MIN_BYTES
+
+
+def _reclaim_stale_partial_archives(directory: Path) -> tuple[int, int]:
+    """Remove only old interrupted archives; recent partials may still be active."""
+    cutoff = time.time() - _STALE_PARTIAL_SECONDS
+    removed_count = 0
+    removed_bytes = 0
+    for path in directory.glob(".backup_*.partial"):
+        try:
+            stat = path.stat()
+            if stat.st_mtime >= cutoff:
+                continue
+            path.unlink()
+        except OSError as exc:
+            logger.warning("Failed to reclaim stale partial backup %s: %s", path.name, exc)
+            continue
+        removed_count += 1
+        removed_bytes += stat.st_size
+    return removed_count, removed_bytes
 
 
 def _apply_storage_budget(
@@ -204,6 +239,7 @@ def _apply_storage_budget(
     The newest available local snapshot in each tier is protected. Remote copies
     remain recorded when their local copy is reclaimed.
     """
+    partial_count, partial_bytes = _reclaim_stale_partial_archives(directory)
     state = _backup_storage_snapshot(directory)
     required_bytes = max(0, int(required_bytes))
 
@@ -213,8 +249,8 @@ def _apply_storage_budget(
             and snapshot["backup_bytes"] + required_bytes <= snapshot["max_local_bytes"]
         )
 
-    pruned_count = 0
-    pruned_bytes = 0
+    pruned_count = partial_count
+    pruned_bytes = partial_bytes
     if not has_capacity(state) and _adaptive_cleanup_enabled():
         records = (
             db.query(BackupRecord)
