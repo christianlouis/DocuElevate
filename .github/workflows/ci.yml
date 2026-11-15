@@ -122,6 +122,27 @@ jobs:
       - run: pip install pip-audit>=2.7.0
       - run: pip-audit -r requirements.txt --desc on --ignore-vuln CVE-2026-4539
 
+  mobile-checks:
+    name: Mobile Lockfile & Static Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install mobile dependencies from lockfile
+        working-directory: mobile
+        run: npm ci --ignore-scripts
+      - name: Check mobile lint
+        working-directory: mobile
+        run: npm run lint
+      - name: Check mobile types
+        working-directory: mobile
+        run: npm run type-check
+
   run-tests:
     name: Execute All Tests (Quick + Integration)
     runs-on: ubuntu-latest
@@ -178,7 +199,7 @@ jobs:
   build:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: [run-tests, mypy, dependency-scan, html-lint, migration-chain, terraform-validate]
+    needs: [run-tests, mypy, dependency-scan, mobile-checks, html-lint, migration-chain, terraform-validate]
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     steps:
       - name: Checkout Code
