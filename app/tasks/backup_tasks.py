@@ -30,6 +30,7 @@ import logging
 import os
 import shutil
 import subprocess
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -114,6 +115,69 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
+    """Validate a local recovery point before retention can protect or prune it.
+
+    The compressed stream is consumed to EOF so gzip CRC/trailer failures and
+    truncation cannot pass.  The bounded sample then checks the expected SQL
+    dump markers for the backend.  A full isolated restore is a separate
+    operational verification job and must never run against the live database.
+    """
+    path = Path(rec.local_path) if rec.local_path else None
+    try:
+        if path is None or not path.is_file():
+            return False, "Local backup archive is missing."
+        if path.stat().st_size <= 0:
+            return False, "Local backup archive is empty."
+        if not rec.checksum:
+            return False, "Local backup archive has no stored checksum."
+        actual_checksum = _sha256(path)
+        if actual_checksum != rec.checksum:
+            return False, "Local backup archive checksum does not match."
+        prefix = bytearray()
+        tail = bytearray()
+        total_payload_bytes = 0
+        with gzip.open(path, "rb") as archive:
+            while chunk := archive.read(65536):
+                total_payload_bytes += len(chunk)
+                if len(prefix) < 65536:
+                    prefix.extend(chunk[: 65536 - len(prefix)])
+                tail.extend(chunk)
+                if len(tail) > 65536:
+                    del tail[:-65536]
+        if not total_payload_bytes:
+            return False, "Local backup archive contains no data."
+        first = bytes(prefix).lstrip()
+        last = bytes(tail).rstrip()
+        suffix = path.name.lower()
+        if suffix.endswith(".db.gz"):
+            if not first.startswith(b"BEGIN TRANSACTION;") or not last.endswith(b"COMMIT;"):
+                return False, "SQLite backup does not contain a complete SQL dump."
+        elif suffix.endswith(".pgsql.gz"):
+            if b"PostgreSQL database dump" not in prefix or b"SET " not in prefix:
+                return False, "PostgreSQL backup does not contain a recognizable SQL dump."
+            if b"PostgreSQL database dump complete" not in last:
+                return False, "PostgreSQL backup does not contain a recognizable SQL dump."
+        elif suffix.endswith(".mysql.gz"):
+            if not (
+                (b"MySQL dump" in prefix or b"MariaDB dump" in prefix)
+                and b"/*!" in prefix
+                and last.find(b"Dump completed on") >= 0
+            ):
+                return False, "MySQL backup does not contain a recognizable SQL dump."
+        else:
+            return False, "Local backup archive has an unsupported extension."
+    except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile, zlib.error) as exc:
+        return False, f"Local backup archive is unreadable: {exc}"
+    return True, None
+
+
+def _mark_invalid_archive(rec: BackupRecord, detail: str) -> None:
+    rec.status = "failed"
+    rec.error_detail = detail[:2000]
+    logger.warning("Backup archive %s failed integrity validation: %s", rec.filename, detail)
 
 
 def _configured_non_negative_int(name: str, default: int = 0) -> int:
@@ -245,19 +309,23 @@ def _apply_storage_budget(
             .all()
         )
         protected_paths: set[str] = set()
+        valid_records: list[BackupRecord] = []
         for tier in _BACKUP_TYPE_RETAIN:
-            newest = next(
-                (
-                    rec
-                    for rec in records
-                    if rec.backup_type == tier and rec.local_path and os.path.exists(rec.local_path)
-                ),
-                None,
-            )
+            newest = None
+            for rec in records:
+                if rec.backup_type != tier:
+                    continue
+                valid, detail = _validate_local_archive(rec)
+                if valid:
+                    valid_records.append(rec)
+                    if newest is None:
+                        newest = rec
+                else:
+                    _mark_invalid_archive(rec, detail or "Local backup archive failed integrity validation.")
             if newest is not None:
                 protected_paths.add(str(newest.local_path))
 
-        for rec in reversed(records):
+        for rec in reversed(valid_records):
             local_path = str(rec.local_path or "")
             if not local_path or local_path in protected_paths or not os.path.exists(local_path):
                 continue
@@ -649,12 +717,11 @@ def _apply_retention(backup_type: str, db: object) -> None:
 
     records = []
     for rec in candidates:
-        if rec.local_path and os.path.exists(rec.local_path):
+        valid, detail = _validate_local_archive(rec)
+        if valid:
             records.append(rec)
             continue
-        rec.local_path = None
-        if not rec.remote_path:
-            db.delete(rec)
+        _mark_invalid_archive(rec, detail or "Local backup archive failed integrity validation.")
 
     to_prune = records[retain:]
     for rec in to_prune:
@@ -947,7 +1014,6 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
         _record_backup_failure(filename, backup_type, detail)
         return {"status": "error", "detail": detail, "storage": storage_state}
 
-    status = "ok"
     checksum: str | None = None
     size_bytes = 0
     remote_destination: str | None = None
@@ -970,9 +1036,27 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
     except Exception as exc:
         partial_path.unlink(missing_ok=True)
         logger.error(f"Failed to create backup archive {filename}: {exc}", exc_info=True)
-        status = "failed"
         _record_backup_failure(filename, backup_type, str(exc))
         return {"status": "error", "detail": str(exc)}
+
+    # Do not let a structurally invalid replacement evict an older recovery
+    # point. Keep the archive and a failed record for diagnosis.
+    candidate = BackupRecord(
+        filename=filename,
+        local_path=str(archive_path),
+        backup_type=backup_type,
+        size_bytes=size_bytes,
+        checksum=checksum,
+        status="ok",
+    )
+    valid, validation_detail = _validate_local_archive(candidate)
+    if not valid:
+        detail = validation_detail or "Backup archive failed integrity validation."
+        _mark_invalid_archive(candidate, detail)
+        with SessionLocal() as db:
+            db.add(candidate)
+            db.commit()
+        return {"status": "error", "detail": detail, "filename": filename}
 
     # Optional remote upload
     result = _upload_remote(archive_path, filename)
@@ -980,17 +1064,10 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
         remote_destination, remote_path = result
 
     with SessionLocal() as db:
-        rec = BackupRecord(
-            filename=filename,
-            local_path=str(archive_path),
-            backup_type=backup_type,
-            size_bytes=size_bytes,
-            checksum=checksum,
-            status=status,
-            error_detail=None,
-            remote_destination=remote_destination,
-            remote_path=remote_path,
-        )
+        rec = candidate
+        rec.error_detail = None
+        rec.remote_destination = remote_destination
+        rec.remote_path = remote_path
         db.add(rec)
         db.commit()
 
@@ -1002,7 +1079,7 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
     return {
         "filename": filename,
         "size_bytes": size_bytes,
-        "status": status,
+        "status": "ok",
         "remote_destination": remote_destination,
         "storage": backup_storage_status(),
     }
