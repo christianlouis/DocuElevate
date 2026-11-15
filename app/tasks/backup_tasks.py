@@ -178,7 +178,6 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
     return True, None
 
 
-<<<<<<< HEAD
 def _verify_sqlite_archive(archive_path: Path) -> tuple[str, str | None]:
     """Replay a SQLite dump into a disposable temporary database only."""
     import re
@@ -219,8 +218,6 @@ def _verify_sqlite_archive(archive_path: Path) -> tuple[str, str | None]:
     return "passed", "Isolated SQLite restore verification passed."
 
 
-=======
->>>>>>> origin/main
 def _mark_invalid_archive(rec: BackupRecord, detail: str) -> None:
     rec.status = "failed"
     rec.error_detail = detail[:2000]
