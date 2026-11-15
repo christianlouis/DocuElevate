@@ -676,7 +676,7 @@ def _set_minimal_provider_settings(mock_settings):
         "gotenberg_url": "http://localhost:3000",
         "rclone_remote": None,
         "rclone_base_path": None,
-        "uptime_kuma_push_url": None,
+        "uptime_kuma_url": None,
         # AI provider specifics (set None to avoid AttributeError)
         "anthropic_api_key": None,
         "gemini_api_key": None,
@@ -691,7 +691,8 @@ def _set_minimal_provider_settings(mock_settings):
         "openai_base_url": "https://api.openai.com/v1",
     }
     for attr, val in defaults.items():
-        if not hasattr(mock_settings, attr) or getattr(mock_settings, attr, "NOTSET") == "NOTSET":
+        current = getattr(mock_settings, attr, None)
+        if isinstance(current, MagicMock) or current == "NOTSET":
             setattr(mock_settings, attr, val)
 
 

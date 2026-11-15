@@ -1,180 +1,132 @@
-"""
-Tests for app/tasks/uptime_kuma_tasks.py
-
-Tests Uptime Kuma health check ping functionality.
-"""
+"""Tests for the optional Uptime Kuma monitor."""
 
 from unittest.mock import Mock, patch
 
 import pytest
 import requests
 
+URL = "https://uptime.example.com/api/push/private-token"
+
 
 @pytest.mark.unit
 class TestUptimeKumaTasks:
-    """Test Uptime Kuma ping task"""
+    def test_provider_details_redact_push_path_query_and_token(self):
+        from app.utils.config_validator.providers import get_provider_status
 
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_no_url_configured(self, mock_settings):
-        """Test that task does nothing when URL is not configured"""
+        with patch("app.utils.config_validator.providers.settings") as settings:
+            settings.uptime_kuma_url = "https://uptime.example.com/api/push/private-token?user=alice"
+            settings.uptime_kuma_ping_interval = 5
+            details = get_provider_status()["Uptime Kuma"]["details"]
+
+        assert details["url"] == "https://uptime.example.com"
+        assert "private-token" not in str(details)
+        assert "alice" not in str(details)
+
+    def test_disabled_monitor_is_truthful_and_skips_request(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        mock_settings.uptime_kuma_url = None
-
-        result = ping_uptime_kuma()
-
-        # Should return None and not make any requests
-        assert result is None
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_success(self, mock_settings, mock_get, caplog):
-        """Test successful ping to Uptime Kuma"""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        mock_settings.uptime_kuma_url = "https://uptime.example.com/ping/123"
-
-        # Mock successful response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
-
-        with caplog.at_level("INFO", logger="app.tasks.uptime_kuma_tasks"):
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get") as request,
+        ):
+            settings.uptime_kuma_url = None
             result = ping_uptime_kuma()
+        assert result["status"] == "disabled"
+        assert result["configured"] is False
+        request.assert_not_called()
 
-        # Should return True on success
-        assert result is True
-        mock_get.assert_called_once_with("https://uptime.example.com/ping/123", timeout=10)
-        mock_response.raise_for_status.assert_called_once()
-        assert "https://uptime.example.com/ping/123" not in caplog.text
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_connection_error(self, mock_settings, mock_get):
-        """Test handling of connection errors"""
+    def test_success_reports_safe_endpoint_and_status(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        mock_settings.uptime_kuma_url = "https://uptime.example.com/ping/123"
-
-        # Mock connection error
-        mock_get.side_effect = requests.exceptions.ConnectionError("Connection refused")
-
-        result = ping_uptime_kuma()
-
-        # Should return False on error
-        assert result is False
-        mock_get.assert_called_once()
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_timeout(self, mock_settings, mock_get):
-        """Test handling of request timeout"""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        mock_settings.uptime_kuma_url = "https://uptime.example.com/ping/123"
-
-        # Mock timeout error
-        mock_get.side_effect = requests.exceptions.Timeout("Request timed out")
-
-        result = ping_uptime_kuma()
-
-        # Should return False on timeout
-        assert result is False
-        mock_get.assert_called_once()
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_http_error(self, mock_settings, mock_get):
-        """Test handling of HTTP errors (4xx, 5xx)"""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        mock_settings.uptime_kuma_url = "https://uptime.example.com/ping/123"
-
-        # Mock HTTP error
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
-        mock_get.return_value = mock_response
-
-        result = ping_uptime_kuma()
-
-        # Should return False on HTTP error
-        assert result is False
-        mock_get.assert_called_once()
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_generic_request_exception(self, mock_settings, mock_get):
-        """Test handling of generic request exceptions"""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        mock_settings.uptime_kuma_url = "https://uptime.example.com/ping/123"
-
-        # Mock generic request exception
-        mock_get.side_effect = requests.exceptions.RequestException("Generic error")
-
-        result = ping_uptime_kuma()
-
-        # Should return False on any request exception
-        assert result is False
-        mock_get.assert_called_once()
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_failure_never_logs_push_url(self, mock_settings, mock_get, caplog):
-        """Request exceptions can include the secret-bearing URL."""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        push_url = "https://uptime.example.com/api/push/private-token"
-        mock_settings.uptime_kuma_url = push_url
-        mock_get.side_effect = requests.exceptions.HTTPError(f"500 Server Error for url: {push_url}")
-
-        with caplog.at_level("ERROR", logger="app.tasks.uptime_kuma_tasks"):
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=204)) as request,
+        ):
+            settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
+        assert result["status"] == "success"
+        assert result["http_status"] == 204
+        assert result["endpoint"] == "https://uptime.example.com"
+        assert "private-token" not in str(result)
+        request.assert_called_once_with(URL, timeout=10, allow_redirects=False)
 
-        assert result is False
-        assert push_url not in caplog.text
+    def test_redirect_is_not_treated_as_success(self):
+        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=302)) as request,
+        ):
+            settings.uptime_kuma_url = URL
+            result = ping_uptime_kuma()
+        assert result["status"] == "error"
+        assert result["http_status"] == 302
+        request.assert_called_once_with(URL, timeout=10, allow_redirects=False)
+
+    def test_kuma_json_rejection_is_not_treated_as_success(self):
+        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+
+        response = Mock(status_code=200)
+        response.json.return_value = {"ok": False}
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=response),
+        ):
+            settings.uptime_kuma_url = URL
+            result = ping_uptime_kuma()
+        assert result["status"] == "error"
+        assert "rejected" in result["message"]
+
+    def test_client_error_is_actionable_without_retry(self):
+        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=401)) as request,
+        ):
+            settings.uptime_kuma_url = URL
+            result = ping_uptime_kuma()
+        assert result["status"] == "error"
+        assert result["http_status"] == 401
+        assert result["attempts"] == 1
+        assert "push URL" in result["message"]
+        request.assert_called_once()
+
+    @pytest.mark.parametrize("status_code", [500, 503])
+    def test_server_error_retries_with_bounded_backoff(self, status_code):
+        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=status_code)) as request,
+            patch("app.tasks.uptime_kuma_tasks.time.sleep") as sleep,
+        ):
+            settings.uptime_kuma_url = URL
+            result = ping_uptime_kuma()
+        assert result["status"] == "error"
+        assert result["http_status"] == status_code
+        assert result["attempts"] == 3
+        assert request.call_count == 3
+        assert sleep.call_args_list[0].args == (1,)
+        assert sleep.call_args_list[1].args == (2,)
+
+    def test_timeout_retries_then_returns_actionable_error(self, caplog):
+        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
+
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch(
+                "app.tasks.uptime_kuma_tasks.requests.get",
+                side_effect=requests.exceptions.Timeout("secret URL details"),
+            ) as request,
+            patch("app.tasks.uptime_kuma_tasks.time.sleep") as sleep,
+        ):
+            settings.uptime_kuma_url = URL
+            result = ping_uptime_kuma()
+        assert result["status"] == "error"
+        assert result["attempts"] == 3
+        assert "timeout" in result["message"]
+        assert "private-token" not in str(result)
         assert "private-token" not in caplog.text
-        assert "HTTPError" in caplog.text
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_empty_url(self, mock_settings, mock_get):
-        """Test handling of empty URL string"""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        mock_settings.uptime_kuma_url = ""
-
-        result = ping_uptime_kuma()
-
-        # Should return None and not make any requests
-        assert result is None
-        mock_get.assert_not_called()
-
-    @patch("app.tasks.uptime_kuma_tasks.requests.get")
-    @patch("app.tasks.uptime_kuma_tasks.settings")
-    def test_ping_uptime_kuma_with_various_status_codes(self, mock_settings, mock_get):
-        """Test successful ping with various 2xx status codes"""
-        from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
-
-        mock_settings.uptime_kuma_url = "https://uptime.example.com/ping/123"
-
-        # Test with 200 OK
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
-
-        result = ping_uptime_kuma()
-        assert result is True
-
-        # Test with 204 No Content
-        mock_response.status_code = 204
-        result = ping_uptime_kuma()
-        assert result is True
-
-        # Test with 202 Accepted
-        mock_response.status_code = 202
-        result = ping_uptime_kuma()
-        assert result is True
+        assert request.call_count == 3
+        assert sleep.call_count == 2
