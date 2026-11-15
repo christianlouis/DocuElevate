@@ -13,7 +13,10 @@ class TestUptimeKumaTasks:
     def test_disabled_monitor_is_truthful_and_skips_request(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch("app.tasks.uptime_kuma_tasks.requests.get") as request:
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get") as request,
+        ):
             settings.uptime_kuma_url = None
             result = ping_uptime_kuma()
         assert result["status"] == "disabled"
@@ -23,9 +26,10 @@ class TestUptimeKumaTasks:
     def test_success_reports_safe_endpoint_and_status(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch(
-            "app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=204)
-        ) as request:
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=204)) as request,
+        ):
             settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
         assert result["status"] == "success"
@@ -37,9 +41,10 @@ class TestUptimeKumaTasks:
     def test_client_error_is_actionable_without_retry(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch(
-            "app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=401)
-        ) as request:
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=401)) as request,
+        ):
             settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
         assert result["status"] == "error"
@@ -71,7 +76,10 @@ class TestUptimeKumaTasks:
 
         with (
             patch("app.tasks.uptime_kuma_tasks.settings") as settings,
-            patch("app.tasks.uptime_kuma_tasks.requests.get", side_effect=requests.exceptions.Timeout("secret URL details")) as request,
+            patch(
+                "app.tasks.uptime_kuma_tasks.requests.get",
+                side_effect=requests.exceptions.Timeout("secret URL details"),
+            ) as request,
             patch("app.tasks.uptime_kuma_tasks.time.sleep") as sleep,
         ):
             settings.uptime_kuma_url = URL

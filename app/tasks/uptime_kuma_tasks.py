@@ -68,9 +68,7 @@ def check_uptime_kuma(url: str | None = None) -> dict[str, object]:
                 )
 
             retryable = http_status >= 500 or http_status in _RETRYABLE_HTTP_STATUS_CODES
-            error_message = (
-                f"Uptime Kuma returned HTTP {http_status}. Check the push URL and monitor configuration."
-            )
+            error_message = f"Uptime Kuma returned HTTP {http_status}. Check the push URL and monitor configuration."
             error_kind = f"HTTP {http_status}"
             if not retryable or attempt == _MAX_ATTEMPTS:
                 return _result(
