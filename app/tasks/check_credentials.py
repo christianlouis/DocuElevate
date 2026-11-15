@@ -301,7 +301,7 @@ def check_credentials():
                     # not fall back to the legacy file as a coordination mechanism.
                     service_state = failure_state.get(service_name, {"count": 0, "last_notified": 0}).copy()
                     service_state["count"] = service_state.get("count", 0) + 1
-                    should_notify = service_state["count"] <= 3 or service_state.get("recovered", False)
+                    should_notify = False
                 failure_state[service_name] = service_state
 
                 if should_notify:
@@ -334,7 +334,7 @@ def check_credentials():
             if service_state is None:
                 service_state = failure_state.get(service_name, {"count": 0, "last_notified": 0}).copy()
                 service_state["count"] = service_state.get("count", 0) + 1
-                should_notify = service_state["count"] <= 3 or service_state.get("recovered", False)
+                should_notify = False
             failure_state[service_name] = service_state
 
             if should_notify:

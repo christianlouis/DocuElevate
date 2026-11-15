@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "070_credential_check_states"
-down_revision = "069_destination_delivery_parts"
+revision = "071_credential_check_states"
+down_revision = "070_imap_message_ledger"
 branch_labels = None
 depends_on = None
 
