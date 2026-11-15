@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.9 (2026-11-15)
+
+### Bug Fixes
+
+- Make credential-check state transactional (#1190)
+  ([#1320](https://github.com/christianlouis/DocuElevate/pull/1320),
+  [`6be2028`](https://github.com/christianlouis/DocuElevate/commit/6be202843dcbfd6964d27d030559ee89cfdfc703))
+
+
 ## v0.195.8 (2026-11-15)
 
 ### Bug Fixes
