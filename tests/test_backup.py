@@ -189,6 +189,101 @@ class TestBackupTaskHelpers:
         assert len(digest) == 64
         assert all(c in "0123456789abcdef" for c in digest)
 
+    def test_storage_budget_counts_and_preserves_all_partials(self, tmp_path):
+        """Interrupted archives consume budget and are never deleted by age alone."""
+        from app.tasks.backup_tasks import _apply_storage_budget, _backup_storage_snapshot
+
+        stale = tmp_path / ".backup_hourly_old.db.gz.partial"
+        stale.write_bytes(b"s" * 40)
+        recent = tmp_path / ".backup_hourly_active.db.gz.partial"
+        recent.write_bytes(b"r" * 30)
+        old_time = (datetime.now(timezone.utc) - timedelta(days=2)).timestamp()
+        stale.touch()
+        import os
+
+        os.utime(stale, (old_time, old_time))
+        snapshot = _backup_storage_snapshot(tmp_path)
+        assert snapshot["partial_bytes"] == 70
+        assert snapshot["backup_bytes"] == 70
+
+        usage = MagicMock(total=10_000, used=1_000, free=9_000)
+        with (
+            patch("app.tasks.backup_tasks.shutil.disk_usage", return_value=usage),
+            patch("app.tasks.backup_tasks.settings") as mock_settings,
+        ):
+            mock_settings.backup_max_local_bytes = 100
+            mock_settings.backup_min_free_bytes = 1
+            mock_settings.backup_adaptive_cleanup_enabled = False
+            result = _apply_storage_budget(MagicMock(), tmp_path)
+
+        assert result["pruned_count"] == 0
+        assert result["pruned_bytes"] == 0
+        assert stale.exists()
+        assert recent.exists()
+
+    def test_storage_snapshot_tolerates_file_removed_during_accounting(self, tmp_path):
+        """A concurrent rename must not make capacity accounting fail."""
+        from app.tasks.backup_tasks import _backup_storage_snapshot
+
+        published = tmp_path / "backup_hourly.db.gz"
+        published.write_bytes(b"published")
+        real_stat = Path.stat
+
+        def stat_with_published_race(path, *args, **kwargs):
+            if path == published:
+                raise FileNotFoundError(path)
+            return real_stat(path, *args, **kwargs)
+
+        with patch("app.tasks.backup_tasks.Path.stat", new=stat_with_published_race):
+            with patch("app.tasks.backup_tasks.shutil.disk_usage") as usage:
+                usage.return_value = MagicMock(total=10_000, used=1_000, free=9_000)
+                snapshot = _backup_storage_snapshot(tmp_path)
+        assert snapshot["backup_bytes"] == 0
+        assert snapshot["partial_bytes"] == 0
+
+    def test_first_backup_uses_non_zero_database_size_floor(self, tmp_path):
+        """A first backup reserves space even without a prior BackupRecord."""
+        from app.tasks.backup_tasks import _FIRST_BACKUP_MIN_BYTES, _estimated_backup_bytes
+
+        db_path = tmp_path / "docuelevate.db"
+        db_path.write_bytes(b"x" * 1024)
+        empty_query = MagicMock()
+        empty_query.filter.return_value = empty_query
+        empty_query.order_by.return_value = empty_query
+        empty_query.first.return_value = None
+        db = MagicMock()
+        db.query.return_value = empty_query
+        with patch("app.tasks.backup_tasks._db_path", return_value=db_path):
+            assert _estimated_backup_bytes(db, "hourly") == _FIRST_BACKUP_MIN_BYTES
+
+    def test_first_backup_uses_database_size_above_floor(self):
+        """A larger SQLite database gets headroom beyond the minimum reserve."""
+        from app.tasks.backup_tasks import _estimated_backup_bytes
+
+        db_path = MagicMock()
+        db_path.stat.return_value.st_size = 100 * 1024 * 1024
+        empty_query = MagicMock()
+        empty_query.filter.return_value = empty_query
+        empty_query.order_by.return_value = empty_query
+        empty_query.first.return_value = None
+        db = MagicMock()
+        db.query.return_value = empty_query
+        with patch("app.tasks.backup_tasks._db_path", return_value=db_path):
+            assert _estimated_backup_bytes(db, "hourly") == 125 * 1024 * 1024
+
+    def test_first_backup_non_sqlite_uses_safe_floor(self):
+        """Non-SQLite backends without history still reserve the safe floor."""
+        from app.tasks.backup_tasks import _FIRST_BACKUP_MIN_BYTES, _estimated_backup_bytes
+
+        empty_query = MagicMock()
+        empty_query.filter.return_value = empty_query
+        empty_query.order_by.return_value = empty_query
+        empty_query.first.return_value = None
+        db = MagicMock()
+        db.query.return_value = empty_query
+        with patch("app.tasks.backup_tasks._db_path", return_value=None):
+            assert _estimated_backup_bytes(db, "hourly") == _FIRST_BACKUP_MIN_BYTES
+
     def test_dump_sqlite(self, tmp_path):
         """_dump_sqlite() writes a gzip-compressed SQL dump."""
         from app.tasks.backup_tasks import _dump_sqlite
