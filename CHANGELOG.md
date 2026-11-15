@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.0 (2026-11-15)
+
+### Features
+
+- Safely verify isolated SQLite backup restores
+  ([#1322](https://github.com/christianlouis/DocuElevate/pull/1322),
+  [`bdaad86`](https://github.com/christianlouis/DocuElevate/commit/bdaad86b3eddd7cccbf2c5c7e3e78a67961bb75a))
+
+
 ## v0.195.9 (2026-11-15)
 
 ### Bug Fixes
