@@ -53,9 +53,10 @@ class TestUptimeKumaTasks:
     def test_redirect_is_not_treated_as_success(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch(
-            "app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=302)
-        ) as request:
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=302)) as request,
+        ):
             settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
         assert result["status"] == "error"
@@ -67,8 +68,9 @@ class TestUptimeKumaTasks:
 
         response = Mock(status_code=200)
         response.json.return_value = {"ok": False}
-        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch(
-            "app.tasks.uptime_kuma_tasks.requests.get", return_value=response
+        with (
+            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
+            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=response),
         ):
             settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
