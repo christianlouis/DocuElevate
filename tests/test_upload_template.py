@@ -98,6 +98,8 @@ def test_original_non_pdf_preview_does_not_invoke_pdfjs():
     assert "original_file_exists and (file.mime_type == 'application/pdf'" in template
     assert 'id="original-image-container"' in template
     assert 'src="/files/{{ file.id }}/preview/original"' in template
+    assert "'image/png'" in template
+    assert "file.mime_type.startswith('image/')" not in template
 
 
 @pytest.mark.security
@@ -109,5 +111,3 @@ def test_pdf_text_error_renders_untrusted_message_as_text():
     assert "errorMsg.textContent = error.message" in error_block
     assert "error.message" not in error_block.replace("errorMsg.textContent = error.message", "")
     assert "innerHTML" not in error_block
-    assert "'image/png'" in template
-    assert "file.mime_type.startswith('image/')" not in template

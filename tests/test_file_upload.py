@@ -274,8 +274,8 @@ class TestUploadSecurity:
         assert response.status_code == 200
         data = response.json()
 
-        # The original filename should be sanitized (only basename)
-        assert data["original_filename"] == "passwd.pdf"
+        # The complete filename is sanitized before storage; no path remains.
+        assert data["original_filename"] == "etc_passwd.pdf"
         assert ".." not in data["stored_filename"]
         assert "/" not in data["stored_filename"]
 
@@ -292,8 +292,7 @@ class TestUploadSecurity:
         assert response.status_code == 200
         data = response.json()
 
-        # Only the basename should be kept
-        assert data["original_filename"] == "shadow.pdf"
+        assert data["original_filename"] == "etc_shadow.pdf"
         assert not data["stored_filename"].startswith("/")
 
     def test_filename_with_special_characters(self, client: TestClient, mock_celery_tasks):
@@ -359,9 +358,9 @@ class TestUploadSecurity:
         assert response.status_code == 200
         data = response.json()
 
-        # os.path.basename recognizes Unix / separators and extracts "file.pdf"
-        # sanitize_filename then ensures it's safe (already is in this case)
-        expected_filename = "file.pdf"
+        # Sanitizing the complete filename neutralizes both separators and
+        # traversal markers before the storage path is derived.
+        expected_filename = "path_to_file.pdf"
         assert data["original_filename"] == expected_filename
         # Verify no dangerous characters remain
         assert "/" not in data["original_filename"]
