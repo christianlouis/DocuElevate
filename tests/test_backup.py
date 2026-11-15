@@ -26,7 +26,14 @@ from app.main import app
 from app.models import BackupRecord
 
 
-def _write_archive(path: Path, payload: bytes = b"SELECT 1;") -> str:
+def _write_archive(path: Path, payload: bytes | None = None) -> str:
+    if payload is None:
+        if path.name.endswith(".pgsql.gz"):
+            payload = b"-- PostgreSQL database dump\nSET search_path = public;\n"
+        elif path.name.endswith(".mysql.gz"):
+            payload = b"-- MySQL dump\nCREATE TABLE example (id INT);\n"
+        else:
+            payload = b"BEGIN TRANSACTION;\nCREATE TABLE example (id INTEGER);\nCOMMIT;\n"
     with gzip.open(path, "wb") as archive:
         archive.write(payload)
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -304,12 +311,13 @@ class TestBackupTaskHelpers:
             ("backup_daily_new.db.gz", "daily", 2),
         ):
             path = tmp_path / filename
-            path.write_bytes(b"x" * 60)
+            checksum = _write_archive(path)
             rec = BackupRecord(
                 filename=filename,
                 local_path=str(path),
                 backup_type=tier,
-                size_bytes=60,
+                size_bytes=path.stat().st_size,
+                checksum=checksum,
                 status="ok",
                 created_at=now - timedelta(hours=age),
             )
@@ -339,13 +347,14 @@ class TestBackupTaskHelpers:
         from app.tasks.backup_tasks import _apply_storage_budget
 
         path = tmp_path / "backup_hourly_only.db.gz"
-        path.write_bytes(b"x" * 80)
+        checksum = _write_archive(path)
         db_session.add(
             BackupRecord(
                 filename=path.name,
                 local_path=str(path),
                 backup_type="hourly",
-                size_bytes=80,
+                size_bytes=path.stat().st_size,
+                checksum=checksum,
                 status="ok",
             )
         )
@@ -598,7 +607,7 @@ class TestBackupTaskHelpers:
         from app.tasks.backup_tasks import _validate_local_archive
 
         archive = tmp_path / f"backup_hourly_test{suffix}"
-        checksum = _write_archive(archive, b"-- structurally valid dump\n")
+        checksum = _write_archive(archive)
         record = BackupRecord(
             filename=archive.name,
             local_path=str(archive),
@@ -613,6 +622,21 @@ class TestBackupTaskHelpers:
         valid, detail = _validate_local_archive(record)
         assert not valid
         assert "checksum" in detail.lower()
+
+        checksum = _write_archive(archive)
+        record.checksum = checksum
+        raw = archive.read_bytes()
+        archive.write_bytes(raw[:-8])
+        record.checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+        valid, detail = _validate_local_archive(record)
+        assert not valid
+        assert "unreadable" in detail.lower()
+
+        checksum = _write_archive(archive, b"not a database dump")
+        record.checksum = checksum
+        valid, detail = _validate_local_archive(record)
+        assert not valid
+        assert "sql dump" in detail.lower()
 
     def test_corrupt_archive_cannot_evict_verified_archive(self, tmp_path, db_session):
         """Retention marks corruption failed and keeps the verified recovery point."""

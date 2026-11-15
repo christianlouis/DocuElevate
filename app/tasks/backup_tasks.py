@@ -118,10 +118,10 @@ def _sha256(path: Path) -> str:
 def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
     """Validate a local recovery point before retention can protect or prune it.
 
-    This deliberately performs a backend-independent structural check: the
-    archive must be non-empty, readable as gzip, and match the checksum stored
-    when it was created.  A full isolated restore is a separate operational
-    verification job and must never run against the live database.
+    The compressed stream is consumed to EOF so gzip CRC/trailer failures and
+    truncation cannot pass.  The bounded sample then checks the expected SQL
+    dump markers for the backend.  A full isolated restore is a separate
+    operational verification job and must never run against the live database.
     """
     path = Path(rec.local_path) if rec.local_path else None
     if path is None or not path.is_file():
@@ -134,10 +134,30 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
         actual_checksum = _sha256(path)
         if actual_checksum != rec.checksum:
             return False, "Local backup archive checksum does not match."
+        payload = bytearray()
         with gzip.open(path, "rb") as archive:
-            if not archive.read(1):
-                return False, "Local backup archive contains no data."
-    except (OSError, EOFError, gzip.BadGzipFile) as exc:
+            while chunk := archive.read(65536):
+                if len(payload) < 1_048_576:
+                    payload.extend(chunk[: 1_048_576 - len(payload)])
+        if not payload:
+            return False, "Local backup archive contains no data."
+        sample = bytes(payload)
+        suffix = path.name
+        if suffix.endswith(".db.gz"):
+            required = (b"BEGIN TRANSACTION;", b"COMMIT;")
+            if not all(marker in sample for marker in required):
+                return False, "SQLite backup does not contain a complete SQL dump."
+        elif suffix.endswith(".pgsql.gz"):
+            if b"PostgreSQL database dump" not in sample or not any(
+                marker in sample for marker in (b"CREATE ", b"SET ")
+            ):
+                return False, "PostgreSQL backup does not contain a recognizable SQL dump."
+        elif suffix.endswith(".mysql.gz"):
+            if b"MySQL dump" not in sample or not any(
+                marker in sample for marker in (b"CREATE ", b"INSERT ")
+            ):
+                return False, "MySQL backup does not contain a recognizable SQL dump."
+    except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile) as exc:
         return False, f"Local backup archive is unreadable: {exc}"
     return True, None
 
@@ -256,6 +276,7 @@ def _apply_storage_budget(
             .all()
         )
         protected_paths: set[str] = set()
+        valid_records: list[BackupRecord] = []
         for tier in _BACKUP_TYPE_RETAIN:
             newest = None
             for rec in records:
@@ -263,13 +284,15 @@ def _apply_storage_budget(
                     continue
                 valid, detail = _validate_local_archive(rec)
                 if valid:
-                    newest = rec
-                    break
-                _mark_invalid_archive(rec, detail or "Local backup archive failed integrity validation.")
+                    valid_records.append(rec)
+                    if newest is None:
+                        newest = rec
+                else:
+                    _mark_invalid_archive(rec, detail or "Local backup archive failed integrity validation.")
             if newest is not None:
                 protected_paths.add(str(newest.local_path))
 
-        for rec in reversed(records):
+        for rec in reversed(valid_records):
             local_path = str(rec.local_path or "")
             if not local_path or local_path in protected_paths or not os.path.exists(local_path):
                 continue
