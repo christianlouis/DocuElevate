@@ -134,11 +134,19 @@ def _adaptive_cleanup_enabled() -> bool:
     return raw if isinstance(raw, bool) else True
 
 
+def _accounted_file_bytes(path: Path) -> int:
+    """Return a file size, tolerating a concurrent rename/removal only."""
+    try:
+        return path.stat().st_size if path.is_file() else 0
+    except FileNotFoundError:
+        return 0
+
+
 def _backup_storage_snapshot(directory: Path) -> dict[str, int]:
     """Return current filesystem and archive usage without exposing paths."""
     usage = shutil.disk_usage(directory)
-    published_bytes = sum(path.stat().st_size for path in directory.glob("backup_*.gz") if path.is_file())
-    partial_bytes = sum(path.stat().st_size for path in directory.glob(".backup_*.partial") if path.is_file())
+    published_bytes = sum(_accounted_file_bytes(path) for path in directory.glob("backup_*.gz"))
+    partial_bytes = sum(_accounted_file_bytes(path) for path in directory.glob(".backup_*.partial"))
     backup_bytes = published_bytes + partial_bytes
     configured_budget = _configured_non_negative_int("backup_max_local_bytes")
     configured_min_free = _configured_non_negative_int("backup_min_free_bytes")

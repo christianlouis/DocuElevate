@@ -221,6 +221,19 @@ class TestBackupTaskHelpers:
         assert stale.exists()
         assert recent.exists()
 
+    def test_storage_snapshot_tolerates_file_removed_during_accounting(self, tmp_path):
+        """A concurrent rename must not make capacity accounting fail."""
+        from app.tasks.backup_tasks import _backup_storage_snapshot
+
+        published = tmp_path / "backup_hourly.db.gz"
+        published.write_bytes(b"published")
+        with patch("app.tasks.backup_tasks.Path.stat", side_effect=FileNotFoundError):
+            with patch("app.tasks.backup_tasks.shutil.disk_usage") as usage:
+                usage.return_value = MagicMock(total=10_000, used=1_000, free=9_000)
+                snapshot = _backup_storage_snapshot(tmp_path)
+        assert snapshot["backup_bytes"] == 0
+        assert snapshot["partial_bytes"] == 0
+
     def test_first_backup_uses_non_zero_database_size_floor(self, tmp_path):
         """A first backup reserves space even without a prior BackupRecord."""
         from app.tasks.backup_tasks import _FIRST_BACKUP_MIN_BYTES, _estimated_backup_bytes
