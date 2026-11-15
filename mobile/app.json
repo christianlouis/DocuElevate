@@ -82,11 +82,12 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withShareExtension",
       [
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true,
+            "buildReactNativeFromSource": false,
             "privacyManifests": {
               "NSPrivacyAccessedAPITypes": [
                 {
@@ -133,7 +134,24 @@
     "owner": "christianlouis",
     "extra": {
       "eas": {
-        "projectId": "16925679-cb94-411c-83b5-a62c9addb872"
+        "projectId": "16925679-cb94-411c-83b5-a62c9addb872",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "DocuElevateShareExtension",
+                  "bundleIdentifier": "org.docuelevate.mobile.share",
+                  "entitlements": {
+                    "keychain-access-groups": [
+                      "$(AppIdentifierPrefix)org.docuelevate.shared"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
       }
     }
   }
