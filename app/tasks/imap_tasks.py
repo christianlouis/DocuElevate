@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import email
+import hashlib
 import imaplib
 import json
 import logging
@@ -124,13 +125,11 @@ def acquire_lock():
             logger.info("Lock acquired for IMAP processing.")
             return token
         if redis_client.ttl(LOCK_KEY) == -1:
-            # No current owner can be identified for the pre-token format.
-            # Remove only that exact legacy sentinel, then retry atomically.
-            if redis_client.get(LOCK_KEY) == "locked":
-                redis_client.delete(LOCK_KEY)
-                if redis_client.set(LOCK_KEY, token, nx=True, ex=LOCK_EXPIRE):
-                    logger.warning("Recovered legacy IMAP lock without a TTL.")
-                    return token
+            # Atomically replace only the exact pre-token sentinel.
+            script = "if redis.call('get', KEYS[1]) == 'locked' then redis.call('set', KEYS[1], ARGV[1], 'EX', ARGV[2]) return 1 end return 0"
+            if redis_client.eval(script, 1, LOCK_KEY, token, LOCK_EXPIRE):
+                logger.warning("Recovered legacy IMAP lock without a TTL.")
+                return token
     except Exception:  # noqa: BLE001
         logger.exception("Unable to acquire IMAP lock")
     logger.warning("Lock already held. Skipping this cycle.")
@@ -178,7 +177,7 @@ def cleanup_old_entries(processed_emails):
     return valid_emails
 
 
-@shared_task
+@shared_task(soft_time_limit=240, time_limit=270)
 def pull_all_inboxes():
     """
     Periodic Celery task that checks all configured IMAP mailboxes
@@ -201,6 +200,7 @@ def pull_all_inboxes():
         # slot is the normal fresh-install state and must not emit a warning on
         # every beat interval. Partially configured slots still flow through
         # validation so operators get an actionable warning.
+        deadline = time.monotonic() + POLL_BUDGET_SECONDS
         for mailbox in (
             {
                 "mailbox_key": "imap1",
@@ -226,17 +226,17 @@ def pull_all_inboxes():
                     logger.info("Skipping legacy mailbox %s; an owned IMAP integration covers it.", mailbox["mailbox_key"])
                     continue
                 try:
-                    check_and_pull_mailbox(**mailbox)
+                    check_and_pull_mailbox(**mailbox, deadline=deadline)
                 except Exception as exc:  # noqa: BLE001
                     logger.error("Error polling mailbox %s: %s", mailbox["mailbox_key"], type(exc).__name__)
             else:
                 logger.debug("Mailbox %s is not configured; skipping silently.", mailbox["mailbox_key"])
 
         # Per-user IMAP accounts from the database
-        _pull_user_imap_accounts()
+        _pull_user_imap_accounts(deadline=deadline)
 
         # Per-user IMAP integrations from the UserIntegration model
-        _pull_user_integration_imap()
+        _pull_user_integration_imap(deadline=deadline)
 
         logger.info("Finished pull_all_inboxes")
 
@@ -244,7 +244,7 @@ def pull_all_inboxes():
         release_lock(lock_token)
 
 
-def _pull_user_imap_accounts() -> None:
+def _pull_user_imap_accounts(*, deadline=None) -> None:
     """Iterate over all active per-user IMAP accounts and pull their inboxes."""
     try:
         from app.models import UserImapAccount
@@ -257,7 +257,7 @@ def _pull_user_imap_accounts() -> None:
                 # Use a descriptive identifier for logging and processed-email cache keys
                 account_identifier = f"user_{acct.owner_id}_{acct.id}"
                 try:
-                    pull_inbox(
+                    poll_ok = pull_inbox(
                         mailbox_key=account_identifier,
                         host=acct.host,
                         port=acct.port,
@@ -267,7 +267,10 @@ def _pull_user_imap_accounts() -> None:
                         delete_after_process=acct.delete_after_process,
                         owner_id=acct.owner_id,
                         allowed_categories=_resolve_categories_for_profile(acct.profile_id),
+                        deadline=deadline,
                     )
+                    if poll_ok is not True:
+                        raise RuntimeError("IMAP poll did not complete successfully")
                     # Record successful poll
                     acct.last_checked_at = datetime.now(timezone.utc)
                     acct.last_error = None
@@ -317,7 +320,7 @@ def _legacy_mailbox_has_owned_integration(host, port, username) -> bool:
     return False
 
 
-def _pull_user_integration_imap() -> None:
+def _pull_user_integration_imap(*, deadline=None) -> None:
     """Iterate over all active IMAP UserIntegrations and pull their inboxes.
 
     This polls the ``user_integrations`` table for records with
@@ -373,7 +376,7 @@ def _pull_user_integration_imap() -> None:
                         )
                         continue
 
-                    pull_inbox(
+                    poll_ok = pull_inbox(
                         mailbox_key=account_identifier,
                         host=host,
                         port=port,
@@ -385,7 +388,10 @@ def _pull_user_integration_imap() -> None:
                         source_integration_id=integ.id,
                         gmail_apply_labels=gmail_labels,
                         allowed_categories=allowed_categories,
+                        deadline=deadline,
                     )
+                    if poll_ok is not True:
+                        raise RuntimeError("IMAP poll did not complete successfully")
                     integ.last_used_at = datetime.now(timezone.utc)
                     integ.last_error = None
                     db.commit()
@@ -417,6 +423,7 @@ def check_and_pull_mailbox(
     password: str | None,
     use_ssl: bool,
     delete_after_process: bool,
+    deadline: float | None = None,
 ):
     """Validates config and invokes pulling from the mailbox if valid."""
     if not (host and port and username and password):
@@ -432,6 +439,7 @@ def check_and_pull_mailbox(
         password=password,
         use_ssl=use_ssl,
         delete_after_process=delete_after_process,
+        deadline=deadline,
     )
     if succeeded is True:
         record_poll_success(mailbox_key)
@@ -457,8 +465,21 @@ def _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid):
     row.state = "processing"
     row.last_error = None
     db.commit()
+    ledger_id = row.id
     db.close()
-    return row.id
+    return ledger_id
+
+
+def _ledger_is_completed(owner_key, mailbox_key, uidvalidity, uid):
+    from app.models import ImapMessageLedger
+    db = _get_db_session()
+    try:
+        return db.query(ImapMessageLedger.id).filter_by(
+            owner_key=owner_key, mailbox_key=mailbox_key,
+            uidvalidity=str(uidvalidity), uid=int(uid), state="completed",
+        ).first() is not None
+    finally:
+        db.close()
 
 
 def _ledger_finish(ledger_id, *, state, message_id=None, error=None):
@@ -508,6 +529,7 @@ def pull_inbox(
     source_integration_id=None,
     gmail_apply_labels=True,
     allowed_categories=None,
+    deadline=None,
 ):
     """
     Connects to the configured mailbox and fetches all messages incrementally,
@@ -530,6 +552,10 @@ def pull_inbox(
     """
     if allowed_categories is None:
         allowed_categories = _resolve_categories_for_profile(None)
+    deadline = deadline or (time.monotonic() + POLL_BUDGET_SECONDS)
+    if time.monotonic() >= deadline:
+        logger.warning("IMAP poll budget exhausted before connecting to %s", mailbox_key)
+        return False
 
     effective_mime_types, effective_extensions = get_allowed_types_for_categories(allowed_categories)
     logger.info(
@@ -564,7 +590,7 @@ def pull_inbox(
                 select_status, select_data = mail.select(f'"{all_mail_folder}"', readonly=not delete_after_process)
             else:
                 logger.warning("Gmail All Mail folder not found, falling back to INBOX.")
-                select_status, _ = mail.select("INBOX")
+                select_status, select_data = mail.select("INBOX", readonly=not delete_after_process)
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
                 return False
@@ -584,15 +610,30 @@ def pull_inbox(
             return False
 
         msg_numbers = search_data[0].split()
+        uidvalidity = _extract_uidvalidity(mail, select_data)
+        if uidvalidity == "unknown":
+            logger.error("Mailbox %s did not provide UIDVALIDITY; refusing unsafe scan", mailbox_key)
+            return False
+        identity = f"{host}:{port}:{username}:{'gmail-all' if is_gmail_host else 'INBOX'}"
+        account_hash = hashlib.sha256(identity.encode()).hexdigest()[:32]
+        owner_key = f"{owner_id or 'legacy'}:{account_hash}"
         # Newest first makes normal polling cheap; the bounded ledger lets old
         # messages resume on subsequent runs instead of being forgotten.
-        msg_numbers = list(reversed(msg_numbers))[:POLL_BATCH_SIZE]
-        uidvalidity = _extract_uidvalidity(mail, select_data)
-        owner_key = str(owner_id) if owner_id is not None else f"legacy:{mailbox_key}"
+        # Filter completed rows before applying the batch limit.  This means
+        # a mailbox with a large already-processed tail still reaches older
+        # pending UIDs on later runs.
+        candidate_numbers = []
+        for candidate in reversed(msg_numbers):
+            if time.monotonic() >= deadline or len(candidate_numbers) >= POLL_BATCH_SIZE:
+                break
+            if _ledger_is_completed(owner_key, mailbox_key, uidvalidity, int(candidate)):
+                continue
+            candidate_numbers.append(candidate)
+        msg_numbers = candidate_numbers
         started = time.monotonic()
 
         for num in msg_numbers:
-            if time.monotonic() - started >= POLL_BUDGET_SECONDS:
+            if time.monotonic() >= deadline:
                 break
             uid = int(num)
             ledger_id = _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid)
@@ -612,9 +653,8 @@ def pull_inbox(
             msg_id = email_message.get("Message-ID")
 
             if not msg_id:
-                logger.warning("Skipping email without Message-ID in %s", mailbox_key)
-                _ledger_finish(ledger_id, state="failed", error="missing Message-ID")
-                continue
+                msg_id = f"<imap-uid-{uidvalidity}-{uid}@{mailbox_key}>"
+                logger.info("Message %s has no Message-ID; using UID identity", uid)
 
             # For Gmail, check if the email already has the "Ingested" label.
             if is_gmail_host and gmail_apply_labels:
@@ -631,6 +671,7 @@ def pull_inbox(
                     source_integration_id=source_integration_id,
                     effective_mime_types=effective_mime_types,
                     effective_extensions=effective_extensions,
+                    ingestion_prefix=f"{owner_key}:{uidvalidity}:{uid}",
                 )
                 _ledger_finish(ledger_id, state="completed", message_id=msg_id)
             except Exception as exc:  # noqa: BLE001
@@ -674,6 +715,7 @@ def fetch_attachments_and_enqueue(
     source_integration_id: int | None = None,
     effective_mime_types: frozenset[str] | None = None,
     effective_extensions: frozenset[str] | None = None,
+    ingestion_prefix: str | None = None,
 ):
     """
     Extracts attachments from the email and processes only allowed file types.
@@ -703,7 +745,7 @@ def fetch_attachments_and_enqueue(
         effective_mime_types, effective_extensions = get_allowed_types_for_categories(DEFAULT_CATEGORIES)
 
     has_attachment = False
-    for part in email_message.walk():
+    for part_index, part in enumerate(email_message.walk()):
         if part.get_content_maintype() == "multipart":
             continue
 
@@ -734,6 +776,34 @@ def fetch_attachments_and_enqueue(
             logger.warning("Skipping unsafe attachment filename %r", filename)
             continue
         file_path = os.path.join(settings.workdir, safe_filename)
+        if ingestion_prefix:
+            payload = part.get_payload(decode=True) or b""
+            digest = hashlib.sha256(payload).hexdigest()
+            key = f"{ingestion_prefix}:{part_index}:{digest}"
+            try:
+                from app.models import DocumentIntake
+                db = _get_db_session()
+                intake = db.query(DocumentIntake).filter_by(
+                    principal_id=str(owner_id or "legacy"), idempotency_key=key,
+                ).first()
+                if intake and intake.state in {"queued", "dispatched", "completed"}:
+                    db.close()
+                    continue
+                if intake is None:
+                    intake = DocumentIntake(
+                        principal_id=str(owner_id or "legacy"), idempotency_key=key,
+                        source="imap", original_filename=filename, local_path=file_path,
+                        state="pending",
+                    )
+                    db.add(intake)
+                db.commit()
+                db.close()
+            except Exception:
+                try:
+                    db.rollback(); db.close()
+                except Exception:
+                    pass
+                raise
         with open(file_path, "wb") as f:
             f.write(part.get_payload(decode=True))
 
@@ -747,6 +817,23 @@ def fetch_attachments_and_enqueue(
             logger.info("Enqueued file for conversion to PDF: %s", filename)
 
         has_attachment = True
+        if ingestion_prefix:
+            try:
+                from app.models import DocumentIntake
+                db = _get_db_session()
+                intake = db.query(DocumentIntake).filter_by(
+                    principal_id=str(owner_id or "legacy"), idempotency_key=key,
+                ).first()
+                if intake:
+                    intake.state = "dispatched"
+                    db.commit()
+                db.close()
+            except Exception:
+                try:
+                    db.rollback(); db.close()
+                except Exception:
+                    pass
+                raise
     return has_attachment
 
 
@@ -760,7 +847,7 @@ def email_already_has_label(mail, msg_id, label="Ingested"):
         if isinstance(msg_id, int):
             msg_id = str(msg_id).encode()
 
-        label_status, label_data = mail.fetch(msg_id, "(X-GM-LABELS)")
+        label_status, label_data = mail.uid("fetch", msg_id, "(X-GM-LABELS)")
         if label_status == "OK" and label_data and len(label_data) > 0:
             raw_labels = label_data[0][1].decode("utf-8", errors="ignore")
             if label in raw_labels:
@@ -773,7 +860,7 @@ def email_already_has_label(mail, msg_id, label="Ingested"):
 def mark_as_processed_with_star(mail, msg_id):
     """Stars the email in Gmail."""
     try:
-        mail.store(msg_id, "+FLAGS", "\\Flagged")
+        mail.uid("store", msg_id, "+FLAGS", "\\Flagged")
         logger.info("Email %s starred in Gmail.", msg_id)
     except Exception as e:
         logger.error("Failed to star email %s: %s", msg_id, e)
@@ -782,7 +869,7 @@ def mark_as_processed_with_star(mail, msg_id):
 def mark_as_processed_with_label(mail, msg_id, label="Ingested"):
     """Adds a custom label to the email in Gmail."""
     try:
-        mail.store(msg_id, "+X-GM-LABELS", label)
+        mail.uid("store", msg_id, "+X-GM-LABELS", label)
         logger.info("Email %s labeled '%s' in Gmail.", msg_id, label)
     except Exception as e:
         logger.error("Failed to label email %s with %s: %s", msg_id, label, e)
