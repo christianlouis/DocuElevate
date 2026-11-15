@@ -70,6 +70,26 @@ def _stage_payload(path, staging, payload, digest):
             os.unlink(temp_path)
 
 
+def _cleanup_unreserved_stage(db, path):
+    """Remove only a stage that no committed intake row owns.
+
+    A commit exception can be ambiguous.  Confirming that no intake persisted
+    the generated path avoids deleting the payload of a successful commit.
+    """
+    if not path or not os.path.exists(path):
+        return
+    try:
+        reserved = db.query(DocumentIntake.id).filter_by(local_path=path).first()
+    except Exception:
+        # Leave the payload for reconciliation when commit visibility is unknown.
+        return
+    if reserved is None:
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+
+
 @contextmanager
 def _owner_lifecycle_lock(db, owner):
     with (account_lifecycle_lock(db, owner, exclusive=False) if owner else nullcontext()):
@@ -85,7 +105,9 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
     principal = str(owner or "legacy")
     digest = hashlib.sha256(payload).hexdigest()
     key = hashlib.sha256(idempotency_key.encode()).hexdigest()
-    original_filename = os.path.basename(str(filename).replace("\\", "/")) or "attachment"
+    original_filename = os.path.basename(str(filename).replace("\\", "/"))
+    if original_filename in {"", ".", ".."}:
+        original_filename = "attachment"
     extension = os.path.splitext(original_filename)[1].lower()[:32]
     staging = os.path.join(settings.workdir, "imap-staging")
     path = None
@@ -96,7 +118,6 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
         "mime_type": mime_type,
         "is_pdf": bool(is_pdf),
     }
-    created = False
     with SessionLocal() as db, _owner_lifecycle_lock(db, owner):
         if owner:
             # Authorization must precede any durable or filesystem staging.
@@ -108,7 +129,9 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
             path = os.path.join(staging, f"{uuid.uuid4().hex}{extension}")
             existing = None
             if settings.enable_deduplication:
-                existing = db.query(FileRecord).filter_by(owner_id=owner, filehash=digest).order_by(FileRecord.id).first()
+                existing = (
+                    db.query(FileRecord).filter_by(owner_id=owner, filehash=digest).order_by(FileRecord.id).first()
+                )
             if existing:
                 metadata["file_id"] = existing.id
             row = DocumentIntake(
@@ -127,20 +150,19 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
                 # A second check closes the gap between the precheck and commit.
                 if owner:
                     assert_account_active(db, owner)
-                created = _stage_payload(path, staging, payload, digest)
+                if not existing:
+                    _stage_payload(path, staging, payload, digest)
                 db.commit()
             except IntegrityError:
                 db.rollback()
+                _cleanup_unreserved_stage(db, path)
                 winner = db.query(DocumentIntake).filter_by(principal_id=principal, idempotency_key=key).one_or_none()
-                if winner is None and created and os.path.exists(path):
-                    os.unlink(path)
                 if winner is None:
                     raise
                 row = winner
             except Exception:
                 db.rollback()
-                if created and os.path.exists(path):
-                    os.unlink(path)
+                _cleanup_unreserved_stage(db, path)
                 raise
         stored = json.loads(row.metadata_json or "{}")
         path = row.local_path
@@ -185,63 +207,74 @@ def _dispatch_intake(intake_id):
 def process_imap_intake(self, intake_id):
     """Reserve one FileRecord and run the first pipeline stage under a lease."""
     with SessionLocal() as db:
-        row = db.query(DocumentIntake).filter_by(id=intake_id, source="imap").with_for_update().one_or_none()
-        if row is None or row.state == "completed":
+        initial = db.query(DocumentIntake).filter_by(id=intake_id, source="imap").one_or_none()
+        if initial is None or initial.state == "completed":
             return {"status": "already_completed"}
-        if row.state == "processing" and not _expired(row.updated_at):
-            return {"status": "already_processing"}
-        metadata = json.loads(row.metadata_json or "{}")
-        path = row.local_path
-        if not path or not os.path.isfile(path):
-            row.state, row.error = "failed", "Staged attachment missing"
-            db.commit()
-            return {"error": row.error}
-        with open(path, "rb") as stream:
-            actual_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-        if actual_hash != metadata["sha256"]:
-            row.state, row.error = "failed", "Staged attachment hash mismatch"
-            db.commit()
-            return {"error": row.error}
-        owner = metadata.get("owner_id")
-        if owner:
-            assert_account_active(db, owner)
-        file_id = metadata.get("file_id")
-        if file_id is None:
-            existing = None
-            if settings.enable_deduplication:
-                existing = (
-                    db.query(FileRecord).filter_by(owner_id=owner, filehash=actual_hash).order_by(FileRecord.id).first()
-                )
-            if existing:
-                metadata["file_id"] = existing.id
-                row.metadata_json, row.state, row.error = json.dumps(metadata), "completed", None
+        owner = json.loads(initial.metadata_json or "{}").get("owner_id")
+        # Re-read under the same shared lifecycle fence used by reservation and
+        # staging.  The document pipeline runs after this scope has committed.
+        with _owner_lifecycle_lock(db, owner):
+            db.expire_all()
+            row = db.query(DocumentIntake).filter_by(id=intake_id, source="imap").with_for_update().one_or_none()
+            if row is None or row.state == "completed":
+                return {"status": "already_completed"}
+            if row.state == "processing" and not _expired(row.updated_at):
+                return {"status": "already_processing"}
+            metadata = json.loads(row.metadata_json or "{}")
+            path = row.local_path
+            if not path or not os.path.isfile(path):
+                row.state, row.error = "failed", "Staged attachment missing"
                 db.commit()
-                return {"status": "existing", "file_id": existing.id}
-            tenant_id, tribe_id = ensure_document_scope(db, owner)
-            source_id = _trusted_source_integration_id(
-                db, self.request.id, owner, metadata.get("source_integration_id")
-            )
-            record = FileRecord(
-                filehash=actual_hash,
-                original_filename=row.original_filename,
-                local_filename=path,
-                original_file_path=path,
-                file_size=os.path.getsize(path),
-                mime_type=metadata.get("mime_type") or mimetypes.guess_type(path)[0],
-                owner_id=owner,
-                tenant_id=tenant_id,
-                tribe_id=tribe_id,
-                source_integration_id=source_id,
-                is_duplicate=False,
-            )
-            db.add(record)
-            db.flush()
-            file_id = record.id
-            metadata["file_id"] = file_id
-        row.metadata_json = json.dumps(metadata)
-        row.state, row.error, row.updated_at = "processing", None, _now()
-        filename = row.original_filename
-        db.commit()
+                return {"error": row.error}
+            with open(path, "rb") as stream:
+                actual_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+            if actual_hash != metadata["sha256"]:
+                row.state, row.error = "failed", "Staged attachment hash mismatch"
+                db.commit()
+                return {"error": row.error}
+            owner = metadata.get("owner_id")
+            if owner:
+                assert_account_active(db, owner)
+            file_id = metadata.get("file_id")
+            if file_id is None:
+                existing = None
+                if settings.enable_deduplication:
+                    existing = (
+                        db.query(FileRecord)
+                        .filter_by(owner_id=owner, filehash=actual_hash)
+                        .order_by(FileRecord.id)
+                        .first()
+                    )
+                if existing:
+                    metadata["file_id"] = existing.id
+                    row.metadata_json, row.state, row.error = json.dumps(metadata), "completed", None
+                    db.commit()
+                    return {"status": "existing", "file_id": existing.id}
+                tenant_id, tribe_id = ensure_document_scope(db, owner)
+                source_id = _trusted_source_integration_id(
+                    db, self.request.id, owner, metadata.get("source_integration_id")
+                )
+                record = FileRecord(
+                    filehash=actual_hash,
+                    original_filename=row.original_filename,
+                    local_filename=path,
+                    original_file_path=path,
+                    file_size=os.path.getsize(path),
+                    mime_type=metadata.get("mime_type") or mimetypes.guess_type(path)[0],
+                    owner_id=owner,
+                    tenant_id=tenant_id,
+                    tribe_id=tribe_id,
+                    source_integration_id=source_id,
+                    is_duplicate=False,
+                )
+                db.add(record)
+                db.flush()
+                file_id = record.id
+                metadata["file_id"] = file_id
+            row.metadata_json = json.dumps(metadata)
+            row.state, row.error, row.updated_at = "processing", None, _now()
+            filename = row.original_filename
+            db.commit()
     try:
         kwargs = {
             "original_filename": filename,

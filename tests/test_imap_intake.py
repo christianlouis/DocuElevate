@@ -1,8 +1,8 @@
 """Crash and duplicate-delivery coverage for the IMAP consumer handoff."""
 
-from datetime import datetime, timedelta, timezone
 import os
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from sqlalchemy.orm import sessionmaker
@@ -185,7 +185,10 @@ def test_existing_owner_hash_is_seeded_before_publish(intake_env):
         db.add(existing)
         db.commit()
         existing_id = existing.id
-    intake_id = _prepare()
+    with patch.object(imap_intake, "_stage_payload") as stage:
+        intake_id = _prepare()
+        assert _prepare() == intake_id
+    stage.assert_not_called()
     publish.assert_not_called()
     with factory() as db:
         import json
@@ -210,6 +213,7 @@ def test_deduplication_disabled_keeps_distinct_uid_intakes_as_records(intake_env
     with patch.object(imap_intake.settings, "enable_deduplication", False):
         first = _prepare("uid-101")
         second = _prepare("uid-102")
+        assert _prepare("uid-101") == first
         with factory() as db:
             rows = db.query(FileRecord).order_by(FileRecord.id).all()
             assert len(rows) == 0
@@ -243,8 +247,86 @@ def test_original_filename_is_basename_and_existing_stage_is_reused(intake_env):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("filename", (".", "..", r"C:\\incoming\\.."))
+def test_dot_filenames_use_safe_attachment_basename(intake_env, filename):
+    factory, _ = intake_env
+    intake_id = imap_intake.prepare_imap_attachment(
+        owner_id="owner-a", source_integration_id=None, idempotency_key=f"dot-{filename}",
+        filename=filename, payload=b"%PDF test", mime_type="application/pdf", is_pdf=True,
+    )
+    with factory() as db:
+        assert db.query(DocumentIntake).filter_by(id=intake_id).one().original_filename == "attachment"
+
+
+@pytest.mark.unit
 def test_inactive_owner_is_rejected_before_staging(intake_env):
     with patch.object(imap_intake, "assert_account_active", side_effect=ValueError("deleted")):
         with pytest.raises(ValueError, match="deleted"):
             _prepare("uid-deleted")
     assert not os.path.exists(os.path.join(imap_intake.settings.workdir, "imap-staging"))
+
+
+@pytest.mark.unit
+def test_same_intake_key_rejects_different_payload_without_new_stage(intake_env):
+    factory, _ = intake_env
+    intake_id = _prepare("uid-conflict")
+    with pytest.raises(ValueError, match="different attachment content"):
+        imap_intake.prepare_imap_attachment(
+            owner_id="owner-a", source_integration_id=None, idempotency_key="uid-conflict",
+            filename="replacement.pdf", payload=b"not the first payload",
+            mime_type="application/pdf", is_pdf=True,
+        )
+    with factory() as db:
+        assert db.query(DocumentIntake).count() == 1
+        assert db.query(DocumentIntake).one().id == intake_id
+
+
+@pytest.mark.unit
+def test_distinct_reservations_use_isolated_staged_paths(intake_env):
+    factory, _ = intake_env
+    _prepare("uid-isolated-1")
+    _prepare("uid-isolated-2")
+    with factory() as db:
+        paths = [row.local_path for row in db.query(DocumentIntake).order_by(DocumentIntake.id)]
+    assert len(paths) == 2
+    assert len(set(paths)) == 2
+    assert all(os.path.isfile(path) for path in paths)
+
+
+@pytest.mark.unit
+def test_reservation_failure_removes_only_unreserved_stage(intake_env):
+    factory, _ = intake_env
+    owned_id = _prepare("uid-owned-stage")
+    with factory() as db:
+        owned_path = db.query(DocumentIntake).filter_by(id=owned_id).one().local_path
+
+    def failing_session():
+        session = factory()
+
+        def fail_commit():
+            raise RuntimeError("reservation commit failed")
+
+        session.commit = fail_commit
+        return session
+
+    with patch.object(imap_intake, "SessionLocal", failing_session):
+        with pytest.raises(RuntimeError, match="reservation commit failed"):
+            _prepare("uid-commit-failure")
+    staging = os.path.join(imap_intake.settings.workdir, "imap-staging")
+    assert os.path.isdir(staging)
+    assert os.path.isfile(owned_path)
+    assert os.listdir(staging) == [os.path.basename(owned_path)]
+
+
+@pytest.mark.unit
+def test_consumer_reservation_holds_owner_lifecycle_lock(intake_env):
+    intake_id = _prepare("uid-consumer-fence")
+    successful = MagicMock()
+    successful.result = {"status": "Queued for OCR"}
+    lock = MagicMock(return_value=imap_intake.nullcontext())
+    with (
+        patch.object(imap_intake, "account_lifecycle_lock", lock),
+        patch.object(imap_intake.process_document, "apply", return_value=successful),
+    ):
+        assert imap_intake.process_imap_intake.run(intake_id)["status"] == "completed"
+    lock.assert_called_once_with(ANY, "owner-a", exclusive=False)
