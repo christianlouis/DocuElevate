@@ -39,6 +39,18 @@ def test_upload_journey_copy_has_english_source_translations():
 
 
 @pytest.mark.unit
+def test_upload_and_onboarding_copy_is_complete_in_german():
+    """German must cover the upload/onboarding keys shipped by English."""
+    translations_dir = Path("frontend/translations")
+    english = json.loads((translations_dir / "en.json").read_text(encoding="utf-8"))
+    german = json.loads((translations_dir / "de.json").read_text(encoding="utf-8"))
+    required = {key for key in english if key.startswith(("upload.", "onboarding."))}
+
+    missing = sorted(required - german.keys())
+    assert not missing, f"Missing German upload/onboarding translations: {missing}"
+
+
+@pytest.mark.unit
 def test_upload_script_uses_localized_visible_status_messages():
     """The queue runner must not bypass the server-provided translation map."""
     script = Path("frontend/static/js/upload.js").read_text(encoding="utf-8")

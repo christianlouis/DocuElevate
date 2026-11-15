@@ -83,12 +83,14 @@ def test_mailbox_scan_does_not_drop_old_uids_after_new_batch(db_session):
     mail = MagicMock()
     mail.login.return_value = ("OK", [])
     mail.select.return_value = ("OK", [b"60"])
-    mail.response.return_value = ("UIDVALIDITY", [b"1"])
+    mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"1"])
     fetched = []
 
     def imap_command(command, *args):
         if command == "search":
-            assert args == (None, "ALL")
+            assert args[:2] == (None, "UID")
+            start, end = (int(part) for part in args[2].split(":", 1))
+            assert end - start + 1 == imap_tasks.UID_SCAN_WINDOW
             return "OK", [b" ".join(str(uid).encode() for uid in range(1, 61))]
         assert command == "fetch"
         assert args[1] == "(BODY.PEEK[])"
@@ -117,6 +119,125 @@ def test_mailbox_scan_does_not_drop_old_uids_after_new_batch(db_session):
 
 
 @pytest.mark.unit
+def test_mailbox_search_is_bounded_for_large_gmail_all_mail(db_session):
+    """Large folders use a UID window instead of an unbounded SEARCH ALL."""
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"1025798"])
+
+    def response(key):
+        return (key, [b"42" if key == "UIDVALIDITY" else b"1629496"])
+
+    mail.response.side_effect = response
+    searches = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            searches.append(args)
+            return "OK", [b"1 2"]
+        return "OK", [(b"data", _message(int(args[0])))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("gmail", "imap.gmail.com", 993, "user", "pw", True, False)
+
+    assert searches == [
+        (None, "UID", f"1:{imap_tasks.UID_SCAN_WINDOW}"),
+        (None, "UID", "1628496:1629495"),
+    ]
+
+
+@pytest.mark.unit
+def test_uidnext_caps_final_scan_window(db_session):
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"2"])
+    mail.response.side_effect = lambda key: (key, [b"7" if key == "UIDNEXT" else b"43"])
+    searches = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            searches.append(args)
+            return "OK", [b"5 6"]
+        return "OK", [(b"data", _message(int(args[0])))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("cap", "imap.example", 993, "user", "pw", True, False)
+
+    assert searches == [(None, "UID", "1:6")]
+
+
+@pytest.mark.unit
+def test_missing_uidnext_refuses_to_claim_mailbox_scan_success(db_session):
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"0"])
+    mail.response.return_value = ("UIDVALIDITY", [b"43"])
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+    ):
+        assert not imap_tasks.pull_inbox("missing-uidnext", "imap.example", 993, "user", "pw", True, False)
+    mail.uid.assert_not_called()
+
+
+@pytest.mark.unit
+def test_deleted_old_retry_is_marked_vanished_after_confirmed_absence(db_session):
+    from app.models import ImapMessageLedger
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"2"])
+    mail.response.side_effect = lambda key: (key, [b"3" if key == "UIDNEXT" else b"44"])
+    phase = [0]
+
+    def imap_command(command, *args):
+        if command == "search":
+            if len(args) > 2 and args[2] == "1:1":
+                return "OK", [b""]
+            return "OK", [b"1" if phase[0] == 0 else b"2"]
+        uid = int(args[0])
+        if uid == 1 and phase[0] == 0:
+            return "NO", []
+        if uid == 1 and phase[0] == 1:
+            return "OK", []
+        return "OK", [(b"data", _message(uid))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("vanish", "imap.example", 993, "user", "pw", True, False) is False
+        phase[0] = 1
+        assert imap_tasks.pull_inbox("vanish", "imap.example", 993, "user", "pw", True, False) is True
+
+    with factory() as db:
+        assert db.query(ImapMessageLedger).filter_by(uid=1, state="vanished").count() == 1
+
+
+@pytest.mark.unit
 def test_failed_old_message_does_not_starve_new_mail_and_is_retried(db_session):
     from app.models import ImapMessageLedger
     from app.tasks import imap_tasks
@@ -124,7 +245,7 @@ def test_failed_old_message_does_not_starve_new_mail_and_is_retried(db_session):
     factory = sessionmaker(bind=db_session.get_bind())
     mail = MagicMock()
     mail.select.return_value = ("OK", [b"3"])
-    mail.response.return_value = ("UIDVALIDITY", [b"9"])
+    mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"9"])
     fetched = []
     fail = True
 
@@ -154,16 +275,243 @@ def test_failed_old_message_does_not_starve_new_mail_and_is_retried(db_session):
 
 
 @pytest.mark.unit
+def test_ledger_creation_failure_does_not_advance_unrecorded_uid(db_session):
+    """A crash before a durable ledger write must leave the UID discoverable."""
+    from app.models import ImapScanCursor
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"1"])
+    mail.response.side_effect = lambda key: (key, [b"2" if key == "UIDNEXT" else b"44"])
+    fetched = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b"1"]
+        fetched.append(int(args[0]))
+        return "OK", [(b"data", _message(1))]
+
+    mail.uid.side_effect = imap_command
+    common = (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    )
+    with (
+        common[0],
+        common[1],
+        common[2],
+        common[3],
+        patch.object(imap_tasks, "_ledger_get_or_create", side_effect=RuntimeError("ledger unavailable")),
+    ):
+        assert not imap_tasks.pull_inbox("cursor", "imap.example", 993, "user", "pw", True, False)
+
+    with factory() as db:
+        assert db.query(ImapScanCursor).count() == 0
+
+    with common[0], common[1], common[2], common[3]:
+        assert imap_tasks.pull_inbox("cursor", "imap.example", 993, "user", "pw", True, False)
+    assert fetched == [1]
+
+
+@pytest.mark.unit
+def test_empty_fetch_with_existing_byte_uid_stays_retryable(db_session):
+    from app.models import ImapMessageLedger
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"1"])
+    mail.response.side_effect = lambda key: (key, [b"2" if key == "UIDNEXT" else b"44"])
+    phase = [0]
+
+    def imap_command(command, *args):
+        if command == "search":
+            if args[2] == "1:1" and phase[0] == 0 and len(mail.uid.call_args_list) > 1:
+                return "OK", [b"1"]
+            return "OK", [b"1"]
+        if phase[0] == 0:
+            return "OK", []
+        return "OK", [(b"data", _message(1))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert not imap_tasks.pull_inbox("existing", "imap.example", 993, "user", "pw", True, False)
+        phase[0] = 1
+        assert imap_tasks.pull_inbox("existing", "imap.example", 993, "user", "pw", True, False)
+
+    with factory() as db:
+        row = db.query(ImapMessageLedger).filter_by(uid=1).one()
+        assert row.state == "completed"
+        assert row.attempts == 2
+
+
+@pytest.mark.unit
+def test_malformed_absence_confirmation_stays_retryable(db_session):
+    from app.models import ImapMessageLedger
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"1"])
+    mail.response.side_effect = lambda key: (key, [b"2" if key == "UIDNEXT" else b"44"])
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [None] if len(mail.uid.call_args_list) > 1 else [b"1"]
+        return "OK", []
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+    ):
+        assert not imap_tasks.pull_inbox("malformed", "imap.example", 993, "user", "pw", True, False)
+
+    with factory() as db:
+        assert db.query(ImapMessageLedger).filter_by(uid=1, state="failed").count() == 1
+
+
+@pytest.mark.unit
+def test_empty_uidnext_snapshot_does_not_skip_first_future_uid(db_session):
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"0"])
+    uidnext = [1]
+    mail.response.side_effect = lambda key: (key, [str(uidnext[0]).encode() if key == "UIDNEXT" else b"44"])
+    fetched = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b"1"]
+        fetched.append(int(args[0]))
+        return "OK", [(b"data", _message(1))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("empty", "imap.example", 993, "user", "pw", True, False)
+        uidnext[0] = 2
+        assert imap_tasks.pull_inbox("empty", "imap.example", 993, "user", "pw", True, False)
+    assert fetched == [1]
+
+
+@pytest.mark.unit
+def test_frozen_live_tail_is_processed_without_advancing_history_cursor(db_session):
+    from app.models import ImapScanCursor
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"20"])
+    uidnext = [21]
+    mail.response.side_effect = lambda key: (key, [str(uidnext[0]).encode() if key == "UIDNEXT" else b"44"])
+    fetched = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            return {
+                "1:4": ("OK", [b"4"]),
+                "17:20": ("OK", [b"20"]),
+                "5:8": ("OK", [b""]),
+                "18:21": ("OK", [b"20 21"]),
+            }[args[2]]
+        uid = int(args[0])
+        fetched.append(uid)
+        return "OK", [(b"data", _message(uid))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "UID_SCAN_WINDOW", 4),
+        patch.object(imap_tasks, "POLL_BATCH_SIZE", 2),
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("tail", "imap.example", 993, "user", "pw", True, False)
+        uidnext[0] = 22
+        assert imap_tasks.pull_inbox("tail", "imap.example", 993, "user", "pw", True, False)
+
+    with factory() as db:
+        assert db.query(ImapScanCursor).one().last_uid == 8
+    assert fetched == [4, 20, 21]
+
+
+@pytest.mark.unit
+def test_in_window_retry_cannot_leapfrog_unrecorded_history(db_session):
+    import hashlib
+    import json
+
+    from app.models import ImapMessageLedger, ImapScanCursor
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mailbox_key = hashlib.sha256(json.dumps(["", "imap.example", 993, "user", "INBOX"]).encode()).hexdigest()
+    db_session.add(
+        ImapMessageLedger(
+            owner_key="legacy", mailbox_key=mailbox_key, uidvalidity="44", uid=900, state="failed", attempts=0
+        )
+    )
+    db_session.commit()
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"900"])
+    mail.response.side_effect = lambda key: (key, [b"1001" if key == "UIDNEXT" else b"44"])
+    fetched = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b"1 2 900"]
+        uid = int(args[0])
+        fetched.append(uid)
+        return "OK", [(b"data", _message(uid))]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "POLL_BATCH_SIZE", 1),
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("prefix", "imap.example", 993, "user", "pw", True, False)
+        with factory() as db:
+            assert db.query(ImapScanCursor).count() == 0
+        assert imap_tasks.pull_inbox("prefix", "imap.example", 993, "user", "pw", True, False)
+        assert imap_tasks.pull_inbox("prefix", "imap.example", 993, "user", "pw", True, False)
+
+    assert fetched == [900, 1, 2]
+
+
+@pytest.mark.unit
 def test_fair_polling_rotates_retries_and_new_mail_when_only_one_attempt_fits(db_session):
     from app.tasks import imap_tasks
 
     factory = sessionmaker(bind=db_session.get_bind())
     mail = MagicMock()
     mail.select.return_value = ("OK", [b"1"])
-    mail.response.return_value = ("UIDVALIDITY", [b"11"])
     fetched = []
     newest_uid = 3
     clock = [0]
+
+    def response(key):
+        return (key, [str(newest_uid + 1).encode() if key == "UIDNEXT" else b"11"])
+
+    mail.response.side_effect = response
 
     def imap_command(command, *args):
         if command == "search":
@@ -277,7 +625,7 @@ def test_filtered_message_is_not_modified_or_expunged(db_session):
     mail = MagicMock()
     mail.login.return_value = ("OK", [])
     mail.select.return_value = ("OK", [b"1"])
-    mail.response.return_value = ("UIDVALIDITY", [b"1"])
+    mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"1"])
     message = EmailMessage()
     message["Message-ID"] = "<filtered@example.test>"
     message.add_attachment(b"image", maintype="image", subtype="jpeg", filename="photo.jpg")
