@@ -58,7 +58,14 @@ def check_uptime_kuma(url: str | None = None) -> dict[str, object]:
         try:
             response = requests.get(target, timeout=_REQUEST_TIMEOUT_SECONDS)
             http_status = int(response.status_code)
-            if 200 <= http_status < 400:
+            payload = None
+            try:
+                candidate = response.json()
+                if isinstance(candidate, dict):
+                    payload = candidate
+            except (AttributeError, TypeError, ValueError, requests.exceptions.RequestException):
+                pass
+            if 200 <= http_status < 300 and not (isinstance(payload, dict) and payload.get("ok") is False):
                 return _result(
                     "success",
                     endpoint=endpoint,
@@ -68,7 +75,11 @@ def check_uptime_kuma(url: str | None = None) -> dict[str, object]:
                 )
 
             retryable = http_status >= 500 or http_status in _RETRYABLE_HTTP_STATUS_CODES
-            error_message = f"Uptime Kuma returned HTTP {http_status}. Check the push URL and monitor configuration."
+            error_message = (
+                f"Uptime Kuma returned HTTP {http_status}. Check the push URL and monitor configuration."
+            )
+            if isinstance(payload, dict) and payload.get("ok") is False:
+                error_message = "Uptime Kuma rejected the ping (ok=false). Check the monitor configuration."
             error_kind = f"HTTP {http_status}"
             if not retryable or attempt == _MAX_ATTEMPTS:
                 return _result(

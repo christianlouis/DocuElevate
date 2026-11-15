@@ -7,6 +7,7 @@ import logging
 
 import redis as redis_lib
 from fastapi import APIRouter, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -240,4 +241,4 @@ async def test_uptime_kuma(request: Request):
     """Run a safe, bounded Uptime Kuma connection test for the status dashboard."""
     from app.tasks.uptime_kuma_tasks import check_uptime_kuma
 
-    return check_uptime_kuma()
+    return await run_in_threadpool(check_uptime_kuma)
