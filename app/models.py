@@ -1099,6 +1099,11 @@ class BackupRecord(Base):
     # User-safe diagnostic for the most recent failed attempt
     error_detail = Column(Text, nullable=True)
 
+    # Optional isolated restore verification result for this archive
+    verification_at = Column(DateTime(timezone=True), nullable=True)
+    verification_status = Column(String(20), nullable=True)  # passed | failed | skipped | unsupported
+    verification_detail = Column(Text, nullable=True)
+
     # Storage destination where a remote copy was uploaded (e.g. "s3", "dropbox", "email")
     remote_destination = Column(String(50), nullable=True)
 

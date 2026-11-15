@@ -2856,6 +2856,17 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": False,
     },
+    "backup_restore_verification_enabled": {
+        "category": "Backup",
+        "description": (
+            "Verify new SQLite backups by restoring them into an isolated temporary database. "
+            "Disabled by default; PostgreSQL/MySQL verification is unsupported without an isolated target."
+        ),
+        "type": "boolean",
+        "sensitive": False,
+        "required": False,
+        "restart_required": False,
+    },
     "backup_dir": {
         "category": "Backup",
         "description": (

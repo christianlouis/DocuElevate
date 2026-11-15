@@ -76,6 +76,23 @@
   </section>
   {% endif %}
 
+  <section class="mb-6 rounded-lg border {% if backup_restore_verification_healthy %}border-gray-200{% else %}border-red-200{% endif %} bg-white p-4 text-sm" aria-labelledby="backup-verification-heading">
+    <h2 id="backup-verification-heading" class="font-semibold text-gray-900">Restore verification</h2>
+    <p class="mt-1 text-gray-600">
+      {% if backup_restore_verification_enabled %}Enabled for isolated SQLite restore checks.{% else %}Disabled by default.{% endif %}
+    </p>
+    {% if last_backup_verification %}
+    <p class="mt-1 text-gray-600">
+      Latest: <span class="font-medium">{{ last_backup_verification.verification_status }}</span>
+      {% if last_backup_verification.verification_at %}at {{ last_backup_verification.verification_at.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}
+      {% if last_backup_verification.verification_detail %} — {{ last_backup_verification.verification_detail }}{% endif %}
+    </p>
+    {% else %}<p class="mt-1 text-gray-500">No verification result recorded.</p>{% endif %}
+    {% if not backup_restore_verification_healthy %}
+    <p class="mt-1 text-red-700" role="alert">The latest enabled restore verification did not pass.</p>
+    {% endif %}
+  </section>
+
   <!-- Status flash (always in DOM; content toggled via aria-live) -->
   <div role="alert" aria-live="polite" aria-atomic="true"
        :class="flashMsg ? '' : 'sr-only'"

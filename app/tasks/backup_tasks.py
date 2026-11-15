@@ -30,6 +30,8 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
+import time
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,6 +64,8 @@ _AUTO_BACKUP_BUDGET_DIVISOR = 4
 _AUTO_MIN_FREE_DIVISOR = 10
 _AUTO_MIN_FREE_CAP_BYTES = 1024 * 1024 * 1024
 _AUTO_MIN_FREE_FLOOR_BYTES = 64 * 1024 * 1024
+_RESTORE_VERIFY_MAX_SQL_BYTES = 64 * 1024 * 1024
+_RESTORE_VERIFY_TIMEOUT_SECONDS = 30
 _FIRST_BACKUP_MIN_BYTES = 64 * 1024 * 1024
 
 
@@ -172,6 +176,49 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
     except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile, zlib.error) as exc:
         return False, f"Local backup archive is unreadable: {exc}"
     return True, None
+
+
+def _verify_sqlite_archive(archive_path: Path) -> tuple[str, str | None]:
+    """Replay a SQLite dump into a disposable temporary database only."""
+    import re
+    import sqlite3
+
+    forbidden_vacuum = re.compile(rb"\bVACUUM\s+INTO\b", re.IGNORECASE)
+
+    try:
+        payload = bytearray()
+        with gzip.open(archive_path, "rb") as archive:
+            while chunk := archive.read(65536):
+                payload.extend(chunk)
+                if len(payload) > _RESTORE_VERIFY_MAX_SQL_BYTES:
+                    return (
+                        "failed",
+                        "Isolated SQLite restore verification failed: SQL dump exceeds the 64 MiB safety limit.",
+                    )
+        if forbidden_vacuum.search(payload):
+            return "failed", "Isolated SQLite restore verification failed: VACUUM INTO is not permitted."
+        sql_script = bytes(payload).decode("utf-8")
+        with tempfile.TemporaryDirectory(prefix="docuelevate-backup-verify-") as directory:
+            target = Path(directory) / "verification.db"
+            connection = sqlite3.connect(target)
+            try:
+                connection.enable_load_extension(False)
+
+                def authorizer(action, arg1, _arg2, _database, _source):
+                    if action in (sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH):
+                        return sqlite3.SQLITE_DENY
+                    return sqlite3.SQLITE_OK
+
+                connection.set_authorizer(authorizer)
+                deadline = time.monotonic() + _RESTORE_VERIFY_TIMEOUT_SECONDS
+                connection.set_progress_handler(lambda: 1 if time.monotonic() >= deadline else 0, 1000)
+                connection.executescript(sql_script)
+            finally:
+                connection.set_progress_handler(None, 0)
+                connection.close()
+    except (OSError, EOFError, UnicodeError, gzip.BadGzipFile, sqlite3.Error, zlib.error) as exc:
+        return "failed", f"Isolated SQLite restore verification failed: {exc}"
+    return "passed", "Isolated SQLite restore verification passed."
 
 
 def _mark_invalid_archive(rec: BackupRecord, detail: str) -> None:
@@ -1052,6 +1099,28 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
     valid, validation_detail = _validate_local_archive(candidate)
     if not valid:
         detail = validation_detail or "Backup archive failed integrity validation."
+        _mark_invalid_archive(candidate, detail)
+        with SessionLocal() as db:
+            db.add(candidate)
+            db.commit()
+        return {"status": "error", "detail": detail, "filename": filename}
+
+    verification_enabled = getattr(settings, "backup_restore_verification_enabled", False) is True
+    if not verification_enabled:
+        candidate.verification_status = "skipped"
+        candidate.verification_detail = "Isolated restore verification is disabled."
+    elif backend == "sqlite":
+        candidate.verification_at = datetime.now(timezone.utc)
+        candidate.verification_status, candidate.verification_detail = _verify_sqlite_archive(archive_path)
+    else:
+        candidate.verification_status = "unsupported"
+        candidate.verification_detail = (
+            f"Isolated restore verification is not available for the {backend} backend; "
+            "backup was structurally validated."
+        )
+
+    if candidate.verification_status == "failed":
+        detail = candidate.verification_detail or "Isolated restore verification failed."
         _mark_invalid_archive(candidate, detail)
         with SessionLocal() as db:
             db.add(candidate)
