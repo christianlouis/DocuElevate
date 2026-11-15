@@ -374,7 +374,7 @@
           </span>
           {% endif %}
           {% if multi_user_enabled and file.owner_id is none %}
-          <button
+          <button type="button"
             class="action-btn btn-primary"
             id="claim-btn"
             aria-label="{{ _('file.claim_ownership') }}"
@@ -408,9 +408,9 @@
           <!-- ── Image viewer with zoom / pan ── -->
           <div class="img-viewer" id="img-viewer">
             <div class="img-controls">
-              <button onclick="imgZoom(1.25)" title="Zoom in" aria-label="Zoom in"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
-              <button onclick="imgZoom(0.8)" title="Zoom out" aria-label="Zoom out"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
-              <button onclick="imgReset()" title="Reset zoom" aria-label="Reset zoom"><i class="fas fa-expand" aria-hidden="true"></i></button>
+              <button type="button" onclick="imgZoom(1.25)" title="Zoom in" aria-label="Zoom in"><i class="fas fa-search-plus" aria-hidden="true"></i></button>
+              <button type="button" onclick="imgZoom(0.8)" title="Zoom out" aria-label="Zoom out"><i class="fas fa-search-minus" aria-hidden="true"></i></button>
+              <button type="button" onclick="imgReset()" title="Reset zoom" aria-label="Reset zoom"><i class="fas fa-expand" aria-hidden="true"></i></button>
               <span id="img-zoom-level" style="font-size:0.8rem;color:#6b7280;min-width:3em;text-align:center;">100%</span>
             </div>
             <div class="img-wrap" id="img-wrap">
@@ -428,7 +428,7 @@
           <div class="text-viewer" id="text-viewer">
             <div class="text-viewer-header">
               <span><i class="fas fa-file-code" aria-hidden="true" style="margin-right:0.3rem;"></i>{{ file.original_filename }}</span>
-              <button class="text-toggle" onclick="copyTextPreview()" id="text-copy-btn" aria-label="Copy file text">
+              <button type="button" class="text-toggle" onclick="copyTextPreview()" id="text-copy-btn" aria-label="Copy file text">
                 <i class="fas fa-copy" aria-hidden="true"></i> Copy
               </button>
             </div>
@@ -441,9 +441,9 @@
           <!-- ── PDF viewer (pdf.js) ── -->
           <div class="pdf-viewer" id="pdf-viewer">
             <div class="pdf-controls">
-              <button class="pdf-nav-btn" onclick="pdfChangePage(-1)" id="pdf-prev-btn" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
+              <button type="button" class="pdf-nav-btn" onclick="pdfChangePage(-1)" id="pdf-prev-btn" aria-label="Previous page"><i class="fas fa-chevron-left" aria-hidden="true"></i></button>
               <span class="pdf-page-info" id="pdf-page-info" aria-live="polite">Loading…</span>
-              <button class="pdf-nav-btn" onclick="pdfChangePage(1)" id="pdf-next-btn" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
+              <button type="button" class="pdf-nav-btn" onclick="pdfChangePage(1)" id="pdf-next-btn" aria-label="Next page"><i class="fas fa-chevron-right" aria-hidden="true"></i></button>
             </div>
             <div class="pdf-canvas-wrap" id="pdf-canvas-wrap">
               <div style="text-align:center;padding:3rem;color:#94a3b8;">
@@ -470,11 +470,11 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
       <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" aria-hidden="true" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
       <div style="display:flex;gap:0.5rem;">
-        <button class="text-toggle" onclick="toggleOcrText()" aria-expanded="false" aria-controls="ocr-text-block">
+        <button type="button" class="text-toggle" onclick="toggleOcrText()" aria-expanded="false" aria-controls="ocr-text-block">
           <i id="ocr-toggle-icon" class="fas fa-chevron-down" aria-hidden="true"></i>
           <span id="ocr-toggle-label">Show text</span>
         </button>
-        <button class="text-toggle" onclick="copyOcrText()" id="ocr-copy-btn" style="color:#10b981;" aria-label="Copy extracted text">
+        <button type="button" class="text-toggle" onclick="copyOcrText()" id="ocr-copy-btn" style="color:#10b981;" aria-label="Copy extracted text">
           <i class="fas fa-copy" aria-hidden="true"></i> Copy
         </button>
       </div>
@@ -502,11 +502,11 @@
         {% endif %}
       </div>
       <div style="display:flex;gap:0.5rem;">
-        <button class="text-toggle" onclick="toggleDefaultLangText()" aria-expanded="false" aria-controls="default-lang-text-block">
+        <button type="button" class="text-toggle" onclick="toggleDefaultLangText()" aria-expanded="false" aria-controls="default-lang-text-block">
           <i id="default-lang-toggle-icon" class="fas fa-chevron-down" aria-hidden="true"></i>
           <span id="default-lang-toggle-label">Show text</span>
         </button>
-        <button class="text-toggle" onclick="copyDefaultLangText()" id="default-lang-copy-btn" style="color:#10b981;" aria-label="Copy default language text">
+        <button type="button" class="text-toggle" onclick="copyDefaultLangText()" id="default-lang-copy-btn" style="color:#10b981;" aria-label="Copy default language text">
           <i class="fas fa-copy" aria-hidden="true"></i> Copy
         </button>
       </div>
@@ -523,7 +523,7 @@
         <i class="fas fa-language" aria-hidden="true" style="color:#3b82f6;margin-right:0.4rem;"></i>
         Default Language Version
       </div>
-      <button class="action-btn btn-secondary" onclick="loadDefaultLangText({{ file.id }})">
+      <button type="button" class="action-btn btn-secondary" onclick="loadDefaultLangText({{ file.id }})">
         <i class="fas fa-language" aria-hidden="true"></i> Load translation
       </button>
     </div>
@@ -567,10 +567,10 @@
         <option value="ro">Română</option>
         <option value="uk">Українська</option>
       </select>
-      <button class="action-btn btn-secondary" onclick="translateOnTheFly({{ file.id }})" id="translate-btn" style="min-height:44px;min-width:44px;">
+      <button type="button" class="action-btn btn-secondary" onclick="translateOnTheFly({{ file.id }})" id="translate-btn" style="min-height:44px;min-width:44px;">
         <i class="fas fa-language" aria-hidden="true"></i> Translate
       </button>
-      <button class="text-toggle" onclick="copyTranslatedText()" id="translate-copy-btn" style="color:#10b981;display:none;" aria-label="Copy translated text">
+      <button type="button" class="text-toggle" onclick="copyTranslatedText()" id="translate-copy-btn" style="color:#10b981;display:none;" aria-label="Copy translated text">
         <i class="fas fa-copy" aria-hidden="true"></i> Copy
       </button>
     </div>
@@ -582,7 +582,7 @@
   <div class="doc-card">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <div class="doc-card-title" style="margin:0;"><i class="fas fa-align-left" aria-hidden="true" style="color:#8b5cf6;margin-right:0.4rem;"></i>Extracted Text</div>
-      <button class="action-btn btn-secondary" onclick="loadText({{ file.id }})">
+      <button type="button" class="action-btn btn-secondary" onclick="loadText({{ file.id }})">
         <i class="fas fa-file-alt" aria-hidden="true"></i> Extract &amp; show text
       </button>
     </div>

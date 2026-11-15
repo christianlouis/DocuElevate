@@ -43,13 +43,13 @@
 
     {# ── Tab Navigation ── #}
     <div class="flex justify-center mb-8 space-x-4" role="tablist" aria-label="Wizard tabs">
-      <button @click="activeTab='configure'"
+      <button type="button" @click="activeTab='configure'"
               :class="activeTab==='configure' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
               class="px-6 py-3 rounded-lg font-semibold shadow transition"
               role="tab" :aria-selected="activeTab==='configure'" id="tab-configure" aria-controls="panel-configure">
         <i class="fas fa-cog mr-2" aria-hidden="true"></i> Configure Database
       </button>
-      <button @click="activeTab='migrate'"
+      <button type="button" @click="activeTab='migrate'"
               :class="activeTab==='migrate' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'"
               class="px-6 py-3 rounded-lg font-semibold shadow transition"
               role="tab" :aria-selected="activeTab==='migrate'" id="tab-migrate" aria-controls="panel-migrate">
@@ -116,7 +116,7 @@
             </div>
 
             <div class="flex justify-end mt-8">
-              <button @click="cfgStep=2" :disabled="!form.backend"
+              <button type="button" @click="cfgStep=2" :disabled="!form.backend"
                       class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 Next <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
               </button>
@@ -197,11 +197,11 @@
             </div>
 
             <div class="flex justify-between mt-8">
-              <button @click="cfgStep=1"
+              <button type="button" @click="cfgStep=1"
                       class="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
               </button>
-              <button @click="cfgStep=3; buildUrl()"
+              <button type="button" @click="cfgStep=3; buildUrl()"
                       class="px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 Next <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
               </button>
@@ -218,7 +218,7 @@
 
             {# Test button #}
             <div class="flex items-center space-x-4 mb-6">
-              <button @click="testConnection()"
+              <button type="button" @click="testConnection()"
                       :disabled="testLoading"
                       class="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
                 <i class="fas fa-plug mr-2" aria-hidden="true"></i>
@@ -255,7 +255,7 @@
                 <input id="env_snippet" type="text" readonly
                        :value="'DATABASE_URL=' + builtUrl"
                        class="mono-input flex-1 px-4 py-3 border border-gray-300 rounded-l-md bg-white text-sm" />
-                <button @click="copyToClipboard('DATABASE_URL=' + builtUrl)"
+                <button type="button" @click="copyToClipboard('DATABASE_URL=' + builtUrl)"
                         class="px-4 py-3 bg-indigo-600 text-white rounded-r-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         aria-label="Copy to clipboard">
                   <i class="fas fa-copy" aria-hidden="true"></i>
@@ -267,7 +267,7 @@
             </div>
 
             <div class="flex justify-between mt-8">
-              <button @click="cfgStep=2"
+              <button type="button" @click="cfgStep=2"
                       class="px-6 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                 <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
               </button>
@@ -336,17 +336,17 @@
 
           {# Actions #}
           <div class="flex space-x-4">
-            <button @click="testMigrateConnection('source')"
+            <button type="button" @click="testMigrateConnection('source')"
                     :disabled="!migrate.source || migrateLoading"
                     class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
               <i class="fas fa-plug mr-1" aria-hidden="true"></i> Test Source
             </button>
-            <button @click="testMigrateConnection('target')"
+            <button type="button" @click="testMigrateConnection('target')"
                     :disabled="!migrate.target || migrateLoading"
                     class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
               <i class="fas fa-plug mr-1" aria-hidden="true"></i> Test Target
             </button>
-            <button @click="previewMigration()"
+            <button type="button" @click="previewMigration()"
                     :disabled="!migrate.source || migrateLoading"
                     class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               <i class="fas fa-search mr-1" aria-hidden="true"></i> Preview Migration
@@ -407,7 +407,7 @@
             </label>
 
             <div>
-              <button @click="executeMigration()"
+              <button type="button" @click="executeMigration()"
                       :disabled="!migrate.confirmed || migrateLoading"
                       class="px-6 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
                 <i class="fas fa-play mr-2" aria-hidden="true"></i>

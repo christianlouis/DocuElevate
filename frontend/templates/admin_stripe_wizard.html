@@ -36,7 +36,7 @@
       <ol class="flex items-center space-x-2">
         <template x-for="(step, i) in steps" :key="i">
           <li class="flex items-center">
-            <button
+            <button type="button"
               @click="currentStep = i"
               class="flex items-center focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 rounded"
               :aria-current="currentStep === i ? 'step' : null"
@@ -107,7 +107,7 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <button
+        <button type="button"
           @click="checkStatus()"
           :disabled="checking"
           class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50"
@@ -117,7 +117,7 @@
           <span x-show="!checking">Check Connection</span>
           <span x-show="checking"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Checking…</span>
         </button>
-        <button
+        <button type="button"
           x-show="status && status.configured && status.connection === 'ok'"
           @click="currentStep = 1"
           class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500"
@@ -201,14 +201,14 @@
       </div>
 
       <div class="flex items-center gap-3">
-        <button
+        <button type="button"
           @click="currentStep = 0"
           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
           style="min-height:44px"
         >
           <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> Back
         </button>
-        <button
+        <button type="button"
           @click="syncPlans()"
           :disabled="syncing || !(status && status.configured)"
           class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50"
@@ -218,7 +218,7 @@
           <span x-show="!syncing">Sync Plans to Stripe</span>
           <span x-show="syncing"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> Syncing…</span>
         </button>
-        <button
+        <button type="button"
           x-show="syncResults !== null"
           @click="currentStep = 2; checkStatus()"
           class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-500"
@@ -255,7 +255,7 @@
             class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50 font-mono focus:outline-none"
             aria-label="Webhook endpoint URL to register in Stripe"
           />
-          <button
+          <button type="button"
             @click="copyWebhook()"
             class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400"
             style="min-height:44px"
@@ -320,7 +320,7 @@ stripe trigger customer.subscription.deleted</code></pre>
       </details>
 
       <div class="flex items-center gap-3">
-        <button
+        <button type="button"
           @click="currentStep = 1"
           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400"
           style="min-height:44px"

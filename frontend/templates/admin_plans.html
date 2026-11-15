@@ -20,7 +20,7 @@
       >
         <i class="fab fa-stripe mr-2" aria-hidden="true"></i> {{ _("admin_plans.btn_stripe_setup") }}
       </a>
-      <button
+      <button type="button"
         @click="seedDefaults()"
         :disabled="seeding"
         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-400 disabled:opacity-50"
@@ -30,7 +30,7 @@
         <span x-show="!seeding">{{ _("admin_plans.btn_restore_defaults") }}</span>
         <span x-show="seeding"><i class="fas fa-spinner fa-spin mr-1" aria-hidden="true"></i> {{ _("admin_plans.btn_restoring") }}</span>
       </button>
-      <button
+      <button type="button"
         @click="openCreateModal()"
         class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500"
       >
@@ -91,13 +91,13 @@
           <tr class="hover:bg-gray-50 transition">
             <td class="px-4 py-3 text-sm text-gray-500">
               <div class="flex items-center gap-1">
-                <button
+                <button type="button"
                   @click="moveUp(idx)"
                   :disabled="idx === 0"
                   class="p-1 rounded hover:bg-gray-200 disabled:opacity-30"
                   :aria-label="i18n.ariaMoveUp.replace('{name}', plan.name)"
                 ><i class="fas fa-chevron-up text-xs" aria-hidden="true"></i></button>
-                <button
+                <button type="button"
                   @click="moveDown(idx)"
                   :disabled="idx === plans.length - 1"
                   class="p-1 rounded hover:bg-gray-200 disabled:opacity-30"
@@ -139,14 +139,14 @@
             </td>
             <td class="px-4 py-3 text-right">
               <div class="flex items-center justify-end gap-2">
-                <button
+                <button type="button"
                   @click="openEditModal(plan)"
                   class="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                   :aria-label="i18n.ariaEditPlan.replace('{name}', plan.name)"
                 >
                   <i class="fas fa-pencil-alt" aria-hidden="true"></i> <span x-text="i18n.btnEdit"></span>
                 </button>
-                <button
+                <button type="button"
                   @click="deletePlan(plan.plan_id)"
                   class="text-sm text-red-500 hover:text-red-700 font-medium"
                   :aria-label="i18n.ariaDeletePlan.replace('{name}', plan.name)"
@@ -163,7 +163,7 @@
 
   <!-- Save order button -->
   <div x-show="orderDirty && !loading" x-cloak class="mt-4 flex justify-end">
-    <button
+    <button type="button"
       @click="saveOrder()"
       :disabled="saving"
       class="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 disabled:opacity-50"
@@ -194,7 +194,7 @@
       <!-- Modal header -->
       <div class="flex items-center justify-between px-6 py-4 border-b">
         <h2 id="modal-title" class="text-lg font-semibold text-gray-900" x-text="isCreate ? i18n.modalCreateTitle : i18n.modalEditTitlePrefix + form.name"></h2>
-        <button @click="modalOpen = false" class="text-gray-400 hover:text-gray-600" aria-label="{{ _('admin_plans.modal_close_aria') }}">
+        <button type="button" @click="modalOpen = false" class="text-gray-400 hover:text-gray-600" aria-label="{{ _('admin_plans.modal_close_aria') }}">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>

@@ -80,7 +80,7 @@
           <p class="text-gray-500 text-sm text-center mb-6">
             {{ _("onboarding.duration_hint") }}
           </p>
-          <button @click="advance('welcome')"
+          <button type="button" @click="advance('welcome')"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition min-h-[44px]">
             {{ _("onboarding.get_started") }} <i class="fas fa-arrow-right ml-2" aria-hidden="true"></i>
           </button>
@@ -157,11 +157,11 @@
             {{ _("onboarding.space_privacy_hint") }}
           </div>
           <div class="flex gap-3">
-            <button @click="goBack()"
+            <button type="button" @click="goBack()"
                     class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
               <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
-            <button @click="goNext()"
+            <button type="button" @click="goNext()"
                     :disabled="loading"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
               <span x-show="!loading">{{ _("onboarding.continue") }} <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
@@ -198,7 +198,7 @@
           <!-- Monthly / Annual toggle -->
           <div class="flex items-center justify-center gap-3 mb-6" x-effect="billingCycle = annual ? 'yearly' : 'monthly'">
             <span class="text-sm font-medium" :class="!annual ? 'text-indigo-600' : 'text-gray-500'">{{ _("onboarding.monthly") }}</span>
-            <button @click="annual = !annual"
+            <button type="button" @click="annual = !annual"
                     class="relative w-12 h-6 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     :class="annual ? 'bg-indigo-600' : 'bg-gray-300'"
                     role="switch"
@@ -261,11 +261,11 @@
           {% endif %}
 
           <div class="flex gap-3">
-            <button @click="goBack()"
+            <button type="button" @click="goBack()"
                     class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
               <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
-            <button @click="goNext()"
+            <button type="button" @click="goNext()"
                     :disabled="loading"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
               <span x-show="!loading">{{ _("onboarding.continue") }} <i class="fas fa-arrow-right ml-1" aria-hidden="true"></i></span>
@@ -293,8 +293,8 @@
             <p><i class="fas fa-shield-alt text-indigo-600 mr-2"></i>{{ _("onboarding.processing_credentials") }}</p>
           </div>
           <div class="flex gap-3">
-            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
-            <button @click="advance('processing')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
+            <button type="button" @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
+            <button type="button" @click="advance('processing')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
           </div>
         </div>
       </div>
@@ -316,9 +316,9 @@
           <p class="text-sm text-gray-600 mb-4"><strong x-text="integrationCounts.sources"></strong> {{ _("onboarding.sources_configured") }}</p>
           <a href="/integrations?onboarding=source" class="block text-center mb-3 py-2.5 bg-indigo-50 text-indigo-700 rounded-xl">{{ _("onboarding.configure_source") }}</a>
           <div class="flex gap-3">
-            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
-            <button @click="skip('sources')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">{{ _("onboarding.skip_for_now") }}</button>
-            <button @click="advance('sources')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
+            <button type="button" @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
+            <button type="button" @click="skip('sources')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">{{ _("onboarding.skip_for_now") }}</button>
+            <button type="button" @click="advance('sources')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
           </div>
         </div>
       </div>
@@ -387,11 +387,11 @@
           {% endif %}
 
           <div class="flex gap-3">
-            <button @click="goBack()"
+            <button type="button" @click="goBack()"
                     class="flex-1 py-2.5 px-4 border border-gray-300 text-gray-600 font-semibold rounded-xl hover:bg-gray-50 transition min-h-[44px]">
               <i class="fas fa-arrow-left mr-2" aria-hidden="true"></i> {{ _("onboarding.back") }}
             </button>
-            <button @click="goNext()"
+            <button type="button" @click="goNext()"
                     :disabled="loading"
                     class="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
               <span x-show="!loading">
@@ -418,9 +418,9 @@
             <a href="/notifications" class="block border rounded-xl p-3 hover:bg-gray-50"><strong>{{ _("onboarding.notifications") }}</strong><br><span class="text-gray-500">{{ _("onboarding.notifications_description") }}</span></a>
           </div>
           <div class="flex gap-3">
-            <button @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
-            <button @click="skip('automation')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">{{ _("onboarding.skip_for_now") }}</button>
-            <button @click="advance('automation')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
+            <button type="button" @click="goBack()" class="flex-1 py-2.5 border border-gray-300 rounded-xl">{{ _("onboarding.back") }}</button>
+            <button type="button" @click="skip('automation')" class="flex-1 py-2.5 border border-indigo-300 text-indigo-700 rounded-xl">{{ _("onboarding.skip_for_now") }}</button>
+            <button type="button" @click="advance('automation')" class="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl">{{ _("onboarding.continue") }}</button>
           </div>
         </div>
       </div>
@@ -517,7 +517,7 @@
             <input type="checkbox" x-model="legalAccepted" class="mt-1">
             <span>{{ _('onboarding.legal_accept') }} <a :href="capabilities?.terms_url" target="_blank" rel="noopener" class="text-blue-600 underline">{{ _('onboarding.legal_terms') }}</a> &amp; <a :href="capabilities?.privacy_url" target="_blank" rel="noopener" class="text-blue-600 underline">{{ _('onboarding.legal_privacy') }}</a>.</span>
           </label>
-          <button @click="goNext()"
+          <button type="button" @click="goNext()"
                   :disabled="loading || !legalAccepted || !capabilities"
                   class="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-semibold rounded-xl transition min-h-[44px]">
             <span x-show="!loading">

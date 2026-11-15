@@ -13,7 +13,7 @@
           Apply templates with one click to align your instance with regulatory requirements.
         </p>
       </div>
-      <button @click="refreshAll()"
+      <button type="button" @click="refreshAll()"
               class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               :disabled="loading"
               aria-label="Refresh compliance status">
@@ -84,7 +84,7 @@
        role="alert">
     <i :class="alertType === 'success' ? 'fas fa-check-circle text-green-500' : 'fas fa-exclamation-circle text-red-500'" aria-hidden="true"></i>
     <span x-text="alertMessage"></span>
-    <button @click="alertMessage = ''" class="ml-auto text-gray-400 hover:text-gray-600" aria-label="Dismiss alert">
+    <button type="button" @click="alertMessage = ''" class="ml-auto text-gray-400 hover:text-gray-600" aria-label="Dismiss alert">
       <i class="fas fa-times" aria-hidden="true"></i>
     </button>
   </div>
@@ -146,14 +146,14 @@
 
         <!-- Card Footer -->
         <div class="px-5 py-4 bg-gray-50 border-t flex items-center justify-between gap-2">
-          <button @click="toggleExpand(tmpl)"
+          <button type="button" @click="toggleExpand(tmpl)"
                   class="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   :aria-expanded="tmpl._expanded"
                   :aria-label="'Toggle details for ' + tmpl.display_name">
             <i class="fas mr-1" :class="tmpl._expanded ? 'fa-chevron-up' : 'fa-chevron-down'" aria-hidden="true"></i>
             <span x-text="tmpl._expanded ? 'Hide Details' : 'Show Details'"></span>
           </button>
-          <button @click="applyTemplate(tmpl.name)"
+          <button type="button" @click="applyTemplate(tmpl.name)"
                   :disabled="tmpl._applying"
                   :aria-busy="tmpl._applying"
                   class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px] min-w-[44px]"

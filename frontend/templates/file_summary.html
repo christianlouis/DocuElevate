@@ -191,7 +191,7 @@
         <i class="fas fa-eye" aria-hidden="true"></i> View Detail
       </a>
       {% if multi_user_enabled and file.owner_id is none %}
-      <button
+      <button type="button"
         class="action-btn btn-primary"
         id="claim-btn"
         aria-label="{{ _('file.claim_ownership') }}"

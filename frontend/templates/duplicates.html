@@ -97,7 +97,7 @@
 
   <!-- Tabs -->
   <div class="tabs" role="tablist" aria-label="{{ _('duplicates.tabs_aria') }}">
-    <button class="tab-btn active" role="tab" aria-selected="true"
+    <button type="button" class="tab-btn active" role="tab" aria-selected="true"
             aria-controls="tab-exact" id="btn-exact"
             onclick="switchTab('exact')">
       <i class="fas fa-clone mr-1" aria-hidden="true"></i>
@@ -108,7 +108,7 @@
         </span>
       {% endif %}
     </button>
-    <button class="tab-btn" role="tab" aria-selected="false"
+    <button type="button" class="tab-btn" role="tab" aria-selected="false"
             aria-controls="tab-near" id="btn-near"
             onclick="switchTab('near')">
       <i class="fas fa-layer-group mr-1" aria-hidden="true"></i>
@@ -204,20 +204,20 @@
       <!-- Pagination -->
       {% if pagination.pages > 1 %}
       <nav class="pagination" aria-label="{{ _('duplicates.pagination_aria') }}">
-        <button class="page-btn" onclick="changePage({{ pagination.page - 1 }})"
+        <button type="button" class="page-btn" onclick="changePage({{ pagination.page - 1 }})"
                 {% if pagination.page <= 1 %}disabled{% endif %}
                 aria-label="{{ _('common.prev_page') }}">
           <i class="fas fa-chevron-left" aria-hidden="true"></i>
         </button>
         {% for p in range(1, pagination.pages + 1) %}
-          <button class="page-btn {% if p == pagination.page %}current{% endif %}"
+          <button type="button" class="page-btn {% if p == pagination.page %}current{% endif %}"
                   onclick="changePage({{ p }})"
                   aria-label="{{ _('common.page') }} {{ p }}"
                   {% if p == pagination.page %}aria-current="page"{% endif %}>
             {{ p }}
           </button>
         {% endfor %}
-        <button class="page-btn" onclick="changePage({{ pagination.page + 1 }})"
+        <button type="button" class="page-btn" onclick="changePage({{ pagination.page + 1 }})"
                 {% if pagination.page >= pagination.pages %}disabled{% endif %}
                 aria-label="{{ _('common.next_page') }}">
           <i class="fas fa-chevron-right" aria-hidden="true"></i>
