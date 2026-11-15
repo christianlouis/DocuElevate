@@ -39,6 +39,19 @@ class Tenant(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class CredentialCheckState(Base):
+    """Shared, transactional state for scheduled credential checks."""
+
+    __tablename__ = "credential_check_states"
+
+    id = Column(Integer, primary_key=True)
+    service_name = Column(String(120), nullable=False, unique=True, index=True)
+    failure_count = Column(Integer, nullable=False, default=0, server_default="0")
+    recovered = Column(Boolean, nullable=False, default=False, server_default="0")
+    last_notified_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Tribe(Base):
     """Collaboration boundary inside exactly one tenant."""
 

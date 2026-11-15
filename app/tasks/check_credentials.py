@@ -3,7 +3,12 @@ import inspect
 import json
 import logging
 import os
-import time
+import re
+from contextlib import nullcontext
+from datetime import datetime, timezone
+from threading import Lock
+
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.azure import test_azure_connection
 from app.api.dropbox import test_dropbox_token
@@ -42,6 +47,8 @@ logger = logging.getLogger(__name__)
 
 # Path to store failure counts
 FAILURE_STATE_FILE = os.path.join(settings.workdir, "credential_failures.json")
+CREDENTIAL_NOTIFICATION_COOLDOWN_SECONDS = 3600
+_SQLITE_STATE_LOCK = Lock()
 
 
 def get_failure_state():
@@ -51,7 +58,7 @@ def get_failure_state():
             with open(FAILURE_STATE_FILE, "r") as f:
                 return json.load(f)
     except Exception as e:
-        logger.error(f"Error reading failure state file: {e}")
+        logger.error("Error reading failure state file: %s", _redact_message(e))
 
     # Default empty state
     return {}
@@ -64,6 +71,109 @@ def save_failure_state(state):
             json.dump(state, f)
     except Exception as e:
         logger.error(f"Error saving failure state file: {e}")
+
+
+def _redact_message(message):
+    """Keep provider diagnostics useful without persisting likely secrets."""
+    text = str(message or "Unknown error")
+    text = re.sub(r"(?i)(authorization\s*:\s*bearer\s+)[^\s,]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(?i)(https?://)([^/@\s]+):([^/@\s]+)@", r"\1[REDACTED]@", text)
+    return re.sub(
+        r"(?i)(api[_ -]?key|token|secret|password)([\s:=\"']+)[^,\s}\"']+",
+        r"\1\2[REDACTED]",
+        text,
+    )
+
+
+def _cooldown_elapsed(last_notified_at, now):
+    if last_notified_at is None:
+        return True
+    if last_notified_at.tzinfo is None:
+        last_notified_at = last_notified_at.replace(tzinfo=timezone.utc)
+    return (now - last_notified_at).total_seconds() >= CREDENTIAL_NOTIFICATION_COOLDOWN_SECONDS
+
+
+def _record_credential_result(service_name, success, legacy_state):
+    """Atomically update shared state and decide whether one notification is due.
+
+    The legacy JSON is read only as a one-time seed for an empty database row. It
+    is never written again, so a full or read-only work volume cannot corrupt the
+    control-plane state.
+    """
+    from app.database import SessionLocal
+    from app.models import CredentialCheckState
+
+    for attempt in range(2):
+        db = None
+        try:
+            db = SessionLocal()
+            dialect = db.get_bind().dialect.name
+            lock = _SQLITE_STATE_LOCK if dialect == "sqlite" else nullcontext()
+            with lock:
+                if dialect == "sqlite":
+                    # SQLite has no row-level SELECT FOR UPDATE.  Serialize the
+                    # short state transition so local/test workers cannot lose
+                    # increments; PostgreSQL uses the row lock below.
+                    db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                state = (
+                    db.query(CredentialCheckState)
+                    .with_for_update()
+                    .filter(CredentialCheckState.service_name == service_name)
+                    .one_or_none()
+                )
+                if state is None:
+                    previous = legacy_state.get(service_name, {})
+                    if not isinstance(previous, dict):
+                        previous = {}
+                    try:
+                        previous_count = int(previous.get("count", 0) or 0)
+                    except (TypeError, ValueError):
+                        previous_count = 0
+                    state = CredentialCheckState(
+                        service_name=service_name,
+                        failure_count=previous_count,
+                        recovered=bool(previous.get("recovered", False)),
+                    )
+                    db.add(state)
+                    db.flush()
+
+                should_notify = False
+                now = datetime.now(timezone.utc)
+                if success:
+                    if state.failure_count > 0:
+                        state.failure_count = 0
+                        state.recovered = True
+                else:
+                    state.failure_count += 1
+                    cooldown_elapsed = _cooldown_elapsed(state.last_notified_at, now)
+                    should_notify = cooldown_elapsed or state.recovered
+                    state.recovered = False
+                    if should_notify:
+                        state.last_notified_at = now
+
+                snapshot = {
+                    "count": state.failure_count,
+                    "recovered": state.recovered,
+                    "last_notified": (int(state.last_notified_at.timestamp()) if state.last_notified_at else 0),
+                }
+                db.commit()
+                return snapshot, should_notify
+        except IntegrityError:
+            if db is not None:
+                db.rollback()
+            if attempt == 0:
+                continue
+            logger.error("Credential state insert raced for %s; state update skipped", service_name)
+            return None, False
+        except SQLAlchemyError as exc:
+            if db is not None:
+                db.rollback()
+            logger.error("Shared credential state unavailable for %s (%s)", service_name, type(exc).__name__)
+            return None, False
+        finally:
+            if db is not None:
+                db.close()
+    return None, False
 
 
 # Helper function to get the inner function without the decorator
@@ -135,8 +245,9 @@ def check_credentials():
     """Check all configured credentials and notify if any are invalid"""
     logger.info("Starting credential check task")
 
-    # Load current failure state
-    failure_state = get_failure_state()
+    # State is shared in the database.  Do not read the legacy JSON on every
+    # invocation; it is retained only for explicit one-time migration callers.
+    failure_state = {}
 
     # Track failures
     failures = []
@@ -184,8 +295,6 @@ def check_credentials():
 
     # Check each service
     results = {}
-    current_time = int(time.time())
-
     for service in services:
         service_name = service["name"]
         logger.info(f"Checking credentials for {service_name}")
@@ -205,7 +314,7 @@ def check_credentials():
 
             # All test functions return a dict with "status" field
             is_valid = result.get("status") == "success"
-            error_message = result.get("message", "Unknown error")
+            error_message = _redact_message(result.get("message", "Unknown error"))
 
             # Store the result
             results[service_name] = {"status": "valid" if is_valid else "invalid", "message": error_message}
@@ -213,16 +322,17 @@ def check_credentials():
             if not is_valid:
                 failures.append(service_name)
 
-                # Get current failure count for this service
-                service_state = failure_state.get(service_name, {"count": 0, "last_notified": 0})
-                service_state["count"] = service_state.get("count", 0) + 1
+                service_state, should_notify = _record_credential_result(service_name, False, failure_state)
+                if service_state is None:
+                    # Shared state is unavailable: keep this invocation safe, but do
+                    # not fall back to the legacy file as a coordination mechanism.
+                    service_state = failure_state.get(service_name, {"count": 0, "last_notified": 0}).copy()
+                    service_state["count"] = service_state.get("count", 0) + 1
+                    should_notify = False
+                failure_state[service_name] = service_state
 
-                # Only notify if we haven't reached the notification threshold (3 failures)
-                # or if this is the first failure after a recovery
-                if service_state["count"] <= 3 or service_state.get("recovered", False):
+                if should_notify:
                     notify_credential_failure(service_name, error_message)
-                    service_state["last_notified"] = current_time
-                    service_state["recovered"] = False
                     logger.warning(
                         f"{service_name} credentials check failed ({service_state['count']} times): {error_message}"
                     )
@@ -233,44 +343,32 @@ def check_credentials():
                         f"{error_message} - notification suppressed"
                     )
 
-                # Update failure state
-                failure_state[service_name] = service_state
             else:
                 logger.info(f"{service_name} credentials are valid")
-
-                # Check if this was previously failing and now recovered
-                if service_name in failure_state and failure_state[service_name].get("count", 0) > 0:
-                    logger.info(f"{service_name} has recovered after {failure_state[service_name]['count']} failures")
-
-                    # Mark it as recovered and reset count
-                    failure_state[service_name] = {"count": 0, "recovered": True, "last_notified": 0}
-                elif service_name in failure_state:
-                    # Just make sure recovered flag is cleared if it was there
-                    failure_state[service_name]["recovered"] = True
+                previous_count = failure_state.get(service_name, {}).get("count", 0)
+                service_state, _ = _record_credential_result(service_name, True, failure_state)
+                if service_state is not None:
+                    failure_state[service_name] = service_state
+                if previous_count:
+                    logger.info(f"{service_name} has recovered after {previous_count} failures")
 
         except Exception as e:
-            logger.error(f"Error checking {service_name} credentials: {e}", exc_info=True)
+            logger.error("Error checking %s credentials (%s)", service_name, type(e).__name__)
             failures.append(service_name)
-            error_message = f"Exception during credential check: {str(e)}"
+            error_message = f"Exception during credential check: {_redact_message(e)}"
 
-            # Get current failure count for this service
-            service_state = failure_state.get(service_name, {"count": 0, "last_notified": 0})
-            service_state["count"] = service_state.get("count", 0) + 1
-
-            # Only notify if we haven't reached the notification threshold or if we just recovered
-            if service_state["count"] <= 3 or service_state.get("recovered", False):
-                notify_credential_failure(service_name, error_message)
-                service_state["last_notified"] = current_time
-                service_state["recovered"] = False
-
-            # Update failure state
+            service_state, should_notify = _record_credential_result(service_name, False, failure_state)
+            if service_state is None:
+                service_state = failure_state.get(service_name, {"count": 0, "last_notified": 0}).copy()
+                service_state["count"] = service_state.get("count", 0) + 1
+                should_notify = False
             failure_state[service_name] = service_state
+
+            if should_notify:
+                notify_credential_failure(service_name, error_message)
 
             # Store the error result
             results[service_name] = {"status": "error", "message": error_message}
-
-    # Save updated failure state
-    save_failure_state(failure_state)
 
     # Count only services that were actually checked (configured services)
     configured_services = [s for s in services if s["configured"]]
