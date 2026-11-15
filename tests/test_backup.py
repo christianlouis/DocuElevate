@@ -200,6 +200,7 @@ class TestBackupTaskHelpers:
         old_time = (datetime.now(timezone.utc) - timedelta(days=2)).timestamp()
         stale.touch()
         import os
+
         os.utime(stale, (old_time, old_time))
         snapshot = _backup_storage_snapshot(tmp_path)
         assert snapshot["partial_bytes"] == 70
