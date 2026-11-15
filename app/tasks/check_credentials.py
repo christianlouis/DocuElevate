@@ -128,9 +128,7 @@ def _record_credential_result(service_name, success, legacy_state):
             snapshot = {
                 "count": state.failure_count,
                 "recovered": state.recovered,
-                "last_notified": (
-                    int(state.last_notified_at.timestamp()) if state.last_notified_at else 0
-                ),
+                "last_notified": (int(state.last_notified_at.timestamp()) if state.last_notified_at else 0),
             }
             db.commit()
             return snapshot, should_notify

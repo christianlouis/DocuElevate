@@ -30,9 +30,7 @@ def test_malformed_legacy_state_is_ignored_when_seeding(db_session, monkeypatch)
         sessionmaker(autocommit=False, autoflush=False, bind=db_session.get_bind()),
     )
 
-    snapshot, should_notify = _record_credential_result(
-        "Google Drive", False, {"Google Drive": {"count": "bad"}}
-    )
+    snapshot, should_notify = _record_credential_result("Google Drive", False, {"Google Drive": {"count": "bad"}})
 
     assert should_notify is True
     assert snapshot["count"] == 1
