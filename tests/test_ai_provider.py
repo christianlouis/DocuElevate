@@ -597,6 +597,20 @@ class TestLiteLLMProvider:
         assert call_kwargs["temperature"] == 0
 
     @patch("litellm.completion")
+    def test_chat_completion_propagates_provider_error(self, mock_completion):
+        """Provider errors remain visible to the caller for its normal fallback path."""
+        mock_completion.side_effect = RuntimeError("provider unavailable")
+
+        provider = LiteLLMProvider()
+        with pytest.raises(RuntimeError, match="provider unavailable"):
+            provider.chat_completion(
+                messages=[{"role": "user", "content": "hello"}],
+                model="openai/gpt-4o",
+            )
+
+        mock_completion.assert_called_once()
+
+    @patch("litellm.completion")
     def test_chat_completion_with_api_key(self, mock_completion):
         """Provider forwards api_key when set."""
         mock_completion.return_value = _make_litellm_response("ok")
