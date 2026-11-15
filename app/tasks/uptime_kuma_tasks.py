@@ -75,9 +75,7 @@ def check_uptime_kuma(url: str | None = None) -> dict[str, object]:
                 )
 
             retryable = http_status >= 500 or http_status in _RETRYABLE_HTTP_STATUS_CODES
-            error_message = (
-                f"Uptime Kuma returned HTTP {http_status}. Check the push URL and monitor configuration."
-            )
+            error_message = f"Uptime Kuma returned HTTP {http_status}. Check the push URL and monitor configuration."
             if isinstance(payload, dict) and payload.get("ok") is False:
                 error_message = "Uptime Kuma rejected the ping (ok=false). Check the monitor configuration."
             error_kind = f"HTTP {http_status}"
