@@ -27,7 +27,9 @@ def test_release_automation_keeps_helm_app_version_in_sync():
 
 
 def test_release_automation_builds_the_finalized_release_commit():
-    ci_workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
+    ci_path = ROOT / ".github" / "workflows" / "ci.yml"
+    ci_text = ci_path.read_text(encoding="utf-8")
+    ci_workflow = yaml.safe_load(ci_text)
     release_workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))
 
     # PyYAML 1.1 parses the unquoted GitHub Actions key `on` as boolean True.
@@ -36,9 +38,9 @@ def test_release_automation_builds_the_finalized_release_commit():
     assert ci_workflow["jobs"]["build"]["if"] == (
         "github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
     )
-    assert ci_workflow["jobs"]["update-k8s-manifest"]["if"] == (
-        "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')"
-    )
+    assert "update-k8s-manifest" not in ci_workflow["jobs"]
+    assert "k8s-cluster-state" not in ci_text
+    assert "GH_PAT" not in ci_text
 
     assert release_workflow["permissions"]["actions"] == "write"
     release_steps = release_workflow["jobs"]["release"]["steps"]

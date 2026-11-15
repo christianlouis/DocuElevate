@@ -151,6 +151,10 @@ The Helm chart at `helm/docuelevate/` packages all components into a single, con
 - An optional, idempotent agentic setup Job after migrations
 - Existing Kubernetes Secrets managed by 1Password / External Secrets
 
+### CI and cluster deployment boundary
+
+GitHub Actions validates the repository and builds and publishes the container image. It does not modify an external Kubernetes/GitOps repository, update a preproduction manifest, or apply a cluster. Any preproduction or production rollout must be an explicit, operator-controlled Helm/GitOps action with its own approval and readback.
+
 ### Prerequisites
 
 - Kubernetes 1.24+
