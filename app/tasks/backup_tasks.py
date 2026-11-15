@@ -191,7 +191,10 @@ def _verify_sqlite_archive(archive_path: Path) -> tuple[str, str | None]:
             while chunk := archive.read(65536):
                 payload.extend(chunk)
                 if len(payload) > _RESTORE_VERIFY_MAX_SQL_BYTES:
-                    return "failed", "Isolated SQLite restore verification failed: SQL dump exceeds the 64 MiB safety limit."
+                    return (
+                        "failed",
+                        "Isolated SQLite restore verification failed: SQL dump exceeds the 64 MiB safety limit.",
+                    )
         if forbidden_vacuum.search(payload):
             return "failed", "Isolated SQLite restore verification failed: VACUUM INTO is not permitted."
         sql_script = bytes(payload).decode("utf-8")

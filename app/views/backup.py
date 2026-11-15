@@ -42,9 +42,8 @@ async def backup_dashboard(request: Request, db: Session = Depends(get_db)):
         last_failure = records[0] if records and records[0].status == "failed" else None
         last_verification = next((r for r in records if r.verification_status is not None), None)
         verification_enabled = getattr(settings, "backup_restore_verification_enabled", False) is True
-        verification_healthy = (
-            not verification_enabled
-            or (last_verification is not None and last_verification.verification_status == "passed")
+        verification_healthy = not verification_enabled or (
+            last_verification is not None and last_verification.verification_status == "passed"
         )
 
         return templates.TemplateResponse(

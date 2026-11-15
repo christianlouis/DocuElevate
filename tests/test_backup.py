@@ -826,9 +826,10 @@ class TestBackupTaskHelpers:
         assert status == "failed"
         assert "attach" in detail.lower() or "not authorized" in detail.lower()
         with sqlite3.connect(sentinel) as connection:
-            assert connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='pwned'"
-            ).fetchone() is None
+            assert (
+                connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='pwned'").fetchone()
+                is None
+            )
 
     def test_sqlite_restore_verification_rejects_oversized_dump(self, tmp_path):
         """Verification bounds decompressed SQL before executing it."""
