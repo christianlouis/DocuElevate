@@ -220,6 +220,8 @@ def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | 
     from app.models import (
         DocumentComment,
         DropboxImportObject,
+        ImapMessageLedger,
+        ImapScanCursor,
         Pipeline,
         PipelineRoutingRule,
         PipelineStep,
@@ -363,6 +365,23 @@ def _delete_account_locked(db: Session, owner_id: str, *, workdir: str | Path | 
             (FileShare.owner_id == owner_id) | (FileShare.shared_with_user_id == owner_id)
         ).delete(synchronize_session=False)
         db.query(FileRecord).filter(FileRecord.owner_id == owner_id).delete(synchronize_session=False)
+        # Cursors are keyed by the hashed mailbox identity rather than owner.
+        # Derive the owner's cursor keys from their ledger rows so another
+        # owner's mailbox state is never removed by account deletion.
+        owner_mailbox_keys = {
+            row[0]
+            for row in db.query(ImapMessageLedger.mailbox_key)
+            .filter(ImapMessageLedger.owner_key == owner_id)
+            .distinct()
+            .all()
+        }
+        if owner_mailbox_keys:
+            db.query(ImapScanCursor).filter(ImapScanCursor.mailbox_key.in_(owner_mailbox_keys)).delete(
+                synchronize_session=False
+            )
+            db.query(ImapMessageLedger).filter(ImapMessageLedger.owner_key == owner_id).delete(
+                synchronize_session=False
+            )
         dependent_deleted += _delete_mapped_owner_rows(db, owner_id)
         db.query(LocalUser).filter(LocalUser.email == owner_id).delete(synchronize_session=False)
         tombstone.status = "deleted"

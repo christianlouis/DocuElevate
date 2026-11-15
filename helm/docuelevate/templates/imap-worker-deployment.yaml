@@ -21,6 +21,10 @@ spec:
       labels:
         {{- include "docuelevate.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: imap-worker
+      {{- with .Values.imapWorker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}

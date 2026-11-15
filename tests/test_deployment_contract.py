@@ -95,6 +95,7 @@ def test_helm_imap_worker_is_enabled_and_consumes_dedicated_queue_with_workdir()
     assert "--hostname=imap@%h" in template
     assert ".Values.imapWorker.livenessProbe" in template
     assert ".Values.workdir.persistence.enabled" in template
+    assert ".Values.imapWorker.podAnnotations" in template
 
 
 def test_helm_resolves_broker_and_result_backend_to_a_primary_route():
