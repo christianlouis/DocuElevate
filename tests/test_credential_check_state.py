@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import sessionmaker
 
 from app.models import CredentialCheckState
-from app.tasks.check_credentials import _redact_message, _record_credential_result
+from app.tasks.check_credentials import _record_credential_result, _redact_message
 
 
 def test_credential_state_is_shared_and_notification_is_thresholded(db_session, monkeypatch):
