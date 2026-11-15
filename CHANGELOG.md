@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.8 (2026-11-15)
+
+### Bug Fixes
+
+- Satisfy djlint 1.46.4 template checks
+  ([#1321](https://github.com/christianlouis/DocuElevate/pull/1321),
+  [`009cdcc`](https://github.com/christianlouis/DocuElevate/commit/009cdcc82650480a0de0724c75b090a3c792cc7d))
+
+
 ## v0.195.7 (2026-11-15)
 
 ### Bug Fixes
