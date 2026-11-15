@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.5 (2026-11-15)
+
+### Bug Fixes
+
+- Resume large IMAP mailboxes without delaying new mail
+  ([#1319](https://github.com/christianlouis/DocuElevate/pull/1319),
+  [`994fab9`](https://github.com/christianlouis/DocuElevate/commit/994fab980b7cc8467f23fb14bb5e0b2a5496956a))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e97d8b9`](https://github.com/christianlouis/DocuElevate/commit/e97d8b9fdaddbb65961618234a83ef32e8ef97ed))
+
+- **changelog**: Update changelog [skip ci]
+  ([`d33ccca`](https://github.com/christianlouis/DocuElevate/commit/d33ccca0b209c184e3aa64d5e8159ce53fd0a954))
+
+
 ## Unreleased
 
 ### Documentation
