@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import re
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import redis
@@ -90,6 +92,8 @@ def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
 
 LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
+POLL_BATCH_SIZE = 50
+POLL_BUDGET_SECONDS = 240
 POLL_CHECKPOINT_TTL_SECONDS = 24 * 60 * 60
 POLL_CHECKPOINT_PREFIX = "docuelevate:imap:last_success:"
 
@@ -108,19 +112,37 @@ def record_poll_success(mailbox_key: str, *, now: datetime | None = None) -> Non
 
 
 def acquire_lock():
-    """Attempt to acquire a Redis-based lock. If acquired, set an expiration."""
-    lock_acquired = redis_client.setnx(LOCK_KEY, "locked")
-    if lock_acquired:
-        redis_client.expire(LOCK_KEY, LOCK_EXPIRE)
-        logger.info("Lock acquired for IMAP processing.")
-        return True
+    """Acquire an expiring owner-token lock atomically.
+
+    The old implementation could leave a permanent ``locked`` key between
+    SETNX and EXPIRE.  Such a legacy key is removed once and replaced with a
+    tokenised lease; current owners can only be released by their token.
+    """
+    token = str(uuid.uuid4())
+    try:
+        if redis_client.set(LOCK_KEY, token, nx=True, ex=LOCK_EXPIRE):
+            logger.info("Lock acquired for IMAP processing.")
+            return token
+        if redis_client.ttl(LOCK_KEY) == -1:
+            # No current owner can be identified for the pre-token format.
+            # Remove only that exact legacy sentinel, then retry atomically.
+            if redis_client.get(LOCK_KEY) == "locked":
+                redis_client.delete(LOCK_KEY)
+                if redis_client.set(LOCK_KEY, token, nx=True, ex=LOCK_EXPIRE):
+                    logger.warning("Recovered legacy IMAP lock without a TTL.")
+                    return token
+    except Exception:  # noqa: BLE001
+        logger.exception("Unable to acquire IMAP lock")
     logger.warning("Lock already held. Skipping this cycle.")
-    return False
+    return None
 
 
-def release_lock():
-    """Release the lock by deleting the Redis key."""
-    redis_client.delete(LOCK_KEY)
+def release_lock(token=None):
+    """Release only our own lease (compare-and-delete)."""
+    if not token:
+        return
+    script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+    redis_client.eval(script, 1, LOCK_KEY, token)
     logger.info("Lock released.")
 
 
@@ -167,7 +189,8 @@ def pull_all_inboxes():
     1. System-level mailboxes configured via environment variables (IMAP1, IMAP2).
     2. Per-user IMAP accounts stored in the ``user_imap_accounts`` database table.
     """
-    if not acquire_lock():
+    lock_token = acquire_lock()
+    if not lock_token:
         logger.info("Skipping execution: Another instance is running.")
         return
 
@@ -199,6 +222,9 @@ def pull_all_inboxes():
             },
         ):
             if any(mailbox[field] for field in ("host", "username", "password")):
+                if _legacy_mailbox_has_owned_integration(mailbox["host"], mailbox["port"], mailbox["username"]):
+                    logger.info("Skipping legacy mailbox %s; an owned IMAP integration covers it.", mailbox["mailbox_key"])
+                    continue
                 try:
                     check_and_pull_mailbox(**mailbox)
                 except Exception as exc:  # noqa: BLE001
@@ -215,7 +241,7 @@ def pull_all_inboxes():
         logger.info("Finished pull_all_inboxes")
 
     finally:
-        release_lock()
+        release_lock(lock_token)
 
 
 def _pull_user_imap_accounts() -> None:
@@ -265,6 +291,30 @@ def _pull_user_imap_accounts() -> None:
             db.close()
     except Exception as exc:  # noqa: BLE001
         logger.error("Failed to process per-user IMAP accounts: %s", exc)
+
+
+def _legacy_mailbox_has_owned_integration(host, port, username) -> bool:
+    """Prevent legacy env mailboxes from ingesting the same account as owner None."""
+    try:
+        from app.models import IntegrationDirection, IntegrationType, UserIntegration
+        db = _get_db_session()
+        try:
+            for integ in db.query(UserIntegration).filter(
+                UserIntegration.integration_type == IntegrationType.IMAP,
+                UserIntegration.direction == IntegrationDirection.SOURCE,
+                UserIntegration.is_active.is_(True),
+            ).all():
+                try:
+                    cfg = json.loads(integ.config) if integ.config else {}
+                    if cfg.get("host") == host and int(cfg.get("port", 993)) == int(port or 993) and cfg.get("username") == username:
+                        return True
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    continue
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not check legacy IMAP ownership: %s", exc)
+    return False
 
 
 def _pull_user_integration_imap() -> None:
@@ -388,6 +438,64 @@ def check_and_pull_mailbox(
     return succeeded
 
 
+def _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid):
+    from app.models import ImapMessageLedger
+    db = _get_db_session()
+    row = db.query(ImapMessageLedger).filter_by(
+        owner_key=owner_key, mailbox_key=mailbox_key,
+        uidvalidity=str(uidvalidity), uid=int(uid),
+    ).first()
+    if row is None:
+        row = ImapMessageLedger(owner_key=owner_key, mailbox_key=mailbox_key,
+                                uidvalidity=str(uidvalidity), uid=int(uid), state="pending")
+        db.add(row)
+        db.flush()
+    if row.state == "completed":
+        db.close()
+        return None
+    row.attempts = (row.attempts or 0) + 1
+    row.state = "processing"
+    row.last_error = None
+    db.commit()
+    db.close()
+    return row.id
+
+
+def _ledger_finish(ledger_id, *, state, message_id=None, error=None):
+    from app.models import ImapMessageLedger
+    db = _get_db_session()
+    try:
+        row = db.query(ImapMessageLedger).filter(ImapMessageLedger.id == ledger_id).first()
+        if row:
+            row.state = state
+            if message_id:
+                row.message_id = message_id[:998]
+            row.last_error = str(error)[:_MAX_ERROR_LENGTH] if error else None
+            db.commit()
+    finally:
+        db.close()
+
+
+def _extract_uidvalidity(mail, select_data=None) -> str:
+    """Read UIDVALIDITY, falling back to a stable conservative value."""
+    try:
+        response = mail.response("UIDVALIDITY")
+        values = response[1] if response and len(response) > 1 else []
+        if values:
+            value = values[0]
+            return value.decode(errors="ignore") if isinstance(value, bytes) else str(value)
+    except Exception:  # noqa: BLE001
+        pass
+    if select_data and isinstance(select_data, dict):
+        for key in (b"UIDVALIDITY", "UIDVALIDITY"):
+            if key in select_data:
+                value = select_data[key]
+                if isinstance(value, (list, tuple)):
+                    value = value[0]
+                return value.decode(errors="ignore") if isinstance(value, bytes) else str(value)
+    return "unknown"
+
+
 def pull_inbox(
     mailbox_key,
     host,
@@ -402,7 +510,7 @@ def pull_inbox(
     allowed_categories=None,
 ):
     """
-    Connects to the IMAP inbox, fetches new unread emails from the last 3 days,
+    Connects to the configured mailbox and fetches all messages incrementally,
     and processes attachments while preserving the original unread status.
 
     For Gmail:
@@ -432,8 +540,6 @@ def pull_inbox(
         use_ssl,
         allowed_categories,
     )
-    processed_emails = load_processed_emails()
-
     # Security: Prevent SSRF by blocking connections to internal IPs
     if is_private_ip(host):
         logger.warning("SSRF blocked: Attempt to pull mailbox from private IP %s", host)
@@ -455,24 +561,21 @@ def pull_inbox(
             all_mail_folder = find_all_mail_folder(mail)
             if all_mail_folder:
                 logger.info("Using Gmail All Mail folder: %s", all_mail_folder)
-                select_status, _ = mail.select(f'"{all_mail_folder}"')
+                select_status, select_data = mail.select(f'"{all_mail_folder}"', readonly=not delete_after_process)
             else:
                 logger.warning("Gmail All Mail folder not found, falling back to INBOX.")
                 select_status, _ = mail.select("INBOX")
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
                 return False
-            # Use the X-GM-RAW query for Gmail.
-            raw_query = "in:anywhere in:unread newer_than:3d has:attachment"
-            status, search_data = mail.search(None, "X-GM-RAW", f'"{raw_query}"')
+            status, search_data = mail.uid("search", None, "ALL")
         else:
-            # For non-Gmail, select INBOX and use SINCE/UNSEEN query.
-            select_status, _ = mail.select("INBOX")
+            # Read-only INBOX/ALL scan: do not depend on Seen state or dates.
+            select_status, select_data = mail.select("INBOX", readonly=not delete_after_process)
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
                 return False
-            since_date = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%d-%b-%Y")
-            status, search_data = mail.search(None, f"(SINCE {since_date} UNSEEN)")
+            status, search_data = mail.uid("search", None, "ALL")
 
         if status != "OK":
             logger.warning("Search failed on mailbox %s. Status=%s", mailbox_key, status)
@@ -481,40 +584,59 @@ def pull_inbox(
             return False
 
         msg_numbers = search_data[0].split()
-        logger.info("Found %d unread emails in %s.", len(msg_numbers), mailbox_key)
+        # Newest first makes normal polling cheap; the bounded ledger lets old
+        # messages resume on subsequent runs instead of being forgotten.
+        msg_numbers = list(reversed(msg_numbers))[:POLL_BATCH_SIZE]
+        uidvalidity = _extract_uidvalidity(mail, select_data)
+        owner_key = str(owner_id) if owner_id is not None else f"legacy:{mailbox_key}"
+        started = time.monotonic()
 
         for num in msg_numbers:
-            status, msg_data = mail.fetch(num, "(RFC822)")
+            if time.monotonic() - started >= POLL_BUDGET_SECONDS:
+                break
+            uid = int(num)
+            ledger_id = _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid)
+            if ledger_id is None:
+                continue
+            status, msg_data = mail.uid("fetch", num, "(BODY.PEEK[])")
             if status != "OK":
                 logger.warning("Failed to fetch message %s in %s. Status=%s", num, mailbox_key, status)
+                _ledger_finish(ledger_id, state="failed", error=f"fetch status {status}")
                 continue
 
-            raw_email = msg_data[0][1]
+            raw_email = next((item[1] for item in msg_data if isinstance(item, tuple) and len(item) > 1), None)
+            if not raw_email:
+                _ledger_finish(ledger_id, state="failed", error="empty fetch response")
+                continue
             email_message = email.message_from_bytes(raw_email)
             msg_id = email_message.get("Message-ID")
 
             if not msg_id:
                 logger.warning("Skipping email without Message-ID in %s", mailbox_key)
-                continue
-
-            if msg_id in processed_emails:
-                logger.info("Skipping already processed email %s in %s", msg_id, mailbox_key)
+                _ledger_finish(ledger_id, state="failed", error="missing Message-ID")
                 continue
 
             # For Gmail, check if the email already has the "Ingested" label.
             if is_gmail_host and gmail_apply_labels:
                 if email_already_has_label(mail, num, "Ingested"):
                     logger.info("Skipping email %s in %s, already labeled 'Ingested'.", msg_id, mailbox_key)
+                    _ledger_finish(ledger_id, state="completed", message_id=msg_id)
                     continue
 
             # Process attachments using the resolved mime types / extensions.
-            fetch_attachments_and_enqueue(
-                email_message,
-                owner_id=owner_id,
-                source_integration_id=source_integration_id,
-                effective_mime_types=effective_mime_types,
-                effective_extensions=effective_extensions,
-            )
+            try:
+                fetch_attachments_and_enqueue(
+                    email_message,
+                    owner_id=owner_id,
+                    source_integration_id=source_integration_id,
+                    effective_mime_types=effective_mime_types,
+                    effective_extensions=effective_extensions,
+                )
+                _ledger_finish(ledger_id, state="completed", message_id=msg_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Attachment handoff failed for %s", msg_id)
+                _ledger_finish(ledger_id, state="failed", message_id=msg_id, error=exc)
+                continue
 
             if settings.imap_readonly_mode:
                 logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
@@ -525,12 +647,9 @@ def pull_inbox(
 
                 if delete_after_process:
                     logger.info("Deleting message %s from %s", num.decode(), mailbox_key)
+                    # Deletion remains an explicit mailbox setting.  Normal
+                    # ingestion never changes Seen state (BODY.PEEK above).
                     mail.store(num, "+FLAGS", "\\Deleted")
-                else:
-                    mail.store(num, "-FLAGS", "\\Seen")
-
-            processed_emails[msg_id] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-            save_processed_emails(processed_emails)
 
         if not settings.imap_readonly_mode and delete_after_process:
             mail.expunge()
@@ -608,17 +727,23 @@ def fetch_attachments_and_enqueue(
             )
             continue
 
-        file_path = os.path.join(settings.workdir, filename)
+        # Attachment names are untrusted.  Keep the original name for the
+        # document record while writing only a basename inside the workdir.
+        safe_filename = os.path.basename(filename.replace("\\", "/"))
+        if safe_filename in {"", ".", ".."}:
+            logger.warning("Skipping unsafe attachment filename %r", filename)
+            continue
+        file_path = os.path.join(settings.workdir, safe_filename)
         with open(file_path, "wb") as f:
             f.write(part.get_payload(decode=True))
 
         # If it's a PDF by MIME type or extension, process it directly
         if mime_type == "application/pdf" or is_pdf_by_extension:
-            process_document.delay(file_path, owner_id=owner_id, source_integration_id=source_integration_id)
+            process_document.delay(file_path, original_filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
             logger.info("Enqueued PDF for upload: %s (MIME: %s)", filename, mime_type)
         elif mime_type in effective_mime_types:
             # Other allowed files are sent for conversion
-            convert_to_pdf.delay(file_path, owner_id=owner_id, source_integration_id=source_integration_id)
+            convert_to_pdf.delay(file_path, original_filename=filename, owner_id=owner_id, source_integration_id=source_integration_id)
             logger.info("Enqueued file for conversion to PDF: %s", filename)
 
         has_attachment = True

@@ -282,6 +282,31 @@ class DocumentIntake(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class ImapMessageLedger(Base):
+    """Durable, mailbox/owner-scoped state for resumable IMAP ingestion."""
+
+    __tablename__ = "imap_message_ledger"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_key", "mailbox_key", "uidvalidity", "uid",
+            name="uq_imap_ledger_owner_mailbox_uid",
+        ),
+        Index("ix_imap_ledger_state", "owner_key", "mailbox_key", "state"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_key = Column(String(255), nullable=False)
+    mailbox_key = Column(String(255), nullable=False)
+    uidvalidity = Column(String(255), nullable=False)
+    uid = Column(Integer, nullable=False)
+    message_id = Column(String(998), nullable=True)
+    state = Column(String(32), nullable=False, default="pending", server_default="pending", index=True)
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class UploadBatch(Base):
     """Durable client upload batch; keeps large uploads resumable across reloads."""
 
