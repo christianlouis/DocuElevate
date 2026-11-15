@@ -584,11 +584,20 @@ def _extract_uidvalidity(mail, select_data=None) -> str:
         if isinstance(value, bool) or value is None:
             return None
         if isinstance(value, bytes):
-            value = value.decode(errors="ignore")
-        value = str(value).strip()
-        if not value.isdigit() or int(value) <= 0:
+            try:
+                value = value.decode("ascii")
+            except UnicodeDecodeError:
+                return None
+        if isinstance(value, int):
+            number = value
+        else:
+            value = str(value).strip()
+            if not value or any(char not in "0123456789" for char in value):
+                return None
+            number = int(value)
+        if number <= 0 or number > 4_294_967_295:
             return None
-        return value
+        return str(number)
 
     try:
         response = mail.response("UIDVALIDITY")
@@ -608,6 +617,8 @@ def _extract_uidvalidity(mail, select_data=None) -> str:
             if key in select_data:
                 value = select_data[key]
                 if isinstance(value, (list, tuple)):
+                    if not value:
+                        continue
                     value = value[0]
                 value = valid_value(value)
                 if value is not None:
@@ -765,11 +776,12 @@ def pull_inbox(
         retry_rank = {uid: index for index, uid in enumerate(retry_order)}
         retry_uids.sort(key=lambda uid: (retry_rank.get(uid, len(retry_rank)), uid))
         if new_uids and retry_uids:
-            if len(new_uids) >= POLL_BATCH_SIZE:
-                retry_slots = min(len(retry_uids), max(1, POLL_BATCH_SIZE // 5))
-                selected_uids = new_uids[: POLL_BATCH_SIZE - retry_slots] + retry_uids[:retry_slots]
-            else:
-                selected_uids = new_uids + retry_uids[: POLL_BATCH_SIZE - len(new_uids)]
+            retry_slots = min(len(retry_uids), max(1, POLL_BATCH_SIZE // 5))
+            selected_uids = retry_uids[:retry_slots] + new_uids[: POLL_BATCH_SIZE - retry_slots]
+            if len(selected_uids) < POLL_BATCH_SIZE:
+                selected_uids += retry_uids[retry_slots : retry_slots + POLL_BATCH_SIZE - len(selected_uids)]
+        elif retry_uids:
+            selected_uids = retry_uids[:POLL_BATCH_SIZE]
         else:
             selected_uids = unfinished[:POLL_BATCH_SIZE]
         msg_numbers = [str(uid).encode() for uid in selected_uids]
