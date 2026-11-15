@@ -189,8 +189,8 @@ class TestBackupTaskHelpers:
         assert len(digest) == 64
         assert all(c in "0123456789abcdef" for c in digest)
 
-    def test_storage_budget_counts_and_reclaims_only_stale_partials(self, tmp_path):
-        """Interrupted archives consume budget, but recent active work is protected."""
+    def test_storage_budget_counts_and_preserves_all_partials(self, tmp_path):
+        """Interrupted archives consume budget and are never deleted by age alone."""
         from app.tasks.backup_tasks import _apply_storage_budget, _backup_storage_snapshot
 
         stale = tmp_path / ".backup_hourly_old.db.gz.partial"
@@ -200,7 +200,6 @@ class TestBackupTaskHelpers:
         old_time = (datetime.now(timezone.utc) - timedelta(days=2)).timestamp()
         stale.touch()
         import os
-
         os.utime(stale, (old_time, old_time))
         snapshot = _backup_storage_snapshot(tmp_path)
         assert snapshot["partial_bytes"] == 70
@@ -216,9 +215,9 @@ class TestBackupTaskHelpers:
             mock_settings.backup_adaptive_cleanup_enabled = False
             result = _apply_storage_budget(MagicMock(), tmp_path)
 
-        assert result["pruned_count"] == 1
-        assert result["pruned_bytes"] == 40
-        assert not stale.exists()
+        assert result["pruned_count"] == 0
+        assert result["pruned_bytes"] == 0
+        assert stale.exists()
         assert recent.exists()
 
     def test_first_backup_uses_non_zero_database_size_floor(self, tmp_path):
@@ -234,6 +233,34 @@ class TestBackupTaskHelpers:
         db = MagicMock()
         db.query.return_value = empty_query
         with patch("app.tasks.backup_tasks._db_path", return_value=db_path):
+            assert _estimated_backup_bytes(db, "hourly") == _FIRST_BACKUP_MIN_BYTES
+
+    def test_first_backup_uses_database_size_above_floor(self):
+        """A larger SQLite database gets headroom beyond the minimum reserve."""
+        from app.tasks.backup_tasks import _estimated_backup_bytes
+
+        db_path = MagicMock()
+        db_path.stat.return_value.st_size = 100 * 1024 * 1024
+        empty_query = MagicMock()
+        empty_query.filter.return_value = empty_query
+        empty_query.order_by.return_value = empty_query
+        empty_query.first.return_value = None
+        db = MagicMock()
+        db.query.return_value = empty_query
+        with patch("app.tasks.backup_tasks._db_path", return_value=db_path):
+            assert _estimated_backup_bytes(db, "hourly") == 125 * 1024 * 1024
+
+    def test_first_backup_non_sqlite_uses_safe_floor(self):
+        """Non-SQLite backends without history still reserve the safe floor."""
+        from app.tasks.backup_tasks import _FIRST_BACKUP_MIN_BYTES, _estimated_backup_bytes
+
+        empty_query = MagicMock()
+        empty_query.filter.return_value = empty_query
+        empty_query.order_by.return_value = empty_query
+        empty_query.first.return_value = None
+        db = MagicMock()
+        db.query.return_value = empty_query
+        with patch("app.tasks.backup_tasks._db_path", return_value=None):
             assert _estimated_backup_bytes(db, "hourly") == _FIRST_BACKUP_MIN_BYTES
 
     def test_dump_sqlite(self, tmp_path):

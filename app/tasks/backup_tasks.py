@@ -30,7 +30,6 @@ import logging
 import os
 import shutil
 import subprocess
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -63,7 +62,6 @@ _AUTO_MIN_FREE_DIVISOR = 10
 _AUTO_MIN_FREE_CAP_BYTES = 1024 * 1024 * 1024
 _AUTO_MIN_FREE_FLOOR_BYTES = 64 * 1024 * 1024
 _FIRST_BACKUP_MIN_BYTES = 64 * 1024 * 1024
-_STALE_PARTIAL_SECONDS = 24 * 60 * 60
 
 
 def _backup_dir() -> Path:
@@ -209,25 +207,6 @@ def _estimated_backup_bytes(db: object, backup_type: str) -> int:
     return _FIRST_BACKUP_MIN_BYTES
 
 
-def _reclaim_stale_partial_archives(directory: Path) -> tuple[int, int]:
-    """Remove only old interrupted archives; recent partials may still be active."""
-    cutoff = time.time() - _STALE_PARTIAL_SECONDS
-    removed_count = 0
-    removed_bytes = 0
-    for path in directory.glob(".backup_*.partial"):
-        try:
-            stat = path.stat()
-            if stat.st_mtime >= cutoff:
-                continue
-            path.unlink()
-        except OSError as exc:
-            logger.warning("Failed to reclaim stale partial backup %s: %s", path.name, exc)
-            continue
-        removed_count += 1
-        removed_bytes += stat.st_size
-    return removed_count, removed_bytes
-
-
 def _apply_storage_budget(
     db: object,
     directory: Path,
@@ -239,7 +218,6 @@ def _apply_storage_budget(
     The newest available local snapshot in each tier is protected. Remote copies
     remain recorded when their local copy is reclaimed.
     """
-    partial_count, partial_bytes = _reclaim_stale_partial_archives(directory)
     state = _backup_storage_snapshot(directory)
     required_bytes = max(0, int(required_bytes))
 
@@ -249,8 +227,8 @@ def _apply_storage_budget(
             and snapshot["backup_bytes"] + required_bytes <= snapshot["max_local_bytes"]
         )
 
-    pruned_count = partial_count
-    pruned_bytes = partial_bytes
+    pruned_count = 0
+    pruned_bytes = 0
     if not has_capacity(state) and _adaptive_cleanup_enabled():
         records = (
             db.query(BackupRecord)
