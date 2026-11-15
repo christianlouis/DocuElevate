@@ -580,12 +580,25 @@ def _ledger_finish(ledger_id, *, state, message_id=None, error=None):
 
 def _extract_uidvalidity(mail, select_data=None) -> str:
     """Read UIDVALIDITY; refuse ingestion when a server omits it."""
+    def valid_value(value):
+        if isinstance(value, bool) or value is None:
+            return None
+        if isinstance(value, bytes):
+            value = value.decode(errors="ignore")
+        value = str(value).strip()
+        if not value.isdigit() or int(value) <= 0:
+            return None
+        return value
+
     try:
         response = mail.response("UIDVALIDITY")
         values = response[1] if response and len(response) > 1 else []
+        if isinstance(values, (bytes, str)):
+            values = [values]
         if values:
-            value = values[0]
-            return value.decode(errors="ignore") if isinstance(value, bytes) else str(value)
+            value = valid_value(values[0])
+            if value is not None:
+                return value
     except SoftTimeLimitExceeded:
         raise
     except Exception:  # noqa: BLE001
@@ -596,7 +609,9 @@ def _extract_uidvalidity(mail, select_data=None) -> str:
                 value = select_data[key]
                 if isinstance(value, (list, tuple)):
                     value = value[0]
-                return value.decode(errors="ignore") if isinstance(value, bytes) else str(value)
+                value = valid_value(value)
+                if value is not None:
+                    return value
     return "unknown"
 
 
@@ -722,9 +737,6 @@ def pull_inbox(
         finally:
             db.close()
         ordered = sorted(int(value) for value in msg_numbers)
-        # Rotate after the last attempted UID, including failed messages. This
-        # prevents poison messages and incoming mail from starving older UIDs.
-        ordered = [uid for uid in ordered if uid > cursor] + [uid for uid in ordered if uid <= cursor]
         from app.models import ImapMessageLedger
 
         db = _get_db_session()
@@ -737,10 +749,32 @@ def pull_inbox(
                 )
                 .all()
             }
+            retry_rows = (
+                db.query(ImapMessageLedger.uid)
+                .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
+                .filter(ImapMessageLedger.state != "completed")
+                .order_by(ImapMessageLedger.updated_at.asc())
+                .all()
+            )
+            retry_order = [row[0] for row in retry_rows]
         finally:
             db.close()
-        msg_numbers = [str(uid).encode() for uid in ordered if uid not in completed_uids][:POLL_BATCH_SIZE]
+        unfinished = [uid for uid in ordered if uid not in completed_uids]
+        new_uids = [uid for uid in unfinished if uid > cursor]
+        retry_uids = [uid for uid in unfinished if uid <= cursor]
+        retry_rank = {uid: index for index, uid in enumerate(retry_order)}
+        retry_uids.sort(key=lambda uid: (retry_rank.get(uid, len(retry_rank)), uid))
+        if new_uids and retry_uids:
+            if len(new_uids) >= POLL_BATCH_SIZE:
+                retry_slots = min(len(retry_uids), max(1, POLL_BATCH_SIZE // 5))
+                selected_uids = new_uids[: POLL_BATCH_SIZE - retry_slots] + retry_uids[:retry_slots]
+            else:
+                selected_uids = new_uids + retry_uids[: POLL_BATCH_SIZE - len(new_uids)]
+        else:
+            selected_uids = unfinished[:POLL_BATCH_SIZE]
+        msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
+        deleted_any = False
 
         for num in msg_numbers:
             if time.monotonic() >= deadline:
@@ -754,7 +788,8 @@ def pull_inbox(
                 if scan_cursor is None:
                     scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
                     db.add(scan_cursor)
-                scan_cursor.last_uid = uid
+                if uid > cursor:
+                    scan_cursor.last_uid = uid
                 db.commit()
             finally:
                 db.close()
@@ -782,7 +817,7 @@ def pull_inbox(
 
             # Process attachments using the resolved mime types / extensions.
             try:
-                fetch_attachments_and_enqueue(
+                accepted = fetch_attachments_and_enqueue(
                     email_message,
                     owner_id=owner_id,
                     source_integration_id=source_integration_id,
@@ -799,6 +834,10 @@ def pull_inbox(
                 _ledger_finish(ledger_id, state="failed", message_id=msg_id, error=exc)
                 continue
 
+            if not accepted:
+                _ledger_finish(ledger_id, state="completed", message_id=msg_id)
+                continue
+
             if settings.imap_readonly_mode:
                 logger.info("Readonly mode: skipping mailbox modifications for %s in %s", msg_id, mailbox_key)
             else:
@@ -810,9 +849,11 @@ def pull_inbox(
                     logger.info("Deleting message %s from %s", num.decode(), mailbox_key)
                     # Deletion remains an explicit mailbox setting.  Normal
                     # ingestion never changes Seen state (BODY.PEEK above).
-                    mail.uid("store", num, "+FLAGS", "\\Deleted")
+                    delete_status, _ = mail.uid("store", num, "+FLAGS", "\\Deleted")
+                    if delete_status == "OK":
+                        deleted_any = True
 
-        if not settings.imap_readonly_mode and delete_after_process:
+        if not settings.imap_readonly_mode and delete_after_process and deleted_any:
             mail.expunge()
 
         mail.close()
@@ -908,7 +949,7 @@ def fetch_attachments_and_enqueue(
                 owner_id=owner_id,
                 source_integration_id=source_integration_id,
                 idempotency_key=f"{ingestion_prefix}:{part_index}:{digest}",
-                filename=filename,
+                filename=safe_filename,
                 payload=payload,
                 mime_type=mime_type,
                 is_pdf=mime_type == "application/pdf" or is_pdf_by_extension,
@@ -922,7 +963,10 @@ def fetch_attachments_and_enqueue(
                 stream.write(payload)
             task = process_document if mime_type == "application/pdf" or is_pdf_by_extension else convert_to_pdf
             task.delay(
-                file_path, original_filename=filename, owner_id=owner_id, source_integration_id=source_integration_id
+                file_path,
+                original_filename=safe_filename,
+                owner_id=owner_id,
+                source_integration_id=source_integration_id,
             )
         has_attachment = True
     return has_attachment

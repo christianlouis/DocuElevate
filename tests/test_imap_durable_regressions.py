@@ -172,6 +172,28 @@ def test_attachment_filename_cannot_escape_workdir_and_is_not_shared(tmp_path):
     assert paths
     assert all(path.startswith(str(tmp_path) + "/") for path in paths)
     assert len(set(paths)) == len(paths)
+    assert all(call.kwargs["original_filename"] == "scan.pdf" for call in enqueue.call_args_list)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("value", [None, b"", b"0", b"invalid"])
+def test_uidvalidity_rejects_non_positive_or_invalid_values(value):
+    from app.tasks import imap_tasks
+
+    mail = MagicMock()
+    mail.response.return_value = ("UIDVALIDITY", [value])
+    assert imap_tasks._extract_uidvalidity(mail, {b"UIDVALIDITY": [None]}) == "unknown"
+
+
+@pytest.mark.unit
+def test_durable_attachment_uses_safe_original_filename():
+    from app.tasks import imap_tasks
+
+    message = EmailMessage()
+    message.add_attachment(b"a", maintype="application", subtype="pdf", filename="C:\\tmp\\scan.pdf")
+    with patch("app.tasks.imap_intake.prepare_imap_attachment") as prepare:
+        assert imap_tasks.fetch_attachments_and_enqueue(message, ingestion_prefix="owner:mail:1:7")
+    assert prepare.call_args.kwargs["filename"] == "scan.pdf"
 
 
 @pytest.mark.unit
