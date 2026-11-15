@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Continuous Integration
+
+- Stop automatic preprod manifest updates
+  ([#1323](https://github.com/christianlouis/DocuElevate/pull/1323),
+  [`4b5fe31`](https://github.com/christianlouis/DocuElevate/commit/4b5fe31aeaa30149a28b1e03778af0ffbd368f4a))
+
+
 ## v0.196.0 (2026-11-15)
 
 ### Features
