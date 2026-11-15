@@ -354,50 +354,27 @@ class TestPathValidationSecurity:
 class TestFileUploadSecurity:
     """Test that file upload endpoints prevent path traversal."""
 
-    def test_ui_upload_uses_basename(self):
-        """Test that ui_upload extracts basename to prevent path traversal."""
+    def test_upload_paths_sanitize_complete_filename_on_all_separator_styles(self):
+        """The API must sanitize raw filenames before deriving a storage path."""
 
         from app.utils.filename_utils import sanitize_filename
 
         # Simulate malicious filenames
-        malicious_filenames = [
-            "../../../etc/passwd",
-            "/etc/shadow",
-            "folder/../file.pdf",
-        ]
-
+        malicious_filenames = ["../../../etc/passwd.pdf", "/etc/shadow.pdf", "..\\..\\windows\\system32.pdf"]
         for malicious in malicious_filenames:
-            # os.path.basename should extract just the filename
-            basename = os.path.basename(malicious)
-
-            # Verify no path traversal remains in basename
-            assert ".." not in basename, f"Path traversal not removed: {malicious} -> {basename}"
-            assert "/" not in basename, f"Path separator not removed: {malicious} -> {basename}"
-
-        # Windows-style backslash paths: os.path.basename on Linux does NOT
-        # split on backslash, so the application also uses sanitize_filename
-        # to handle these.  Verify the combined approach is safe.
-        windows_paths = [
-            "..\\..\\windows\\system32",
-        ]
-        for malicious in windows_paths:
-            sanitized = sanitize_filename(os.path.basename(malicious))
+            sanitized = sanitize_filename(malicious)
             assert ".." not in sanitized, f"Path traversal not removed after sanitize: {malicious} -> {sanitized}"
+            assert "/" not in sanitized, f"Path separator not removed: {malicious} -> {sanitized}"
             assert "\\" not in sanitized, f"Backslash not removed after sanitize: {malicious} -> {sanitized}"
 
-    def test_sanitize_after_basename(self):
-        """Test that sanitization happens after basename extraction."""
+    def test_sanitize_does_not_depend_on_posix_basename(self):
+        """Windows traversal remains safe when evaluated on a POSIX host."""
 
         from app.utils.filename_utils import sanitize_filename
 
         malicious = "../../../passwd.pdf"
 
-        # Step 1: Extract basename (as ui_upload does)
-        basename = os.path.basename(malicious)
-        assert basename == "passwd.pdf"
-
-        # Step 2: Sanitize (as ui_upload does)
-        sanitized = sanitize_filename(basename)
+        sanitized = sanitize_filename(malicious)
         assert sanitized == "passwd.pdf"
 
         # Final result is safe

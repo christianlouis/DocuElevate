@@ -30,6 +30,26 @@ def test_intake_queues_normal_pipeline_and_is_idempotent(client, db_session, tmp
     assert len(list(tmp_path.glob("intake_*.pdf"))) == 1
 
 
+def test_intake_sanitizes_windows_traversal_before_persisting_filename(client, db_session, tmp_path):
+    with (
+        patch("app.api.intake.settings.workdir", str(tmp_path)),
+        patch("app.api.intake.process_document.delay") as delay,
+    ):
+        delay.return_value.id = "task-path"
+        response = client.post(
+            "/api/intake/documents",
+            data={"source": "legacy", "idempotency_key": "legacy:42:path"},
+            files={"file": ("..\\..\\outside\\invoice.pdf", b"%PDF-1.4", "application/pdf")},
+        )
+
+    assert response.status_code == 202
+    from app.models import DocumentIntake
+
+    intake = db_session.query(DocumentIntake).filter_by(id=response.json()["intake_id"]).one()
+    assert intake.original_filename == "outside_invoice.pdf"
+    assert len(list(tmp_path.glob("intake_*.pdf"))) == 1
+
+
 def test_intake_rejects_unsupported_type(client):
     response = client.post(
         "/api/intake/documents",

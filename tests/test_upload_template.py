@@ -100,3 +100,16 @@ def test_original_non_pdf_preview_does_not_invoke_pdfjs():
     assert 'src="/files/{{ file.id }}/preview/original"' in template
     assert "'image/png'" in template
     assert "file.mime_type.startswith('image/')" not in template
+
+
+@pytest.mark.security
+def test_pdf_text_error_renders_untrusted_message_as_text():
+    """Fetch failures must not interpolate error messages into HTML."""
+    template = Path("frontend/templates/file_detail.html").read_text(encoding="utf-8")
+    error_block = template[
+        template.index("console.error('Error loading text:'") : template.index("function toggleTextModal")
+    ]
+
+    assert "errorMsg.textContent = error.message" in error_block
+    assert "error.message" not in error_block.replace("errorMsg.textContent = error.message", "")
+    assert "innerHTML" not in error_block

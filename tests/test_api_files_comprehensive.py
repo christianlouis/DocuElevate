@@ -948,6 +948,29 @@ class TestUIUpload:
                 assert ".." not in data["original_filename"]
                 assert "/" not in data["original_filename"]
 
+    @pytest.mark.security
+    @pytest.mark.parametrize(
+        "filename",
+        ["..\\mixed/..\\escape.pdf", "%2e%2e%2f%2e%2e%5cescape.pdf"],
+    )
+    def test_ui_upload_keeps_mixed_and_encoded_paths_inside_workdir(self, client: TestClient, tmp_path, filename):
+        """Traversal-looking multipart names cannot escape the upload directory."""
+        with patch("app.tasks.process_document.process_document.delay") as mock_delay:
+            mock_delay.return_value.id = "task-path"
+            with patch("app.config.settings.workdir", str(tmp_path)):
+                response = client.post(
+                    "/api/ui-upload", files={"file": (filename, BytesIO(b"%PDF-1.4"), "application/pdf")}
+                )
+
+        assert response.status_code == 200
+        stored = response.json()["stored_filename"]
+        stored_path = (tmp_path / stored).resolve()
+        assert stored_path.parent == tmp_path.resolve()
+        assert stored_path.is_file()
+        assert ".." not in response.json()["original_filename"]
+        assert "/" not in response.json()["original_filename"]
+        assert "\\" not in response.json()["original_filename"]
+
 
 @pytest.mark.unit
 class TestExtractTextFromPDF:
