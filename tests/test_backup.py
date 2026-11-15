@@ -9,6 +9,7 @@ Covers:
 """
 
 import gzip
+import hashlib
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +24,12 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app.main import app
 from app.models import BackupRecord
+
+
+def _write_archive(path: Path, payload: bytes = b"SELECT 1;") -> str:
+    with gzip.open(path, "wb") as archive:
+        archive.write(payload)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -563,12 +570,13 @@ class TestBackupTaskHelpers:
 
         for i in range(5):
             f = tmp_path / f"backup_hourly_{i:04d}.db.gz"
-            f.write_bytes(b"x")
+            checksum = _write_archive(f)
             rec = BackupRecord(
                 filename=f"backup_hourly_{i:04d}.db.gz",
                 local_path=str(f),
                 backup_type="hourly",
-                size_bytes=1,
+                size_bytes=f.stat().st_size,
+                checksum=checksum,
                 status="ok",
                 created_at=datetime(2026, 1, 1, i, 0, 0, tzinfo=timezone.utc),
             )
@@ -583,8 +591,68 @@ class TestBackupTaskHelpers:
         remaining_paths = [r.local_path for r in remaining if r.local_path is not None]
         assert len(remaining_paths) <= 3
 
-    def test_apply_retention_removes_record_no_remote(self, tmp_path, db_session):
-        """_apply_retention() deletes the DB record when no local file or remote copy remain."""
+    @pytest.mark.parametrize("suffix", [".db.gz", ".pgsql.gz", ".mysql.gz"])
+    def test_archive_validation_requires_checksum_and_readable_gzip(self, tmp_path, suffix):
+        """SQLite, PostgreSQL, and MySQL archives share the checksum/gzip invariant."""
+        from app.tasks.backup_tasks import _validate_local_archive
+
+        archive = tmp_path / f"backup_hourly_test{suffix}"
+        checksum = _write_archive(archive, b"-- structurally valid dump\n")
+        record = BackupRecord(
+            filename=archive.name,
+            local_path=str(archive),
+            backup_type="hourly",
+            size_bytes=archive.stat().st_size,
+            checksum=checksum,
+            status="ok",
+        )
+        assert _validate_local_archive(record) == (True, None)
+
+        archive.write_bytes(b"corrupt")
+        valid, detail = _validate_local_archive(record)
+        assert not valid
+        assert "checksum" in detail.lower()
+
+    def test_corrupt_archive_cannot_evict_verified_archive(self, tmp_path, db_session):
+        """Retention marks corruption failed and keeps the verified recovery point."""
+        from app.tasks.backup_tasks import _apply_retention
+
+        good_path = tmp_path / "backup_hourly_good.db.gz"
+        good_checksum = _write_archive(good_path)
+        good = BackupRecord(
+            filename=good_path.name,
+            local_path=str(good_path),
+            backup_type="hourly",
+            size_bytes=good_path.stat().st_size,
+            checksum=good_checksum,
+            status="ok",
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        corrupt_path = tmp_path / "backup_hourly_corrupt.db.gz"
+        corrupt_path.write_bytes(b"not gzip")
+        corrupt = BackupRecord(
+            filename=corrupt_path.name,
+            local_path=str(corrupt_path),
+            backup_type="hourly",
+            size_bytes=corrupt_path.stat().st_size,
+            checksum=hashlib.sha256(corrupt_path.read_bytes()).hexdigest(),
+            status="ok",
+            created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        )
+        db_session.add_all([good, corrupt])
+        db_session.commit()
+
+        with patch("app.tasks.backup_tasks.settings") as mock_settings:
+            mock_settings.backup_retain_hourly = 1
+            _apply_retention("hourly", db_session)
+
+        assert good_path.exists()
+        assert db_session.get(BackupRecord, good.id).status == "ok"
+        assert db_session.get(BackupRecord, corrupt.id).status == "failed"
+        assert "unreadable" in db_session.get(BackupRecord, corrupt.id).error_detail.lower()
+
+    def test_apply_retention_marks_missing_record_failed(self, tmp_path, db_session):
+        """A missing archive remains as a failed diagnostic record."""
         from app.tasks.backup_tasks import _apply_retention
 
         # Old record – local file doesn't exist, no remote
@@ -597,16 +665,17 @@ class TestBackupTaskHelpers:
             created_at=datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
         )
         db_session.add(old_rec)
-        # Two newer records so the old one falls outside retention window
+        # Two newer valid records so the old one falls outside retention window
         for i, dt in enumerate([datetime(2026, 1, 1), datetime(2026, 1, 2)]):
             new_path = tmp_path / f"backup_hourly_new_{i}.db.gz"
-            new_path.write_bytes(b"new")
+            checksum = _write_archive(new_path)
             db_session.add(
                 BackupRecord(
                     filename=f"backup_hourly_new_{i}.db.gz",
                     local_path=str(new_path),
                     backup_type="hourly",
-                    size_bytes=1,
+                    size_bytes=new_path.stat().st_size,
+                    checksum=checksum,
                     status="ok",
                     created_at=dt.replace(tzinfo=timezone.utc),
                 )
@@ -617,8 +686,9 @@ class TestBackupTaskHelpers:
             mock_settings.backup_retain_hourly = 2
             _apply_retention("hourly", db_session)
 
-        remaining = db_session.query(BackupRecord).filter_by(filename="backup_hourly_old.db.gz").first()
-        assert remaining is None
+        remaining = db_session.query(BackupRecord).filter_by(filename="backup_hourly_old.db.gz").one()
+        assert remaining.status == "failed"
+        assert "missing" in remaining.error_detail.lower()
 
     def test_failed_attempt_never_counts_as_retained_local_recovery_point(self, tmp_path, db_session):
         """A newer failure must not evict the only usable local archive."""
