@@ -29,9 +29,15 @@ from app.models import BackupRecord
 def _write_archive(path: Path, payload: bytes | None = None) -> str:
     if payload is None:
         if path.name.endswith(".pgsql.gz"):
-            payload = b"-- PostgreSQL database dump\nSET search_path = public;\n"
+            payload = (
+                b"-- PostgreSQL database dump\nSET search_path = public;\n"
+                b"-- PostgreSQL database dump complete\n"
+            )
         elif path.name.endswith(".mysql.gz"):
-            payload = b"-- MySQL dump\nCREATE TABLE example (id INT);\n"
+            payload = (
+                b"-- MySQL dump\n/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n"
+                b"CREATE TABLE example (id INT);\n-- Dump completed on 2026-11-15\n"
+            )
         else:
             payload = b"BEGIN TRANSACTION;\nCREATE TABLE example (id INTEGER);\nCOMMIT;\n"
     with gzip.open(path, "wb") as archive:
@@ -331,7 +337,7 @@ class TestBackupTaskHelpers:
             patch("app.tasks.backup_tasks.shutil.disk_usage", return_value=usage),
             patch("app.tasks.backup_tasks.settings") as mock_settings,
         ):
-            mock_settings.backup_max_local_bytes = 130
+            mock_settings.backup_max_local_bytes = 230
             mock_settings.backup_min_free_bytes = 1
             mock_settings.backup_adaptive_cleanup_enabled = True
             result = _apply_storage_budget(db_session, tmp_path)
@@ -632,11 +638,71 @@ class TestBackupTaskHelpers:
         assert not valid
         assert "unreadable" in detail.lower()
 
+        checksum = _write_archive(archive)
+        record.checksum = checksum
+        raw = bytearray(archive.read_bytes())
+        raw[-8] ^= 0x01
+        archive.write_bytes(raw)
+        record.checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+        valid, detail = _validate_local_archive(record)
+        assert not valid
+        assert "unreadable" in detail.lower()
+
+        checksum = _write_archive(archive)
+        record.checksum = checksum
+        raw = bytearray(archive.read_bytes())
+        raw[len(raw) // 2] ^= 0x01
+        archive.write_bytes(raw)
+        record.checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+        valid, detail = _validate_local_archive(record)
+        assert not valid
+        assert "unreadable" in detail.lower()
+
         checksum = _write_archive(archive, b"not a database dump")
         record.checksum = checksum
         valid, detail = _validate_local_archive(record)
         assert not valid
         assert "sql dump" in detail.lower()
+
+    def test_archive_validation_uses_bounded_tail_and_vendor_dump_markers(self, tmp_path):
+        """Late SQL trailers and empty vendor dumps are validated without buffering all data."""
+        from app.tasks.backup_tasks import _validate_local_archive
+
+        sqlite_archive = tmp_path / "large.db.gz"
+        sqlite_payload = b"BEGIN TRANSACTION;\n" + b"A" * (1024 * 1024 + 128) + b"\nCOMMIT;\n"
+        sqlite_checksum = _write_archive(sqlite_archive, sqlite_payload)
+        sqlite_record = BackupRecord(
+            filename=sqlite_archive.name,
+            local_path=str(sqlite_archive),
+            backup_type="hourly",
+            size_bytes=sqlite_archive.stat().st_size,
+            checksum=sqlite_checksum,
+            status="ok",
+        )
+        assert _validate_local_archive(sqlite_record) == (True, None)
+
+        for name, payload in (
+            (
+                "empty.mysql.gz",
+                b"-- MySQL dump\n/*!40101 SET NAMES utf8mb4 */;\n-- Dump completed on 2026-11-15\n",
+            ),
+            (
+                "empty-mariadb.mysql.gz",
+                b"-- MariaDB dump\n/*!999999 SET @@session.pseudo_thread_id=0 */;\n"
+                b"-- Dump completed on 2026-11-15\n",
+            ),
+        ):
+            archive = tmp_path / name
+            checksum = _write_archive(archive, payload)
+            record = BackupRecord(
+                filename=archive.name,
+                local_path=str(archive),
+                backup_type="hourly",
+                size_bytes=archive.stat().st_size,
+                checksum=checksum,
+                status="ok",
+            )
+            assert _validate_local_archive(record) == (True, None)
 
     def test_corrupt_archive_cannot_evict_verified_archive(self, tmp_path, db_session):
         """Retention marks corruption failed and keeps the verified recovery point."""
@@ -912,7 +978,10 @@ class TestCreateBackupTask:
 
         def fake_pg_dump(db_url: str, dest: Path) -> None:
             with gzip.open(str(dest), "wb") as gz:
-                gz.write(b"-- PostgreSQL dump\n")
+                gz.write(
+                    b"-- PostgreSQL database dump\nSET search_path = public;\n"
+                    b"-- PostgreSQL database dump complete\n"
+                )
 
         with (
             patch("app.tasks.backup_tasks.settings") as mock_settings,
@@ -943,7 +1012,10 @@ class TestCreateBackupTask:
 
         def fake_mysql_dump(db_url: str, dest: Path) -> None:
             with gzip.open(str(dest), "wb") as gz:
-                gz.write(b"-- MySQL dump\n")
+                gz.write(
+                    b"-- MySQL dump\n/*!40101 SET NAMES utf8mb4 */;\n"
+                    b"CREATE TABLE example (id INT);\n-- Dump completed on 2026-11-15\n"
+                )
 
         with (
             patch("app.tasks.backup_tasks.settings") as mock_settings,
@@ -1848,22 +1920,27 @@ class TestApplyRetentionOSError:
         from app.tasks.backup_tasks import _apply_retention
 
         # Create 2 records: 1 new, 1 old with remote path
+        new_path = tmp_path / "bkp_new.db.gz"
+        new_checksum = _write_archive(new_path)
         db_session.add(
             BackupRecord(
                 filename="bkp_new.db.gz",
-                local_path=str(tmp_path / "bkp_new.db.gz"),
+                local_path=str(new_path),
                 backup_type="weekly",
-                size_bytes=1,
+                size_bytes=new_path.stat().st_size,
+                checksum=new_checksum,
                 status="ok",
                 created_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
             )
         )
-        (tmp_path / "bkp_new.db.gz").write_bytes(b"new")
+        old_path = tmp_path / "bkp_old.db.gz"
+        old_checksum = _write_archive(old_path)
         old = BackupRecord(
             filename="bkp_old.db.gz",
-            local_path=str(tmp_path / "bkp_old.db.gz"),
+            local_path=str(old_path),
             backup_type="weekly",
-            size_bytes=1,
+            size_bytes=old_path.stat().st_size,
+            checksum=old_checksum,
             status="ok",
             remote_path="backups/bkp_old.db.gz",
             remote_destination="s3",

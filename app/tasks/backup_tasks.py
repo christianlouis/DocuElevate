@@ -30,6 +30,7 @@ import logging
 import os
 import shutil
 import subprocess
+import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -134,28 +135,40 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
         actual_checksum = _sha256(path)
         if actual_checksum != rec.checksum:
             return False, "Local backup archive checksum does not match."
-        payload = bytearray()
+        prefix = bytearray()
+        tail = bytearray()
+        total_payload_bytes = 0
         with gzip.open(path, "rb") as archive:
             while chunk := archive.read(65536):
-                if len(payload) < 1_048_576:
-                    payload.extend(chunk[: 1_048_576 - len(payload)])
-        if not payload:
+                total_payload_bytes += len(chunk)
+                if len(prefix) < 65536:
+                    prefix.extend(chunk[: 65536 - len(prefix)])
+                tail.extend(chunk)
+                if len(tail) > 65536:
+                    del tail[:-65536]
+        if not total_payload_bytes:
             return False, "Local backup archive contains no data."
-        sample = bytes(payload)
-        suffix = path.name
+        first = bytes(prefix).lstrip()
+        last = bytes(tail).rstrip()
+        suffix = path.name.lower()
         if suffix.endswith(".db.gz"):
-            required = (b"BEGIN TRANSACTION;", b"COMMIT;")
-            if not all(marker in sample for marker in required):
+            if not first.startswith(b"BEGIN TRANSACTION;") or not last.endswith(b"COMMIT;"):
                 return False, "SQLite backup does not contain a complete SQL dump."
         elif suffix.endswith(".pgsql.gz"):
-            if b"PostgreSQL database dump" not in sample or not any(
-                marker in sample for marker in (b"CREATE ", b"SET ")
-            ):
+            if b"PostgreSQL database dump" not in prefix or b"SET " not in prefix:
+                return False, "PostgreSQL backup does not contain a recognizable SQL dump."
+            if not last.endswith(b"PostgreSQL database dump complete"):
                 return False, "PostgreSQL backup does not contain a recognizable SQL dump."
         elif suffix.endswith(".mysql.gz"):
-            if b"MySQL dump" not in sample or not any(marker in sample for marker in (b"CREATE ", b"INSERT ")):
+            if not (
+                (b"MySQL dump" in prefix or b"MariaDB dump" in prefix)
+                and b"/*!" in prefix
+                and last.find(b"Dump completed on") >= 0
+            ):
                 return False, "MySQL backup does not contain a recognizable SQL dump."
-    except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile) as exc:
+        else:
+            return False, "Local backup archive has an unsupported extension."
+    except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile, zlib.error) as exc:
         return False, f"Local backup archive is unreadable: {exc}"
     return True, None
 
