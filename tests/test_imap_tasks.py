@@ -2433,6 +2433,7 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
     mail.login.return_value = ("OK", [])
     mail.select.return_value = ("OK", {b"UIDVALIDITY": [b"42"]})
     mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"42"])
+
     def imap_command(command, *args):
         if command == "search":
             return "OK", [b"7"]

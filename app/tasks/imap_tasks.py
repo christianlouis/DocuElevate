@@ -905,9 +905,7 @@ def pull_inbox(
             mail.logout()
             return False
         historical_ordered = sorted(
-            int(value)
-            for value in search_data[0].split()
-            if window_start <= int(value) <= window_end
+            int(value) for value in search_data[0].split() if window_start <= int(value) <= window_end
         )
         # A frozen UIDNEXT snapshot lets new mail arrive promptly during a
         # large historical catch-up without asking IMAP for an unbounded
@@ -924,9 +922,7 @@ def pull_inbox(
                 mail.logout()
                 return False
             tail_ordered = sorted(
-                int(value)
-                for value in tail_search_data[0].split()
-                if tail_start <= int(value) <= tail_end
+                int(value) for value in tail_search_data[0].split() if tail_start <= int(value) <= tail_end
             )
         from app.models import ImapMessageLedger
 
@@ -999,9 +995,7 @@ def pull_inbox(
             db = _get_db_session()
             try:
                 scan_cursor = (
-                    db.query(ImapScanCursor)
-                    .filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
-                    .first()
+                    db.query(ImapScanCursor).filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity)).first()
                 )
                 if scan_cursor is None:
                     scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))

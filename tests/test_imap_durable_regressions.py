@@ -126,6 +126,7 @@ def test_mailbox_search_is_bounded_for_large_gmail_all_mail(db_session):
     factory = sessionmaker(bind=db_session.get_bind())
     mail = MagicMock()
     mail.select.return_value = ("OK", [b"1025798"])
+
     def response(key):
         return (key, [b"42" if key == "UIDVALIDITY" else b"1629496"])
 
@@ -298,8 +299,12 @@ def test_ledger_creation_failure_does_not_advance_unrecorded_uid(db_session):
         patch.object(imap_tasks, "is_private_ip", return_value=False),
         patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
     )
-    with common[0], common[1], common[2], common[3], patch.object(
-        imap_tasks, "_ledger_get_or_create", side_effect=RuntimeError("ledger unavailable")
+    with (
+        common[0],
+        common[1],
+        common[2],
+        common[3],
+        patch.object(imap_tasks, "_ledger_get_or_create", side_effect=RuntimeError("ledger unavailable")),
     ):
         assert not imap_tasks.pull_inbox("cursor", "imap.example", 993, "user", "pw", True, False)
 
