@@ -356,12 +356,19 @@ class TestCheckCredentialsTask:
     @patch("app.tasks.check_credentials.validate_storage_configs")
     @patch("app.tasks.check_credentials.sync_test_ai_provider_connection")
     @patch("app.tasks.check_credentials.notify_credential_failure")
+    @patch("app.tasks.check_credentials._record_credential_result")
     def test_suppresses_notifications_after_threshold(
-        self, mock_notify, mock_ai_provider, mock_storage_configs, mock_provider_status, mock_get_state, mock_save_state
+        self,
+        mock_record_state,
+        mock_notify,
+        mock_ai_provider,
+        mock_storage_configs,
+        mock_provider_status,
+        mock_get_state,
+        mock_save_state,
     ):
         """Test suppresses notifications after failure threshold."""
-        # Existing state with 4 failures
-        mock_get_state.return_value = {"AI Provider": {"count": 4, "last_notified": 12345}}
+        mock_record_state.return_value = ({"count": 5, "last_notified": 12345}, False)
         mock_provider_status.return_value = {
             "AI Provider": {"configured": True},
             "Azure AI": {"configured": False},
@@ -375,7 +382,7 @@ class TestCheckCredentialsTask:
 
         check_credentials()
 
-        # Notification should be suppressed (already notified 3 times)
+        # Notification should be suppressed by the shared state transition.
         mock_notify.assert_not_called()
 
     @patch("app.tasks.check_credentials.save_failure_state")
