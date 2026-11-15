@@ -4,7 +4,7 @@
 # Use the same slim variant as the runtime to keep Python versions in sync.
 # build-essential + libffi-dev cover the few packages (e.g. cryptography) that
 # need a C compiler; they are discarded after this stage.
-FROM python:3.13.11-slim AS builder
+FROM python:3.13.18-slim AS builder
 
 WORKDIR /build
 
@@ -35,7 +35,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Compiles Tailwind CSS (a devDependency) into the minified styles.css.
 # npm ci installs ALL deps (including devDependencies) so the tailwindcss CLI
 # is available; using --omit=dev would cause 'tailwindcss: not found'.
-FROM node:22.23.4-slim AS frontend-builder
+FROM node:22.23.5-slim AS frontend-builder
 
 # A clean installation must tolerate short registry/network interruptions.
 # Limiting sockets also avoids overwhelming small self-hosted Docker hosts.
@@ -53,7 +53,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ── Stage 4: Documentation builder ──────────────────────────────────────────
-FROM python:3.13.11-slim AS docs-builder
+FROM python:3.13.18-slim AS docs-builder
 
 WORKDIR /docs
 
@@ -69,7 +69,7 @@ COPY mkdocs.yml /docs/mkdocs.yml
 RUN mkdocs build --config-file /docs/mkdocs.yml --site-dir /docs/docs_build
 
 # ── Stage 5: Runtime image ───────────────────────────────────────────────────
-FROM python:3.13.11-slim
+FROM python:3.13.18-slim
 
 WORKDIR /app
 
