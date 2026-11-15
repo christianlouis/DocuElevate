@@ -40,6 +40,13 @@ async def backup_dashboard(request: Request, db: Session = Depends(get_db)):
         # current result window and must not be presented as disk usage.
         total_size = int(storage["backup_bytes"])
         last_failure = records[0] if records and records[0].status == "failed" else None
+        last_verification = next((r for r in records if r.verification_at is not None), None)
+        verification_enabled = getattr(settings, "backup_restore_verification_enabled", False) is True
+        verification_healthy = (
+            not verification_enabled
+            or last_verification is None
+            or last_verification.verification_status == "passed"
+        )
 
         return templates.TemplateResponse(
             "backup.html",
@@ -49,6 +56,8 @@ async def backup_dashboard(request: Request, db: Session = Depends(get_db)):
                 "counts": counts,
                 "total_size": total_size,
                 "backup_enabled": getattr(settings, "backup_enabled", True),
+                "backup_restore_verification_enabled": verification_enabled,
+                "backup_restore_verification_healthy": verification_healthy,
                 "backup_remote_destination": getattr(settings, "backup_remote_destination", None),
                 "backup_retain_hourly": getattr(settings, "backup_retain_hourly", 96),
                 "backup_retain_daily": getattr(settings, "backup_retain_daily", 21),
@@ -59,6 +68,7 @@ async def backup_dashboard(request: Request, db: Session = Depends(get_db)):
                 "backup_storage_used_mib": int(storage["backup_bytes"]) // 1048576,
                 "backup_storage_reserve_mib": int(storage["min_free_bytes"]) // 1048576,
                 "last_backup_failure": last_failure,
+                "last_backup_verification": last_verification,
                 "backup_archive_extension": _archive_ext_for_backend(_db_backend()),
                 "app_version": settings.version,
             },

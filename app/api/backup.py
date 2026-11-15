@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, stat
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import BackupRecord
 
@@ -58,6 +59,9 @@ async def list_backups(
             "checksum": r.checksum,
             "status": r.status,
             "error_detail": r.error_detail,
+            "verification_at": r.verification_at.isoformat() if r.verification_at else None,
+            "verification_status": r.verification_status,
+            "verification_detail": r.verification_detail,
             "local_path": r.local_path,
             "remote_destination": r.remote_destination,
             "remote_path": r.remote_path,
@@ -79,6 +83,18 @@ async def backup_storage(_admin: AdminUser, db: Session = Depends(get_db)) -> di
         .order_by(BackupRecord.created_at.desc(), BackupRecord.id.desc())
         .first()
     )
+    last_verification = (
+        db.query(BackupRecord)
+        .filter(BackupRecord.verification_at.isnot(None))
+        .order_by(BackupRecord.verification_at.desc(), BackupRecord.id.desc())
+        .first()
+    )
+    verification_enabled = getattr(settings, "backup_restore_verification_enabled", False) is True
+    verification_healthy = (
+        not verification_enabled
+        or last_verification is None
+        or last_verification.verification_status == "passed"
+    )
     return {
         **backup_storage_status(),
         "last_failure": (
@@ -90,6 +106,20 @@ async def backup_storage(_admin: AdminUser, db: Session = Depends(get_db)) -> di
             if last_failure
             else None
         ),
+        "last_verification": (
+            {
+                "filename": last_verification.filename,
+                "status": last_verification.verification_status,
+                "detail": last_verification.verification_detail,
+                "verified_at": last_verification.verification_at.isoformat()
+                if last_verification.verification_at
+                else None,
+            }
+            if last_verification
+            else None
+        ),
+        "verification_enabled": verification_enabled,
+        "verification_healthy": verification_healthy,
     }
 
 

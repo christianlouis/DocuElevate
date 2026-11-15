@@ -1190,6 +1190,13 @@ class Settings(BaseSettings):
             "When enabled, hourly, daily, and weekly backups are created automatically. Default: True."
         ),
     )
+    backup_restore_verification_enabled: bool = Field(
+        default=False,
+        description=(
+            "Run an isolated restore verification for new SQLite backups. "
+            "Disabled by default; PostgreSQL/MySQL verification remains unsupported until an explicit isolated target exists."
+        ),
+    )
     backup_dir: Optional[str] = Field(
         default=None,
         description=("Directory where local backup archives are stored. Defaults to <workdir>/backups when not set."),

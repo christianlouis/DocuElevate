@@ -703,6 +703,20 @@ class TestBackupTaskHelpers:
             )
             assert _validate_local_archive(record) == (True, None)
 
+    def test_sqlite_restore_verification_isolated(self, tmp_path):
+        """Restore verification replays SQL only into a disposable database."""
+        from app.tasks.backup_tasks import _verify_sqlite_archive
+
+        archive = tmp_path / "backup.db.gz"
+        _write_archive(archive)
+        assert _verify_sqlite_archive(archive) == ("passed", "Isolated SQLite restore verification passed.")
+
+        invalid = tmp_path / "invalid.db.gz"
+        _write_archive(invalid, b"BEGIN TRANSACTION;\nNOT SQL;\nCOMMIT;\n")
+        status, detail = _verify_sqlite_archive(invalid)
+        assert status == "failed"
+        assert "isolated sqlite restore verification failed" in detail.lower()
+
     def test_corrupt_archive_cannot_evict_verified_archive(self, tmp_path, db_session):
         """Retention marks corruption failed and keeps the verified recovery point."""
         from app.tasks.backup_tasks import _apply_retention
@@ -1115,6 +1129,8 @@ class TestBackupAPIEndpoints:
         assert payload["healthy"] is False
         assert payload["last_failure"]["detail"].startswith("Insufficient backup storage")
         assert "local_path" not in payload["last_failure"]
+        assert payload["verification_enabled"] is False
+        assert payload["verification_healthy"] is True
 
     def test_list_backups_non_admin(self, non_admin_client):
         """GET /api/admin/backup/ returns 403 for non-admin users."""

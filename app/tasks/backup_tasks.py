@@ -30,6 +30,7 @@ import logging
 import os
 import shutil
 import subprocess
+import tempfile
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
@@ -171,6 +172,25 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
     except (OSError, EOFError, UnicodeDecodeError, gzip.BadGzipFile, zlib.error) as exc:
         return False, f"Local backup archive is unreadable: {exc}"
     return True, None
+
+
+def _verify_sqlite_archive(archive_path: Path) -> tuple[str, str | None]:
+    """Replay a SQLite dump into a disposable temporary database only."""
+    import sqlite3
+
+    try:
+        with gzip.open(archive_path, "rt", encoding="utf-8") as archive:
+            sql_script = archive.read()
+        with tempfile.TemporaryDirectory(prefix="docuelevate-backup-verify-") as directory:
+            target = Path(directory) / "verification.db"
+            connection = sqlite3.connect(target)
+            try:
+                connection.executescript(sql_script)
+            finally:
+                connection.close()
+    except (OSError, EOFError, UnicodeError, gzip.BadGzipFile, sqlite3.Error, zlib.error) as exc:
+        return "failed", f"Isolated SQLite restore verification failed: {exc}"
+    return "passed", "Isolated SQLite restore verification passed."
 
 
 def _mark_invalid_archive(rec: BackupRecord, detail: str) -> None:
@@ -1035,6 +1055,20 @@ def create_backup(self, backup_type: str = "hourly") -> dict:
             db.add(candidate)
             db.commit()
         return {"status": "error", "detail": detail, "filename": filename}
+
+    candidate.verification_at = datetime.now(timezone.utc)
+    verification_enabled = getattr(settings, "backup_restore_verification_enabled", False) is True
+    if not verification_enabled:
+        candidate.verification_status = "skipped"
+        candidate.verification_detail = "Isolated restore verification is disabled."
+    elif backend == "sqlite":
+        candidate.verification_status, candidate.verification_detail = _verify_sqlite_archive(archive_path)
+    else:
+        candidate.verification_status = "unsupported"
+        candidate.verification_detail = (
+            f"Isolated restore verification is not available for the {backend} backend; "
+            "backup was structurally validated."
+        )
 
     # Optional remote upload
     result = _upload_remote(archive_path, filename)
