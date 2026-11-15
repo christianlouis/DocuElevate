@@ -708,6 +708,60 @@ def _fair_poll_batch(new_uids, retry_uids, *, batch_size, retry_first):
     return selected
 
 
+def _fair_poll_batch_with_tail(historical_uids, tail_uids, retry_uids, *, batch_size, rotation):
+    """Round-robin history, frozen live tail, and retries without new state.
+
+    ``rotation`` is derived from durable ledger attempts. Consequently, a
+    short poll which reaches only one message still advances its leading class
+    on the next poll. The live tail is deliberately separate from historical
+    scanning: selecting a tail UID must never advance the historical cursor.
+    """
+    queues = [historical_uids, tail_uids, retry_uids]
+    indexes = [0, 0, 0]
+    selected = []
+    position = rotation % len(queues)
+    while len(selected) < batch_size:
+        if indexes[position] < len(queues[position]):
+            selected.append(queues[position][indexes[position]])
+            indexes[position] += 1
+        if not any(indexes[index] < len(queue) for index, queue in enumerate(queues)):
+            break
+        position = (position + 1) % len(queues)
+    return selected
+
+
+def _uid_search_confirms_absent(search_data, _uid) -> bool:
+    """Return true only for a well-formed empty exact-UID search response."""
+    if not isinstance(search_data, (list, tuple)) or len(search_data) != 1:
+        return False
+    payload = search_data[0]
+    if not isinstance(payload, bytes):
+        return False
+    values = payload.split()
+    if not values:
+        return True
+    # For an exact ``UID n:n`` query, every non-empty reply either proves the
+    # message remains present or is unexpected. Both cases must be retryable.
+    return False
+
+
+def _historical_cursor_target(historical_uids, durable_uids, cursor):
+    """Return the furthest returned historical UID safe to checkpoint.
+
+    UID gaps are safe because the bounded search proved them absent. A returned
+    UID is safe only after it already has a durable ledger row, preventing a
+    retry or live-tail selection from leaping over newly discovered history.
+    """
+    target = cursor
+    for uid in historical_uids:
+        if uid <= cursor:
+            continue
+        if uid not in durable_uids:
+            break
+        target = uid
+    return target
+
+
 def pull_inbox(
     mailbox_key,
     host,
@@ -841,7 +895,7 @@ def pull_inbox(
         window_end = min(window_start + UID_SCAN_WINDOW - 1, 4294967295)
         window_end = min(window_end, uidnext - 1)
         if window_start > window_end:
-            ordered = []
+            historical_ordered = []
             status, search_data = "OK", [b""]
         else:
             status, search_data = mail.uid("search", None, "UID", f"{window_start}:{window_end}")
@@ -850,23 +904,43 @@ def pull_inbox(
             mail.close()
             mail.logout()
             return False
-        ordered = sorted(
+        historical_ordered = sorted(
             int(value)
             for value in search_data[0].split()
             if window_start <= int(value) <= window_end
         )
+        # A frozen UIDNEXT snapshot lets new mail arrive promptly during a
+        # large historical catch-up without asking IMAP for an unbounded
+        # response.  Tail work never moves ``scan_cursor`` below.
+        tail_start = max(1, uidnext - UID_SCAN_WINDOW)
+        tail_end = uidnext - 1
+        if (tail_start, tail_end) == (window_start, window_end):
+            tail_ordered = historical_ordered
+        else:
+            status, tail_search_data = mail.uid("search", None, "UID", f"{tail_start}:{tail_end}")
+            if status != "OK":
+                logger.warning("Live-tail UID search failed on mailbox %s. Status=%s", mailbox_key, status)
+                mail.close()
+                mail.logout()
+                return False
+            tail_ordered = sorted(
+                int(value)
+                for value in tail_search_data[0].split()
+                if tail_start <= int(value) <= tail_end
+            )
         from app.models import ImapMessageLedger
 
+        candidate_uids = set(historical_ordered) | set(tail_ordered)
         db = _get_db_session()
         try:
-            completed_query = db.query(ImapMessageLedger.uid).filter_by(
-                owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), state="completed"
+            ledger_query = db.query(ImapMessageLedger.uid).filter_by(
+                owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity)
             )
-            if ordered:
-                completed_query = completed_query.filter(ImapMessageLedger.uid.in_(ordered))
+            if candidate_uids:
+                ledger_query = ledger_query.filter(ImapMessageLedger.uid.in_(candidate_uids))
             else:
-                completed_query = completed_query.filter(ImapMessageLedger.uid == -1)
-            completed_uids = {row[0] for row in completed_query.all()}
+                ledger_query = ledger_query.filter(ImapMessageLedger.uid == -1)
+            durable_uids = {row[0] for row in ledger_query.all()}
             retry_rows = (
                 db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts)
                 .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
@@ -883,30 +957,45 @@ def pull_inbox(
             )
         finally:
             db.close()
-        # ``ordered`` contains only the current bounded window.  Retries come
-        # from the durable ledger and therefore remain eligible even when they
-        # are below the current scan cursor.
-        new_uids = [uid for uid in ordered if uid not in completed_uids and uid > cursor]
-        retry_uids = [uid for uid, _attempts in retry_rows if uid not in completed_uids]
+        # Retries come from the durable ledger and therefore remain eligible
+        # even when they are below the current historical cursor.
+        historical_new_uids = [uid for uid in historical_ordered if uid not in durable_uids and uid > cursor]
+        tail_new_uids = [
+            uid
+            for uid in reversed(tail_ordered)
+            if uid not in durable_uids and uid > cursor and uid not in historical_new_uids
+        ]
+        retry_uids = [uid for uid, _attempts in retry_rows]
         retry_attempts = {uid: attempts or 0 for uid, attempts in retry_rows}
         # Lowest-attempt failures lead so permanent failures rotate rather than
         # repeatedly consuming the retry share ahead of their peers.
         retry_uids.sort(key=lambda uid: (retry_attempts.get(uid, 0), uid))
-        selected_uids = _fair_poll_batch(
-            new_uids,
-            retry_uids,
-            batch_size=POLL_BATCH_SIZE,
-            # Each fetched message increments this durable total.  Alternating
-            # the leading class prevents either class from starving when a
-            # deadline permits only the first selected message.
-            retry_first=(total_attempts % 2 == 0),
-        )
+        if tail_new_uids:
+            selected_uids = _fair_poll_batch_with_tail(
+                historical_new_uids,
+                tail_new_uids,
+                retry_uids,
+                batch_size=POLL_BATCH_SIZE,
+                # Each fetched message increments this durable total. Rotating
+                # the leading class prevents history, fresh tail mail, and
+                # retries from starving when a deadline permits one attempt.
+                rotation=total_attempts % 3,
+            )
+        else:
+            # Preserve the established two-class fair rotation when the tail
+            # overlaps the history window (or is already complete).
+            selected_uids = _fair_poll_batch(
+                historical_new_uids,
+                retry_uids,
+                batch_size=POLL_BATCH_SIZE,
+                retry_first=(total_attempts % 2 == 0),
+            )
         selected_uids = list(dict.fromkeys(selected_uids))
         # Once a successful bounded search contains no unclaimed UID, the
         # entire window is known to be safe to skip.  This prevents sparse UID
         # gaps from pinning a mailbox forever while never skipping a returned
         # message that still needs an attempt.
-        if uidnext is not None and not new_uids and window_end > cursor:
+        if not historical_new_uids and window_end > cursor:
             db = _get_db_session()
             try:
                 scan_cursor = (
@@ -930,22 +1019,31 @@ def pull_inbox(
             if time.monotonic() >= deadline:
                 break
             uid = int(num)
-            db = _get_db_session()
-            try:
-                scan_cursor = (
-                    db.query(ImapScanCursor).filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity)).first()
-                )
-                if scan_cursor is None:
-                    scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
-                    db.add(scan_cursor)
-                if uid > cursor:
-                    scan_cursor.last_uid = uid
-                db.commit()
-            finally:
-                db.close()
+            # The ledger is committed first. If process creation fails or the
+            # worker dies, a historical UID cannot be advanced beyond an
+            # unrecorded message; the next poll will rediscover/retry it.
             ledger_id = _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid)
             if ledger_id is None:
                 continue
+            if uid in historical_ordered:
+                durable_uids.add(uid)
+            cursor_target = _historical_cursor_target(historical_ordered, durable_uids, cursor)
+            if cursor_target > cursor:
+                db = _get_db_session()
+                try:
+                    scan_cursor = (
+                        db.query(ImapScanCursor)
+                        .filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                        .first()
+                    )
+                    if scan_cursor is None:
+                        scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                        db.add(scan_cursor)
+                    scan_cursor.last_uid = cursor_target
+                    db.commit()
+                    cursor = cursor_target
+                finally:
+                    db.close()
             status, msg_data = mail.uid("fetch", num, "(BODY.PEEK[])")
             if status != "OK":
                 logger.warning("Failed to fetch message %s in %s. Status=%s", num, mailbox_key, status)
@@ -956,13 +1054,7 @@ def pull_inbox(
             raw_email = next((item[1] for item in msg_data if isinstance(item, tuple) and len(item) > 1), None)
             if not raw_email:
                 absence_status, absence_data = mail.uid("search", None, "UID", f"{uid}:{uid}")
-                absent = (
-                    absence_status == "OK"
-                    and not any(
-                        str(value) == str(uid)
-                        for value in (absence_data[0].split() if absence_data else [])
-                    )
-                )
+                absent = absence_status == "OK" and _uid_search_confirms_absent(absence_data, uid)
                 if absent:
                     _ledger_finish(ledger_id, state="vanished", error="UID absent after empty fetch response")
                 else:

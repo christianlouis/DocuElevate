@@ -2433,10 +2433,12 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
     mail.login.return_value = ("OK", [])
     mail.select.return_value = ("OK", {b"UIDVALIDITY": [b"42"]})
     mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"42"])
-    mail.uid.side_effect = [
-        ("OK", [b"7"]),
-        ("OK", [(b"7 (BODY[] {1})", message.as_bytes())]),
-    ]
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b"7"]
+        return "OK", [(b"7 (BODY[] {1})", message.as_bytes())]
+
+    mail.uid.side_effect = imap_command
 
     with (
         patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
@@ -2452,7 +2454,8 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
     mail.select.assert_called_once_with("INBOX", readonly=True)
     assert mail.uid.call_args_list[0].args[:3] == ("search", None, "UID")
     assert mail.uid.call_args_list[0].args[3].endswith(f":{imap_tasks.UID_SCAN_WINDOW}")
-    assert mail.uid.call_args_list[1].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
+    assert mail.uid.call_args_list[1].args[:3] == ("search", None, "UID")
+    assert mail.uid.call_args_list[2].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
     assert not any(call.args[0] == "store" for call in mail.uid.call_args_list)
 
 
