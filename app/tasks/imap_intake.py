@@ -51,27 +51,12 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
     principal = str(owner or "legacy")
     digest = hashlib.sha256(payload).hexdigest()
     key = hashlib.sha256(idempotency_key.encode()).hexdigest()
-    extension = os.path.splitext(os.path.basename(filename.replace("\\", "/")))[1].lower()[:32]
+    original_filename = os.path.basename(str(filename).replace("\\", "/")) or "attachment"
+    extension = os.path.splitext(original_filename)[1].lower()[:32]
     staging = os.path.join(settings.workdir, "imap-staging")
-    os.makedirs(staging, exist_ok=True)
     path = os.path.join(
         staging, hashlib.sha256((principal + ":" + key + ":" + digest).encode()).hexdigest() + extension
     )
-    fd, temp_path = tempfile.mkstemp(prefix=".imap-", dir=staging)
-    try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(payload)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temp_path, path)
-        directory_fd = os.open(staging, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
-    finally:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
     metadata = {
         "sha256": digest,
         "owner_id": owner,
@@ -80,18 +65,21 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
         "is_pdf": bool(is_pdf),
     }
     with SessionLocal() as db:
+        if owner:
+            # Authorization must precede any durable or filesystem staging.
+            assert_account_active(db, owner)
         row = db.query(DocumentIntake).filter_by(principal_id=principal, idempotency_key=key).first()
         if row is None:
-            if owner:
-                assert_account_active(db, owner)
-            existing = db.query(FileRecord).filter_by(owner_id=owner, filehash=digest).order_by(FileRecord.id).first()
+            existing = None
+            if settings.enable_deduplication:
+                existing = db.query(FileRecord).filter_by(owner_id=owner, filehash=digest).order_by(FileRecord.id).first()
             if existing:
                 metadata["file_id"] = existing.id
             row = DocumentIntake(
                 principal_id=principal,
                 idempotency_key=key,
                 source="imap",
-                original_filename=filename,
+                original_filename=original_filename,
                 local_path=path,
                 metadata_json=json.dumps(metadata),
                 state="completed" if existing else "pending",
@@ -107,7 +95,38 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
             raise ValueError("IMAP intake identity reused for different attachment content")
         intake_id, state = row.id, row.state
     if state != "completed":
-        _dispatch_intake(intake_id)
+        os.makedirs(staging, exist_ok=True)
+        created = False
+        if not os.path.exists(path):
+            fd, temp_path = tempfile.mkstemp(prefix=".imap-", dir=staging)
+            try:
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(payload)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temp_path, path)
+                created = True
+                directory_fd = os.open(staging, os.O_RDONLY)
+                try:
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+        else:
+            with open(path, "rb") as existing_stream:
+                existing_hash = hashlib.file_digest(existing_stream, "sha256").hexdigest()
+            if existing_hash != digest:
+                raise ValueError("IMAP staging path collision with different content")
+        # The row was reserved before writing; on a failed publish, only remove
+        # a file created by this attempt and never a pre-existing valid stage.
+        try:
+            _dispatch_intake(intake_id)
+        except Exception:
+            if created and os.path.exists(path):
+                os.unlink(path)
+            raise
     return intake_id
 
 
@@ -162,7 +181,7 @@ def process_imap_intake(self, intake_id):
         if owner:
             assert_account_active(db, owner)
         file_id = metadata.get("file_id")
-        if file_id is None:
+        if file_id is None and settings.enable_deduplication:
             existing = (
                 db.query(FileRecord).filter_by(owner_id=owner, filehash=actual_hash).order_by(FileRecord.id).first()
             )

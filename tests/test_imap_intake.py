@@ -200,3 +200,43 @@ def test_real_eager_celery_consumer_can_invoke_pipeline_task(intake_env):
         outcome = imap_intake.process_imap_intake.apply(args=[intake_id], throw=True).result
     assert outcome["status"] == "completed"
     assert run.call_args.kwargs["file_id"] == outcome["file_id"]
+
+
+@pytest.mark.unit
+def test_deduplication_disabled_keeps_distinct_uid_intakes_as_records(intake_env):
+    factory, _ = intake_env
+    with patch.object(imap_intake.settings, "enable_deduplication", False):
+        first = _prepare("uid-101")
+        second = _prepare("uid-102")
+        with factory() as db:
+            rows = db.query(FileRecord).order_by(FileRecord.id).all()
+            assert len(rows) == 0
+        successful = MagicMock()
+        successful.result = {"status": "Queued for OCR"}
+        with patch.object(imap_intake.process_document, "apply", return_value=successful):
+            assert imap_intake.process_imap_intake.run(first)["status"] == "completed"
+            assert imap_intake.process_imap_intake.run(second)["status"] == "completed"
+        with factory() as db:
+            assert db.query(FileRecord).count() == 2
+
+
+@pytest.mark.unit
+def test_original_filename_is_basename_and_existing_stage_is_reused(intake_env):
+    factory, _ = intake_env
+    intake_id = imap_intake.prepare_imap_attachment(
+        owner_id="owner-a", source_integration_id=None, idempotency_key="uid-103",
+        filename=r"C:\\incoming/..\\scan.pdf", payload=b"%PDF test",
+        mime_type="application/pdf", is_pdf=True,
+    )
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        assert row.original_filename == "scan.pdf"
+        staged = row.local_path
+    with patch.object(imap_intake, "_dispatch_intake") as dispatch:
+        assert imap_intake.prepare_imap_attachment(
+            owner_id="owner-a", source_integration_id=None, idempotency_key="uid-103",
+            filename="different-name.pdf", payload=b"%PDF test",
+            mime_type="application/pdf", is_pdf=True,
+        ) == intake_id
+        dispatch.assert_not_called()
+    assert staged.endswith(".pdf")
