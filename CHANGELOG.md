@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.4 (2026-11-15)
+
+### Bug Fixes
+
+- Make IMAP ingestion durable and resume full mailbox catch-up
+  ([#1310](https://github.com/christianlouis/DocuElevate/pull/1310),
+  [`454ac3a`](https://github.com/christianlouis/DocuElevate/commit/454ac3a45983bf774e0f50c8e28b5ff7582576b5))
+
+
 ## v0.195.3 (2026-11-03)
 
 ### Bug Fixes
