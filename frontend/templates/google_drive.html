@@ -93,10 +93,10 @@
     </div>
 
     <div class="flex space-x-4 mb-6">
-      <button id="oauth-tab-btn" class="px-4 py-2 rounded-md {{ 'text-white bg-blue-600' if use_oauth else 'text-gray-700 bg-gray-200' }}">
+      <button type="button" id="oauth-tab-btn" class="px-4 py-2 rounded-md {{ 'text-white bg-blue-600' if use_oauth else 'text-gray-700 bg-gray-200' }}">
         OAuth User Account
       </button>
-      <button id="sa-tab-btn" class="px-4 py-2 rounded-md {{ 'text-white bg-blue-600' if not use_oauth else 'text-gray-700 bg-gray-200' }}">
+      <button type="button" id="sa-tab-btn" class="px-4 py-2 rounded-md {{ 'text-white bg-blue-600' if not use_oauth else 'text-gray-700 bg-gray-200' }}">
         Service Account
       </button>
     </div>
@@ -201,7 +201,7 @@
           </div>
 
           <div>
-            <button id="select-folder-btn" class="mb-2 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+            <button type="button" id="select-folder-btn" class="mb-2 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
               <svg class="h-5 w-5 mr-2 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1H8a3 3 0 00-3 3v1.5a1.5 1.5 0 01-3 0V6z" clip-rule="evenodd" />
                 <path d="M6 12a2 2 0 012-2h8a2 2 0 012 2v2a2 2 0 01-2 2H2h2a2 2 0 002-2v-2z" />
@@ -211,7 +211,7 @@
           </div>
 
           <div>
-            <button id="start-oauth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <button type="button" id="start-oauth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               Start Authentication Flow
             </button>
           </div>
@@ -265,7 +265,7 @@
           </div>
 
           <div>
-            <button id="save-sa-settings" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+            <button type="button" id="save-sa-settings" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               Save Service Account Settings
             </button>
           </div>
@@ -292,7 +292,7 @@
       </div>
       {% endif %}
       <div>
-        <a id="start-oauth-flow" href="/google-drive-auth-start?integration_id={{ integration_id }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <a id="start-oauth-flow-user" href="/google-drive-auth-start?integration_id={{ integration_id }}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Start Authentication Flow
         </a>
       </div>
@@ -331,10 +331,10 @@
     </div>
 
     <div class="mt-4 flex space-x-3">
-      <button id="test-connection" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+      <button type="button" id="test-connection" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
         Test Connection
       </button>
-      <button id="refresh-token-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+      <button type="button" id="refresh-token-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
         Refresh Token
       </button>
     </div>
@@ -352,7 +352,7 @@ GOOGLE_DRIVE_CLIENT_ID=YOUR_OPERATOR_CLIENT_ID
 GOOGLE_DRIVE_CLIENT_SECRET=YOUR_OPERATOR_CLIENT_SECRET
 GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}</code></pre>
 
-        <button id="copy-oauth-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
+        <button type="button" id="copy-oauth-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
           Copy
         </button>
       </div>
@@ -373,7 +373,7 @@ GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}</code></p
 GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}
 # Make sure to add your GOOGLE_DRIVE_CREDENTIALS_JSON to your .env file</code></pre>
 
-        <button id="copy-sa-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
+        <button type="button" id="copy-sa-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
           Copy
         </button>
       </div>
@@ -428,7 +428,7 @@ GOOGLE_DRIVE_FOLDER_ID={{ folder_id|default('YOUR_FOLDER_ID', true) }}
           </p>
         </div>
         <div class="items-center px-4 py-3">
-          <button id="modalClose" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <button type="button" id="modalClose" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
             Close
           </button>
         </div>
@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const clientSecretInput = document.getElementById('client-secret');
   const folderIdInput = document.getElementById('folder-id');
   const saFolderIdInput = document.getElementById('sa-folder-id');
-  const startOauthFlowBtn = document.getElementById('start-oauth-flow');
+  const startOauthFlowBtn = document.getElementById('start-oauth-flow') || document.getElementById('start-oauth-flow-user');
   const saveSaSettingsBtn = document.getElementById('save-sa-settings');
   const selectFolderBtn = document.getElementById('select-folder-btn');
 

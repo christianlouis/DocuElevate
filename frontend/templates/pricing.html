@@ -19,12 +19,12 @@
 
       <!-- Annual / Monthly toggle (cosmetic — actual billing handled separately) -->
       <div class="mt-8 inline-flex items-center bg-white/10 rounded-full p-1 gap-1">
-        <button
+        <button type="button"
           @click="annual = false"
           :class="!annual ? 'bg-white text-indigo-700 shadow' : 'text-white'"
           class="px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200"
         >Monthly</button>
-        <button
+        <button type="button"
           @click="annual = true"
           :class="annual ? 'bg-white text-indigo-700 shadow' : 'text-white'"
           class="px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200"
@@ -352,7 +352,7 @@
 
         {% for q, a in faqs %}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <button
+          <button type="button"
             @click="open = (open === {{ loop.index0 }}) ? null : {{ loop.index0 }}"
             class="w-full flex justify-between items-center px-6 py-4 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
             :aria-expanded="open === {{ loop.index0 }}"

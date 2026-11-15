@@ -74,7 +74,7 @@
         <p class="text-base text-gray-700 dark:text-gray-300 mb-4">
           {{ _("qr_login.expired_message") }}
         </p>
-        <button
+        <button type="button"
           @click="generateChallenge()"
           class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
           style="min-height:44px;"
@@ -90,7 +90,7 @@
       <div class="py-8">
         <i class="fas fa-exclamation-triangle text-red-500 text-5xl mb-4" aria-hidden="true"></i>
         <p class="text-base text-gray-700 dark:text-gray-300 mb-4" x-text="errorMsg"></p>
-        <button
+        <button type="button"
           @click="generateChallenge()"
           class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
           style="min-height:44px;"
