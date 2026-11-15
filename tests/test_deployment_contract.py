@@ -94,6 +94,8 @@ def test_helm_imap_worker_is_enabled_and_consumes_dedicated_queue_with_workdir()
     assert "imap_polling" in template
     assert "--hostname=imap@%h" in template
     assert ".Values.imapWorker.livenessProbe" in template
+    assert ".Values.imapWorker.readinessProbe" in template
+    assert 'timeoutSeconds: 10' in (CHART / "values.yaml").read_text(encoding="utf-8")
     assert ".Values.workdir.persistence.enabled" in template
 
 

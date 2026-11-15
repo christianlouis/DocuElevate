@@ -1,4 +1,7 @@
 {{- if .Values.imapWorker.enabled }}
+{{- if not .Values.workdir.persistence.enabled }}
+{{- fail "imapWorker requires workdir.persistence.enabled so staged mail attachments survive restarts" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,6 +23,10 @@ spec:
         app.kubernetes.io/component: imap-worker
     spec:
       serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.imapWorker.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -55,4 +62,16 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+      {{- with .Values.imapWorker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imapWorker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imapWorker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
 {{- end }}

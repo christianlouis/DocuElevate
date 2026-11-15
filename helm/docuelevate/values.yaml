@@ -256,12 +256,14 @@ uploadMaintenanceWorker:
       command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=upload-maintenance@$(hostname) --timeout=5"]
     initialDelaySeconds: 30
     periodSeconds: 15
+    timeoutSeconds: 10
     failureThreshold: 3
   readinessProbe:
     exec:
       command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=upload-maintenance@$(hostname) --timeout=5 && python -c \"from app.utils.upload_health import DISPATCHER_KEY, RECONCILER_KEY, freshness; raise SystemExit(0 if freshness(DISPATCHER_KEY) == freshness(RECONCILER_KEY) == 'healthy' else 1)\""]
     initialDelaySeconds: 20
     periodSeconds: 10
+    timeoutSeconds: 10
     failureThreshold: 3
   podAnnotations: {}
   nodeSelector: {}
@@ -295,12 +297,14 @@ imapWorker:
       command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=imap@$(hostname) --timeout=5"]
     initialDelaySeconds: 30
     periodSeconds: 15
+    timeoutSeconds: 10
     failureThreshold: 3
   readinessProbe:
     exec:
       command: ["/bin/sh", "-ec", "celery -A app.celery_worker inspect ping --destination=imap@$(hostname) --timeout=5"]
     initialDelaySeconds: 20
     periodSeconds: 10
+    timeoutSeconds: 10
     failureThreshold: 3
   podAnnotations: {}
   nodeSelector: {}
