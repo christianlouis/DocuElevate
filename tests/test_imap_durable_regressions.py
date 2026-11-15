@@ -60,6 +60,7 @@ def test_legacy_permanent_lock_is_recovered_with_a_bounded_new_lease():
 @pytest.mark.unit
 def test_soft_timeout_releases_own_lock_and_is_not_suppressed():
     from celery.exceptions import SoftTimeLimitExceeded
+
     from app.tasks import imap_tasks
 
     with (

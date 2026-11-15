@@ -791,7 +791,9 @@ class TestPullInbox:
         mock_settings.imap2_delete_after_process = False
         mock_settings.imap_readonly_mode = False
 
-        pull_all_inboxes()
+        _mock_acquire.return_value = "test-token"
+        with patch("app.tasks.imap_tasks.record_poll_success"):
+            pull_all_inboxes()
 
         assert mock_imap_class.call_args_list[0].kwargs == {"timeout": 30}
         assert mock_imap_class.call_args_list[1].kwargs == {"timeout": 30}
@@ -801,7 +803,7 @@ class TestPullInbox:
         second_mail.login.assert_called_once_with("healthy-user", _TEST_CREDENTIAL)
         second_mail.close.assert_called_once_with()
         second_mail.logout.assert_called_once_with()
-        mock_release.assert_called_once_with()
+        mock_release.assert_called_once_with("test-token")
 
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
@@ -895,10 +897,10 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.load_processed_emails")
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.settings")
-    def test_processes_messages_and_marks_as_read(
+    def test_processes_messages_without_changing_read_state(
         self, mock_settings, mock_save, mock_load, mock_imap_class, mock_fetch
     ):
-        """Test processing messages and marking them as read."""
+        """Processing a message preserves its read state."""
         mock_settings.workdir = "/tmp"
         mock_settings.imap_readonly_mode = False
         mock_load.return_value = {}
@@ -929,9 +931,10 @@ class TestPullInbox:
             delete_after_process=False,
         )
 
-        # Should mark as unread (remove Seen flag)
+        # Reading attachments must not change the Seen flag
         assert not any(call.args[0] == "store" and "\\Seen" in call.args for call in mock_mail.uid.call_args_list)
-        mock_save.assert_called()
+        mock_fetch.assert_called_once()
+        mock_save.assert_not_called()
 
     @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
@@ -1293,8 +1296,8 @@ class TestPullInbox:
         mock_star.assert_not_called()
         mock_label.assert_not_called()
         assert not any(call.args[0] == "store" for call in mock_mail.uid.call_args_list)
-        # Processed emails cache should still be updated
-        mock_save.assert_called()
+        # The expiring legacy cache is no longer used
+        mock_save.assert_not_called()
 
     @patch("app.tasks.imap_tasks.is_private_ip", return_value=False)
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
@@ -1339,8 +1342,8 @@ class TestPullInbox:
         # But no mailbox modifications (no delete, no flag changes)
         assert not any(call.args[0] == "store" for call in mock_mail.uid.call_args_list)
         mock_mail.expunge.assert_not_called()
-        # Processed emails cache should still be updated
-        mock_save.assert_called()
+        # The expiring legacy cache is no longer used
+        mock_save.assert_not_called()
 
     @patch("app.tasks.imap_tasks.fetch_attachments_and_enqueue")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
@@ -1846,6 +1849,7 @@ class TestPullUserIntegrationImap:
     def test_polls_active_imap_integrations(self, mock_pull, mock_session_factory):
         """Active IMAP integrations should be polled with correct owner_id."""
         from app.tasks.imap_tasks import _pull_user_integration_imap
+
         mock_pull.return_value = True
 
         mock_integ = MagicMock()
@@ -1932,6 +1936,7 @@ class TestPullUserIntegrationImap:
     def test_records_last_used_at_on_success(self, mock_pull, _mock_record_success, mock_session_factory):
         """Successful polling should update last_used_at and clear last_error."""
         from app.tasks.imap_tasks import _pull_user_integration_imap
+
         mock_pull.return_value = True
 
         mock_integ = MagicMock()
@@ -2144,7 +2149,10 @@ class TestPullUserImapAccounts:
         mock_db.query.return_value.filter.return_value.all.return_value = [mock_acct]
         mock_session_factory.return_value = mock_db
 
-        with patch("app.utils.encryption.decrypt_value", return_value="plainpass"):
+        with (
+            patch("app.utils.encryption.decrypt_value", return_value="plainpass"),
+            patch("app.tasks.imap_tasks._legacy_mailbox_has_owned_integration", return_value=False),
+        ):
             _pull_user_imap_accounts()
 
         mock_pull.assert_called_once()
