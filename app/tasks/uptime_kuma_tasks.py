@@ -56,7 +56,11 @@ def check_uptime_kuma(url: str | None = None) -> dict[str, object]:
     endpoint = _safe_endpoint(target)
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
-            response = requests.get(target, timeout=_REQUEST_TIMEOUT_SECONDS)
+            response = requests.get(
+                target,
+                timeout=_REQUEST_TIMEOUT_SECONDS,
+                allow_redirects=False,
+            )
             http_status = int(response.status_code)
             payload = None
             try:

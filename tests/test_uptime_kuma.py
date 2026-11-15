@@ -48,28 +48,27 @@ class TestUptimeKumaTasks:
         assert result["http_status"] == 204
         assert result["endpoint"] == "https://uptime.example.com"
         assert "private-token" not in str(result)
-        request.assert_called_once_with(URL, timeout=10)
+        request.assert_called_once_with(URL, timeout=10, allow_redirects=False)
 
     def test_redirect_is_not_treated_as_success(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
-        with (
-            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
-            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=302)),
-        ):
+        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch(
+            "app.tasks.uptime_kuma_tasks.requests.get", return_value=Mock(status_code=302)
+        ) as request:
             settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
         assert result["status"] == "error"
         assert result["http_status"] == 302
+        request.assert_called_once_with(URL, timeout=10, allow_redirects=False)
 
     def test_kuma_json_rejection_is_not_treated_as_success(self):
         from app.tasks.uptime_kuma_tasks import ping_uptime_kuma
 
         response = Mock(status_code=200)
         response.json.return_value = {"ok": False}
-        with (
-            patch("app.tasks.uptime_kuma_tasks.settings") as settings,
-            patch("app.tasks.uptime_kuma_tasks.requests.get", return_value=response),
+        with patch("app.tasks.uptime_kuma_tasks.settings") as settings, patch(
+            "app.tasks.uptime_kuma_tasks.requests.get", return_value=response
         ):
             settings.uptime_kuma_url = URL
             result = ping_uptime_kuma()
