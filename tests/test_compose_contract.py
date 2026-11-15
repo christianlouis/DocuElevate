@@ -91,3 +91,11 @@ def test_upload_control_plane_processes_have_health_contracts():
     assert "--hostname=upload-maintenance@%h" in compose["upload-maintenance-worker"]["command"]
     assert "inspect ping" in str(compose["upload-maintenance-worker"]["healthcheck"])
     assert "DISPATCHER_KEY" in str(compose["upload-maintenance-worker"]["healthcheck"])
+
+
+def test_imap_worker_has_dedicated_queue_and_single_prefork_consumer():
+    service = _compose()["services"]["imap-worker"]
+    assert "--concurrency=1" in service["command"]
+    assert service["command"][service["command"].index("-Q") + 1] == "imap_polling"
+    assert "inspect ping" in str(service["healthcheck"])
+    assert service["depends_on"]["postgres"]["condition"] == "service_healthy"

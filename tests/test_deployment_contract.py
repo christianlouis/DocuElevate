@@ -86,6 +86,17 @@ def test_helm_upload_control_plane_has_configurable_resources_and_health_checks(
     assert "--hostname=upload-maintenance@%h" in maintenance
 
 
+def test_helm_imap_worker_is_enabled_and_consumes_dedicated_queue_with_workdir():
+    values = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
+    template = (CHART / "templates" / "imap-worker-deployment.yaml").read_text(encoding="utf-8")
+    assert values["imapWorker"]["enabled"] is True
+    assert values["imapWorker"]["concurrency"] == 1
+    assert "imap_polling" in template
+    assert "--hostname=imap@%h" in template
+    assert ".Values.imapWorker.livenessProbe" in template
+    assert ".Values.workdir.persistence.enabled" in template
+
+
 def test_helm_resolves_broker_and_result_backend_to_a_primary_route():
     helpers = (CHART / "templates" / "_helpers.tpl").read_text(encoding="utf-8")
     runtime_secret = (CHART / "templates" / "runtime-config.yaml").read_text(encoding="utf-8")

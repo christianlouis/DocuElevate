@@ -1,0 +1,58 @@
+{{- if .Values.imapWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "docuelevate.fullname" . }}-imap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "docuelevate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: imap-worker
+spec:
+  replicas: {{ .Values.imapWorker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "docuelevate.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: imap-worker
+  template:
+    metadata:
+      labels:
+        {{- include "docuelevate.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: imap-worker
+    spec:
+      serviceAccountName: {{ include "docuelevate.serviceAccountName" . }}
+      {{- with .Values.imapWorker.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: imap-worker
+          image: {{ include "docuelevate.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency={{ .Values.imapWorker.concurrency }}", "--hostname=imap@%h", "-Q", "imap_polling"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "docuelevate.fullname" . }}-config
+            - secretRef:
+                name: {{ include "docuelevate.secretName" . }}
+          {{- with .Values.imapWorker.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.imapWorker.resources | nindent 12 }}
+          volumeMounts:
+            - name: workdir
+              mountPath: /workdir
+          livenessProbe:
+            {{- toYaml .Values.imapWorker.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.imapWorker.readinessProbe | nindent 12 }}
+      volumes:
+        - name: workdir
+          {{- if .Values.workdir.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.workdir.persistence.existingClaim | default (printf "%s-workdir" (include "docuelevate.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- end }}
