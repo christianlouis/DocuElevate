@@ -626,6 +626,32 @@ def _extract_uidvalidity(mail, select_data=None) -> str:
     return "unknown"
 
 
+def _fair_poll_batch(new_uids, retry_uids, *, batch_size, retry_first):
+    """Interleave new work and retries, preserving progress under short polls.
+
+    The caller derives ``retry_first`` from the durable attempt ledger.  Thus a
+    poll which gets time for only its first message still alternates between new
+    messages and retries on the next successful attempt, without adding cursor
+    state or relying on wall-clock precision.
+    """
+    if not new_uids:
+        return retry_uids[:batch_size]
+    if not retry_uids:
+        return new_uids[:batch_size]
+
+    first, second = (retry_uids, new_uids) if retry_first else (new_uids, retry_uids)
+    selected = []
+    indexes = [0, 0]
+    while len(selected) < batch_size and (indexes[0] < len(first) or indexes[1] < len(second)):
+        for position, uids in enumerate((first, second)):
+            if len(selected) >= batch_size:
+                break
+            if indexes[position] < len(uids):
+                selected.append(uids[indexes[position]])
+                indexes[position] += 1
+    return selected
+
+
 def pull_inbox(
     mailbox_key,
     host,
@@ -761,29 +787,35 @@ def pull_inbox(
                 .all()
             }
             retry_rows = (
-                db.query(ImapMessageLedger.uid)
+                db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts)
                 .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
                 .filter(ImapMessageLedger.state != "completed")
-                .order_by(ImapMessageLedger.updated_at.asc())
                 .all()
             )
-            retry_order = [row[0] for row in retry_rows]
+            total_attempts = sum(
+                attempts or 0
+                for (attempts,) in db.query(ImapMessageLedger.attempts)
+                .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
+                .all()
+            )
         finally:
             db.close()
         unfinished = [uid for uid in ordered if uid not in completed_uids]
         new_uids = [uid for uid in unfinished if uid > cursor]
         retry_uids = [uid for uid in unfinished if uid <= cursor]
-        retry_rank = {uid: index for index, uid in enumerate(retry_order)}
-        retry_uids.sort(key=lambda uid: (retry_rank.get(uid, len(retry_rank)), uid))
-        if new_uids and retry_uids:
-            retry_slots = min(len(retry_uids), max(1, POLL_BATCH_SIZE // 5))
-            selected_uids = retry_uids[:retry_slots] + new_uids[: POLL_BATCH_SIZE - retry_slots]
-            if len(selected_uids) < POLL_BATCH_SIZE:
-                selected_uids += retry_uids[retry_slots : retry_slots + POLL_BATCH_SIZE - len(selected_uids)]
-        elif retry_uids:
-            selected_uids = retry_uids[:POLL_BATCH_SIZE]
-        else:
-            selected_uids = unfinished[:POLL_BATCH_SIZE]
+        retry_attempts = {uid: attempts or 0 for uid, attempts in retry_rows}
+        # Lowest-attempt failures lead so permanent failures rotate rather than
+        # repeatedly consuming the retry share ahead of their peers.
+        retry_uids.sort(key=lambda uid: (retry_attempts.get(uid, 0), uid))
+        selected_uids = _fair_poll_batch(
+            new_uids,
+            retry_uids,
+            batch_size=POLL_BATCH_SIZE,
+            # Each fetched message increments this durable total.  Alternating
+            # the leading class prevents either class from starving when a
+            # deadline permits only the first selected message.
+            retry_first=(total_attempts % 2 == 0),
+        )
         msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
         deleted_any = False
@@ -925,7 +957,7 @@ def fetch_attachments_and_enqueue(
             continue
 
         filename = part.get_filename()
-        if not filename:
+        if filename is None:
             continue
 
         # Check if it's a PDF file by extension, regardless of MIME type
@@ -948,8 +980,7 @@ def fetch_attachments_and_enqueue(
         # document record while writing only a basename inside the workdir.
         safe_filename = os.path.basename(filename.replace("\\", "/"))
         if safe_filename in {"", ".", ".."}:
-            logger.warning("Skipping unsafe attachment filename %r", filename)
-            continue
+            safe_filename = "attachment"
         payload = part.get_payload(decode=True)
         if payload is None:
             raise ValueError("Attachment payload could not be decoded")

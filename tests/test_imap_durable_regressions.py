@@ -154,7 +154,7 @@ def test_failed_old_message_does_not_starve_new_mail_and_is_retried(db_session):
 
 
 @pytest.mark.unit
-def test_retry_quota_rotates_permanent_old_failures_under_continuous_arrivals(db_session):
+def test_fair_polling_rotates_retries_and_new_mail_when_only_one_attempt_fits(db_session):
     from app.tasks import imap_tasks
 
     factory = sessionmaker(bind=db_session.get_bind())
@@ -162,7 +162,8 @@ def test_retry_quota_rotates_permanent_old_failures_under_continuous_arrivals(db
     mail.select.return_value = ("OK", [b"1"])
     mail.response.return_value = ("UIDVALIDITY", [b"11"])
     fetched = []
-    newest_uid = 5
+    newest_uid = 3
+    clock = [0]
 
     def imap_command(command, *args):
         if command == "search":
@@ -176,16 +177,40 @@ def test_retry_quota_rotates_permanent_old_failures_under_continuous_arrivals(db
     mail.uid.side_effect = imap_command
     with (
         patch.object(imap_tasks, "_get_db_session", factory),
-        patch.object(imap_tasks, "POLL_BATCH_SIZE", 5),
+        patch.object(imap_tasks, "POLL_BATCH_SIZE", 3),
         patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
         patch.object(imap_tasks, "is_private_ip", return_value=False),
         patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+        patch.object(imap_tasks.time, "monotonic", side_effect=lambda: clock[0]),
     ):
-        for poll in range(5):
-            newest_uid = 5 + poll * 5
-            assert not imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False)
+        # Seed three durable failures before a continuous stream of new mail.
+        assert not imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False)
 
-    assert {1, 2, 3}.issubset(fetched)
+        def poll_with_one_attempt():
+            clock[0] = 0
+            # The fetch flips the clock; the loop may select a batch but gets
+            # exactly one attempt before its deadline.
+            original_command = mail.uid.side_effect
+
+            def deadline_after_first_attempt(command, *args, _original_command=original_command):
+                result = _original_command(command, *args)
+                if command == "fetch":
+                    clock[0] = 1
+                return result
+
+            mail.uid.side_effect = deadline_after_first_attempt
+            imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False, deadline=1)
+            mail.uid.side_effect = original_command
+
+        # With no new UIDs, retries remain eligible and progress.
+        poll_with_one_attempt()
+        assert fetched[-1] == 1
+        for _ in range(12):
+            newest_uid += 3
+            poll_with_one_attempt()
+
+    assert all(fetched.count(uid) >= 3 for uid in (1, 2, 3))
+    assert sum(uid > 3 for uid in fetched) == 6
 
 
 @pytest.mark.unit
@@ -221,15 +246,15 @@ def test_uidvalidity_rejects_non_positive_or_invalid_values(value):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("filename", [".", "..", r"C:\\tmp\\.."])
-def test_durable_attachment_rejects_dot_path_filename(filename):
+@pytest.mark.parametrize("filename", [".", "..", r"C:\\tmp\\..", "/"])
+def test_durable_attachment_normalizes_dot_path_filename(filename):
     from app.tasks import imap_tasks
 
     message = EmailMessage()
     message.add_attachment(b"a", maintype="application", subtype="pdf", filename=filename)
     with patch("app.tasks.imap_intake.prepare_imap_attachment") as prepare:
-        assert not imap_tasks.fetch_attachments_and_enqueue(message, ingestion_prefix="owner:mail:1:7")
-    prepare.assert_not_called()
+        assert imap_tasks.fetch_attachments_and_enqueue(message, ingestion_prefix="owner:mail:1:7")
+    assert prepare.call_args.kwargs["filename"] == "attachment"
 
 
 @pytest.mark.unit
@@ -245,6 +270,7 @@ def test_durable_attachment_uses_safe_original_filename():
 
 @pytest.mark.unit
 def test_filtered_message_is_not_modified_or_expunged(db_session):
+    from app.models import ImapMessageLedger
     from app.tasks import imap_tasks
 
     factory = sessionmaker(bind=db_session.get_bind())
@@ -266,15 +292,17 @@ def test_filtered_message_is_not_modified_or_expunged(db_session):
         patch.object(imap_tasks, "_get_db_session", factory),
         patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
         patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "find_all_mail_folder", return_value="[Gmail]/All Mail"),
         patch.object(imap_tasks, "settings", imap_readonly_mode=False),
-        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=False),
     ):
         assert imap_tasks.pull_inbox(
-            "test", "imap.example", 993, "user", "pw", True, True, allowed_categories=["pdf"]
+            "test", "imap.gmail.com", 993, "user", "pw", True, True, allowed_categories=["pdf"]
         )
 
     assert not any(call.args[0] == "store" for call in mail.uid.call_args_list)
     mail.expunge.assert_not_called()
+    with factory() as db:
+        assert db.query(ImapMessageLedger).filter_by(state="completed").count() == 1
 
 
 @pytest.mark.unit
