@@ -36,7 +36,7 @@ _TEST_CREDENTIAL = "pass"  # noqa: S105
 
 def _use_uid_api(mock_mail):
     """Make legacy mailbox mocks model UID SEARCH/FETCH and UIDVALIDITY."""
-    mock_mail.response.return_value = ("UIDVALIDITY", [b"1"])
+    mock_mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"1"])
 
     def uid(command, *args):
         if command == "search":
@@ -2432,11 +2432,14 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
     mail = MagicMock()
     mail.login.return_value = ("OK", [])
     mail.select.return_value = ("OK", {b"UIDVALIDITY": [b"42"]})
-    mail.response.return_value = ("UIDVALIDITY", [b"42"])
-    mail.uid.side_effect = [
-        ("OK", [b"7"]),
-        ("OK", [(b"7 (BODY[] {1})", message.as_bytes())]),
-    ]
+    mail.response.side_effect = lambda key: (key, [b"4294967296" if key == "UIDNEXT" else b"42"])
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b"7"]
+        return "OK", [(b"7 (BODY[] {1})", message.as_bytes())]
+
+    mail.uid.side_effect = imap_command
 
     with (
         patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
@@ -2450,8 +2453,10 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
         assert imap_tasks.pull_inbox("uid-test", "imap.example", 993, "user", "pw", True, False) is True
 
     mail.select.assert_called_once_with("INBOX", readonly=True)
-    assert mail.uid.call_args_list[0].args[:3] == ("search", None, "ALL")
-    assert mail.uid.call_args_list[1].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
+    assert mail.uid.call_args_list[0].args[:3] == ("search", None, "UID")
+    assert mail.uid.call_args_list[0].args[3].endswith(f":{imap_tasks.UID_SCAN_WINDOW}")
+    assert mail.uid.call_args_list[1].args[:3] == ("search", None, "UID")
+    assert mail.uid.call_args_list[2].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
     assert not any(call.args[0] == "store" for call in mail.uid.call_args_list)
 
 
