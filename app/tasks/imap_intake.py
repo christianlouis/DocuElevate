@@ -92,7 +92,7 @@ def _cleanup_unreserved_stage(db, path):
 
 @contextmanager
 def _owner_lifecycle_lock(db, owner):
-    with (account_lifecycle_lock(db, owner, exclusive=False) if owner else nullcontext()):
+    with account_lifecycle_lock(db, owner, exclusive=False) if owner else nullcontext():
         yield
 
 

@@ -580,6 +580,7 @@ def _ledger_finish(ledger_id, *, state, message_id=None, error=None):
 
 def _extract_uidvalidity(mail, select_data=None) -> str:
     """Read UIDVALIDITY; refuse ingestion when a server omits it."""
+
     def valid_value(value):
         if isinstance(value, bool) or value is None:
             return None

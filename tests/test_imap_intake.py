@@ -230,19 +230,30 @@ def test_deduplication_disabled_keeps_distinct_uid_intakes_as_records(intake_env
 def test_original_filename_is_basename_and_existing_stage_is_reused(intake_env):
     factory, _ = intake_env
     intake_id = imap_intake.prepare_imap_attachment(
-        owner_id="owner-a", source_integration_id=None, idempotency_key="uid-103",
-        filename=r"C:\\incoming/..\\scan.pdf", payload=b"%PDF test",
-        mime_type="application/pdf", is_pdf=True,
+        owner_id="owner-a",
+        source_integration_id=None,
+        idempotency_key="uid-103",
+        filename=r"C:\\incoming/..\\scan.pdf",
+        payload=b"%PDF test",
+        mime_type="application/pdf",
+        is_pdf=True,
     )
     with factory() as db:
         row = db.query(DocumentIntake).filter_by(id=intake_id).one()
         assert row.original_filename == "scan.pdf"
         staged = row.local_path
-    assert imap_intake.prepare_imap_attachment(
-        owner_id="owner-a", source_integration_id=None, idempotency_key="uid-103",
-        filename="different-name.pdf", payload=b"%PDF test",
-        mime_type="application/pdf", is_pdf=True,
-    ) == intake_id
+    assert (
+        imap_intake.prepare_imap_attachment(
+            owner_id="owner-a",
+            source_integration_id=None,
+            idempotency_key="uid-103",
+            filename="different-name.pdf",
+            payload=b"%PDF test",
+            mime_type="application/pdf",
+            is_pdf=True,
+        )
+        == intake_id
+    )
     assert staged.endswith(".pdf")
 
 
@@ -251,8 +262,13 @@ def test_original_filename_is_basename_and_existing_stage_is_reused(intake_env):
 def test_dot_filenames_use_safe_attachment_basename(intake_env, filename):
     factory, _ = intake_env
     intake_id = imap_intake.prepare_imap_attachment(
-        owner_id="owner-a", source_integration_id=None, idempotency_key=f"dot-{filename}",
-        filename=filename, payload=b"%PDF test", mime_type="application/pdf", is_pdf=True,
+        owner_id="owner-a",
+        source_integration_id=None,
+        idempotency_key=f"dot-{filename}",
+        filename=filename,
+        payload=b"%PDF test",
+        mime_type="application/pdf",
+        is_pdf=True,
     )
     with factory() as db:
         assert db.query(DocumentIntake).filter_by(id=intake_id).one().original_filename == "attachment"
@@ -272,9 +288,13 @@ def test_same_intake_key_rejects_different_payload_without_new_stage(intake_env)
     intake_id = _prepare("uid-conflict")
     with pytest.raises(ValueError, match="different attachment content"):
         imap_intake.prepare_imap_attachment(
-            owner_id="owner-a", source_integration_id=None, idempotency_key="uid-conflict",
-            filename="replacement.pdf", payload=b"not the first payload",
-            mime_type="application/pdf", is_pdf=True,
+            owner_id="owner-a",
+            source_integration_id=None,
+            idempotency_key="uid-conflict",
+            filename="replacement.pdf",
+            payload=b"not the first payload",
+            mime_type="application/pdf",
+            is_pdf=True,
         )
     with factory() as db:
         assert db.query(DocumentIntake).count() == 1
