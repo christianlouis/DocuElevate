@@ -90,9 +90,8 @@ async def backup_storage(_admin: AdminUser, db: Session = Depends(get_db)) -> di
         .first()
     )
     verification_enabled = getattr(settings, "backup_restore_verification_enabled", False) is True
-    verification_healthy = (
-        not verification_enabled
-        or (last_verification is not None and last_verification.verification_status == "passed")
+    verification_healthy = not verification_enabled or (
+        last_verification is not None and last_verification.verification_status == "passed"
     )
     return {
         **backup_storage_status(),
