@@ -26,6 +26,7 @@ from app.models import (  # noqa: F401
     BackupRecord,
     ClassificationRuleModel,
     ComplianceTemplate,
+    CredentialCheckState,
     DocumentAnnotation,
     DocumentComment,
     DocumentIntake,
