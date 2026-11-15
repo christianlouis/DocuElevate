@@ -10,6 +10,7 @@ Covers:
 
 import gzip
 import hashlib
+import importlib
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,7 +18,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -742,6 +745,20 @@ class TestBackupTaskHelpers:
         assert status == "failed"
         assert "64 mib" in detail.lower()
 
+    def test_restore_verification_migration_up_and_down(self):
+        """Migration 072 adds and removes exactly the verification columns."""
+        migration = importlib.import_module("migrations.versions.072_backup_restore_verification")
+        engine = create_engine("sqlite:///:memory:")
+        with engine.begin() as connection:
+            connection.execute(text("CREATE TABLE backup_records (id INTEGER PRIMARY KEY)"))
+            migration.op = Operations(MigrationContext.configure(connection))
+            migration.upgrade()
+            columns = {column["name"] for column in inspect(connection).get_columns("backup_records")}
+            assert {"verification_at", "verification_status", "verification_detail"} <= columns
+            migration.downgrade()
+            columns = {column["name"] for column in inspect(connection).get_columns("backup_records")}
+            assert columns == {"id"}
+
     def test_corrupt_archive_cannot_evict_verified_archive(self, tmp_path, db_session):
         """Retention marks corruption failed and keeps the verified recovery point."""
         from app.tasks.backup_tasks import _apply_retention
@@ -1006,6 +1023,9 @@ class TestCreateBackupTask:
         assert result["filename"].endswith(".db.gz")
         assert (backup_dir / result["filename"]).is_file()
         assert not list(backup_dir.glob(".*.partial"))
+        candidate = mock_db.add.call_args.args[0]
+        assert candidate.verification_status == "skipped"
+        assert candidate.verification_at is None
 
     def test_failed_restore_verification_keeps_archive_local_and_skips_upload(self, tmp_path):
         """A failed optional restore check cannot replace or publish a recovery point."""
@@ -1064,6 +1084,7 @@ class TestCreateBackupTask:
             patch("app.tasks.backup_tasks.SessionLocal") as mock_sl,
         ):
             mock_settings.backup_enabled = True
+            mock_settings.backup_restore_verification_enabled = True
             mock_settings.database_url = "postgresql://user:pass@localhost/testdb"
             mock_db = MagicMock()
             mock_sl.return_value.__enter__ = MagicMock(return_value=mock_db)
@@ -1073,6 +1094,9 @@ class TestCreateBackupTask:
         assert result["status"] == "ok"
         assert result["filename"].endswith(".pgsql.gz")
         assert "daily" in result["filename"]
+        candidate = mock_db.add.call_args.args[0]
+        assert candidate.verification_status == "unsupported"
+        assert candidate.verification_at is None
 
     def test_successful_backup_mysql(self, tmp_path):
         """create_backup creates a .mysql.gz archive for MySQL databases."""
@@ -1189,6 +1213,17 @@ class TestBackupAPIEndpoints:
         assert "local_path" not in payload["last_failure"]
         assert payload["verification_enabled"] is False
         assert payload["verification_healthy"] is True
+
+    def test_storage_status_is_unhealthy_when_verification_enabled_without_result(self, admin_client):
+        """Enabled verification without a recorded result is an explicit unknown state."""
+        with patch("app.api.backup.settings.backup_restore_verification_enabled", True):
+            resp = admin_client.get("/api/admin/backup/storage")
+
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["verification_enabled"] is True
+        assert payload["verification_healthy"] is False
+        assert payload["last_verification"] is None
 
     def test_list_backups_non_admin(self, non_admin_client):
         """GET /api/admin/backup/ returns 403 for non-admin users."""
