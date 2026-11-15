@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
@@ -53,6 +53,12 @@ def mock_imap_ledger_session(monkeypatch):
     db = MagicMock()
     db.query.return_value.filter_by.return_value.first.return_value = None
     db.query.return_value.filter_by.return_value.all.return_value = []
+
+    def assign_ledger_id(row):
+        if row.__class__.__name__ == "ImapMessageLedger":
+            row.id = 1
+
+    db.add.side_effect = assign_ledger_id
     monkeypatch.setattr("app.tasks.imap_tasks._get_db_session", lambda: db)
     return db
 
@@ -638,6 +644,7 @@ class TestPullAllInboxes:
             password=None,
             use_ssl=True,
             delete_after_process=False,
+            deadline=ANY,
         )
 
     @patch("app.tasks.imap_tasks.acquire_lock")
@@ -743,6 +750,7 @@ class TestPullInbox:
     @patch("app.tasks.imap_tasks.acquire_lock", return_value=True)
     @patch("app.tasks.imap_tasks.save_processed_emails")
     @patch("app.tasks.imap_tasks.load_processed_emails", return_value={})
+    @patch("app.tasks.imap_tasks.reconcile_imap_intakes")
     @patch("app.tasks.imap_tasks.is_private_ip", new=lambda _: False)
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
     @patch("app.tasks.imap_tasks.settings")
@@ -751,6 +759,7 @@ class TestPullInbox:
         mock_settings,
         mock_imap_class,
         _mock_load,
+        _mock_reconcile,
         _mock_save,
         _mock_acquire,
         mock_release,
@@ -821,7 +830,7 @@ class TestPullInbox:
         )
 
         mock_find_all.assert_called_once_with(mock_mail)
-        mock_mail.select.assert_called_once_with('"[Gmail]/All Mail"', readonly=True)
+        mock_mail.select.assert_called_once_with('"[Gmail]/All Mail"', readonly=False)
 
     @patch("app.tasks.imap_tasks.find_all_mail_folder")
     @patch("app.tasks.imap_tasks.imaplib.IMAP4_SSL")
@@ -1918,8 +1927,9 @@ class TestPullUserIntegrationImap:
         _pull_user_integration_imap()
 
     @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.record_poll_success")
     @patch("app.tasks.imap_tasks.pull_inbox")
-    def test_records_last_used_at_on_success(self, mock_pull, mock_session_factory):
+    def test_records_last_used_at_on_success(self, mock_pull, _mock_record_success, mock_session_factory):
         """Successful polling should update last_used_at and clear last_error."""
         from app.tasks.imap_tasks import _pull_user_integration_imap
         mock_pull.return_value = True
@@ -2114,8 +2124,9 @@ class TestPullUserImapAccounts:
     """Tests for _pull_user_imap_accounts function."""
 
     @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.record_poll_success")
     @patch("app.tasks.imap_tasks.pull_inbox")
-    def test_polls_active_accounts(self, mock_pull, mock_session_factory):
+    def test_polls_active_accounts(self, mock_pull, _mock_record_success, mock_session_factory):
         """Active accounts should be polled and last_checked_at updated."""
         mock_pull.return_value = True
         mock_acct = MagicMock()
