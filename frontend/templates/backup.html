@@ -202,10 +202,10 @@
       </h2>
       <!-- Tier filter -->
       <div class="flex gap-2 text-sm">
-        <button @click="filterType = ''" :class="filterType === '' ? 'bg-gray-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("common.all") }}</button>
-        <button @click="filterType = 'hourly'" :class="filterType === 'hourly' ? 'bg-blue-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("backup.type_hourly") }}</button>
-        <button @click="filterType = 'daily'" :class="filterType === 'daily' ? 'bg-green-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("backup.type_daily") }}</button>
-        <button @click="filterType = 'weekly'" :class="filterType === 'weekly' ? 'bg-purple-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("backup.type_weekly") }}</button>
+        <button type="button" @click="filterType = ''" :class="filterType === '' ? 'bg-gray-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("common.all") }}</button>
+        <button type="button" @click="filterType = 'hourly'" :class="filterType === 'hourly' ? 'bg-blue-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("backup.type_hourly") }}</button>
+        <button type="button" @click="filterType = 'daily'" :class="filterType === 'daily' ? 'bg-green-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("backup.type_daily") }}</button>
+        <button type="button" @click="filterType = 'weekly'" :class="filterType === 'weekly' ? 'bg-purple-200 font-semibold' : 'hover:bg-gray-100'" class="px-2 py-1 rounded">{{ _("backup.type_weekly") }}</button>
       </div>
     </div>
 

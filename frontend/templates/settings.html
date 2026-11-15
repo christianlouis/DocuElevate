@@ -66,7 +66,7 @@
           <i class="fas fa-database mr-1.5" aria-hidden="true"></i> {{ _("settings.db_wizard_btn") }}
         </a>
         <div class="relative" x-data="{ exportOpen: false }">
-          <button @click="exportOpen = !exportOpen"
+          <button type="button" @click="exportOpen = !exportOpen"
                   class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
             <i class="fas fa-download mr-1.5" aria-hidden="true"></i> {{ _("settings.export_btn") }}
             <i class="fas fa-chevron-down ml-1 text-xs" aria-hidden="true"></i>

@@ -27,7 +27,7 @@
         <i class="fas fa-tower-broadcast mr-1" aria-hidden="true"></i>{{ _("audit.siem_off") }}
       </span>
       {% endif %}
-      <button @click="fetchLogs()" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 min-h-[44px] min-w-[44px]"
+      <button type="button" @click="fetchLogs()" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-600 min-h-[44px] min-w-[44px]"
               aria-label="{{ _('audit.refresh_label') }}">
         <i class="fas fa-arrows-rotate mr-1" aria-hidden="true"></i>{{ _("common.refresh") }}
       </button>
@@ -129,13 +129,13 @@
 
   <!-- Pagination -->
   <nav class="flex items-center justify-between mt-4" aria-label="{{ _('audit.pagination_label') }}" x-show="total > filters.limit">
-    <button @click="prevPage()" :disabled="filters.offset === 0"
+    <button type="button" @click="prevPage()" :disabled="filters.offset === 0"
             class="px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 min-h-[44px] min-w-[44px]"
             aria-label="{{ _('audit.prev_label') }}">
       <i class="fas fa-chevron-left mr-1" aria-hidden="true"></i>{{ _("audit.prev") }}
     </button>
     <span class="text-sm text-gray-500 dark:text-gray-400" x-text="'Page ' + currentPage + ' of ' + totalPages"></span>
-    <button @click="nextPage()" :disabled="filters.offset + filters.limit >= total"
+    <button type="button" @click="nextPage()" :disabled="filters.offset + filters.limit >= total"
             class="px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 min-h-[44px] min-w-[44px]"
             aria-label="{{ _('audit.next_label') }}">
       {{ _("audit.next") }}<i class="fas fa-chevron-right ml-1" aria-hidden="true"></i>

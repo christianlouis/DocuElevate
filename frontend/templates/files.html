@@ -439,7 +439,7 @@
 <div id="uploadModal" class="upload-modal" role="dialog" aria-modal="true" aria-label="{{ _('files.upload_modal_aria') }}">
   <div class="upload-modal-header">
     <span><i class="fas fa-upload" aria-hidden="true"></i> {{ _("files.upload_modal_header") }}</span>
-    <button class="close-modal-btn" onclick="closeUploadModal()" aria-label="{{ _('files.upload_modal_close') }}">
+    <button type="button" class="close-modal-btn" onclick="closeUploadModal()" aria-label="{{ _('files.upload_modal_close') }}">
       <i class="fas fa-times" aria-hidden="true"></i>
     </button>
   </div>
@@ -731,13 +731,13 @@
           <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M:%S') if file.created_at else _('common.not_available') }}</td>
           <td>
             <div style="display: flex; align-items: center;">
-              <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="{{ _('files.action_preview') }}" aria-label="{{ _('files.action_preview') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <button type="button" onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="{{ _('files.action_preview') }}" aria-label="{{ _('files.action_preview') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-eye" aria-hidden="true"></i>
               </button>
-              <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="{{ _('files.action_details') }}" aria-label="{{ _('files.action_details') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <button type="button" onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="{{ _('files.action_details') }}" aria-label="{{ _('files.action_details') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
               </button>
-              <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="{{ _('files.action_delete') }}" aria-label="{{ _('files.action_delete') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+              <button type="button" onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="{{ _('files.action_delete') }}" aria-label="{{ _('files.action_delete') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
                 <i class="fas fa-trash" aria-hidden="true"></i>
               </button>
             </div>
@@ -776,13 +776,13 @@
         <div class="flex flex-col items-end gap-2 flex-shrink-0">
           <span class="status-badge status-{{ file.processing_status }}">{% if file.processing_status == 'pending' %}{{ _("common.pending") }}{% elif file.processing_status == 'processing' %}{{ _("common.processing") }}{% elif file.processing_status == 'completed' %}{{ _("common.completed") }}{% elif file.processing_status == 'failed' %}{{ _("common.failed") }}{% elif file.processing_status == 'duplicate' %}{{ _("files.status_duplicate") }}{% else %}{{ file.processing_status | title }}{% endif %}</span>
           <div class="flex gap-1" role="group" aria-label="{{ _('files.file_actions_aria') }}" onclick="event.stopPropagation();" onkeydown="event.stopPropagation();">
-            <button onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="{{ _('files.action_preview') }}" aria-label="{{ _('files.action_preview') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+            <button type="button" onclick="openPreviewModal({{ file.id }}, '{{ file.mime_type or '' }}', '{{ file.original_filename | e }}', event)" class="action-btn" title="{{ _('files.action_preview') }}" aria-label="{{ _('files.action_preview') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-eye" aria-hidden="true"></i>
             </button>
-            <button onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="{{ _('files.action_details') }}" aria-label="{{ _('files.action_details') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+            <button type="button" onclick="viewFileDetail({{ file.id }}, event)" class="action-btn" title="{{ _('files.action_details') }}" aria-label="{{ _('files.action_details') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-info-circle" aria-hidden="true"></i>
             </button>
-            <button onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="{{ _('files.action_delete') }}" aria-label="{{ _('files.action_delete') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
+            <button type="button" onclick="showDeleteModal({{ file.id }}, event)" class="action-btn delete" title="{{ _('files.action_delete') }}" aria-label="{{ _('files.action_delete') }} {{ file.original_filename }}" style="min-height:44px;min-width:44px;">
               <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
           </div>
@@ -804,19 +804,19 @@
     </div>
     <div class="pagination-buttons flex-wrap">
       {% if pagination.page > 1 %}
-      <button class="pagination-button" onclick="goToPage(1)" aria-label="{{ _('files.pagination_first') }}" style="min-height:44px;">{{ _("files.pagination_first") }}</button>
-      <button class="pagination-button" onclick="goToPage({{ pagination.page - 1 }})" aria-label="{{ _('files.pagination_previous') }}" style="min-height:44px;">{{ _("files.pagination_previous") }}</button>
+      <button type="button" class="pagination-button" onclick="goToPage(1)" aria-label="{{ _('files.pagination_first') }}" style="min-height:44px;">{{ _("files.pagination_first") }}</button>
+      <button type="button" class="pagination-button" onclick="goToPage({{ pagination.page - 1 }})" aria-label="{{ _('files.pagination_previous') }}" style="min-height:44px;">{{ _("files.pagination_previous") }}</button>
       {% endif %}
 
       {% for p in range(max(1, pagination.page - 2), min(pagination.pages + 1, pagination.page + 3)) %}
-      <button class="pagination-button {% if p == pagination.page %}active{% endif %}" onclick="goToPage({{ p }})" aria-label="{{ _('common.page') }} {{ p }}" {% if p == pagination.page %}aria-current="page"{% endif %} style="min-height:44px;">
+      <button type="button" class="pagination-button {% if p == pagination.page %}active{% endif %}" onclick="goToPage({{ p }})" aria-label="{{ _('common.page') }} {{ p }}" {% if p == pagination.page %}aria-current="page"{% endif %} style="min-height:44px;">
         {{ p }}
       </button>
       {% endfor %}
 
       {% if pagination.page < pagination.pages %}
-      <button class="pagination-button" onclick="goToPage({{ pagination.page + 1 }})" aria-label="{{ _('files.pagination_next') }}" style="min-height:44px;">{{ _("files.pagination_next") }}</button>
-      <button class="pagination-button" onclick="goToPage({{ pagination.pages }})" aria-label="{{ _('files.pagination_last') }}" style="min-height:44px;">{{ _("files.pagination_last") }}</button>
+      <button type="button" class="pagination-button" onclick="goToPage({{ pagination.page + 1 }})" aria-label="{{ _('files.pagination_next') }}" style="min-height:44px;">{{ _("files.pagination_next") }}</button>
+      <button type="button" class="pagination-button" onclick="goToPage({{ pagination.pages }})" aria-label="{{ _('files.pagination_last') }}" style="min-height:44px;">{{ _("files.pagination_last") }}</button>
       {% endif %}
     </div>
   </nav>
@@ -828,8 +828,8 @@
       <div class="modal-title" id="deleteModalTitle">{{ _("files.delete_modal_title") }}</div>
       <p>{{ _("files.delete_modal_message") }}</p>
       <div class="modal-buttons">
-        <button id="cancelDelete" class="modal-btn modal-btn-cancel" style="min-height:44px;min-width:80px;">{{ _("files.delete_modal_cancel") }}</button>
-        <button id="confirmDelete" class="modal-btn modal-btn-delete" style="min-height:44px;min-width:80px;">{{ _("files.delete_modal_confirm") }}</button>
+        <button type="button" id="cancelDelete" class="modal-btn modal-btn-cancel" style="min-height:44px;min-width:80px;">{{ _("files.delete_modal_cancel") }}</button>
+        <button type="button" id="confirmDelete" class="modal-btn modal-btn-delete" style="min-height:44px;min-width:80px;">{{ _("files.delete_modal_confirm") }}</button>
       </div>
     </div>
   </div>
@@ -839,7 +839,7 @@
     <div class="preview-panel">
       <div class="preview-panel-header">
         <h3 id="previewTitle">{{ _("files.preview_modal_title") }}</h3>
-        <button class="preview-panel-close" onclick="closePreviewModal()" aria-label="{{ _('files.preview_modal_close') }}">
+        <button type="button" class="preview-panel-close" onclick="closePreviewModal()" aria-label="{{ _('files.preview_modal_close') }}">
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
       </div>

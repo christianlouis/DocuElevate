@@ -179,7 +179,7 @@
       {% endif %}
 
       <div>
-        <button id="start-auth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+        <button type="button" id="start-auth-flow" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
           Start Authentication Flow
         </button>
       </div>
@@ -213,10 +213,10 @@
         </div>
 
         <div class="mt-4 flex space-x-3">
-          <button id="test-token" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          <button type="button" id="test-token" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
             Test Token
           </button>
-          <button id="refresh-token-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+          <button type="button" id="refresh-token-btn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
             Refresh Token
           </button>
         </div>
@@ -235,7 +235,7 @@ ONEDRIVE_TENANT_ID={{ tenant_id }}
 ONEDRIVE_REFRESH_TOKEN={{ refresh_token_value|default('YOUR_REFRESH_TOKEN', true) }}
 ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code></pre>
 
-            <button id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
+            <button type="button" id="copy-env-vars" class="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1 px-2 rounded">
               Copy
             </button>
           </div>
@@ -292,7 +292,7 @@ ONEDRIVE_FOLDER_PATH={{ folder_path|default('Documents/Uploads', true) }}</code>
           </p>
         </div>
         <div class="items-center px-4 py-3">
-          <button id="modalClose" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <button type="button" id="modalClose" class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300">
             Close
           </button>
         </div>

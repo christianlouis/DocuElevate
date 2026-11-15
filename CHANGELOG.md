@@ -10,6 +10,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.195.9 (2026-11-15)
+
+### Bug Fixes
+
+- Make credential-check state transactional (#1190)
+  ([#1320](https://github.com/christianlouis/DocuElevate/pull/1320),
+  [`6be2028`](https://github.com/christianlouis/DocuElevate/commit/6be202843dcbfd6964d27d030559ee89cfdfc703))
+
+
+## v0.195.8 (2026-11-15)
+
+### Bug Fixes
+
+- Satisfy djlint 1.46.4 template checks
+  ([#1321](https://github.com/christianlouis/DocuElevate/pull/1321),
+  [`009cdcc`](https://github.com/christianlouis/DocuElevate/commit/009cdcc82650480a0de0724c75b090a3c792cc7d))
+
+
+## v0.195.7 (2026-11-15)
+
+### Bug Fixes
+
+- Make Uptime Kuma failures actionable
+  ([#1315](https://github.com/christianlouis/DocuElevate/pull/1315),
+  [`4058749`](https://github.com/christianlouis/DocuElevate/commit/4058749d1aa66e3abe73fc1249c96385edbdf874))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`f00bab6`](https://github.com/christianlouis/DocuElevate/commit/f00bab60afde65ef7408e58f8a830b75ac408bbd))
+
+
 ## Unreleased
 
 

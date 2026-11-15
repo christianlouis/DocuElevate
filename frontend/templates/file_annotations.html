@@ -592,7 +592,7 @@
         {{ _("file.owner_label") }}: <strong>{{ owner_display or _("file.owner_unowned") }}</strong>
         {% if file.owner_id is none %}
         &mdash;
-        <button
+        <button type="button"
           id="claim-btn"
           aria-label="{{ _('file.claim_ownership') }}"
           style="background:#10b981;color:#fff;border:none;border-radius:0.375rem;padding:0.25rem 0.75rem;font-size:0.8rem;font-weight:600;cursor:pointer;"
