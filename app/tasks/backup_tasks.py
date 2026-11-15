@@ -125,9 +125,9 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
     operational verification job and must never run against the live database.
     """
     path = Path(rec.local_path) if rec.local_path else None
-    if path is None or not path.is_file():
-        return False, "Local backup archive is missing."
     try:
+        if path is None or not path.is_file():
+            return False, "Local backup archive is missing."
         if path.stat().st_size <= 0:
             return False, "Local backup archive is empty."
         if not rec.checksum:
@@ -157,7 +157,7 @@ def _validate_local_archive(rec: BackupRecord) -> tuple[bool, str | None]:
         elif suffix.endswith(".pgsql.gz"):
             if b"PostgreSQL database dump" not in prefix or b"SET " not in prefix:
                 return False, "PostgreSQL backup does not contain a recognizable SQL dump."
-            if not last.endswith(b"PostgreSQL database dump complete"):
+            if b"PostgreSQL database dump complete" not in last:
                 return False, "PostgreSQL backup does not contain a recognizable SQL dump."
         elif suffix.endswith(".mysql.gz"):
             if not (

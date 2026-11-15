@@ -29,7 +29,10 @@ from app.models import BackupRecord
 def _write_archive(path: Path, payload: bytes | None = None) -> str:
     if payload is None:
         if path.name.endswith(".pgsql.gz"):
-            payload = b"-- PostgreSQL database dump\nSET search_path = public;\n-- PostgreSQL database dump complete\n"
+            payload = (
+                b"-- PostgreSQL database dump\nSET search_path = public;\n"
+                b"-- PostgreSQL database dump complete\n--\n\\unrestrict test-key\n"
+            )
         elif path.name.endswith(".mysql.gz"):
             payload = (
                 b"-- MySQL dump\n/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n"
@@ -975,7 +978,8 @@ class TestCreateBackupTask:
         def fake_pg_dump(db_url: str, dest: Path) -> None:
             with gzip.open(str(dest), "wb") as gz:
                 gz.write(
-                    b"-- PostgreSQL database dump\nSET search_path = public;\n-- PostgreSQL database dump complete\n"
+                    b"-- PostgreSQL database dump\nSET search_path = public;\n"
+                    b"-- PostgreSQL database dump complete\n--\n\\unrestrict test-key\n"
                 )
 
         with (
