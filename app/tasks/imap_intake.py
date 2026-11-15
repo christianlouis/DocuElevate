@@ -13,6 +13,7 @@ import mimetypes
 import os
 import tempfile
 import uuid
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
@@ -23,6 +24,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import DocumentIntake, FileRecord
 from app.services.account_deletion import assert_account_active
+from app.services.account_lifecycle_lock import account_lifecycle_lock
 from app.tasks.convert_to_pdf import convert_to_pdf
 from app.tasks.process_document import _trusted_source_integration_id, process_document
 from app.utils.tribe_scope import ensure_document_scope
@@ -42,6 +44,38 @@ def _expired(value):
     return value <= _now() - timedelta(seconds=CLAIM_SECONDS)
 
 
+def _stage_payload(path, staging, payload, digest):
+    """Create an immutable stage without replacing an existing stage."""
+    os.makedirs(staging, exist_ok=True)
+    if os.path.exists(path):
+        with open(path, "rb") as existing_stream:
+            if hashlib.file_digest(existing_stream, "sha256").hexdigest() != digest:
+                raise ValueError("IMAP staging path collision with different content")
+        return False
+    fd, temp_path = tempfile.mkstemp(prefix=".imap-", dir=staging)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_path, path)
+        directory_fd = os.open(staging, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        return True
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+@contextmanager
+def _owner_lifecycle_lock(db, owner):
+    with (account_lifecycle_lock(db, owner, exclusive=False) if owner else nullcontext()):
+        yield
+
+
 def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key, filename, payload, mime_type, is_pdf):
     """Persist an immutable staged attachment and enqueue its intake ID.
 
@@ -54,9 +88,7 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
     original_filename = os.path.basename(str(filename).replace("\\", "/")) or "attachment"
     extension = os.path.splitext(original_filename)[1].lower()[:32]
     staging = os.path.join(settings.workdir, "imap-staging")
-    path = os.path.join(
-        staging, hashlib.sha256((principal + ":" + key + ":" + digest).encode()).hexdigest() + extension
-    )
+    path = None
     metadata = {
         "sha256": digest,
         "owner_id": owner,
@@ -64,12 +96,16 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
         "mime_type": mime_type,
         "is_pdf": bool(is_pdf),
     }
-    with SessionLocal() as db:
+    created = False
+    with SessionLocal() as db, _owner_lifecycle_lock(db, owner):
         if owner:
             # Authorization must precede any durable or filesystem staging.
             assert_account_active(db, owner)
-        row = db.query(DocumentIntake).filter_by(principal_id=principal, idempotency_key=key).first()
+        row = db.query(DocumentIntake).filter_by(principal_id=principal, idempotency_key=key).with_for_update().first()
         if row is None:
+            # The row owns this unique path.  It prevents a losing reservation
+            # from ever deleting a winner's shared deterministic path.
+            path = os.path.join(staging, f"{uuid.uuid4().hex}{extension}")
             existing = None
             if settings.enable_deduplication:
                 existing = db.query(FileRecord).filter_by(owner_id=owner, filehash=digest).order_by(FileRecord.id).first()
@@ -86,47 +122,36 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
             )
             db.add(row)
             try:
+                db.flush()
+                # Keep the reservation/account transaction open while staging.
+                # A second check closes the gap between the precheck and commit.
+                if owner:
+                    assert_account_active(db, owner)
+                created = _stage_payload(path, staging, payload, digest)
                 db.commit()
             except IntegrityError:
                 db.rollback()
-                row = db.query(DocumentIntake).filter_by(principal_id=principal, idempotency_key=key).one()
+                winner = db.query(DocumentIntake).filter_by(principal_id=principal, idempotency_key=key).one_or_none()
+                if winner is None and created and os.path.exists(path):
+                    os.unlink(path)
+                if winner is None:
+                    raise
+                row = winner
+            except Exception:
+                db.rollback()
+                if created and os.path.exists(path):
+                    os.unlink(path)
+                raise
         stored = json.loads(row.metadata_json or "{}")
-        if stored.get("sha256") != digest or row.local_path != path:
+        path = row.local_path
+        if stored.get("sha256") != digest:
             raise ValueError("IMAP intake identity reused for different attachment content")
         intake_id, state = row.id, row.state
+        if state != "completed" and not os.path.exists(path):
+            # Keep restoration under the same lifecycle fence as reservation.
+            _stage_payload(path, staging, payload, digest)
     if state != "completed":
-        os.makedirs(staging, exist_ok=True)
-        created = False
-        if not os.path.exists(path):
-            fd, temp_path = tempfile.mkstemp(prefix=".imap-", dir=staging)
-            try:
-                with os.fdopen(fd, "wb") as stream:
-                    stream.write(payload)
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(temp_path, path)
-                created = True
-                directory_fd = os.open(staging, os.O_RDONLY)
-                try:
-                    os.fsync(directory_fd)
-                finally:
-                    os.close(directory_fd)
-            finally:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-        else:
-            with open(path, "rb") as existing_stream:
-                existing_hash = hashlib.file_digest(existing_stream, "sha256").hexdigest()
-            if existing_hash != digest:
-                raise ValueError("IMAP staging path collision with different content")
-        # The row was reserved before writing; on a failed publish, only remove
-        # a file created by this attempt and never a pre-existing valid stage.
-        try:
-            _dispatch_intake(intake_id)
-        except Exception:
-            if created and os.path.exists(path):
-                os.unlink(path)
-            raise
+        _dispatch_intake(intake_id)
     return intake_id
 
 
@@ -181,10 +206,12 @@ def process_imap_intake(self, intake_id):
         if owner:
             assert_account_active(db, owner)
         file_id = metadata.get("file_id")
-        if file_id is None and settings.enable_deduplication:
-            existing = (
-                db.query(FileRecord).filter_by(owner_id=owner, filehash=actual_hash).order_by(FileRecord.id).first()
-            )
+        if file_id is None:
+            existing = None
+            if settings.enable_deduplication:
+                existing = (
+                    db.query(FileRecord).filter_by(owner_id=owner, filehash=actual_hash).order_by(FileRecord.id).first()
+                )
             if existing:
                 metadata["file_id"] = existing.id
                 row.metadata_json, row.state, row.error = json.dumps(metadata), "completed", None

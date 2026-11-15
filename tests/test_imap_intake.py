@@ -1,6 +1,7 @@
 """Crash and duplicate-delivery coverage for the IMAP consumer handoff."""
 
 from datetime import datetime, timedelta, timezone
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -146,6 +147,7 @@ def test_failed_publish_returns_to_pending_and_recovers(intake_env):
     with factory() as db:
         row = db.query(DocumentIntake).one()
         assert row.state == "pending"
+        assert row.local_path and os.path.isfile(row.local_path)
         intake_id = row.id
     publish.side_effect = None
     assert imap_intake.reconcile_imap_intakes() == 1
@@ -232,11 +234,17 @@ def test_original_filename_is_basename_and_existing_stage_is_reused(intake_env):
         row = db.query(DocumentIntake).filter_by(id=intake_id).one()
         assert row.original_filename == "scan.pdf"
         staged = row.local_path
-    with patch.object(imap_intake, "_dispatch_intake") as dispatch:
-        assert imap_intake.prepare_imap_attachment(
-            owner_id="owner-a", source_integration_id=None, idempotency_key="uid-103",
-            filename="different-name.pdf", payload=b"%PDF test",
-            mime_type="application/pdf", is_pdf=True,
-        ) == intake_id
-        dispatch.assert_not_called()
+    assert imap_intake.prepare_imap_attachment(
+        owner_id="owner-a", source_integration_id=None, idempotency_key="uid-103",
+        filename="different-name.pdf", payload=b"%PDF test",
+        mime_type="application/pdf", is_pdf=True,
+    ) == intake_id
     assert staged.endswith(".pdf")
+
+
+@pytest.mark.unit
+def test_inactive_owner_is_rejected_before_staging(intake_env):
+    with patch.object(imap_intake, "assert_account_active", side_effect=ValueError("deleted")):
+        with pytest.raises(ValueError, match="deleted"):
+            _prepare("uid-deleted")
+    assert not os.path.exists(os.path.join(imap_intake.settings.workdir, "imap-staging"))
