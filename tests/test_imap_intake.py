@@ -48,7 +48,12 @@ def test_repeated_delivery_and_failed_stage_reuse_one_record(intake_env):
             imap_intake.process_imap_intake.run(intake_id)
     with factory() as db:
         assert db.query(FileRecord).count() == 1
-        assert db.query(DocumentIntake).filter_by(id=intake_id).one().state == "failed"
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        assert row.state == "failed"
+        metadata = __import__("json").loads(row.metadata_json)
+        metadata["next_retry_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+        row.metadata_json = __import__("json").dumps(metadata)
+        db.commit()
     successful = MagicMock()
     successful.result = {"status": "Queued for OCR"}
     with patch.object(imap_intake.process_document, "apply", return_value=successful) as run:
@@ -70,7 +75,8 @@ def test_reconciliation_republishes_expired_claim_only(intake_env):
         row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.CLAIM_SECONDS + 1)
         db.commit()
     publish.reset_mock()
-    assert imap_intake.reconcile_imap_intakes() == 1
+    with patch.object(imap_intake, "_broker_intake_inventory", return_value=set()):
+        assert imap_intake.reconcile_imap_intakes() == 1
     publish.assert_called_once()
     assert publish.call_args.kwargs["args"] == [intake_id]
 
@@ -166,7 +172,8 @@ def test_ambiguous_published_message_is_republished_after_lease(intake_env):
         row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.DISPATCH_RECOVERY_SECONDS + 1)
         db.commit()
     publish.reset_mock()
-    assert imap_intake.reconcile_imap_intakes() == 1
+    with patch.object(imap_intake, "_broker_intake_inventory", return_value=set()):
+        assert imap_intake.reconcile_imap_intakes() == 1
     publish.assert_called_once()
     assert publish.call_args.kwargs["args"] == [intake_id]
 
@@ -193,7 +200,8 @@ def test_old_dispatch_is_republished_with_token_and_stale_delivery_is_noop(intak
         row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.DISPATCH_RECOVERY_SECONDS + 1)
         db.commit()
     publish.reset_mock()
-    assert imap_intake.reconcile_imap_intakes() == 1
+    with patch.object(imap_intake, "_broker_intake_inventory", return_value=set()):
+        assert imap_intake.reconcile_imap_intakes() == 1
     new_token = publish.call_args.kwargs["kwargs"]["dispatch_token"]
     with factory() as db:
         current_token = __import__("json").loads(db.query(DocumentIntake).get(intake_id).metadata_json)["dispatch_token"]
@@ -218,6 +226,46 @@ def test_failed_stage_is_backed_off_before_reconcile(intake_env):
         metadata = __import__("json").loads(row.metadata_json)
         assert metadata["intake_attempts"] == 1
         assert metadata["next_retry_at"]
+
+
+@pytest.mark.unit
+def test_legacy_delivery_obeys_failed_backoff(intake_env):
+    factory, _ = intake_env
+    intake_id = _prepare()
+    with patch.object(imap_intake.process_document, "apply", side_effect=RuntimeError("poison")):
+        with pytest.raises(RuntimeError):
+            imap_intake.process_imap_intake.run(intake_id)
+    with patch.object(imap_intake.process_document, "apply") as run:
+        assert imap_intake.process_imap_intake.run(intake_id)["status"] == "retry_backoff"
+        run.assert_not_called()
+
+
+@pytest.mark.unit
+def test_stale_dispatch_recovery_fails_closed_when_inventory_unknown(intake_env):
+    factory, publish = intake_env
+    intake_id = _prepare()
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.DISPATCH_RECOVERY_SECONDS + 1)
+        db.commit()
+    publish.reset_mock()
+    with patch.object(imap_intake, "_broker_intake_inventory", return_value=None):
+        assert imap_intake.reconcile_imap_intakes() == 0
+    publish.assert_not_called()
+
+
+@pytest.mark.unit
+def test_celery_inventory_extracts_intake_id_from_message():
+    import base64
+    import json
+
+    body = base64.b64encode(json.dumps([[123], {"dispatch_token": "t"}, None]).encode()).decode()
+    raw = json.dumps({
+        "headers": {"task": "app.tasks.imap_intake.process_imap_intake"},
+        "body": body,
+    })
+    assert imap_intake._celery_intake_id(raw) == 123
+    assert imap_intake._celery_intake_id(json.dumps({"headers": {"task": "other"}})) is None
 
 
 @pytest.mark.unit

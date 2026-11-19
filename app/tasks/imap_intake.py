@@ -13,10 +13,13 @@ import mimetypes
 import os
 import tempfile
 import uuid
+import base64
+import binascii
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
+import redis
 from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
@@ -36,6 +39,9 @@ CLAIM_SECONDS = 600
 DISPATCH_RECOVERY_SECONDS = CLAIM_SECONDS * 6
 FAILED_RETRY_BASE_SECONDS = 300
 FAILED_RETRY_MAX_SECONDS = 3600
+BROKER_INVENTORY_MAX_MESSAGES = 2000
+BROKER_QUEUE_NAMES = ("document_processor",) + tuple(f"document_processor\x06\x16{i}" for i in range(1, 10))
+_broker_client = None
 
 
 def _now():
@@ -64,6 +70,61 @@ def _retry_due(row, now=None):
     except (TypeError, ValueError):
         # A malformed backoff marker must not strand a durable intake forever.
         return True
+
+
+def _celery_intake_id(raw):
+    """Extract an intake ID from one Redis-backed Celery message."""
+    try:
+        message = json.loads(raw)
+        task = (message.get("headers") or {}).get("task") or (message.get("properties") or {}).get("task")
+        if task != "app.tasks.imap_intake.process_imap_intake":
+            return None
+        body = message.get("body")
+        if isinstance(body, str):
+            body = json.loads(base64.b64decode(body))
+        args = body[0] if isinstance(body, (list, tuple)) else []
+        return int(args[0]) if args else None
+    except (TypeError, ValueError, KeyError, IndexError, json.JSONDecodeError, UnicodeDecodeError, binascii.Error):
+        return None
+
+
+def _broker_intake_inventory():
+    """Return queued/unacked IMAP IDs, or None when bounded proof is unavailable.
+
+    Reconciliation must fail closed: it is safer to wait for a later poll than
+    to enqueue another copy while Redis contains an unknown amount of work.
+    """
+    global _broker_client
+    try:
+        if _broker_client is None:
+            _broker_client = redis.StrictRedis.from_url(
+                settings.redis_url, decode_responses=True, socket_connect_timeout=2, socket_timeout=3
+            )
+        values = []
+        for queue in BROKER_QUEUE_NAMES:
+            size = int(_broker_client.llen(queue) or 0)
+            if size > BROKER_INVENTORY_MAX_MESSAGES:
+                return None
+            values.extend(_broker_client.lrange(queue, 0, BROKER_INVENTORY_MAX_MESSAGES - 1))
+        # Redis transport stores unacked messages in one hash.  It is bounded
+        # independently from the visible lists and therefore included here.
+        unacked = _broker_client.hlen("unacked")
+        if unacked > BROKER_INVENTORY_MAX_MESSAGES:
+            return None
+        values.extend(_broker_client.hvals("unacked"))
+        return {intake_id for raw in values if (intake_id := _celery_intake_id(raw)) is not None}
+    except Exception:
+        return None
+
+
+def _record_intake_failure(row, metadata, error):
+    """Persist a bounded retry marker for every failed first-stage attempt."""
+    attempts = int(metadata.get("intake_attempts") or 0) + 1
+    delay = min(FAILED_RETRY_MAX_SECONDS, FAILED_RETRY_BASE_SECONDS * (2 ** min(attempts - 1, 4)))
+    metadata["intake_attempts"] = attempts
+    metadata["next_retry_at"] = (_now() + timedelta(seconds=delay)).isoformat()
+    row.metadata_json = json.dumps(metadata)
+    row.state, row.error = "failed", str(error)[:500]
 
 
 def _stage_payload(path, staging, payload, digest):
@@ -199,7 +260,7 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
     return intake_id
 
 
-def _dispatch_intake(intake_id):
+def _dispatch_intake(intake_id, *, broker_inventory=None):
     """Persist a dispatch lease before publishing; recover ambiguous publishes."""
     token = uuid.uuid4().hex
     with SessionLocal() as db:
@@ -209,6 +270,12 @@ def _dispatch_intake(intake_id):
         if row.state == "failed" and not _retry_due(row):
             return False
         if row.state in {"processing", "dispatched"} and not _expired(row.updated_at):
+            return False
+        if row.state == "dispatched" and (
+            broker_inventory is None or intake_id in broker_inventory
+        ):
+            # The existing broker/unacked copy is still present, or inventory
+            # could not prove its absence.  Fail closed to avoid queue storms.
             return False
         metadata = json.loads(row.metadata_json or "{}")
         metadata["dispatch_token"] = token
@@ -231,7 +298,7 @@ def _dispatch_intake(intake_id):
     return True
 
 
-@shared_task(bind=True, soft_time_limit=480, time_limit=540)
+@shared_task(bind=True, soft_time_limit=480, time_limit=540, acks_late=True, reject_on_worker_lost=True)
 def process_imap_intake(self, intake_id, dispatch_token=None):
     """Reserve one FileRecord and run the first pipeline stage under a lease."""
     with SessionLocal() as db:
@@ -251,18 +318,24 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
                 # A task that was waiting in the broker past its recovery lease
                 # must not steal the newer dispatch or run the pipeline twice.
                 return {"status": "stale_dispatch"}
+            if row.state == "failed" and not _retry_due(row):
+                # Legacy one-argument deliveries must obey the same durable
+                # backoff as tokenized deliveries; otherwise old broker
+                # messages can hot-loop a poison attachment.
+                return {"status": "retry_backoff"}
             if row.state == "processing" and not _expired(row.updated_at):
                 return {"status": "already_processing"}
             metadata = json.loads(row.metadata_json or "{}")
+            claim_token = dispatch_token or metadata.get("dispatch_token")
             path = row.local_path
             if not path or not os.path.isfile(path):
-                row.state, row.error = "failed", "Staged attachment missing"
+                _record_intake_failure(row, metadata, "Staged attachment missing")
                 db.commit()
                 return {"error": row.error}
             with open(path, "rb") as stream:
                 actual_hash = hashlib.file_digest(stream, "sha256").hexdigest()
             if actual_hash != metadata["sha256"]:
-                row.state, row.error = "failed", "Staged attachment hash mismatch"
+                _record_intake_failure(row, metadata, "Staged attachment hash mismatch")
                 db.commit()
                 return {"error": row.error}
             owner = metadata.get("owner_id")
@@ -304,6 +377,7 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
                 db.flush()
                 file_id = record.id
                 metadata["file_id"] = file_id
+            metadata["claim_token"] = claim_token
             row.metadata_json = json.dumps(metadata)
             row.state, row.error, row.updated_at = "processing", None, _now()
             filename = row.original_filename
@@ -323,17 +397,16 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
         with SessionLocal() as db:
             row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
             metadata = json.loads(row.metadata_json or "{}")
-            attempts = int(metadata.get("intake_attempts") or 0) + 1
-            delay = min(FAILED_RETRY_MAX_SECONDS, FAILED_RETRY_BASE_SECONDS * (2 ** min(attempts - 1, 4)))
-            metadata["intake_attempts"] = attempts
-            metadata["next_retry_at"] = (_now() + timedelta(seconds=delay)).isoformat()
-            row.metadata_json = json.dumps(metadata)
-            row.state, row.error = "failed", str(exc)[:500]
+            if metadata.get("claim_token") != (dispatch_token or metadata.get("dispatch_token")):
+                return {"status": "stale_dispatch"}
+            _record_intake_failure(row, metadata, exc)
             db.commit()
         raise
     with SessionLocal() as db:
         row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
         metadata = json.loads(row.metadata_json or "{}")
+        if metadata.get("claim_token") != (dispatch_token or metadata.get("dispatch_token")):
+            return {"status": "stale_dispatch"}
         metadata.pop("next_retry_at", None)
         row.metadata_json = json.dumps(metadata)
         row.state, row.error = "completed", None
@@ -346,6 +419,7 @@ def reconcile_imap_intakes(limit=50):
     now = _now()
     cutoff = now - timedelta(seconds=CLAIM_SECONDS)
     dispatch_cutoff = now - timedelta(seconds=DISPATCH_RECOVERY_SECONDS)
+    broker_inventory = None
     with SessionLocal() as db:
         # Pending and failed rows are selected separately so a poison document
         # with an exponential retry delay cannot consume the whole batch.
@@ -394,5 +468,10 @@ def reconcile_imap_intakes(limit=50):
             .limit(limit)
             .all()
         ]
+        if dispatched_ids:
+            broker_inventory = _broker_intake_inventory()
     ids = pending_ids + processing_ids + failed_ids + dispatched_ids
-    return sum(bool(_dispatch_intake(intake_id)) for intake_id in ids[:limit])
+    return sum(
+        bool(_dispatch_intake(intake_id, broker_inventory=broker_inventory))
+        for intake_id in ids[:limit]
+    )
