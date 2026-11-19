@@ -13,11 +13,16 @@ share the polling budget so one class cannot monopolize it.
 - A poll requests BODYSTRUCTURE for up to 200 candidate messages. Only proven,
   unnamed plain-text/HTML messages can complete without downloading their body.
   Unknown, malformed or attachment-bearing structures use the ordinary
-  BODY.PEEK path, limited to 50 payload attempts. Requested mailbox mutations
-  retain that ordinary path.
+  BODY.PEEK path, limited to 50 payload attempts. Labels and deletion still
+  apply only after accepting attachments; proven text-only messages need neither.
 - Failed mail attempts back off instead of consuming every poll. Attachments
   are staged durably before publication; the same message/part/content identity
   reuses its reservation.
+- Historical full-payload admission pauses at 500 unfinished IMAP intakes,
+  2,000 waiting document jobs, or less than 5 GiB free in the workdir. Unknown
+  capacity fails closed. Recent mail, durable retries and proven metadata-only
+  messages remain eligible. A deferred historical message gets no ledger entry
+  and cannot be skipped by the cursor. Capacity is checked once per poll.
 - Historical attachments and their child tasks use priority 6. New mail keeps
   priority 0. Historical IMAP work does not age into the urgent queue.
 
@@ -47,6 +52,9 @@ growth. Old duplicate envelopes may remain. The separately documented
 [queue compactor](imap-queue-compaction.md) requires an exact preview, a durable
 backup and quiescent producers/consumers. It preserves unknown tasks and every
 unique unfinished intake. It does not remove source mail, files or documents.
+The [backlog reprioritizer](document-backlog-priority.md) can then move reviewed
+legacy work to priority 6 while protecting current scan intakes. It also requires
+quiescence, an exact preview, persistent backup and independent readback.
 
 For acceptance, compare ledger/cursor growth, ready-queue counts and unfinished
 intakes across a graceful restart, and verify a current scan reaches the

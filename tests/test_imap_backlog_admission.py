@@ -1,4 +1,6 @@
+import hashlib
 import json
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from unittest.mock import MagicMock, patch
 
@@ -80,12 +82,12 @@ def test_saturated_intake_admission_blocks_without_broker_read():
 
 
 @pytest.mark.unit
-def test_queue_limit_uses_one_bounded_pipeline_and_allows_exact_limit():
+def test_queue_limit_uses_one_bounded_pipeline_and_blocks_at_limit():
     from app.tasks import imap_tasks
 
     db = MagicMock()
     db.query.side_effect = [_Query([]), _Query([])]
-    broker = _broker([200] * 10)
+    broker = _broker([199] + [200] * 9)
     patchers = _start_admission_patches(imap_tasks, db, broker)
     try:
         assert imap_tasks._historical_payload_admission_available()
@@ -96,7 +98,7 @@ def test_queue_limit_uses_one_bounded_pipeline_and_allows_exact_limit():
 
     db = MagicMock()
     db.query.side_effect = [_Query([]), _Query([])]
-    broker = _broker([201] + [200] * 9)
+    broker = _broker([200] * 10)
     patchers = _start_admission_patches(imap_tasks, db, broker)
     try:
         assert not imap_tasks._historical_payload_admission_available()
@@ -133,7 +135,7 @@ def test_disk_or_redis_failure_fails_closed_with_fresh_fakes():
 
 
 @pytest.mark.unit
-def test_real_db_capacity_allows_only_when_no_unfinished_intake(db_session):
+def test_real_db_capacity_allows_one_unfinished_intake(db_session):
     from app.models import DocumentIntake, ImapMessageLedger, ImapScanCursor
     from app.tasks import imap_tasks
 
@@ -197,3 +199,58 @@ def test_poll_blocked_historical_uid_has_no_ledger_then_ingests_when_allowed(db_
     with factory() as check:
         assert check.query(ImapMessageLedger).filter_by(state="completed").count() == 1
         assert check.query(ImapScanCursor).one().last_uid == 1
+
+
+@pytest.mark.unit
+def test_blocked_history_does_not_starve_fresh_tail_or_durable_retry(db_session):
+    from app.models import ImapMessageLedger, ImapScanCursor
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mailbox_key = hashlib.sha256(json.dumps(["", "imap.example", 993, "user", "INBOX"]).encode()).hexdigest()
+    db_session.add(
+        ImapMessageLedger(
+            owner_key="legacy",
+            mailbox_key=mailbox_key,
+            uidvalidity="44",
+            uid=2,
+            state="failed",
+            attempts=2,
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=2),
+        )
+    )
+    db_session.commit()
+    mail = MagicMock()
+    mail.select.return_value = ("OK", [b"50001"])
+    mail.response.side_effect = lambda key: (key, [b"50002" if key == "UIDNEXT" else b"44"])
+    fetched = []
+    message = EmailMessage()
+    message["Message-ID"] = "<fairness@example.test>"
+    message.set_content("scan")
+    message.add_attachment(b"%PDF-1.7", maintype="application", subtype="pdf", filename="scan.pdf")
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b"1 2 50001"]
+        if args[1] == "(UID BODYSTRUCTURE)":
+            return "NO", []
+        fetched.append(int(args[0]))
+        return "OK", [(b"data", message.as_bytes())]
+
+    mail.uid.side_effect = imap_command
+    with (
+        patch.object(imap_tasks, "POLL_BATCH_SIZE", 3),
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "_historical_payload_admission_available", return_value=False),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
+    ):
+        assert imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False)
+
+    assert set(fetched) == {2, 50001}
+    with factory() as check:
+        assert check.query(ImapMessageLedger).filter_by(uid=1).count() == 0
+        assert check.query(ImapMessageLedger).filter_by(uid=2, state="completed").count() == 1
+        assert check.query(ImapMessageLedger).filter_by(uid=50001, state="completed").count() == 1
+        assert check.query(ImapScanCursor).count() == 0

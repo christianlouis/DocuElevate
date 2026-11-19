@@ -143,7 +143,7 @@ def _historical_payload_admission_available() -> bool:
                 .limit(MAX_UNFINISHED_IMAP_INTAKES + 1)
                 .all()
             )
-            if len(unfinished) > MAX_UNFINISHED_IMAP_INTAKES:
+            if len(unfinished) >= MAX_UNFINISHED_IMAP_INTAKES:
                 return False
             failed = (
                 db.query(DocumentIntake)
@@ -169,7 +169,7 @@ def _historical_payload_admission_available() -> bool:
                     return False
                 if not metadata.get("suppress_automatic_retry"):
                     retryable += 1
-            if len(unfinished) + retryable > MAX_UNFINISHED_IMAP_INTAKES:
+            if len(unfinished) + retryable >= MAX_UNFINISHED_IMAP_INTAKES:
                 return False
         finally:
             db.close()
@@ -189,7 +189,7 @@ def _historical_payload_admission_available() -> bool:
                     pipeline.llen(queue_name)
                 queue_lengths = pipeline.execute()
             queue_depth = sum(int(length) for length in queue_lengths)
-            if queue_depth > MAX_DOCUMENT_QUEUE_DEPTH:
+            if queue_depth >= MAX_DOCUMENT_QUEUE_DEPTH:
                 return False
         finally:
             close = getattr(broker, "close", None)
@@ -1107,11 +1107,10 @@ def pull_inbox(
                 db.close()
         metadata_safe_uids = set()
         metadata_candidates = list(dict.fromkeys(selected_uids + historical_new_uids + tail_new_uids + retry_uids))
-        # Completing from metadata must not bypass requested mailbox mutations.
-        mailbox_mutations = not settings.imap_readonly_mode and (
-            delete_after_process or (is_gmail_host and gmail_apply_labels)
-        )
-        metadata_uids = metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE] if not mailbox_mutations else []
+        # Only accepted attachments trigger labels/deletion below. Proven
+        # nameless text has no accepted attachment and needs no mailbox mutation,
+        # even when those options are enabled for attachment-bearing messages.
+        metadata_uids = metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE]
         if metadata_uids:
             try:
                 metadata_set = ",".join(str(uid) for uid in metadata_uids)

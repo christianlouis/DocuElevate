@@ -23,7 +23,8 @@ def _mail_for_uids(uids: list[int]) -> MagicMock:
 
 
 @pytest.mark.unit
-def test_metadata_fast_path_completes_200_plain_messages_and_advances_cursor(db_session):
+@pytest.mark.parametrize("delete_after_process", [False, True])
+def test_metadata_fast_path_completes_200_plain_messages_and_advances_cursor(db_session, delete_after_process):
     from app.models import ImapMessageLedger, ImapScanCursor
     from app.tasks import imap_tasks
 
@@ -53,14 +54,18 @@ def test_metadata_fast_path_completes_200_plain_messages_and_advances_cursor(db_
     mail.uid.side_effect = imap_command
     with (
         patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks, "_historical_payload_admission_available", return_value=False),
         patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
         patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "find_all_mail_folder", return_value="[Gmail]/All Mail"),
         patch.object(imap_tasks.settings, "imap_readonly_mode", False),
     ):
-        assert imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False)
+        assert imap_tasks.pull_inbox("test", "imap.gmail.com", 993, "user", "pw", True, delete_after_process)
 
     assert metadata_fetches == [",".join(str(uid) for uid in uids)]
     assert payload_fetches == []
+    mail.expunge.assert_not_called()
+    assert all(call.args[0] != "store" for call in mail.uid.call_args_list)
     with factory() as db:
         assert db.query(ImapMessageLedger).filter_by(state="completed").count() == 200
         assert db.query(ImapScanCursor).one().last_uid == 200
@@ -110,7 +115,7 @@ def test_unproven_metadata_always_fetches_the_payload(db_session, metadata_item)
 
 
 @pytest.mark.unit
-def test_requested_mailbox_mutation_disables_metadata_completion(db_session):
+def test_requested_mailbox_mutation_is_preserved_for_attachment_metadata(db_session):
     from app.tasks import imap_tasks
 
     factory = sessionmaker(bind=db_session.get_bind())
@@ -121,7 +126,7 @@ def test_requested_mailbox_mutation_disables_metadata_completion(db_session):
         if command == "search":
             return "OK", [b"1"]
         if command == "fetch" and args[1] == "(UID BODYSTRUCTURE)":
-            raise AssertionError("mutation-eligible polling must not complete from metadata")
+            return "OK", [b'1 (UID 1 BODYSTRUCTURE ("APPLICATION" "PDF" NIL NIL NIL "BASE64" 12))']
         if command == "fetch" and args[1] == "(BODY.PEEK[])":
             payload_fetches.append(args[0])
             return "OK", [(b"1 FETCH (BODY[])", _raw_message(1))]
