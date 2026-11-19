@@ -17,7 +17,6 @@ from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
-from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
@@ -30,6 +29,13 @@ from app.tasks.process_document import _trusted_source_integration_id, process_d
 from app.utils.tribe_scope import ensure_document_scope
 
 CLAIM_SECONDS = 600
+# A broker-accepted task can spend considerably longer than the consumer lease
+# waiting behind a large historical catch-up.  Do not republish that handoff
+# after the short processing lease; the dispatch token below makes a genuinely
+# stale delivery a no-op when recovery eventually republishes it.
+DISPATCH_RECOVERY_SECONDS = CLAIM_SECONDS * 6
+FAILED_RETRY_BASE_SECONDS = 300
+FAILED_RETRY_MAX_SECONDS = 3600
 
 
 def _now():
@@ -42,6 +48,22 @@ def _expired(value):
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value <= _now() - timedelta(seconds=CLAIM_SECONDS)
+
+
+def _retry_due(row, now=None):
+    """Return whether a failed intake has reached its durable retry time."""
+    metadata = json.loads(row.metadata_json or "{}")
+    retry_at = metadata.get("next_retry_at")
+    if not retry_at:
+        return True
+    try:
+        due = datetime.fromisoformat(retry_at)
+        if due.tzinfo is None:
+            due = due.replace(tzinfo=timezone.utc)
+        return due <= (now or _now())
+    except (TypeError, ValueError):
+        # A malformed backoff marker must not strand a durable intake forever.
+        return True
 
 
 def _stage_payload(path, staging, payload, digest):
@@ -184,6 +206,8 @@ def _dispatch_intake(intake_id):
         row = db.query(DocumentIntake).filter_by(id=intake_id, source="imap").with_for_update().one_or_none()
         if row is None or row.state == "completed":
             return False
+        if row.state == "failed" and not _retry_due(row):
+            return False
         if row.state in {"processing", "dispatched"} and not _expired(row.updated_at):
             return False
         metadata = json.loads(row.metadata_json or "{}")
@@ -191,7 +215,11 @@ def _dispatch_intake(intake_id):
         row.metadata_json, row.state, row.updated_at, row.error = json.dumps(metadata), "dispatched", _now(), None
         db.commit()
     try:
-        process_imap_intake.delay(intake_id)
+        process_imap_intake.apply_async(
+            args=[intake_id],
+            kwargs={"dispatch_token": token},
+            task_id=f"imap-intake-{intake_id}-{token}",
+        )
     except Exception as exc:
         with SessionLocal() as db:
             row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
@@ -204,7 +232,7 @@ def _dispatch_intake(intake_id):
 
 
 @shared_task(bind=True, soft_time_limit=480, time_limit=540)
-def process_imap_intake(self, intake_id):
+def process_imap_intake(self, intake_id, dispatch_token=None):
     """Reserve one FileRecord and run the first pipeline stage under a lease."""
     with SessionLocal() as db:
         initial = db.query(DocumentIntake).filter_by(id=intake_id, source="imap").one_or_none()
@@ -218,6 +246,11 @@ def process_imap_intake(self, intake_id):
             row = db.query(DocumentIntake).filter_by(id=intake_id, source="imap").with_for_update().one_or_none()
             if row is None or row.state == "completed":
                 return {"status": "already_completed"}
+            current_token = json.loads(row.metadata_json or "{}").get("dispatch_token")
+            if dispatch_token and current_token and dispatch_token != current_token:
+                # A task that was waiting in the broker past its recovery lease
+                # must not steal the newer dispatch or run the pipeline twice.
+                return {"status": "stale_dispatch"}
             if row.state == "processing" and not _expired(row.updated_at):
                 return {"status": "already_processing"}
             metadata = json.loads(row.metadata_json or "{}")
@@ -289,11 +322,20 @@ def process_imap_intake(self, intake_id):
     except Exception as exc:
         with SessionLocal() as db:
             row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
+            metadata = json.loads(row.metadata_json or "{}")
+            attempts = int(metadata.get("intake_attempts") or 0) + 1
+            delay = min(FAILED_RETRY_MAX_SECONDS, FAILED_RETRY_BASE_SECONDS * (2 ** min(attempts - 1, 4)))
+            metadata["intake_attempts"] = attempts
+            metadata["next_retry_at"] = (_now() + timedelta(seconds=delay)).isoformat()
+            row.metadata_json = json.dumps(metadata)
             row.state, row.error = "failed", str(exc)[:500]
             db.commit()
         raise
     with SessionLocal() as db:
         row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
+        metadata = json.loads(row.metadata_json or "{}")
+        metadata.pop("next_retry_at", None)
+        row.metadata_json = json.dumps(metadata)
         row.state, row.error = "completed", None
         db.commit()
     return {"status": "completed", "file_id": file_id}
@@ -301,20 +343,56 @@ def process_imap_intake(self, intake_id):
 
 def reconcile_imap_intakes(limit=50):
     """Republish unfinished handoffs after a broker loss or expired consumer."""
-    cutoff = _now() - timedelta(seconds=CLAIM_SECONDS)
+    now = _now()
+    cutoff = now - timedelta(seconds=CLAIM_SECONDS)
+    dispatch_cutoff = now - timedelta(seconds=DISPATCH_RECOVERY_SECONDS)
     with SessionLocal() as db:
-        ids = [
+        # Pending and failed rows are selected separately so a poison document
+        # with an exponential retry delay cannot consume the whole batch.
+        pending_ids = [
             row[0]
             for row in db.query(DocumentIntake.id)
             .filter(
                 DocumentIntake.source == "imap",
-                or_(
-                    DocumentIntake.state.in_(("pending", "failed")),
-                    (DocumentIntake.state.in_(("processing", "dispatched"))) & (DocumentIntake.updated_at < cutoff),
-                ),
+                DocumentIntake.state == "pending",
+            )
+            .order_by(DocumentIntake.updated_at, DocumentIntake.id)
+            .limit(limit // 2 or 1)
+            .all()
+        ]
+        processing_ids = [
+            row[0]
+            for row in db.query(DocumentIntake.id)
+            .filter(
+                DocumentIntake.source == "imap",
+                DocumentIntake.state == "processing",
+                DocumentIntake.updated_at < cutoff,
+            )
+            .order_by(DocumentIntake.updated_at, DocumentIntake.id)
+            .limit(limit - len(pending_ids))
+            .all()
+        ]
+        failed_rows = (
+            db.query(DocumentIntake)
+            .filter(DocumentIntake.source == "imap", DocumentIntake.state == "failed")
+            .order_by(DocumentIntake.updated_at, DocumentIntake.id)
+            .limit(limit)
+            .all()
+        )
+        failed_ids = [row.id for row in failed_rows if _retry_due(row, now)]
+        # Dispatched tasks are only recovered after the longer broker grace
+        # period.  Their token makes an older queued delivery harmless.
+        dispatched_ids = [
+            row[0]
+            for row in db.query(DocumentIntake.id)
+            .filter(
+                DocumentIntake.source == "imap",
+                DocumentIntake.state == "dispatched",
+                DocumentIntake.updated_at < dispatch_cutoff,
             )
             .order_by(DocumentIntake.updated_at, DocumentIntake.id)
             .limit(limit)
             .all()
         ]
-    return sum(bool(_dispatch_intake(intake_id)) for intake_id in ids)
+    ids = pending_ids + processing_ids + failed_ids + dispatched_ids
+    return sum(bool(_dispatch_intake(intake_id)) for intake_id in ids[:limit])

@@ -18,7 +18,7 @@ def intake_env(db_session, tmp_path):
         patch.object(imap_intake, "SessionLocal", factory),
         patch.object(imap_intake.settings, "workdir", str(tmp_path)),
         patch.object(imap_intake.settings, "default_owner_id", None),
-        patch.object(imap_intake.process_imap_intake, "delay") as publish,
+        patch.object(imap_intake.process_imap_intake, "apply_async") as publish,
         patch.object(imap_intake, "ensure_document_scope", return_value=("default", "quarantine")),
         patch.object(imap_intake, "_trusted_source_integration_id", return_value=None),
     ):
@@ -71,7 +71,8 @@ def test_reconciliation_republishes_expired_claim_only(intake_env):
         db.commit()
     publish.reset_mock()
     assert imap_intake.reconcile_imap_intakes() == 1
-    publish.assert_called_once_with(intake_id)
+    publish.assert_called_once()
+    assert publish.call_args.kwargs["args"] == [intake_id]
 
 
 @pytest.mark.unit
@@ -151,7 +152,7 @@ def test_failed_publish_returns_to_pending_and_recovers(intake_env):
         intake_id = row.id
     publish.side_effect = None
     assert imap_intake.reconcile_imap_intakes() == 1
-    assert publish.call_args.args == (intake_id,)
+    assert publish.call_args.kwargs["args"] == [intake_id]
     with factory() as db:
         assert db.query(DocumentIntake).one().state == "dispatched"
 
@@ -162,11 +163,61 @@ def test_ambiguous_published_message_is_republished_after_lease(intake_env):
     intake_id = _prepare()
     with factory() as db:
         row = db.query(DocumentIntake).filter_by(id=intake_id).one()
-        row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.CLAIM_SECONDS + 1)
+        row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.DISPATCH_RECOVERY_SECONDS + 1)
         db.commit()
     publish.reset_mock()
     assert imap_intake.reconcile_imap_intakes() == 1
-    publish.assert_called_once_with(intake_id)
+    publish.assert_called_once()
+    assert publish.call_args.kwargs["args"] == [intake_id]
+
+
+@pytest.mark.unit
+def test_dispatched_waiting_in_broker_is_not_republished_at_consumer_lease(intake_env):
+    factory, publish = intake_env
+    intake_id = _prepare()
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.CLAIM_SECONDS + 1)
+        db.commit()
+    publish.reset_mock()
+    assert imap_intake.reconcile_imap_intakes() == 0
+    publish.assert_not_called()
+
+
+@pytest.mark.unit
+def test_old_dispatch_is_republished_with_token_and_stale_delivery_is_noop(intake_env):
+    factory, publish = intake_env
+    intake_id = _prepare()
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        row.updated_at = datetime.now(timezone.utc) - timedelta(seconds=imap_intake.DISPATCH_RECOVERY_SECONDS + 1)
+        db.commit()
+    publish.reset_mock()
+    assert imap_intake.reconcile_imap_intakes() == 1
+    new_token = publish.call_args.kwargs["kwargs"]["dispatch_token"]
+    with factory() as db:
+        current_token = __import__("json").loads(db.query(DocumentIntake).get(intake_id).metadata_json)["dispatch_token"]
+    assert new_token == current_token
+    assert imap_intake.process_imap_intake.run(intake_id, dispatch_token="old-token")["status"] == "stale_dispatch"
+
+
+@pytest.mark.unit
+def test_failed_stage_is_backed_off_before_reconcile(intake_env):
+    factory, publish = intake_env
+    intake_id = _prepare()
+    successful = MagicMock()
+    successful.result = None
+    with patch.object(imap_intake.process_document, "apply", return_value=successful):
+        with pytest.raises(RuntimeError):
+            imap_intake.process_imap_intake.run(intake_id)
+    publish.reset_mock()
+    assert imap_intake.reconcile_imap_intakes() == 0
+    publish.assert_not_called()
+    with factory() as db:
+        row = db.query(DocumentIntake).get(intake_id)
+        metadata = __import__("json").loads(row.metadata_json)
+        assert metadata["intake_attempts"] == 1
+        assert metadata["next_retry_at"]
 
 
 @pytest.mark.unit
