@@ -9,6 +9,7 @@ import logging
 import os
 import quopri
 import re
+import shutil
 import tempfile
 import time
 import uuid
@@ -18,7 +19,7 @@ from email.header import decode_header, make_header
 import redis
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
@@ -106,6 +107,9 @@ LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
 POLL_BATCH_SIZE = 50
 BODYSTRUCTURE_BATCH_SIZE = 200
+MAX_UNFINISHED_IMAP_INTAKES = 500
+MAX_DOCUMENT_QUEUE_DEPTH = 2000
+MIN_WORKDIR_FREE_BYTES = 5 * 1024**3
 # Never ask an IMAP server for an unbounded UID SEARCH response.  Gmail can
 # have millions of messages and imaplib cannot parse responses larger than its
 # line buffer.  The durable cursor makes these windows resumable.
@@ -121,6 +125,75 @@ RETRY_BACKOFF_MAX_SECONDS = 60 * 60
 
 # Local cache file for tracking processed emails
 CACHE_FILE = os.path.join(settings.workdir, "processed_mails.json")
+
+
+def _historical_payload_admission_available() -> bool:
+    """Bound historical payload admission before creating ledger/cursor state."""
+    try:
+        from app.models import DocumentIntake
+
+        db = _get_db_session()
+        try:
+            unfinished = (
+                db.query(DocumentIntake)
+                .filter(
+                    DocumentIntake.source == "imap",
+                    DocumentIntake.state.in_(("pending", "processing")),
+                )
+                .limit(MAX_UNFINISHED_IMAP_INTAKES + 1)
+                .all()
+            )
+            if len(unfinished) > MAX_UNFINISHED_IMAP_INTAKES:
+                return False
+            failed = (
+                db.query(DocumentIntake)
+                .filter(DocumentIntake.source == "imap", DocumentIntake.state == "failed")
+                .filter(
+                    or_(
+                        DocumentIntake.metadata_json.is_(None),
+                        ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry": true%'),
+                        ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry":true%'),
+                    )
+                )
+                .order_by(DocumentIntake.updated_at, DocumentIntake.id)
+                .limit(MAX_UNFINISHED_IMAP_INTAKES + 1)
+                .all()
+            )
+            retryable = 0
+            for row in failed:
+                try:
+                    metadata = json.loads(row.metadata_json or "{}")
+                except (TypeError, ValueError):
+                    return False
+                if not metadata.get("suppress_automatic_retry"):
+                    retryable += 1
+            if len(unfinished) + retryable > MAX_UNFINISHED_IMAP_INTAKES:
+                return False
+        finally:
+            db.close()
+
+        broker = redis.StrictRedis.from_url(
+            settings.effective_celery_broker_url,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            decode_responses=True,
+        )
+        try:
+            queue_depth = broker.llen("document_processor")
+            for priority in range(1, 10):
+                queue_depth += broker.llen(f"document_processor\x06\x16{priority}")
+            if queue_depth > MAX_DOCUMENT_QUEUE_DEPTH:
+                return False
+        finally:
+            close = getattr(broker, "close", None)
+            if close:
+                close()
+
+        _total, _used, free = shutil.disk_usage(settings.workdir)
+        return free >= MIN_WORKDIR_FREE_BYTES
+    except Exception:  # noqa: BLE001
+        logger.warning("Historical IMAP payload admission unavailable; blocking payload admission")
+        return False
 
 
 def record_poll_success(mailbox_key: str, *, now: datetime | None = None) -> None:
@@ -1061,6 +1134,12 @@ def pull_inbox(
         had_failure = False
         deleted_any = False
         full_payload_attempts = 0
+        historical_payload_uids = {
+            uid
+            for uid in historical_new_uids
+            if uid not in metadata_safe_uids and uid not in set(tail_ordered) and uid not in set(retry_uids)
+        }
+        historical_admission = None
 
         for num in msg_numbers:
             if time.monotonic() >= deadline:
@@ -1091,6 +1170,12 @@ def pull_inbox(
                         db.close()
                 _ledger_finish(ledger_id, state="completed", message_id=f"<imap-uid-{uidvalidity}-{uid}@{mailbox_key}>")
                 continue
+            if uid in historical_payload_uids:
+                if historical_admission is None:
+                    historical_admission = _historical_payload_admission_available()
+                if not historical_admission:
+                    logger.info("Historical IMAP payload admission blocked UID %s", uid)
+                    continue
             if full_payload_attempts >= POLL_BATCH_SIZE:
                 continue
             full_payload_attempts += 1
