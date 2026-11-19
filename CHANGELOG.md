@@ -10,6 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.1 (2026-11-19)
+
+### Bug Fixes
+
+- Recover historical IMAP backlog without starving new mail
+  ([#1327](https://github.com/christianlouis/DocuElevate/pull/1327),
+  [`2732166`](https://github.com/christianlouis/DocuElevate/commit/27321663789862221901bcdb3be53c6fcfefe965))
+
+### Continuous Integration
+
+- Stop automatic preprod manifest updates
+  ([#1323](https://github.com/christianlouis/DocuElevate/pull/1323),
+  [`4b5fe31`](https://github.com/christianlouis/DocuElevate/commit/4b5fe31aeaa30149a28b1e03778af0ffbd368f4a))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`2912078`](https://github.com/christianlouis/DocuElevate/commit/29120783a581fccc621dbcdf2f6032dbf9a7979d))
+
+
 ## Unreleased
 
 ### Continuous Integration
