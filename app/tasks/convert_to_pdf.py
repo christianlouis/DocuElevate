@@ -450,7 +450,11 @@ def convert_to_pdf(
             )
             progress("call_gotenberg", "failure", error_msg)
             progress("convert_to_pdf", "failure", f"Conversion failed: {error_msg}")
-            error_type = PermanentConversionError if 400 <= response.status_code < 500 else TransientConversionError
+            error_type = (
+                PermanentConversionError
+                if 400 <= response.status_code < 500 and response.status_code not in {408, 429}
+                else TransientConversionError
+            )
             error = error_type(error_msg)
             if raise_on_error:
                 raise error
@@ -463,7 +467,8 @@ def convert_to_pdf(
         if raise_on_error and isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
             raise TransientConversionError(str(e)) from e
         if raise_on_error:
-            raise PermanentConversionError(str(e)) from e
+            # Unknown infrastructure/publish failures must stay recoverable.
+            raise TransientConversionError(str(e)) from e
         return None
     finally:
         for handle in upload_handles:

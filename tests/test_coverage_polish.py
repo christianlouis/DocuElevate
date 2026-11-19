@@ -493,7 +493,12 @@ class TestConvertToPdfDetection:
         ):
             mock_settings.gotenberg_url = "http://gotenberg"
             mock_settings.http_request_timeout = 30
-            for status, error_type in ((400, PermanentConversionError), (503, TransientConversionError)):
+            for status, error_type in (
+                (400, PermanentConversionError),
+                (408, TransientConversionError),
+                (429, TransientConversionError),
+                (503, TransientConversionError),
+            ):
                 response = Mock(status_code=status, text="failure")
                 with patch("app.tasks.convert_to_pdf.requests.post", return_value=response):
                     with pytest.raises(error_type):
