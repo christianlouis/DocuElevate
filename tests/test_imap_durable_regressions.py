@@ -289,6 +289,8 @@ def test_ledger_creation_failure_does_not_advance_unrecorded_uid(db_session):
     def imap_command(command, *args):
         if command == "search":
             return "OK", [b"1"]
+        if command == "fetch" and args[1] == "(UID BODYSTRUCTURE)":
+            return "NO", []
         fetched.append(int(args[0]))
         return "OK", [(b"data", _message(1))]
 
@@ -394,6 +396,8 @@ def test_empty_uidnext_snapshot_does_not_skip_first_future_uid(db_session):
     def imap_command(command, *args):
         if command == "search":
             return "OK", [b"1"]
+        if command == "fetch" and args[1] == "(UID BODYSTRUCTURE)":
+            return "NO", []
         fetched.append(int(args[0]))
         return "OK", [(b"data", _message(1))]
 
@@ -430,6 +434,8 @@ def test_frozen_live_tail_is_processed_without_advancing_history_cursor(db_sessi
                 "5:8": ("OK", [b""]),
                 "18:21": ("OK", [b"20 21"]),
             }[args[2]]
+        if command == "fetch" and args[1] == "(UID BODYSTRUCTURE)":
+            return "NO", []
         uid = int(args[0])
         fetched.append(uid)
         return "OK", [(b"data", _message(uid))]
@@ -476,6 +482,8 @@ def test_in_window_retry_cannot_leapfrog_unrecorded_history(db_session):
     def imap_command(command, *args):
         if command == "search":
             return "OK", [b"1 2 900"]
+        if command == "fetch" and args[1] == "(UID BODYSTRUCTURE)":
+            return "NO", []
         uid = int(args[0])
         fetched.append(uid)
         return "OK", [(b"data", _message(uid))]
@@ -530,9 +538,9 @@ def test_fair_polling_rotates_retries_and_new_mail_when_only_one_attempt_fits(db
         patch.object(imap_tasks, "is_private_ip", return_value=False),
         patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
         patch.object(imap_tasks.time, "monotonic", side_effect=lambda: clock[0]),
-            # This test exercises class rotation; the dedicated backoff unit
-            # tests cover retry timing without waiting for wall-clock time.
-            patch.object(imap_tasks, "RETRY_BACKOFF_BASE_SECONDS", 0),
+        # This test exercises class rotation; the dedicated backoff unit
+        # tests cover retry timing without waiting for wall-clock time.
+        patch.object(imap_tasks, "RETRY_BACKOFF_BASE_SECONDS", 0),
     ):
         # Seed three durable failures before a continuous stream of new mail.
         assert not imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False)

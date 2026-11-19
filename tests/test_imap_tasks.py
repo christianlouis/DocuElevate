@@ -8,12 +8,12 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from app.tasks.imap_tasks import (
-    _decode_attachment_payload,
     _decode_attachment_filename,
-    _retry_backoff_ready,
+    _decode_attachment_payload,
     _decrypt_imap_password,
     _pull_user_imap_accounts,
     _resolve_categories_for_profile,
+    _retry_backoff_ready,
     acquire_lock,
     check_and_pull_mailbox,
     cleanup_old_entries,
@@ -1577,7 +1577,7 @@ class TestFetchAttachmentsExtended:
 
         part = message_from_bytes(
             b"Content-Type: application/pdf\r\n"
-            b"Content-Disposition: attachment; filename=\"=?UTF-8?Q?Rechnung_=C3=84.pdf?=\"\r\n\r\n"
+            b'Content-Disposition: attachment; filename="=?UTF-8?Q?Rechnung_=C3=84.pdf?="\r\n\r\n'
         )
 
         assert _decode_attachment_filename(part) == "Rechnung Ä.pdf"
@@ -2510,7 +2510,8 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
     assert mail.uid.call_args_list[0].args[:3] == ("search", None, "UID")
     assert mail.uid.call_args_list[0].args[3].endswith(f":{imap_tasks.UID_SCAN_WINDOW}")
     assert mail.uid.call_args_list[1].args[:3] == ("search", None, "UID")
-    assert mail.uid.call_args_list[2].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
+    assert mail.uid.call_args_list[2].args[:3] == ("fetch", "7", "(UID BODYSTRUCTURE)")
+    assert mail.uid.call_args_list[3].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
     assert not any(call.args[0] == "store" for call in mail.uid.call_args_list)
 
 

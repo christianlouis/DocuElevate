@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-import email
 import base64
 import binascii
-from email.header import decode_header, make_header
+import email
 import hashlib
 import imaplib
 import json
@@ -14,6 +13,7 @@ import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from email.header import decode_header, make_header
 
 import redis
 from celery import shared_task
@@ -30,6 +30,7 @@ from app.utils.allowed_types import (
     get_allowed_types_for_categories,
 )
 from app.utils.imap import IMAP_SOCKET_TIMEOUT_SECONDS, _shutdown_imap_connection
+from app.utils.imap_bodystructure import bodystructure_proves_no_named_attachment, metadata_uid_and_structure
 from app.utils.network import is_private_ip
 
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
@@ -104,6 +105,7 @@ def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
 LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
 POLL_BATCH_SIZE = 50
+BODYSTRUCTURE_BATCH_SIZE = 200
 # Never ask an IMAP server for an unbounded UID SEARCH response.  Gmail can
 # have millions of messages and imaplib cannot parse responses larger than its
 # line buffer.  The durable cursor makes these windows resumable.
@@ -1023,14 +1025,67 @@ def pull_inbox(
                 cursor = max(cursor, window_end)
             finally:
                 db.close()
+        metadata_safe_uids = set()
+        metadata_candidates = list(dict.fromkeys(selected_uids + historical_new_uids + tail_new_uids + retry_uids))
+        metadata_uids = metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE]
+        if metadata_uids:
+            try:
+                metadata_set = ",".join(str(uid) for uid in metadata_uids)
+                metadata_status, metadata_data = mail.uid("fetch", metadata_set, "(UID BODYSTRUCTURE)")
+                if metadata_status == "OK":
+                    for item in metadata_data or []:
+                        metadata_uid, structure = metadata_uid_and_structure(item)
+                        if (
+                            metadata_uid in metadata_uids
+                            and structure is not None
+                            and bodystructure_proves_no_named_attachment(structure)
+                        ):
+                            metadata_safe_uids.add(metadata_uid)
+                else:
+                    logger.warning("BODYSTRUCTURE fetch failed for %s; falling back to full payloads", mailbox_key)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("BODYSTRUCTURE fetch unavailable for %s (%s); using full payloads", mailbox_key, exc)
+
+        # Add only proven document-free UIDs from the wider metadata window;
+        # potential attachments remain limited to the normal payload budget.
+        selected_uids.extend(uid for uid in metadata_safe_uids if uid not in selected_uids)
         msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
         deleted_any = False
+        full_payload_attempts = 0
 
         for num in msg_numbers:
             if time.monotonic() >= deadline:
                 break
             uid = int(num)
+            if uid in metadata_safe_uids:
+                ledger_id = _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid)
+                if ledger_id is None:
+                    continue
+                if uid in historical_ordered:
+                    durable_uids.add(uid)
+                cursor_target = _historical_cursor_target(historical_ordered, durable_uids, cursor)
+                if cursor_target > cursor:
+                    db = _get_db_session()
+                    try:
+                        scan_cursor = (
+                            db.query(ImapScanCursor)
+                            .filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                            .first()
+                        )
+                        if scan_cursor is None:
+                            scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                            db.add(scan_cursor)
+                        scan_cursor.last_uid = cursor_target
+                        db.commit()
+                        cursor = cursor_target
+                    finally:
+                        db.close()
+                _ledger_finish(ledger_id, state="completed", message_id=f"<imap-uid-{uidvalidity}-{uid}@{mailbox_key}>")
+                continue
+            if full_payload_attempts >= POLL_BATCH_SIZE:
+                continue
+            full_payload_attempts += 1
             # The ledger is committed first. If process creation fails or the
             # worker dies, a historical UID cannot be advanced beyond an
             # unrecorded message; the next poll will rediscover/retry it.
@@ -1089,6 +1144,7 @@ def pull_inbox(
                     effective_mime_types=effective_mime_types,
                     effective_extensions=effective_extensions,
                     ingestion_prefix=f"{owner_key}:{mailbox_key}:{uidvalidity}:{uid}",
+                    background=uid not in tail_ordered,
                 )
                 _ledger_finish(ledger_id, state="completed", message_id=msg_id)
             except SoftTimeLimitExceeded:
@@ -1144,6 +1200,7 @@ def fetch_attachments_and_enqueue(
     effective_mime_types: frozenset[str] | None = None,
     effective_extensions: frozenset[str] | None = None,
     ingestion_prefix: str | None = None,
+    background: bool = False,
 ):
     """
     Extracts attachments from the email and processes only allowed file types.
@@ -1209,7 +1266,7 @@ def fetch_attachments_and_enqueue(
             from app.tasks.imap_intake import prepare_imap_attachment
 
             digest = hashlib.sha256(payload).hexdigest()
-            prepare_imap_attachment(
+            prepare_kwargs = dict(
                 owner_id=owner_id,
                 source_integration_id=source_integration_id,
                 idempotency_key=f"{ingestion_prefix}:{part_index}:{digest}",
@@ -1218,6 +1275,18 @@ def fetch_attachments_and_enqueue(
                 mime_type=mime_type,
                 is_pdf=mime_type == "application/pdf" or is_pdf_by_extension,
             )
+            if background:
+                try:
+                    prepare_imap_attachment(**prepare_kwargs, background=True)
+                except TypeError as exc:
+                    # Keep this commit compatible with the currently deployed
+                    # intake worker; the upgraded worker accepts the optional
+                    # flag and stores it for queue prioritisation.
+                    if "background" not in str(exc):
+                        raise
+                    prepare_imap_attachment(**prepare_kwargs)
+            else:
+                prepare_imap_attachment(**prepare_kwargs)
         else:
             # Direct callers also need collision-free paths; scheduled imports
             # always use the durable intake path above.
