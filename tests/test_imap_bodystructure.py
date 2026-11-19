@@ -35,3 +35,17 @@ def test_metadata_parser_handles_normal_imap_bytes_entry():
     )
     assert uid == 99
     assert bodystructure_proves_no_named_attachment(structure)
+
+
+@pytest.mark.unit
+def test_tuple_literal_body_is_not_treated_as_bodystructure():
+    uid, structure = metadata_uid_and_structure(
+        (b"99 FETCH (UID 99 BODY[] {12})", b'("TEXT" "PLAIN" NIL NIL NIL "7BIT" 4 1)')
+    )
+    assert uid is None
+    assert structure is None
+
+
+@pytest.mark.unit
+def test_trailing_tokens_and_quoted_parentheses_fail_closed():
+    assert not bodystructure_proves_no_named_attachment(b'("TEXT" "PLAIN" ("CHARSET" "x (y)") NIL NIL "7BIT" 4 1) junk')

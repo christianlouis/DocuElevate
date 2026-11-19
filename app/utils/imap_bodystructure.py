@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import re
 
+_MAX_BYTES = 64 * 1024
+_MAX_DEPTH = 32
+_MAX_TOKENS = 20_000
+
 
 class _ParseError(ValueError):
     pass
@@ -11,7 +15,11 @@ class _ParseError(ValueError):
 
 def _tokens(value: str):
     index = 0
+    token_count = 0
     while index < len(value):
+        token_count += 1
+        if token_count > _MAX_TOKENS:
+            raise _ParseError("too many tokens")
         if value[index].isspace():
             index += 1
         elif value[index] in "()":
@@ -49,18 +57,23 @@ def _parse(tokens):
     if next(tokens, None) != "(":
         raise _ParseError("structure must start with list")
 
-    def parse_list():
+    def parse_list(depth=1):
+        if depth > _MAX_DEPTH:
+            raise _ParseError("structure too deep")
         result = []
         for token in tokens:
             if token == ")":
                 return result
             if token == "(":
-                result.append(parse_list())
+                result.append(parse_list(depth + 1))
             else:
                 result.append(token)
         raise _ParseError("unbalanced list")
 
-    return parse_list()
+    result = parse_list()
+    if next(tokens, None) is not None:
+        raise _ParseError("trailing structure data")
+    return result
 
 
 def _string(value):
@@ -103,7 +116,7 @@ def _text_only(node):
             return False
         return all(_text_only(child) for child in children) and all(_safe_extension(item) for item in node[1:])
 
-    if len(node) < 7 or not (_string(node[0]) and _string(node[1])):
+    if len(node) < 8 or not (_string(node[0]) and _string(node[1])):
         return False
     if node[0][1].lower() != "text" or node[1][1].lower() not in {"plain", "html"}:
         return False
@@ -111,7 +124,7 @@ def _text_only(node):
         return False
     if not (_string(node[5]) and node[5][1].lower() in {"7bit", "8bit", "binary", "base64", "quoted-printable"}):
         return False
-    if not _integer(node[6]) or (len(node) >= 8 and not _integer(node[7])):
+    if not _integer(node[6]) or not _integer(node[7]):
         return False
     return all(_safe_extension(item) for item in node[8:])
 
@@ -119,7 +132,11 @@ def _text_only(node):
 def bodystructure_proves_no_named_attachment(value: bytes | str) -> bool:
     """Return true only for a complete, known text-only structure."""
     try:
+        if isinstance(value, bytes) and len(value) > _MAX_BYTES:
+            return False
         text = value.decode("ascii") if isinstance(value, bytes) else value
+        if len(text.encode("ascii", errors="ignore")) > _MAX_BYTES:
+            return False
         return _text_only(_parse(iter(_tokens(text))))
     except (UnicodeDecodeError, _ParseError, TypeError):
         return False
@@ -128,25 +145,36 @@ def bodystructure_proves_no_named_attachment(value: bytes | str) -> bool:
 def metadata_uid_and_structure(item) -> tuple[int | None, bytes | None]:
     """Extract UID and BODYSTRUCTURE from imaplib FETCH item bytes/tuples."""
     header = item[0] if isinstance(item, tuple) and item else item
-    body = item[1] if isinstance(item, tuple) and len(item) > 1 else None
     if not isinstance(header, (bytes, bytearray)):
         return None, None
     header = bytes(header)
     match = re.search(rb"\bUID\s+(\d+)\b", header, re.IGNORECASE)
-    marker = re.search(rb"\bBODYSTRUCTURE\s+", header, re.IGNORECASE)
-    if not match:
+    if not match or len(re.findall(rb"\bUID\s+\d+\b", header, re.IGNORECASE)) != 1:
         return None, None
+    markers = list(re.finditer(rb"\bBODYSTRUCTURE\s+", header, re.IGNORECASE))
+    if len(markers) != 1:
+        return None, None
+    marker = markers[0]
     if marker:
         start = header.find(b"(", marker.end())
         if start >= 0:
             depth = 0
+            quoted = False
+            escaped = False
             for index in range(start, len(header)):
-                if header[index] == 40:
+                char = header[index]
+                if quoted and escaped:
+                    escaped = False
+                elif quoted and char == 92:
+                    escaped = True
+                elif char == 34:
+                    quoted = not quoted
+                elif not quoted and char == 40:
                     depth += 1
-                elif header[index] == 41:
+                elif not quoted and char == 41:
                     depth -= 1
                     if depth == 0:
+                        if header[index + 1 :].strip() != b")":
+                            return None, None
                         return int(match.group(1)), header[start : index + 1]
-    if isinstance(body, (bytes, bytearray)) and body.startswith(b"("):
-        return int(match.group(1)), bytes(body)
     return None, None
