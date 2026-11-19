@@ -7,19 +7,21 @@ consumers from creating different file records for the same attachment.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import mimetypes
 import os
 import tempfile
 import uuid
-import base64
-import binascii
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
-from celery import shared_task
 import redis
+from celery import shared_task
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
@@ -27,7 +29,7 @@ from app.database import SessionLocal
 from app.models import DocumentIntake, FileRecord
 from app.services.account_deletion import assert_account_active
 from app.services.account_lifecycle_lock import account_lifecycle_lock
-from app.tasks.convert_to_pdf import convert_to_pdf
+from app.tasks.convert_to_pdf import PermanentConversionError, convert_to_pdf
 from app.tasks.process_document import _trusted_source_integration_id, process_document
 from app.utils.tribe_scope import ensure_document_scope
 
@@ -39,9 +41,53 @@ CLAIM_SECONDS = 600
 DISPATCH_RECOVERY_SECONDS = CLAIM_SECONDS * 6
 FAILED_RETRY_BASE_SECONDS = 300
 FAILED_RETRY_MAX_SECONDS = 3600
-BROKER_INVENTORY_MAX_MESSAGES = 2000
+BROKER_INVENTORY_MAX_MESSAGES = 50_000
+BROKER_INVENTORY_MAX_BYTES = 25 * 1024 * 1024
 BROKER_QUEUE_NAMES = ("document_processor",) + tuple(f"document_processor\x06\x16{i}" for i in range(1, 10))
 _broker_client = None
+_broker_client_url = None
+
+# Redis executes each script without interleaving another command.  The count
+# checks therefore cover the exact queue/unacked snapshot being parsed below;
+# a separate LLEN/LRANGE/HVALS sequence could otherwise briefly prove a task
+# absent while a worker moves it to Kombu's unacked hash.
+_BROKER_INVENTORY_SCRIPT = """
+local maximum_messages = tonumber(ARGV[1])
+local maximum_bytes = tonumber(ARGV[2])
+local total = 0
+for index, key in ipairs(KEYS) do
+    local count
+    if index == #KEYS then
+        count = redis.call('HLEN', key)
+    else
+        count = redis.call('LLEN', key)
+    end
+    total = total + count
+    if total > maximum_messages then
+        return {0, total, 0}
+    end
+end
+
+local result = {1, total, 0}
+local bytes = 0
+for index, key in ipairs(KEYS) do
+    local entries
+    if index == #KEYS then
+        entries = redis.call('HVALS', key)
+    else
+        entries = redis.call('LRANGE', key, 0, -1)
+    end
+    for _, entry in ipairs(entries) do
+        bytes = bytes + string.len(entry)
+        if bytes > maximum_bytes then
+            return {0, total, bytes}
+        end
+        result[#result + 1] = entry
+    end
+end
+result[3] = bytes
+return result
+"""
 
 
 def _now():
@@ -59,6 +105,8 @@ def _expired(value):
 def _retry_due(row, now=None):
     """Return whether a failed intake has reached its durable retry time."""
     metadata = json.loads(row.metadata_json or "{}")
+    if metadata.get("suppress_automatic_retry"):
+        return False
     retry_at = metadata.get("next_retry_at")
     if not retry_at:
         return True
@@ -76,6 +124,12 @@ def _celery_intake_id(raw):
     """Extract an intake ID from one Redis-backed Celery message."""
     try:
         message = json.loads(raw)
+        # Kombu's Redis unacked hash stores [envelope, exchange, routing_key],
+        # whereas ready queues store the envelope directly.
+        if isinstance(message, list):
+            message = message[0]
+        if not isinstance(message, dict):
+            return None
         task = (message.get("headers") or {}).get("task") or (message.get("properties") or {}).get("task")
         if task != "app.tasks.imap_intake.process_imap_intake":
             return None
@@ -94,25 +148,27 @@ def _broker_intake_inventory():
     Reconciliation must fail closed: it is safer to wait for a later poll than
     to enqueue another copy while Redis contains an unknown amount of work.
     """
-    global _broker_client
+    global _broker_client, _broker_client_url
     try:
-        if _broker_client is None:
-            _broker_client = redis.StrictRedis.from_url(
-                settings.redis_url, decode_responses=True, socket_connect_timeout=2, socket_timeout=3
-            )
-        values = []
-        for queue in BROKER_QUEUE_NAMES:
-            size = int(_broker_client.llen(queue) or 0)
-            if size > BROKER_INVENTORY_MAX_MESSAGES:
-                return None
-            values.extend(_broker_client.lrange(queue, 0, BROKER_INVENTORY_MAX_MESSAGES - 1))
-        # Redis transport stores unacked messages in one hash.  It is bounded
-        # independently from the visible lists and therefore included here.
-        unacked = _broker_client.hlen("unacked")
-        if unacked > BROKER_INVENTORY_MAX_MESSAGES:
+        broker_url = settings.effective_celery_broker_url
+        if urlparse(broker_url).scheme not in {"redis", "rediss"}:
             return None
-        values.extend(_broker_client.hvals("unacked"))
-        return {intake_id for raw in values if (intake_id := _celery_intake_id(raw)) is not None}
+        if _broker_client is None or _broker_client_url != broker_url:
+            _broker_client = redis.StrictRedis.from_url(
+                broker_url, decode_responses=True, socket_connect_timeout=2, socket_timeout=5
+            )
+            _broker_client_url = broker_url
+        snapshot = _broker_client.eval(
+            _BROKER_INVENTORY_SCRIPT,
+            len(BROKER_QUEUE_NAMES) + 1,
+            *BROKER_QUEUE_NAMES,
+            "unacked",
+            BROKER_INVENTORY_MAX_MESSAGES,
+            BROKER_INVENTORY_MAX_BYTES,
+        )
+        if not snapshot or int(snapshot[0]) != 1:
+            return None
+        return {intake_id for raw in snapshot[3:] if (intake_id := _celery_intake_id(raw)) is not None}
     except Exception:
         return None
 
@@ -179,7 +235,9 @@ def _owner_lifecycle_lock(db, owner):
         yield
 
 
-def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key, filename, payload, mime_type, is_pdf):
+def prepare_imap_attachment(
+    *, owner_id, source_integration_id, idempotency_key, filename, payload, mime_type, is_pdf, background=False
+):
     """Persist an immutable staged attachment and enqueue its intake ID.
 
     Publication may be repeated safely; the consumer claims the database row.
@@ -200,6 +258,7 @@ def prepare_imap_attachment(*, owner_id, source_integration_id, idempotency_key,
         "source_integration_id": source_integration_id,
         "mime_type": mime_type,
         "is_pdf": bool(is_pdf),
+        "background": bool(background),
     }
     with SessionLocal() as db, _owner_lifecycle_lock(db, owner):
         if owner:
@@ -282,10 +341,12 @@ def _dispatch_intake(intake_id, *, broker_inventory=None):
         row.metadata_json, row.state, row.updated_at, row.error = json.dumps(metadata), "dispatched", _now(), None
         db.commit()
     try:
+        delivery_options = {"headers": {"imap_backlog": True}, "priority": 6} if metadata.get("background") else {}
         process_imap_intake.apply_async(
             args=[intake_id],
             kwargs={"dispatch_token": token},
             task_id=f"imap-intake-{intake_id}-{token}",
+            **delivery_options,
         )
     except Exception as exc:
         with SessionLocal() as db:
@@ -326,7 +387,11 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
             if row.state == "processing" and not _expired(row.updated_at):
                 return {"status": "already_processing"}
             metadata = json.loads(row.metadata_json or "{}")
-            claim_token = dispatch_token or metadata.get("dispatch_token")
+            # This must identify the *claim*, not the current dispatch.  A
+            # legacy delivery has no dispatch token and can otherwise read a
+            # replacement token at completion, allowing a lost old claim to
+            # commit over a newer worker's claim.
+            claim_token = uuid.uuid4().hex
             path = row.local_path
             if not path or not os.path.isfile(path):
                 _record_intake_failure(row, metadata, "Staged attachment missing")
@@ -390,14 +455,32 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
             "source_integration_id": metadata.get("source_integration_id"),
         }
         task = process_document if metadata["is_pdf"] else convert_to_pdf
-        result = task.apply(args=[path], kwargs=kwargs, throw=True).result
+        delivery_options = {"headers": {"imap_backlog": True}, "priority": 6} if metadata.get("background") else {}
+        if task is convert_to_pdf:
+            kwargs["raise_on_error"] = True
+        result = task.apply(args=[path], kwargs=kwargs, throw=True, **delivery_options).result
         if result is None or (isinstance(result, dict) and (result.get("error") or result.get("status") == "skipped")):
             raise RuntimeError(f"First ingestion stage failed: {result}")
+    except PermanentConversionError as exc:
+        with SessionLocal() as db:
+            row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
+            metadata = json.loads(row.metadata_json or "{}")
+            if metadata.get("claim_token") != claim_token:
+                return {"status": "stale_dispatch"}
+            # Preserve the staged file and visible failed state for operator
+            # action, but do not turn an unsupported/corrupt input into an
+            # automatic recovery loop.
+            metadata["suppress_automatic_retry"] = True
+            metadata.pop("next_retry_at", None)
+            row.metadata_json = json.dumps(metadata)
+            row.state, row.error = "failed", str(exc)[:500]
+            db.commit()
+        return {"status": "permanent_failure", "file_id": file_id}
     except Exception as exc:
         with SessionLocal() as db:
             row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
             metadata = json.loads(row.metadata_json or "{}")
-            if metadata.get("claim_token") != (dispatch_token or metadata.get("dispatch_token")):
+            if metadata.get("claim_token") != claim_token:
                 return {"status": "stale_dispatch"}
             _record_intake_failure(row, metadata, exc)
             db.commit()
@@ -405,7 +488,7 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
     with SessionLocal() as db:
         row = db.query(DocumentIntake).filter_by(id=intake_id).with_for_update().one()
         metadata = json.loads(row.metadata_json or "{}")
-        if metadata.get("claim_token") != (dispatch_token or metadata.get("dispatch_token")):
+        if metadata.get("claim_token") != claim_token:
             return {"status": "stale_dispatch"}
         metadata.pop("next_retry_at", None)
         row.metadata_json = json.dumps(metadata)
@@ -448,7 +531,20 @@ def reconcile_imap_intakes(limit=50):
         ]
         failed_rows = (
             db.query(DocumentIntake)
-            .filter(DocumentIntake.source == "imap", DocumentIntake.state == "failed")
+            .filter(
+                DocumentIntake.source == "imap",
+                DocumentIntake.state == "failed",
+                # Keep terminal conversion failures out of the bounded query
+                # itself: filtering only after ``limit`` lets old suppressed
+                # rows permanently starve due transient failures behind them.
+                or_(
+                    DocumentIntake.metadata_json.is_(None),
+                    and_(
+                        ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry": true%'),
+                        ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry":true%'),
+                    ),
+                ),
+            )
             .order_by(DocumentIntake.updated_at, DocumentIntake.id)
             .limit(limit)
             .all()

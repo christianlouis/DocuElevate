@@ -66,6 +66,31 @@ def test_repeated_delivery_and_failed_stage_reuse_one_record(intake_env):
 
 
 @pytest.mark.unit
+def test_background_intake_preserves_backlog_priority_for_handoff_and_child(intake_env):
+    factory, publish = intake_env
+    intake_id = imap_intake.prepare_imap_attachment(
+        owner_id="owner-a",
+        source_integration_id=None,
+        idempotency_key="historical-uid",
+        filename="scan.pdf",
+        payload=b"%PDF test",
+        mime_type="application/pdf",
+        is_pdf=True,
+        background=True,
+    )
+    assert publish.call_args.kwargs["priority"] == 6
+    assert publish.call_args.kwargs["headers"] == {"imap_backlog": True}
+    with factory() as db:
+        assert __import__("json").loads(db.query(DocumentIntake).get(intake_id).metadata_json)["background"] is True
+    successful = MagicMock()
+    successful.result = {"status": "Queued for OCR"}
+    with patch.object(imap_intake.process_document, "apply", return_value=successful) as run:
+        assert imap_intake.process_imap_intake.run(intake_id)["status"] == "completed"
+    assert run.call_args.kwargs["priority"] == 6
+    assert run.call_args.kwargs["headers"] == {"imap_backlog": True}
+
+
+@pytest.mark.unit
 def test_reconciliation_republishes_expired_claim_only(intake_env):
     factory, publish = intake_env
     intake_id = _prepare()
@@ -192,6 +217,20 @@ def test_dispatched_waiting_in_broker_is_not_republished_at_consumer_lease(intak
 
 
 @pytest.mark.unit
+def test_multihour_queued_dispatch_is_not_republished_while_inventory_contains_it(intake_env):
+    factory, publish = intake_env
+    intake_id = _prepare()
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        row.updated_at = datetime.now(timezone.utc) - timedelta(hours=8)
+        db.commit()
+    publish.reset_mock()
+    with patch.object(imap_intake, "_broker_intake_inventory", return_value={intake_id}):
+        assert imap_intake.reconcile_imap_intakes() == 0
+    publish.assert_not_called()
+
+
+@pytest.mark.unit
 def test_old_dispatch_is_republished_with_token_and_stale_delivery_is_noop(intake_env):
     factory, publish = intake_env
     intake_id = _prepare()
@@ -266,6 +305,120 @@ def test_celery_inventory_extracts_intake_id_from_message():
     })
     assert imap_intake._celery_intake_id(raw) == 123
     assert imap_intake._celery_intake_id(json.dumps({"headers": {"task": "other"}})) is None
+
+
+@pytest.mark.unit
+def test_celery_inventory_extracts_intake_id_from_kombu_unacked_envelope():
+    import base64
+    import json
+
+    body = base64.b64encode(json.dumps([[456], {}, None]).encode()).decode()
+    envelope = {"headers": {"task": "app.tasks.imap_intake.process_imap_intake"}, "body": body}
+    assert imap_intake._celery_intake_id(json.dumps([envelope, "", "document_processor"])) == 456
+
+
+@pytest.mark.unit
+def test_broker_inventory_uses_effective_redis_broker_and_atomic_snapshot(monkeypatch):
+    client = MagicMock()
+    client.eval.return_value = [1, 0, 0]
+    monkeypatch.setattr(imap_intake, "_broker_client", None)
+    monkeypatch.setattr(imap_intake, "_broker_client_url", None)
+    monkeypatch.setattr(imap_intake.settings, "redis_url", "redis://cache:6379/0")
+    monkeypatch.setattr(imap_intake.settings, "celery_broker_url", "redis://broker:6379/7")
+    with patch.object(imap_intake.redis.StrictRedis, "from_url", return_value=client) as from_url:
+        assert imap_intake._broker_intake_inventory() == set()
+    from_url.assert_called_once_with(
+        "redis://broker:6379/7", decode_responses=True, socket_connect_timeout=2, socket_timeout=5
+    )
+    assert client.eval.call_args.args[1] == len(imap_intake.BROKER_QUEUE_NAMES) + 1
+    assert client.llen.call_count == 0
+    assert client.hvals.call_count == 0
+
+
+@pytest.mark.unit
+def test_broker_inventory_fails_closed_for_nonredis_or_over_limit(monkeypatch):
+    client = MagicMock()
+    monkeypatch.setattr(imap_intake, "_broker_client", None)
+    monkeypatch.setattr(imap_intake, "_broker_client_url", None)
+    monkeypatch.setattr(imap_intake.settings, "celery_broker_url", "amqp://broker")
+    with patch.object(imap_intake.redis.StrictRedis, "from_url") as from_url:
+        assert imap_intake._broker_intake_inventory() is None
+    from_url.assert_not_called()
+
+    monkeypatch.setattr(imap_intake.settings, "celery_broker_url", "redis://broker:6379/7")
+    client.eval.return_value = [0, imap_intake.BROKER_INVENTORY_MAX_MESSAGES + 1, 0]
+    with patch.object(imap_intake.redis.StrictRedis, "from_url", return_value=client):
+        assert imap_intake._broker_intake_inventory() is None
+
+
+@pytest.mark.unit
+def test_lost_legacy_claim_cannot_complete_replacement_claim(intake_env):
+    factory, _ = intake_env
+    intake_id = _prepare()
+
+    def replace_claim(*_args, **_kwargs):
+        with factory() as db:
+            row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+            metadata = __import__("json").loads(row.metadata_json)
+            metadata["claim_token"] = "replacement-claim"
+            row.metadata_json = __import__("json").dumps(metadata)
+            row.state = "processing"
+            db.commit()
+        result = MagicMock()
+        result.result = {"status": "Queued for OCR"}
+        return result
+
+    with patch.object(imap_intake.process_document, "apply", side_effect=replace_claim):
+        assert imap_intake.process_imap_intake.run(intake_id)["status"] == "stale_dispatch"
+    with factory() as db:
+        assert db.query(DocumentIntake).filter_by(id=intake_id).one().state == "processing"
+
+
+@pytest.mark.unit
+def test_permanent_conversion_failure_preserves_stage_but_stops_automatic_retry(intake_env):
+    factory, publish = intake_env
+    intake_id = imap_intake.prepare_imap_attachment(
+        owner_id="owner-a",
+        source_integration_id=None,
+        idempotency_key="unsupported-source",
+        filename="unsupported.bin",
+        payload=b"not a supported document",
+        mime_type="application/octet-stream",
+        is_pdf=False,
+    )
+    with patch.object(
+        imap_intake.convert_to_pdf, "apply", side_effect=imap_intake.PermanentConversionError("unsupported")
+    ) as convert:
+        assert imap_intake.process_imap_intake.run(intake_id)["status"] == "permanent_failure"
+    assert convert.call_args.kwargs["kwargs"]["raise_on_error"] is True
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        assert row.state == "failed"
+        assert __import__("json").loads(row.metadata_json)["suppress_automatic_retry"] is True
+        assert row.local_path
+    publish.reset_mock()
+    assert imap_intake.reconcile_imap_intakes() == 0
+    publish.assert_not_called()
+
+
+@pytest.mark.unit
+def test_suppressed_failed_rows_do_not_starve_due_retry(intake_env):
+    factory, publish = intake_env
+    suppressed_id = _prepare("suppressed")
+    due_id = _prepare("due")
+    with factory() as db:
+        for intake_id, suppress in ((suppressed_id, True), (due_id, False)):
+            row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+            metadata = __import__("json").loads(row.metadata_json)
+            if suppress:
+                metadata["suppress_automatic_retry"] = True
+            else:
+                metadata["next_retry_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+            row.metadata_json, row.state = __import__("json").dumps(metadata), "failed"
+        db.commit()
+    publish.reset_mock()
+    assert imap_intake.reconcile_imap_intakes(limit=1) == 1
+    assert publish.call_args.kwargs["args"] == [due_id]
 
 
 @pytest.mark.unit
