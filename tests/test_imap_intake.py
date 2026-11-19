@@ -243,7 +243,9 @@ def test_old_dispatch_is_republished_with_token_and_stale_delivery_is_noop(intak
         assert imap_intake.reconcile_imap_intakes() == 1
     new_token = publish.call_args.kwargs["kwargs"]["dispatch_token"]
     with factory() as db:
-        current_token = __import__("json").loads(db.query(DocumentIntake).get(intake_id).metadata_json)["dispatch_token"]
+        current_token = __import__("json").loads(db.query(DocumentIntake).get(intake_id).metadata_json)[
+            "dispatch_token"
+        ]
     assert new_token == current_token
     assert imap_intake.process_imap_intake.run(intake_id, dispatch_token="old-token")["status"] == "stale_dispatch"
 
@@ -299,10 +301,12 @@ def test_celery_inventory_extracts_intake_id_from_message():
     import json
 
     body = base64.b64encode(json.dumps([[123], {"dispatch_token": "t"}, None]).encode()).decode()
-    raw = json.dumps({
-        "headers": {"task": "app.tasks.imap_intake.process_imap_intake"},
-        "body": body,
-    })
+    raw = json.dumps(
+        {
+            "headers": {"task": "app.tasks.imap_intake.process_imap_intake"},
+            "body": body,
+        }
+    )
     assert imap_intake._celery_intake_id(raw) == 123
     assert imap_intake._celery_intake_id(json.dumps({"headers": {"task": "other"}})) is None
 

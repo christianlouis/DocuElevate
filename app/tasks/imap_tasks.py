@@ -1027,7 +1027,10 @@ def pull_inbox(
                 db.close()
         metadata_safe_uids = set()
         metadata_candidates = list(dict.fromkeys(selected_uids + historical_new_uids + tail_new_uids + retry_uids))
-        metadata_uids = metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE]
+        # Completing from metadata must not bypass requested mailbox mutations.
+        metadata_uids = (
+            metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE] if not (delete_after_process or gmail_apply_labels) else []
+        )
         if metadata_uids:
             try:
                 metadata_set = ",".join(str(uid) for uid in metadata_uids)
@@ -1043,8 +1046,12 @@ def pull_inbox(
                             metadata_safe_uids.add(metadata_uid)
                 else:
                     logger.warning("BODYSTRUCTURE fetch failed for %s; falling back to full payloads", mailbox_key)
+            except SoftTimeLimitExceeded:
+                raise
             except Exception as exc:  # noqa: BLE001
-                logger.warning("BODYSTRUCTURE fetch unavailable for %s (%s); using full payloads", mailbox_key, exc)
+                logger.warning(
+                    "BODYSTRUCTURE fetch unavailable for %s (%s); using full payloads", mailbox_key, type(exc).__name__
+                )
 
         # Add only proven document-free UIDs from the wider metadata window;
         # potential attachments remain limited to the normal payload budget.
@@ -1275,18 +1282,7 @@ def fetch_attachments_and_enqueue(
                 mime_type=mime_type,
                 is_pdf=mime_type == "application/pdf" or is_pdf_by_extension,
             )
-            if background:
-                try:
-                    prepare_imap_attachment(**prepare_kwargs, background=True)
-                except TypeError as exc:
-                    # Keep this commit compatible with the currently deployed
-                    # intake worker; the upgraded worker accepts the optional
-                    # flag and stores it for queue prioritisation.
-                    if "background" not in str(exc):
-                        raise
-                    prepare_imap_attachment(**prepare_kwargs)
-            else:
-                prepare_imap_attachment(**prepare_kwargs)
+            prepare_imap_attachment(**prepare_kwargs, background=background)
         else:
             # Direct callers also need collision-free paths; scheduled imports
             # always use the durable intake path above.

@@ -6,8 +6,14 @@ import pytest
 
 
 def _envelope(
-    intake_id, *, token="a", kwargs=None, task="app.tasks.imap_intake.process_imap_intake", message_id=None, origin=None
-):  # noqa: S107 - synthetic dispatch identity
+    intake_id,
+    *,
+    token="a",  # noqa: S107 - synthetic dispatch identity
+    kwargs=None,
+    task="app.tasks.imap_intake.process_imap_intake",
+    message_id=None,
+    origin=None,
+):
     body = base64.b64encode(json.dumps([[intake_id], kwargs or {}, None], separators=(",", ":")).encode()).decode()
     envelope = {"body": body, "headers": {"task": task, "dispatch_token": token}}
     if message_id is not None:

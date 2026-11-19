@@ -330,9 +330,7 @@ def _dispatch_intake(intake_id, *, broker_inventory=None):
             return False
         if row.state in {"processing", "dispatched"} and not _expired(row.updated_at):
             return False
-        if row.state == "dispatched" and (
-            broker_inventory is None or intake_id in broker_inventory
-        ):
+        if row.state == "dispatched" and (broker_inventory is None or intake_id in broker_inventory):
             # The existing broker/unacked copy is still present, or inventory
             # could not prove its absence.  Fail closed to avoid queue storms.
             return False
@@ -567,7 +565,4 @@ def reconcile_imap_intakes(limit=50):
         if dispatched_ids:
             broker_inventory = _broker_intake_inventory()
     ids = pending_ids + processing_ids + failed_ids + dispatched_ids
-    return sum(
-        bool(_dispatch_intake(intake_id, broker_inventory=broker_inventory))
-        for intake_id in ids[:limit]
-    )
+    return sum(bool(_dispatch_intake(intake_id, broker_inventory=broker_inventory)) for intake_id in ids[:limit])
