@@ -10,7 +10,7 @@ and broker settings available:
 DocuElevate/.venv/bin/python scripts/compact_imap_queue.py > /tmp/imap-preview.json
 ```
 
-Inspect the JSON plan and record its `snapshot_digest`. Before applying, stop
+Inspect the JSON plan and record its `preview_digest`. Before applying, stop
 the IMAP producer and the main worker and ensure no other producer publishes to
 `document_processor` (Beat and manual producers included). Then apply exactly
 the reviewed snapshot:
@@ -22,15 +22,22 @@ DocuElevate/.venv/bin/python scripts/compact_imap_queue.py \
 ```
 
 The tool only considers the base `document_processor` list and priority lists
-0–9. It removes byte-for-byte duplicate
-`app.tasks.imap_intake.process_imap_intake(intake_id)` envelopes: completed
-intakes may lose all copies; unfinished intakes retain at least one copy.
-Malformed messages, other tasks, and envelopes with different headers,
-dispatch tokens, arguments, or kwargs are retained. It never touches mail,
-attachments, database rows, or in-flight deliveries.
+0–9. It removes known `app.tasks.imap_intake.process_imap_intake(intake_id)`
+envelopes with empty kwargs. Transport-generated Celery IDs (`id`, `root_id`,
+`parent_id`, `origin`, `correlation_id`, and `delivery_tag`) are ignored when comparing
+envelopes. Dispatch tokens, retries, timing, routing, options, arguments, and
+kwargs remain significant. Completed intakes may lose even a singleton
+obsolete envelope; unfinished intakes retain at least one equivalent copy.
+Malformed messages, other tasks, and envelopes with different execution
+options are retained. It never touches mail, attachments, database rows, or
+in-flight deliveries.
 
-The backup is written and fsynced with mode `0600` before the Redis transaction.
-Redis `WATCH` plus a digest check aborts if the queue changed; there is no
-automatic retry. After a successful transaction the tool verifies exact list
-contents and order. A failed apply leaves the backup for investigation; do not
-retry until the queue is re-previewed.
+The preview digest covers both the raw queue and the durable state of every
+candidate intake. During apply those intake rows are locked and reread before
+the Redis transaction, preventing a completed-to-reset transition from being
+silently acted on. The backup is written and fsynced with mode `0600` before
+the Redis transaction, and an existing backup path is rejected rather than
+overwritten. Redis `WATCH` plus a digest check aborts if the queue changed; no
+automatic retry is performed. After a successful transaction the tool verifies
+exact list contents and order. A failed apply leaves the backup for
+investigation; do not retry until the queue is re-previewed.

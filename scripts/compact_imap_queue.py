@@ -2,10 +2,13 @@
 """Preview and, explicitly, compact safe duplicate IMAP Celery envelopes.
 
 The default is a read-only preview.  This tool never removes mail, staged
-files, database rows, or unknown Celery messages.  It only removes byte-for-
-byte duplicate ``process_imap_intake(intake_id)`` envelopes, keeping at least
-one copy while an unfinished durable intake exists.  Completed intakes may
-have all duplicate copies removed.  Different headers/kwargs remain intact.
+files, database rows, or unknown Celery messages.  It only removes known
+``process_imap_intake(intake_id)`` envelopes with empty kwargs. Celery's
+transport-generated message IDs are ignored when identifying equivalent
+envelopes; dispatch tokens, options, routing, retries, and timing remain part
+of the identity. At least one copy remains for unfinished intakes, while a
+completed intake's obsolete envelope may be removed even when it is a
+singleton.
 Run it from a worker pod (or another environment with the same Redis and DB
 configuration) and keep producers/consumers quiescent while applying.
 """
@@ -71,6 +74,31 @@ def intake_id(raw: bytes) -> int | None:
     return args[0]
 
 
+_TRANSPORT_IDS = {
+    ("headers", "id"),
+    ("headers", "root_id"),
+    ("headers", "parent_id"),
+    ("headers", "origin"),
+    ("properties", "correlation_id"),
+    ("properties", "delivery_tag"),
+}
+
+
+def execution_key(raw: bytes) -> bytes | None:
+    """Return a stable identity while ignoring only transport-generated IDs."""
+    if intake_id(raw) is None:
+        return None
+    try:
+        envelope = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    for section, field in _TRANSPORT_IDS:
+        values = envelope.get(section)
+        if isinstance(values, dict):
+            values.pop(field, None)
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode()
+
+
 def snapshot_digest(snapshot: Mapping[str, list[bytes]]) -> str:
     digest = hashlib.sha256()
     for key in sorted(snapshot):
@@ -82,6 +110,13 @@ def snapshot_digest(snapshot: Mapping[str, list[bytes]]) -> str:
     return digest.hexdigest()
 
 
+def state_digest(states: Mapping[int, str]) -> str:
+    digest = hashlib.sha256()
+    for intake_id_value, state in sorted(states.items()):
+        digest.update(f"{intake_id_value}\0{state}\0".encode())
+    return digest.hexdigest()
+
+
 def plan_compaction(snapshot: Mapping[str, list[bytes]], states: Mapping[int, str]) -> dict[str, Any]:
     """Build a deterministic removal plan without mutating its input."""
     occurrences: dict[tuple[str, bytes], list[int]] = {}
@@ -90,27 +125,31 @@ def plan_compaction(snapshot: Mapping[str, list[bytes]], states: Mapping[int, st
     for key, messages in snapshot.items():
         for index, raw in enumerate(messages):
             iid = intake_id(raw)
-            if iid is None:
+            identity = execution_key(raw)
+            if iid is None or identity is None:
                 malformed += 1
                 continue
             eligible += 1
-            occurrences.setdefault((key, raw), []).append(index)
+            occurrences.setdefault((key, identity), []).append(index)
 
     removals: list[dict[str, Any]] = []
-    for (key, raw), indices in occurrences.items():
-        if len(indices) < 2:
-            continue
-        iid = intake_id(raw)
+    for (key, identity), indices in occurrences.items():
+        iid = intake_id(snapshot[key][indices[0]])
         state = states.get(iid)
         if state not in UNFINISHED and state != "completed":
             continue
         keep = 1 if state in UNFINISHED else 0
         for index in indices[keep:]:
+            raw = snapshot[key][index]
             removals.append({"key": key, "index": index, "intake_id": iid, "sha256": hashlib.sha256(raw).hexdigest()})
     removals.sort(key=lambda item: (item["key"], item["index"]))
+    queue_digest = snapshot_digest(snapshot)
+    durable_state_digest = state_digest(states)
     return {
         "queue": QUEUE,
-        "snapshot_digest": snapshot_digest(snapshot),
+        "snapshot_digest": queue_digest,
+        "state_digest": durable_state_digest,
+        "preview_digest": hashlib.sha256(f"{queue_digest}\0{durable_state_digest}".encode()).hexdigest(),
         "message_count": sum(len(v) for v in snapshot.values()),
         "eligible_imap_messages": eligible,
         "malformed_or_other_messages": malformed,
@@ -121,6 +160,8 @@ def plan_compaction(snapshot: Mapping[str, list[bytes]], states: Mapping[int, st
 
 def backup_snapshot(path: Path, snapshot: Mapping[str, list[bytes]], manifest: Mapping[str, Any]) -> None:
     """Write an fsynced mode-0600 JSON backup before any broker mutation."""
+    if path.exists():
+        raise RuntimeError(f"backup path already exists; choose a unique path: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"manifest": manifest, "messages": {key: [base64.b64encode(v).decode("ascii") for v in values] for key, values in snapshot.items()}}
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -146,7 +187,7 @@ def backup_snapshot(path: Path, snapshot: Mapping[str, list[bytes]], manifest: M
 
 def apply_plan(redis_client: Any, snapshot: Mapping[str, list[bytes]], plan: Mapping[str, Any], backup: Path, preview_digest: str) -> dict[str, Any]:
     """Apply one watched Redis transaction; a changed queue fails closed."""
-    if plan["snapshot_digest"] != preview_digest:
+    if plan["preview_digest"] != preview_digest:
         raise RuntimeError("preview digest does not match the plan")
     backup_snapshot(backup, snapshot, plan)
     by_value: dict[str, dict[bytes, int]] = {}
@@ -159,7 +200,7 @@ def apply_plan(redis_client: Any, snapshot: Mapping[str, list[bytes]], plan: Map
     try:
         pipe.watch(*keys)
         current = {key: list(redis_client.lrange(key, 0, -1)) for key in keys}
-        if snapshot_digest(current) != preview_digest:
+        if snapshot_digest(current) != plan["snapshot_digest"]:
             raise RuntimeError("queue changed since preview; no mutation applied")
         pipe.multi()
         for key, values in by_value.items():
@@ -218,16 +259,27 @@ def main(argv: list[str] | None = None) -> int:
     if total > MAX_SNAPSHOT_MESSAGES:
         raise SystemExit(f"refusing snapshot of {total} messages; limit is {MAX_SNAPSHOT_MESSAGES}")
     snapshot = {key: list(client.lrange(key, 0, -1)) for key in keys}
+    candidate_ids = {
+        iid
+        for messages in snapshot.values()
+        for raw in messages
+        if (iid := intake_id(raw)) is not None
+    }
     with SessionLocal() as db:
-        states = {row.id: row.state for row in db.query(DocumentIntake.id, DocumentIntake.state).filter(DocumentIntake.source == "imap")}
-    plan = plan_compaction(snapshot, states)
-    print(json.dumps(plan, sort_keys=True))
-    if not args.apply:
-        return 0
-    if args.preview_digest != plan["snapshot_digest"]:
-        raise SystemExit("queue changed or digest mismatch; rerun a read-only preview")
-    apply_plan(client, snapshot, plan, args.backup, args.preview_digest)
-    print(json.dumps({"status": "applied", "backup": str(args.backup), "digest": args.preview_digest}))
+        query = db.query(DocumentIntake.id, DocumentIntake.state).filter(
+            DocumentIntake.source == "imap", DocumentIntake.id.in_(candidate_ids or {-1})
+        )
+        if args.apply:
+            query = query.with_for_update()
+        states = {row.id: row.state for row in query}
+        plan = plan_compaction(snapshot, states)
+        print(json.dumps(plan, sort_keys=True))
+        if not args.apply:
+            return 0
+        if args.preview_digest != plan["preview_digest"]:
+            raise SystemExit("queue or durable intake state changed; rerun a read-only preview")
+        apply_plan(client, snapshot, plan, args.backup, args.preview_digest)
+        print(json.dumps({"status": "applied", "backup": str(args.backup), "digest": args.preview_digest}))
     return 0
 
 
