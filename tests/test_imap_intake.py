@@ -91,6 +91,24 @@ def test_background_intake_preserves_backlog_priority_for_handoff_and_child(inta
 
 
 @pytest.mark.unit
+def test_reprioritized_legacy_delivery_persists_and_propagates_background(intake_env):
+    factory, _ = intake_env
+    intake_id = _prepare("legacy-queue-migration")
+    successful = MagicMock()
+    successful.result = {"status": "Queued for OCR"}
+    with patch.object(imap_intake.process_document, "apply", return_value=successful) as run:
+        result = imap_intake.process_imap_intake.apply(
+            args=[intake_id], headers={"imap_backlog": True}, priority=6, throw=True
+        ).result
+    assert result["status"] == "completed"
+    assert run.call_args.kwargs["priority"] == 6
+    assert run.call_args.kwargs["headers"] == {"imap_backlog": True}
+    with factory() as db:
+        row = db.query(DocumentIntake).filter_by(id=intake_id).one()
+        assert __import__("json").loads(row.metadata_json)["background"] is True
+
+
+@pytest.mark.unit
 def test_reconciliation_republishes_expired_claim_only(intake_env):
     factory, publish = intake_env
     intake_id = _prepare()

@@ -385,6 +385,11 @@ def process_imap_intake(self, intake_id, dispatch_token=None):
             if row.state == "processing" and not _expired(row.updated_at):
                 return {"status": "already_processing"}
             metadata = json.loads(row.metadata_json or "{}")
+            if (self.request.headers or {}).get("imap_backlog"):
+                # A reviewed queue migration can classify legacy deliveries
+                # that predate durable background metadata. Keep that priority
+                # through the synchronous first stage and any later recovery.
+                metadata["background"] = True
             # This must identify the *claim*, not the current dispatch.  A
             # legacy delivery has no dispatch token and can otherwise read a
             # replacement token at completion, allowing a lost old claim to
