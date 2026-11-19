@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 import email
+import base64
+import binascii
+from email.header import decode_header, make_header
 import hashlib
 import imaplib
 import json
 import logging
 import os
+import quopri
 import re
 import tempfile
 import time
@@ -107,6 +111,11 @@ UID_SCAN_WINDOW = 1000
 POLL_BUDGET_SECONDS = 240
 POLL_CHECKPOINT_TTL_SECONDS = 24 * 60 * 60
 POLL_CHECKPOINT_PREFIX = "docuelevate:imap:last_success:"
+# A malformed message must remain durable and retryable, but must not consume
+# every poll while the historical cursor is trying to advance.  The ledger's
+# updated_at is the durable retry timestamp, so no schema change is needed.
+RETRY_BACKOFF_BASE_SECONDS = 60
+RETRY_BACKOFF_MAX_SECONDS = 60 * 60
 
 # Local cache file for tracking processed emails
 CACHE_FILE = os.path.join(settings.workdir, "processed_mails.json")
@@ -938,7 +947,7 @@ def pull_inbox(
                 ledger_query = ledger_query.filter(ImapMessageLedger.uid == -1)
             durable_uids = {row[0] for row in ledger_query.all()}
             retry_rows = (
-                db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts)
+                db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts, ImapMessageLedger.updated_at)
                 .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
                 .filter(~ImapMessageLedger.state.in_(("completed", "vanished")))
                 .order_by(ImapMessageLedger.attempts.asc(), ImapMessageLedger.uid.asc())
@@ -961,8 +970,17 @@ def pull_inbox(
             for uid in reversed(tail_ordered)
             if uid not in durable_uids and uid > cursor and uid not in historical_new_uids
         ]
-        retry_uids = [uid for uid, _attempts in retry_rows]
-        retry_attempts = {uid: attempts or 0 for uid, attempts in retry_rows}
+        retry_now = datetime.now(timezone.utc)
+        retry_candidates = []
+        for row in retry_rows:
+            # Keep compatibility with lightweight query fakes used by callers
+            # which still return the pre-backoff two-column shape.
+            uid, attempts = row[0], row[1]
+            updated_at = row[2] if len(row) > 2 else None
+            if _retry_backoff_ready(attempts, updated_at, now=retry_now):
+                retry_candidates.append((uid, attempts))
+        retry_uids = [uid for uid, _attempts in retry_candidates]
+        retry_attempts = {uid: attempts or 0 for uid, attempts in retry_candidates}
         # Lowest-attempt failures lead so permanent failures rotate rather than
         # repeatedly consuming the retry share ahead of their peers.
         retry_uids.sort(key=lambda uid: (retry_attempts.get(uid, 0), uid))
@@ -1159,7 +1177,7 @@ def fetch_attachments_and_enqueue(
         if part.get_content_maintype() == "multipart":
             continue
 
-        filename = part.get_filename()
+        filename = _decode_attachment_filename(part)
         if filename is None:
             continue
 
@@ -1184,7 +1202,7 @@ def fetch_attachments_and_enqueue(
         safe_filename = os.path.basename(filename.replace("\\", "/"))
         if safe_filename in {"", ".", ".."}:
             safe_filename = "attachment"
-        payload = part.get_payload(decode=True)
+        payload = _decode_attachment_payload(part)
         if payload is None:
             raise ValueError("Attachment payload could not be decoded")
         if ingestion_prefix:
@@ -1216,6 +1234,93 @@ def fetch_attachments_and_enqueue(
             )
         has_attachment = True
     return has_attachment
+
+
+def _decode_attachment_payload(part):
+    """Return attachment bytes, tolerating common malformed MIME encodings.
+
+    ``email.message.Message.get_payload(decode=True)`` returns ``None`` for
+    malformed base64/quoted-printable bodies and for ``message/rfc822`` parts,
+    even when the original body is still present.  Treating that as a hard
+    ingestion failure caused the same historical message to be retried forever.
+    First use the stdlib decoder, then recover the raw payload using its
+    declared transfer encoding.  Returning raw bytes for an invalid base64
+    body preserves the evidence for downstream conversion instead of silently
+    dropping the attachment.
+    """
+    raw = part.get_payload(decode=False)
+    if raw is None:
+        return None
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    if isinstance(raw, list):
+        # A message/rfc822 attachment exposes its nested Message as a list.
+        # Serialize the nested message so .eml files remain ingestible.
+        chunks = []
+        for nested in raw:
+            if hasattr(nested, "as_bytes"):
+                chunks.append(nested.as_bytes())
+            elif isinstance(nested, (bytes, bytearray)):
+                chunks.append(bytes(nested))
+        return b"".join(chunks) if chunks else None
+    if not isinstance(raw, str):
+        return None
+
+    transfer_encoding = (part.get("Content-Transfer-Encoding") or "").strip().lower()
+    if transfer_encoding == "base64":
+        try:
+            # Whitespace is valid line wrapping; all remaining characters must
+            # be in the alphabet.  Strict validation avoids silently turning a
+            # malformed body into unrelated binary data.
+            encoded = b"".join(raw.encode("ascii").split())
+            return base64.b64decode(encoded, validate=True)
+        except (binascii.Error, UnicodeEncodeError, ValueError):
+            logger.warning("Malformed base64 attachment %s; preserving raw body", part.get_filename())
+            return raw.rstrip("\r\n").encode("ascii", errors="surrogateescape")
+    elif transfer_encoding in {"quoted-printable", "quopri"}:
+        return quopri.decodestring(raw.encode("ascii", errors="surrogateescape"))
+
+    try:
+        decoded = part.get_payload(decode=True)
+    except (LookupError, ValueError, binascii.Error):
+        decoded = None
+    if isinstance(decoded, bytes):
+        return decoded
+
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        return raw.encode(charset, errors="surrogateescape")
+    except (LookupError, UnicodeEncodeError):
+        return raw.encode("utf-8", errors="replace")
+
+
+def _decode_attachment_filename(part):
+    """Decode RFC 2047/RFC 2231 attachment names without losing fallbacks."""
+    filename = part.get_filename()
+    if filename is None:
+        return None
+    try:
+        return str(make_header(decode_header(filename)))
+    except (LookupError, UnicodeDecodeError, ValueError):
+        logger.warning("Could not decode attachment filename %r; preserving it", filename)
+        return filename
+
+
+def _retry_backoff_ready(attempts, updated_at, *, now=None):
+    """Return whether a failed ledger row is eligible for another attempt."""
+    # Give the first retry a chance immediately; this keeps transient IMAP
+    # fetch failures responsive.  Persistent poison rows are throttled from
+    # their second attempt onward.
+    if not updated_at or not attempts or int(attempts) <= 1:
+        return True
+    now = now or datetime.now(timezone.utc)
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    delay = min(
+        RETRY_BACKOFF_MAX_SECONDS,
+        RETRY_BACKOFF_BASE_SECONDS * (2 ** min(max(int(attempts) - 1, 0), 10)),
+    )
+    return (now - updated_at).total_seconds() >= delay
 
 
 def email_already_has_label(mail, msg_id, label="Ingested"):

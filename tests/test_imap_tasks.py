@@ -8,6 +8,9 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from app.tasks.imap_tasks import (
+    _decode_attachment_payload,
+    _decode_attachment_filename,
+    _retry_backoff_ready,
     _decrypt_imap_password,
     _pull_user_imap_accounts,
     _resolve_categories_for_profile,
@@ -1541,6 +1544,57 @@ class TestFetchAttachmentsExtended:
         assert result is False
         mock_process.delay.assert_not_called()
         mock_convert.delay.assert_not_called()
+
+    def test_recovers_malformed_base64_payload(self):
+        """Malformed transfer encoding must not strand a mailbox ledger row."""
+        from email import message_from_bytes
+
+        part = message_from_bytes(
+            b"Content-Type: application/octet-stream; name=scan.bin\r\n"
+            b"Content-Disposition: attachment; filename=scan.bin\r\n"
+            b"Content-Transfer-Encoding: base64\r\n\r\n"
+            b"not-valid-base64!!\r\n"
+        )
+
+        assert _decode_attachment_payload(part) == b"not-valid-base64!!"
+
+    def test_serializes_message_rfc822_attachment(self):
+        """Nested messages are preserved as .eml bytes instead of returning None."""
+        from email import message_from_bytes
+
+        part = message_from_bytes(
+            b"Content-Type: message/rfc822; name=forwarded.eml\r\n"
+            b"Content-Disposition: attachment; filename=forwarded.eml\r\n\r\n"
+            b"From: sender@example.test\r\nSubject: forwarded\r\n\r\nBody\r\n"
+        )
+
+        payload = _decode_attachment_payload(part)
+        assert payload is not None
+        assert b"Subject: forwarded" in payload
+
+    def test_decodes_rfc2047_attachment_filename(self):
+        from email import message_from_bytes
+
+        part = message_from_bytes(
+            b"Content-Type: application/pdf\r\n"
+            b"Content-Disposition: attachment; filename=\"=?UTF-8?Q?Rechnung_=C3=84.pdf?=\"\r\n\r\n"
+        )
+
+        assert _decode_attachment_filename(part) == "Rechnung Ä.pdf"
+
+
+@pytest.mark.unit
+class TestRetryBackoff:
+    def test_failed_rows_wait_with_exponential_backoff(self):
+        now = datetime(2026, 11, 19, tzinfo=timezone.utc)
+        assert _retry_backoff_ready(1, now - timedelta(seconds=1), now=now)
+        assert not _retry_backoff_ready(2, now - timedelta(seconds=119), now=now)
+        assert _retry_backoff_ready(2, now - timedelta(seconds=120), now=now)
+        assert not _retry_backoff_ready(3, now - timedelta(seconds=239), now=now)
+        assert _retry_backoff_ready(3, now - timedelta(seconds=240), now=now)
+
+    def test_missing_timestamp_remains_retryable(self):
+        assert _retry_backoff_ready(100, None)
 
 
 @pytest.mark.unit

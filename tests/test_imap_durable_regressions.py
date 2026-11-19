@@ -530,6 +530,9 @@ def test_fair_polling_rotates_retries_and_new_mail_when_only_one_attempt_fits(db
         patch.object(imap_tasks, "is_private_ip", return_value=False),
         patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=True),
         patch.object(imap_tasks.time, "monotonic", side_effect=lambda: clock[0]),
+            # This test exercises class rotation; the dedicated backoff unit
+            # tests cover retry timing without waiting for wall-clock time.
+            patch.object(imap_tasks, "RETRY_BACKOFF_BASE_SECONDS", 0),
     ):
         # Seed three durable failures before a continuous stream of new mail.
         assert not imap_tasks.pull_inbox("test", "imap.example", 993, "user", "pw", True, False)
