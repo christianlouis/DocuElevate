@@ -65,6 +65,9 @@ celery.conf.task_routes = {
     "app.tasks.dispatch_uploads.dispatch_upload_item": {"queue": "upload_maintenance"},
     "app.tasks.dispatch_uploads.dispatch_upload_outbox": {"queue": "upload_maintenance"},
     "app.tasks.dispatch_uploads.reconcile_upload_states": {"queue": "upload_maintenance"},
+    # Health checks must remain timely while historical documents drain.
+    "app.tasks.monitor_stalled_steps.monitor_stalled_steps": {"queue": "upload_maintenance"},
+    "app.tasks.uptime_kuma_tasks.ping_uptime_kuma": {"queue": "upload_maintenance"},
     "app.tasks.*": {"queue": "document_processor"},
 }
 
