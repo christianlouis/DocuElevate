@@ -2,7 +2,9 @@
 import logging
 import mimetypes
 import os
+from email.header import decode_header, make_header
 from typing import Any, Optional, Tuple
+from urllib.parse import unquote
 
 import filetype
 import puremagic
@@ -15,6 +17,33 @@ from app.tasks.retry_config import mark_bulk_processing, mark_bulk_terminal_fail
 from app.utils import log_task_progress
 
 logger = logging.getLogger(__name__)
+
+
+class ConversionError(RuntimeError):
+    """Base error for callers opting into typed conversion failures."""
+
+
+class PermanentConversionError(ConversionError):
+    """The input or request is not convertible and should not be retried."""
+
+
+class TransientConversionError(ConversionError):
+    """Gotenberg or the network failed temporarily; retrying is appropriate."""
+
+
+def _decode_original_filename(original_filename: Optional[str]) -> Optional[str]:
+    """Decode legacy RFC2047/RFC2231 names before extension inference."""
+    if not original_filename:
+        return original_filename
+    try:
+        decoded = str(make_header(decode_header(original_filename)))
+    except (LookupError, UnicodeDecodeError, ValueError):
+        decoded = original_filename
+    decoded = unquote(decoded)
+    # A legacy RFC2047 parser in the intake path left the encoded-word
+    # terminator behind (for example ``invoice.doc?=``).  It must not become
+    # the apparent extension and route the document to the fallback handler.
+    return decoded[:-2] if decoded.endswith("?=") else decoded
 
 
 def _normalise_magic_match(matches) -> tuple[Optional[str], Optional[str]]:
@@ -65,14 +94,15 @@ def _detect_mime_type(file_path: str, original_filename: Optional[str]) -> Tuple
     Returns:
         Tuple of detected MIME type and encoding.
     """
-    mime_type, encoding = mimetypes.guess_type(file_path)
-    if mime_type:
-        return mime_type, encoding
-
+    original_filename = _decode_original_filename(original_filename)
     if original_filename:
         mime_type, encoding = mimetypes.guess_type(original_filename)
         if mime_type:
             return mime_type, encoding
+
+    mime_type, encoding = mimetypes.guess_type(file_path)
+    if mime_type:
+        return mime_type, encoding
 
     return _detect_mime_type_from_magic(file_path), encoding
 
@@ -89,14 +119,15 @@ def _detect_extension(file_path: str, original_filename: Optional[str], mime_typ
     Returns:
         File extension with leading dot (e.g., ".pdf") or empty string if unknown.
     """
-    file_ext = os.path.splitext(file_path)[1].lower()
-    if file_ext:
-        return file_ext
-
+    original_filename = _decode_original_filename(original_filename)
     if original_filename:
         file_ext = os.path.splitext(original_filename)[1].lower()
         if file_ext:
             return file_ext
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+    if file_ext:
+        return file_ext
 
     if mime_type:
         return mimetypes.guess_extension(mime_type) or ""
@@ -148,6 +179,7 @@ def convert_to_pdf(
     owner_id: Optional[str] = None,
     file_id: Optional[int] = None,
     source_integration_id: Optional[int] = None,
+    raise_on_error: bool = False,
 ) -> Optional[str]:
     """
     Converts a file to PDF using Gotenberg's API.
@@ -161,6 +193,7 @@ def convert_to_pdf(
         file_id: Existing file record to continue after conversion.  Reusing it
             keeps one user-visible document and preserves its immutable source.
     """
+    original_filename = _decode_original_filename(original_filename)
     task_id = self.request.id
     mark_bulk_processing(file_id)
     logger.info(f"[{task_id}] Starting PDF conversion: {file_path}")
@@ -168,7 +201,10 @@ def convert_to_pdf(
     def progress(step: str, status: str, message: str, **kwargs: Any) -> None:
         """Attach conversion history to the original user-visible record."""
         log_task_progress(task_id, step, status, message, file_id=file_id, **kwargs)
-        if status == "failure":
+        # Opt-in callers (the intake worker) classify the typed exception and
+        # decide whether the original should remain retryable.  Legacy callers
+        # retain the existing terminal-failure bookkeeping.
+        if status == "failure" and not raise_on_error:
             mark_bulk_terminal_failure(file_id, f"{step}: {message}")
 
     progress("convert_to_pdf", "in_progress", f"Converting file: {os.path.basename(file_path)}")
@@ -177,6 +213,8 @@ def convert_to_pdf(
     if not gotenberg_url:
         logger.error(f"[{task_id}] Gotenberg URL is not configured in settings.")
         progress("convert_to_pdf", "failure", "Gotenberg URL not configured")
+        if raise_on_error:
+            raise PermanentConversionError("Gotenberg URL not configured")
         return
 
     # Try to guess the MIME type based on file content and extension
@@ -195,6 +233,8 @@ def convert_to_pdf(
             ),
         )
         logger.error(f"[{task_id}] Unable to determine file type for conversion: {file_path}")
+        if raise_on_error:
+            raise PermanentConversionError("Unable to determine file type for conversion")
         return None
     progress("detect_file_type", "success", f"File type: {mime_type or file_ext}")
 
@@ -202,6 +242,12 @@ def convert_to_pdf(
     endpoint = None
     form_data = {}
     files = {}
+    upload_handles = []
+
+    def upload_file(field_name: str, filename: str, path: str):
+        handle = open(path, "rb")
+        upload_handles.append(handle)
+        return field_name, (filename, handle)
 
     # Dictionary mapping file extensions to their handlers
     OFFICE_EXTENSIONS = {
@@ -249,7 +295,7 @@ def convert_to_pdf(
         or file_ext in IMAGE_EXTENSIONS
     ):
         endpoint = f"{gotenberg_url}/forms/libreoffice/convert"
-        files = {"files": (_build_filename(file_path, original_filename, file_ext), open(file_path, "rb"))}
+        files = dict([upload_file("files", _build_filename(file_path, original_filename, file_ext), file_path)])
 
         # Add some quality settings for better PDF output
         form_data = {
@@ -263,9 +309,10 @@ def convert_to_pdf(
     # Use Chromium endpoint for HTML documents
     elif (mime_type and mime_type == "text/html") or file_ext in HTML_EXTENSIONS:
         endpoint = f"{gotenberg_url}/forms/chromium/convert/html"
-        # Gotenberg requires the form field to be exactly 'index.html'
-        # The content filename doesn't matter, just the form field key
-        files = {"index.html": ("index.html", open(file_path, "rb"))}
+        # Chromium expects the repeated multipart field name ``files`` and an
+        # index.html filename; using ``index.html`` as the field name returns
+        # HTTP 400 on current Gotenberg.
+        files = dict([upload_file("files", "index.html", file_path)])
 
         # Add options for better HTML to PDF conversion
         form_data = {
@@ -313,10 +360,10 @@ def convert_to_pdf(
             f.write(html_wrapper)
 
         try:
-            files = {
-                "index.html": ("index.html", open(wrapper_path, "rb")),
-                markdown_filename: (markdown_filename, open(file_path, "rb")),
-            }
+            files = [
+                upload_file("files", "index.html", wrapper_path),
+                upload_file("files", markdown_filename, file_path),
+            ]
 
             form_data = {
                 "paperWidth": "8.27",  # A4 width in inches
@@ -334,12 +381,14 @@ def convert_to_pdf(
     # Fallback to LibreOffice for everything else
     else:
         endpoint = f"{gotenberg_url}/forms/libreoffice/convert"
-        files = {"files": (_build_filename(file_path, original_filename, file_ext), open(file_path, "rb"))}
+        files = dict([upload_file("files", _build_filename(file_path, original_filename, file_ext), file_path)])
         logger.warning(f"Using fallback conversion for unknown type: {mime_type} / {file_ext}")
 
     if not endpoint:
         logger.error(f"[{task_id}] Could not determine Gotenberg endpoint for file type: {mime_type}")
         progress("convert_to_pdf", "failure", f"Unknown file type: {mime_type}")
+        if raise_on_error:
+            raise PermanentConversionError(f"Unknown file type: {mime_type}")
         return None
 
     try:
@@ -401,8 +450,21 @@ def convert_to_pdf(
             )
             progress("call_gotenberg", "failure", error_msg)
             progress("convert_to_pdf", "failure", f"Conversion failed: {error_msg}")
+            error_type = PermanentConversionError if 400 <= response.status_code < 500 else TransientConversionError
+            error = error_type(error_msg)
+            if raise_on_error:
+                raise error
             return None
     except Exception as e:
+        if raise_on_error and isinstance(e, ConversionError):
+            raise
         logger.exception(f"[{task_id}] Error converting {file_path} to PDF: {e}")
         progress("convert_to_pdf", "failure", f"Exception: {str(e)}")
+        if raise_on_error and isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
+            raise TransientConversionError(str(e)) from e
+        if raise_on_error:
+            raise PermanentConversionError(str(e)) from e
         return None
+    finally:
+        for handle in upload_handles:
+            handle.close()

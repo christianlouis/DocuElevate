@@ -429,6 +429,76 @@ class TestConvertToPdfDetection:
         result = _build_filename("/tmp/uuid123", None, ".pdf")
         assert result == "uuid123.pdf"
 
+    def test_decodes_legacy_original_filename_before_extension_detection(self, tmp_path):
+        from app.tasks.convert_to_pdf import _detect_extension, _detect_mime_type
+
+        staged = tmp_path / "upload-without-suffix"
+        staged.write_bytes(b"content")
+        legacy_name = "=?UTF-8?Q?Rechnung_=C3=84.doc?="
+
+        assert _detect_extension(str(staged), legacy_name, None) == ".doc"
+        assert _detect_mime_type(str(staged), legacy_name)[0] == "application/msword"
+        assert _detect_extension(str(staged), "Rechnung.doc?=", None) == ".doc"
+
+    def test_html_upload_uses_gotenberg_files_field_and_closes_handle(self, tmp_path):
+        from app.tasks.convert_to_pdf import convert_to_pdf
+
+        html_file = tmp_path / "source.html"
+        html_file.write_text("<html><body>ok</body></html>")
+        response = Mock(status_code=200, content=b"%PDF-1.4 fake")
+        with (
+            patch("app.tasks.convert_to_pdf.requests.post", return_value=response) as post,
+            patch("app.tasks.convert_to_pdf.process_document"),
+            patch("app.tasks.convert_to_pdf.log_task_progress"),
+            patch("app.tasks.convert_to_pdf.settings") as mock_settings,
+        ):
+            mock_settings.gotenberg_url = "http://gotenberg"
+            mock_settings.http_request_timeout = 30
+            result = convert_to_pdf.apply(args=[str(html_file)]).get()
+
+        assert result == str(tmp_path / "source.pdf")
+        uploaded = post.call_args.kwargs["files"]
+        assert uploaded["files"][0] == "index.html"
+        assert uploaded["files"][1].closed
+
+    def test_markdown_upload_repeats_files_field(self, tmp_path):
+        from app.tasks.convert_to_pdf import convert_to_pdf
+
+        markdown_file = tmp_path / "source.md"
+        markdown_file.write_text("# title")
+        response = Mock(status_code=200, content=b"%PDF-1.4 fake")
+        with (
+            patch("app.tasks.convert_to_pdf.requests.post", return_value=response) as post,
+            patch("app.tasks.convert_to_pdf.process_document"),
+            patch("app.tasks.convert_to_pdf.log_task_progress"),
+            patch("app.tasks.convert_to_pdf.settings") as mock_settings,
+        ):
+            mock_settings.gotenberg_url = "http://gotenberg"
+            mock_settings.http_request_timeout = 30
+            convert_to_pdf.apply(args=[str(markdown_file)]).get()
+
+        uploaded = post.call_args.kwargs["files"]
+        assert [field for field, _value in uploaded] == ["files", "files"]
+        assert all(value[1].closed for _field, value in uploaded)
+
+    def test_transient_and_permanent_http_failures_are_typed_when_opted_in(self, tmp_path):
+        from app.tasks.convert_to_pdf import PermanentConversionError, TransientConversionError, convert_to_pdf
+
+        source = tmp_path / "source.doc"
+        source.write_bytes(b"legacy")
+        with (
+            patch("app.tasks.convert_to_pdf.process_document"),
+            patch("app.tasks.convert_to_pdf.log_task_progress"),
+            patch("app.tasks.convert_to_pdf.settings") as mock_settings,
+        ):
+            mock_settings.gotenberg_url = "http://gotenberg"
+            mock_settings.http_request_timeout = 30
+            for status, error_type in ((400, PermanentConversionError), (503, TransientConversionError)):
+                response = Mock(status_code=status, text="failure")
+                with patch("app.tasks.convert_to_pdf.requests.post", return_value=response):
+                    with pytest.raises(error_type):
+                        convert_to_pdf.apply(args=[str(source)], kwargs={"raise_on_error": True}).get()
+
 
 # ---------------------------------------------------------------------------
 # app/utils/file_queries.py  (93 % → 95 %+)
