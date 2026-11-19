@@ -21,7 +21,6 @@ import hashlib
 import json
 import os
 import stat
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -48,7 +47,12 @@ def _json_body(envelope: Mapping[str, Any]) -> tuple[list[Any], dict[str, Any]] 
         value = json.loads(decoded)
     except (ValueError, TypeError, json.JSONDecodeError):
         return None
-    if not isinstance(value, list) or len(value) < 2 or not isinstance(value[0], list) or not isinstance(value[1], dict):
+    if (
+        not isinstance(value, list)
+        or len(value) < 2
+        or not isinstance(value[0], list)
+        or not isinstance(value[1], dict)
+    ):
         return None
     return value[0], value[1]
 
@@ -133,13 +137,14 @@ def plan_compaction(snapshot: Mapping[str, list[bytes]], states: Mapping[int, st
             occurrences.setdefault((key, identity), []).append(index)
 
     removals: list[dict[str, Any]] = []
-    for (key, identity), indices in occurrences.items():
+    for (key, _identity), indices in occurrences.items():
         iid = intake_id(snapshot[key][indices[0]])
         state = states.get(iid)
         if state not in UNFINISHED and state != "completed":
             continue
         keep = 1 if state in UNFINISHED else 0
-        for index in indices[keep:]:
+        # Redis consumes from the right: retain the oldest queued copy.
+        for index in indices[:-keep] if keep else indices:
             raw = snapshot[key][index]
             removals.append({"key": key, "index": index, "intake_id": iid, "sha256": hashlib.sha256(raw).hexdigest()})
     removals.sort(key=lambda item: (item["key"], item["index"]))
@@ -163,7 +168,10 @@ def backup_snapshot(path: Path, snapshot: Mapping[str, list[bytes]], manifest: M
     if path.exists():
         raise RuntimeError(f"backup path already exists; choose a unique path: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"manifest": manifest, "messages": {key: [base64.b64encode(v).decode("ascii") for v in values] for key, values in snapshot.items()}}
+    payload = {
+        "manifest": manifest,
+        "messages": {key: [base64.b64encode(v).decode("ascii") for v in values] for key, values in snapshot.items()},
+    }
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
         os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
@@ -185,7 +193,9 @@ def backup_snapshot(path: Path, snapshot: Mapping[str, list[bytes]], manifest: M
         raise
 
 
-def apply_plan(redis_client: Any, snapshot: Mapping[str, list[bytes]], plan: Mapping[str, Any], backup: Path, preview_digest: str) -> dict[str, Any]:
+def apply_plan(
+    redis_client: Any, snapshot: Mapping[str, list[bytes]], plan: Mapping[str, Any], backup: Path, preview_digest: str
+) -> dict[str, Any]:
     """Apply one watched Redis transaction; a changed queue fails closed."""
     if plan["preview_digest"] != preview_digest:
         raise RuntimeError("preview digest does not match the plan")
@@ -213,7 +223,7 @@ def apply_plan(redis_client: Any, snapshot: Mapping[str, list[bytes]], plan: Map
     finally:
         try:
             pipe.reset()
-        except Exception:
+        except Exception:  # noqa: S110 - preserve the original transaction error
             pass
     expected = {key: list(values) for key, values in snapshot.items()}
     for key, values in by_value.items():
@@ -245,26 +255,20 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--apply requires --preview-digest from an unchanged preview")
 
     import redis
+
+    from app.config import settings
     from app.database import SessionLocal
     from app.models import DocumentIntake
-    from app.config import settings
 
     client = redis.Redis.from_url(settings.effective_celery_broker_url, socket_connect_timeout=5, socket_timeout=10)
     # Do not use Redis KEYS here: the known queue names are bounded and this
     # command must remain safe while the broker contains a large backlog.
-    keys = queue_keys(
-        key for key in [QUEUE, *(f"{QUEUE}{PRIORITY_SEP}{n}" for n in range(10))] if client.exists(key)
-    )
+    keys = queue_keys(key for key in [QUEUE, *(f"{QUEUE}{PRIORITY_SEP}{n}" for n in range(10))] if client.exists(key))
     total = sum(int(client.llen(key)) for key in keys)
     if total > MAX_SNAPSHOT_MESSAGES:
         raise SystemExit(f"refusing snapshot of {total} messages; limit is {MAX_SNAPSHOT_MESSAGES}")
     snapshot = {key: list(client.lrange(key, 0, -1)) for key in keys}
-    candidate_ids = {
-        iid
-        for messages in snapshot.values()
-        for raw in messages
-        if (iid := intake_id(raw)) is not None
-    }
+    candidate_ids = {iid for messages in snapshot.values() for raw in messages if (iid := intake_id(raw)) is not None}
     with SessionLocal() as db:
         query = db.query(DocumentIntake.id, DocumentIntake.state).filter(
             DocumentIntake.source == "imap", DocumentIntake.id.in_(candidate_ids or {-1})

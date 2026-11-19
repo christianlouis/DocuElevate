@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 
-def _envelope(intake_id, *, token="a", kwargs=None, task="app.tasks.imap_intake.process_imap_intake", message_id=None, origin=None):
+def _envelope(
+    intake_id, *, token="a", kwargs=None, task="app.tasks.imap_intake.process_imap_intake", message_id=None, origin=None
+):  # noqa: S107 - synthetic dispatch identity
     body = base64.b64encode(json.dumps([[intake_id], kwargs or {}, None], separators=(",", ":")).encode()).decode()
     envelope = {"body": body, "headers": {"task": task, "dispatch_token": token}}
     if message_id is not None:
@@ -35,7 +37,7 @@ def test_plan_removes_only_exact_duplicates_and_keeps_one_unfinished(tool):
     result = plan(snapshot, {10: "dispatched", 11: "completed"})
 
     assert result["remove_count"] == 3
-    assert {(item["intake_id"], item["index"]) for item in result["removals"]} == {(10, 2), (11, 3), (11, 4)}
+    assert {(item["intake_id"], item["index"]) for item in result["removals"]} == {(10, 0), (11, 3), (11, 4)}
     assert result["malformed_or_other_messages"] == 1
 
 
@@ -46,7 +48,7 @@ def test_transport_ids_are_ignored_but_dispatch_token_is_preserved(tool):
     different_token = _envelope(14, token="different", message_id="three")
     result = plan({"document_processor": [first, second, different_token]}, {14: "dispatched"})
     assert result["remove_count"] == 1
-    assert result["removals"][0]["index"] == 1
+    assert result["removals"][0]["index"] == 0
 
 
 def test_completed_singleton_is_removed_with_durable_state_guard(tool):
@@ -166,6 +168,11 @@ def test_existing_backup_path_is_never_overwritten(tmp_path: Path, tool):
     backup = tmp_path / "backup.json"
     backup.write_bytes(b"keep me")
     with pytest.raises(RuntimeError, match="already exists"):
-        apply_plan(FakeRedis({key: list(value) for key, value in snapshot.items()}), snapshot, plan, backup, plan["preview_digest"])
+        apply_plan(
+            FakeRedis({key: list(value) for key, value in snapshot.items()}),
+            snapshot,
+            plan,
+            backup,
+            plan["preview_digest"],
+        )
     assert backup.read_bytes() == b"keep me"
-
