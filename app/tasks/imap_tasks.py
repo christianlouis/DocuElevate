@@ -19,7 +19,7 @@ from email.header import decode_header, make_header
 import redis
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
@@ -138,7 +138,7 @@ def _historical_payload_admission_available() -> bool:
                 db.query(DocumentIntake)
                 .filter(
                     DocumentIntake.source == "imap",
-                    DocumentIntake.state.in_(("pending", "processing")),
+                    DocumentIntake.state.in_(("pending", "dispatched", "processing")),
                 )
                 .limit(MAX_UNFINISHED_IMAP_INTAKES + 1)
                 .all()
@@ -151,8 +151,10 @@ def _historical_payload_admission_available() -> bool:
                 .filter(
                     or_(
                         DocumentIntake.metadata_json.is_(None),
-                        ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry": true%'),
-                        ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry":true%'),
+                        and_(
+                            ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry": true%'),
+                            ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry":true%'),
+                        ),
                     )
                 )
                 .order_by(DocumentIntake.updated_at, DocumentIntake.id)
