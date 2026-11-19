@@ -25,6 +25,40 @@ def test_downstream_bulk_inherits_priority_and_provenance():
     assert properties["priority"] == 6
 
 
+def test_downstream_imap_backlog_inherits_priority_and_marker():
+    headers, properties = {}, {"priority": 0}
+    inherit_upload_priority(
+        headers,
+        properties,
+        SimpleNamespace(headers={"imap_backlog": True}, delivery_info={"priority": 6}),
+    )
+    assert headers == {"imap_backlog": True}
+    assert properties["priority"] == 6
+
+
+def test_imap_backlog_is_not_aged_like_bulk():
+    now = datetime.now(timezone.utc)
+    headers = {"imap_backlog": True, "bulk_accepted_at": (now - timedelta(hours=2)).isoformat()}
+    properties = {"priority": 6}
+    inherit_upload_priority(headers, properties, None, now=now)
+    assert properties["priority"] == 6
+
+
+def test_mixed_bulk_and_imap_backlog_keeps_existing_bulk_aging():
+    now = datetime.now(timezone.utc)
+    parent = {
+        "bulk_upload": True,
+        "imap_backlog": True,
+        "bulk_accepted_at": (now - timedelta(minutes=16)).isoformat(),
+    }
+    headers, properties = {}, {"priority": 6}
+    inherit_upload_priority(
+        headers, properties, SimpleNamespace(headers=parent, delivery_info={"priority": 6}), now=now
+    )
+    assert headers == parent
+    assert properties["priority"] == 0
+
+
 def test_small_batch_priority_survives_pipeline():
     properties = {}
     inherit_upload_priority(
