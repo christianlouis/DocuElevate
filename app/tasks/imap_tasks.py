@@ -1028,9 +1028,10 @@ def pull_inbox(
         metadata_safe_uids = set()
         metadata_candidates = list(dict.fromkeys(selected_uids + historical_new_uids + tail_new_uids + retry_uids))
         # Completing from metadata must not bypass requested mailbox mutations.
-        metadata_uids = (
-            metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE] if not (delete_after_process or gmail_apply_labels) else []
+        mailbox_mutations = not settings.imap_readonly_mode and (
+            delete_after_process or (is_gmail_host and gmail_apply_labels)
         )
+        metadata_uids = metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE] if not mailbox_mutations else []
         if metadata_uids:
             try:
                 metadata_set = ",".join(str(uid) for uid in metadata_uids)
