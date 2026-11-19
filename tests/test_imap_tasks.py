@@ -63,6 +63,7 @@ def mock_imap_ledger_session(monkeypatch):
 
     db.add.side_effect = assign_ledger_id
     monkeypatch.setattr("app.tasks.imap_tasks._get_db_session", lambda: db)
+    monkeypatch.setattr("app.tasks.imap_tasks._historical_payload_admission_available", lambda: True)
     return db
 
 

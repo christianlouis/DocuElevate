@@ -41,7 +41,7 @@ def test_metadata_fast_path_completes_200_plain_messages_and_advances_cursor(db_
             return (
                 "OK",
                 [
-                    f'{uid} FETCH (UID {uid} BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 12 1))'.encode()
+                    f'{uid} (UID {uid} BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "UTF-8") NIL NIL "7BIT" 12 1))'.encode()
                     for uid in uids
                 ],
             )

@@ -45,9 +45,10 @@ def test_metadata_parser_rejects_tuple_framing():
 
 
 @pytest.mark.unit
-def test_metadata_parser_handles_normal_imap_bytes_entry():
+@pytest.mark.parametrize("prefix", [b"99 ", b"99 FETCH ", b"* 99 FETCH "])
+def test_metadata_parser_handles_normal_imap_bytes_entry(prefix):
     uid, structure = metadata_uid_and_structure(
-        b'99 FETCH (UID 99 BODYSTRUCTURE ("TEXT" "PLAIN" NIL NIL NIL "7BIT" 4 1))'
+        prefix + b'(UID 99 BODYSTRUCTURE ("TEXT" "PLAIN" NIL NIL NIL "7BIT" 4 1))'
     )
     assert uid == 99
     assert bodystructure_proves_no_named_attachment(structure)

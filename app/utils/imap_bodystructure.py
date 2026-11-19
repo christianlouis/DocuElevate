@@ -8,9 +8,7 @@ from collections.abc import Iterator
 _MAX_BYTES = 64 * 1024
 _MAX_DEPTH = 32
 _MAX_TOKENS = 20_000
-_METADATA_PREFIX = re.compile(
-    rb"^\s*(?:\*\s+)?\d+\s+FETCH\s+\(\s*UID\s+(\d+)\s+BODYSTRUCTURE\s+", re.IGNORECASE
-)
+_METADATA_PREFIX = re.compile(rb"^\s*(?:\*\s+)?\d+\s+(?:FETCH\s+)?\(\s*UID\s+(\d+)\s+BODYSTRUCTURE\s+", re.IGNORECASE)
 
 
 class _ParseError(ValueError):
@@ -81,12 +79,7 @@ def _parse(tokens: Iterator[object]) -> list[object]:
 
 
 def _text_value(value: object) -> str | None:
-    if (
-        isinstance(value, tuple)
-        and len(value) == 2
-        and value[0] == "string"
-        and isinstance(value[1], str)
-    ):
+    if isinstance(value, tuple) and len(value) == 2 and value[0] == "string" and isinstance(value[1], str):
         return value[1]
     return None
 

@@ -14,6 +14,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 
+@pytest.fixture(autouse=True)
+def available_historical_payload_capacity(monkeypatch):
+    """Admission has separate tests; these exercise UID/lease durability."""
+    monkeypatch.setattr("app.tasks.imap_tasks._historical_payload_admission_available", lambda: True)
+
+
 def _message(uid: int, filename: str = "scan.pdf") -> bytes:
     message = EmailMessage()
     message["Message-ID"] = f"<uid-{uid}@example.test>"
