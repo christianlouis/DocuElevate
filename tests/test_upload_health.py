@@ -78,3 +78,14 @@ def test_document_pipeline_tasks_keep_the_normal_processing_queue():
         route = celery.amqp.router.route({}, task_name, (), {})
         queue = route["queue"]
         assert (queue.name if hasattr(queue, "name") else queue) == "document_processor"
+
+
+def test_document_health_checks_bypass_the_document_backlog():
+    from app.celery_app import celery
+
+    router = celery.amqp.Router()
+    for name in (
+        "app.tasks.monitor_stalled_steps.monitor_stalled_steps",
+        "app.tasks.uptime_kuma_tasks.ping_uptime_kuma",
+    ):
+        assert router.route({}, name)["queue"].name == "upload_maintenance"

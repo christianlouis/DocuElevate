@@ -8,9 +8,12 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from app.tasks.imap_tasks import (
+    _decode_attachment_filename,
+    _decode_attachment_payload,
     _decrypt_imap_password,
     _pull_user_imap_accounts,
     _resolve_categories_for_profile,
+    _retry_backoff_ready,
     acquire_lock,
     check_and_pull_mailbox,
     cleanup_old_entries,
@@ -60,6 +63,7 @@ def mock_imap_ledger_session(monkeypatch):
 
     db.add.side_effect = assign_ledger_id
     monkeypatch.setattr("app.tasks.imap_tasks._get_db_session", lambda: db)
+    monkeypatch.setattr("app.tasks.imap_tasks._historical_payload_admission_available", lambda: True)
     return db
 
 
@@ -1542,6 +1546,57 @@ class TestFetchAttachmentsExtended:
         mock_process.delay.assert_not_called()
         mock_convert.delay.assert_not_called()
 
+    def test_recovers_malformed_base64_payload(self):
+        """Malformed transfer encoding must not strand a mailbox ledger row."""
+        from email import message_from_bytes
+
+        part = message_from_bytes(
+            b"Content-Type: application/octet-stream; name=scan.bin\r\n"
+            b"Content-Disposition: attachment; filename=scan.bin\r\n"
+            b"Content-Transfer-Encoding: base64\r\n\r\n"
+            b"not-valid-base64!!\r\n"
+        )
+
+        assert _decode_attachment_payload(part) == b"not-valid-base64!!"
+
+    def test_serializes_message_rfc822_attachment(self):
+        """Nested messages are preserved as .eml bytes instead of returning None."""
+        from email import message_from_bytes
+
+        part = message_from_bytes(
+            b"Content-Type: message/rfc822; name=forwarded.eml\r\n"
+            b"Content-Disposition: attachment; filename=forwarded.eml\r\n\r\n"
+            b"From: sender@example.test\r\nSubject: forwarded\r\n\r\nBody\r\n"
+        )
+
+        payload = _decode_attachment_payload(part)
+        assert payload is not None
+        assert b"Subject: forwarded" in payload
+
+    def test_decodes_rfc2047_attachment_filename(self):
+        from email import message_from_bytes
+
+        part = message_from_bytes(
+            b"Content-Type: application/pdf\r\n"
+            b'Content-Disposition: attachment; filename="=?UTF-8?Q?Rechnung_=C3=84.pdf?="\r\n\r\n'
+        )
+
+        assert _decode_attachment_filename(part) == "Rechnung Ä.pdf"
+
+
+@pytest.mark.unit
+class TestRetryBackoff:
+    def test_failed_rows_wait_with_exponential_backoff(self):
+        now = datetime(2026, 11, 19, tzinfo=timezone.utc)
+        assert _retry_backoff_ready(1, now - timedelta(seconds=1), now=now)
+        assert not _retry_backoff_ready(2, now - timedelta(seconds=119), now=now)
+        assert _retry_backoff_ready(2, now - timedelta(seconds=120), now=now)
+        assert not _retry_backoff_ready(3, now - timedelta(seconds=239), now=now)
+        assert _retry_backoff_ready(3, now - timedelta(seconds=240), now=now)
+
+    def test_missing_timestamp_remains_retryable(self):
+        assert _retry_backoff_ready(100, None)
+
 
 @pytest.mark.unit
 class TestLoadProcessedEmailsEdgeCases:
@@ -2456,7 +2511,8 @@ def test_pull_inbox_uses_uid_search_peek_and_preserves_seen_state():
     assert mail.uid.call_args_list[0].args[:3] == ("search", None, "UID")
     assert mail.uid.call_args_list[0].args[3].endswith(f":{imap_tasks.UID_SCAN_WINDOW}")
     assert mail.uid.call_args_list[1].args[:3] == ("search", None, "UID")
-    assert mail.uid.call_args_list[2].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
+    assert mail.uid.call_args_list[2].args[:3] == ("fetch", "7", "(UID BODYSTRUCTURE)")
+    assert mail.uid.call_args_list[3].args[:3] == ("fetch", b"7", "(BODY.PEEK[])")
     assert not any(call.args[0] == "store" for call in mail.uid.call_args_list)
 
 

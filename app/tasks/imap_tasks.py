@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
+import base64
+import binascii
 import email
 import hashlib
 import imaplib
 import json
 import logging
 import os
+import quopri
 import re
+import shutil
 import tempfile
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from email.header import decode_header, make_header
 
 import redis
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 
 from app.config import settings
 from app.tasks.convert_to_pdf import convert_to_pdf  # new conversion task
@@ -26,6 +31,7 @@ from app.utils.allowed_types import (
     get_allowed_types_for_categories,
 )
 from app.utils.imap import IMAP_SOCKET_TIMEOUT_SECONDS, _shutdown_imap_connection
+from app.utils.imap_bodystructure import bodystructure_proves_no_named_attachment, metadata_uid_and_structure
 from app.utils.network import is_private_ip
 
 # Database session for per-user IMAP accounts (imported lazily to avoid circular imports)
@@ -100,6 +106,10 @@ def _resolve_categories_for_profile(profile_id: int | None) -> list[str]:
 LOCK_KEY = "imap_lock"  # Unique key for locking
 LOCK_EXPIRE = 300  # Lock expires in 5 minutes
 POLL_BATCH_SIZE = 50
+BODYSTRUCTURE_BATCH_SIZE = 200
+MAX_UNFINISHED_IMAP_INTAKES = 500
+MAX_DOCUMENT_QUEUE_DEPTH = 2000
+MIN_WORKDIR_FREE_BYTES = 5 * 1024**3
 # Never ask an IMAP server for an unbounded UID SEARCH response.  Gmail can
 # have millions of messages and imaplib cannot parse responses larger than its
 # line buffer.  The durable cursor makes these windows resumable.
@@ -107,9 +117,90 @@ UID_SCAN_WINDOW = 1000
 POLL_BUDGET_SECONDS = 240
 POLL_CHECKPOINT_TTL_SECONDS = 24 * 60 * 60
 POLL_CHECKPOINT_PREFIX = "docuelevate:imap:last_success:"
+# A malformed message must remain durable and retryable, but must not consume
+# every poll while the historical cursor is trying to advance.  The ledger's
+# updated_at is the durable retry timestamp, so no schema change is needed.
+RETRY_BACKOFF_BASE_SECONDS = 60
+RETRY_BACKOFF_MAX_SECONDS = 60 * 60
 
 # Local cache file for tracking processed emails
 CACHE_FILE = os.path.join(settings.workdir, "processed_mails.json")
+
+
+def _historical_payload_admission_available() -> bool:
+    """Bound historical payload admission before creating ledger/cursor state."""
+    try:
+        from app.models import DocumentIntake
+
+        db = _get_db_session()
+        try:
+            unfinished = (
+                db.query(DocumentIntake)
+                .filter(
+                    DocumentIntake.source == "imap",
+                    DocumentIntake.state.in_(("pending", "dispatched", "processing")),
+                )
+                .limit(MAX_UNFINISHED_IMAP_INTAKES + 1)
+                .all()
+            )
+            if len(unfinished) >= MAX_UNFINISHED_IMAP_INTAKES:
+                return False
+            failed = (
+                db.query(DocumentIntake)
+                .filter(DocumentIntake.source == "imap", DocumentIntake.state == "failed")
+                .filter(
+                    or_(
+                        DocumentIntake.metadata_json.is_(None),
+                        and_(
+                            ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry": true%'),
+                            ~DocumentIntake.metadata_json.like('%"suppress_automatic_retry":true%'),
+                        ),
+                    )
+                )
+                .order_by(DocumentIntake.updated_at, DocumentIntake.id)
+                .limit(MAX_UNFINISHED_IMAP_INTAKES + 1)
+                .all()
+            )
+            retryable = 0
+            for row in failed:
+                try:
+                    metadata = json.loads(row.metadata_json or "{}")
+                except (TypeError, ValueError):
+                    return False
+                if not metadata.get("suppress_automatic_retry"):
+                    retryable += 1
+            if len(unfinished) + retryable >= MAX_UNFINISHED_IMAP_INTAKES:
+                return False
+        finally:
+            db.close()
+
+        broker = redis.StrictRedis.from_url(
+            settings.effective_celery_broker_url,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            decode_responses=True,
+        )
+        try:
+            queue_names = ["document_processor"] + [
+                f"document_processor\x06\x16{priority}" for priority in range(1, 10)
+            ]
+            with broker.pipeline(transaction=False) as pipeline:
+                for queue_name in queue_names:
+                    pipeline.llen(queue_name)
+                queue_lengths = pipeline.execute()
+            queue_depth = sum(int(length) for length in queue_lengths)
+            if queue_depth >= MAX_DOCUMENT_QUEUE_DEPTH:
+                return False
+        finally:
+            close = getattr(broker, "close", None)
+            if close:
+                close()
+
+        _total, _used, free = shutil.disk_usage(settings.workdir)
+        return free >= MIN_WORKDIR_FREE_BYTES
+    except Exception:  # noqa: BLE001
+        logger.warning("Historical IMAP payload admission unavailable; blocking payload admission")
+        return False
 
 
 def record_poll_success(mailbox_key: str, *, now: datetime | None = None) -> None:
@@ -938,7 +1029,7 @@ def pull_inbox(
                 ledger_query = ledger_query.filter(ImapMessageLedger.uid == -1)
             durable_uids = {row[0] for row in ledger_query.all()}
             retry_rows = (
-                db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts)
+                db.query(ImapMessageLedger.uid, ImapMessageLedger.attempts, ImapMessageLedger.updated_at)
                 .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity))
                 .filter(~ImapMessageLedger.state.in_(("completed", "vanished")))
                 .order_by(ImapMessageLedger.attempts.asc(), ImapMessageLedger.uid.asc())
@@ -961,8 +1052,17 @@ def pull_inbox(
             for uid in reversed(tail_ordered)
             if uid not in durable_uids and uid > cursor and uid not in historical_new_uids
         ]
-        retry_uids = [uid for uid, _attempts in retry_rows]
-        retry_attempts = {uid: attempts or 0 for uid, attempts in retry_rows}
+        retry_now = datetime.now(timezone.utc)
+        retry_candidates = []
+        for row in retry_rows:
+            # Keep compatibility with lightweight query fakes used by callers
+            # which still return the pre-backoff two-column shape.
+            uid, attempts = row[0], row[1]
+            updated_at = row[2] if len(row) > 2 else None
+            if _retry_backoff_ready(attempts, updated_at, now=retry_now):
+                retry_candidates.append((uid, attempts))
+        retry_uids = [uid for uid, _attempts in retry_candidates]
+        retry_attempts = {uid: attempts or 0 for uid, attempts in retry_candidates}
         # Lowest-attempt failures lead so permanent failures rotate rather than
         # repeatedly consuming the retry share ahead of their peers.
         retry_uids.sort(key=lambda uid: (retry_attempts.get(uid, 0), uid))
@@ -1005,14 +1105,86 @@ def pull_inbox(
                 cursor = max(cursor, window_end)
             finally:
                 db.close()
+        metadata_safe_uids = set()
+        metadata_candidates = list(dict.fromkeys(selected_uids + historical_new_uids + tail_new_uids + retry_uids))
+        # Only accepted attachments trigger labels/deletion below. Proven
+        # nameless text has no accepted attachment and needs no mailbox mutation,
+        # even when those options are enabled for attachment-bearing messages.
+        metadata_uids = metadata_candidates[:BODYSTRUCTURE_BATCH_SIZE]
+        if metadata_uids:
+            try:
+                metadata_set = ",".join(str(uid) for uid in metadata_uids)
+                metadata_status, metadata_data = mail.uid("fetch", metadata_set, "(UID BODYSTRUCTURE)")
+                if metadata_status == "OK":
+                    for item in metadata_data or []:
+                        metadata_uid, structure = metadata_uid_and_structure(item)
+                        if (
+                            metadata_uid in metadata_uids
+                            and structure is not None
+                            and bodystructure_proves_no_named_attachment(structure)
+                        ):
+                            metadata_safe_uids.add(metadata_uid)
+                else:
+                    logger.warning("BODYSTRUCTURE fetch failed for %s; falling back to full payloads", mailbox_key)
+            except SoftTimeLimitExceeded:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "BODYSTRUCTURE fetch unavailable for %s (%s); using full payloads", mailbox_key, type(exc).__name__
+                )
+
+        # Add only proven document-free UIDs from the wider metadata window;
+        # potential attachments remain limited to the normal payload budget.
+        selected_uids.extend(uid for uid in metadata_safe_uids if uid not in selected_uids)
         msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
         deleted_any = False
+        full_payload_attempts = 0
+        historical_payload_uids = {
+            uid
+            for uid in historical_new_uids
+            if uid not in metadata_safe_uids and uid not in set(tail_ordered) and uid not in set(retry_uids)
+        }
+        historical_admission = None
 
         for num in msg_numbers:
             if time.monotonic() >= deadline:
                 break
             uid = int(num)
+            if uid in metadata_safe_uids:
+                ledger_id = _ledger_get_or_create(owner_key, mailbox_key, uidvalidity, uid)
+                if ledger_id is None:
+                    continue
+                if uid in historical_ordered:
+                    durable_uids.add(uid)
+                cursor_target = _historical_cursor_target(historical_ordered, durable_uids, cursor)
+                if cursor_target > cursor:
+                    db = _get_db_session()
+                    try:
+                        scan_cursor = (
+                            db.query(ImapScanCursor)
+                            .filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                            .first()
+                        )
+                        if scan_cursor is None:
+                            scan_cursor = ImapScanCursor(mailbox_key=account_hash, uidvalidity=str(uidvalidity))
+                            db.add(scan_cursor)
+                        scan_cursor.last_uid = cursor_target
+                        db.commit()
+                        cursor = cursor_target
+                    finally:
+                        db.close()
+                _ledger_finish(ledger_id, state="completed", message_id=f"<imap-uid-{uidvalidity}-{uid}@{mailbox_key}>")
+                continue
+            if uid in historical_payload_uids:
+                if historical_admission is None:
+                    historical_admission = _historical_payload_admission_available()
+                if not historical_admission:
+                    logger.info("Historical IMAP payload admission blocked UID %s", uid)
+                    continue
+            if full_payload_attempts >= POLL_BATCH_SIZE:
+                continue
+            full_payload_attempts += 1
             # The ledger is committed first. If process creation fails or the
             # worker dies, a historical UID cannot be advanced beyond an
             # unrecorded message; the next poll will rediscover/retry it.
@@ -1071,6 +1243,7 @@ def pull_inbox(
                     effective_mime_types=effective_mime_types,
                     effective_extensions=effective_extensions,
                     ingestion_prefix=f"{owner_key}:{mailbox_key}:{uidvalidity}:{uid}",
+                    background=uid not in tail_ordered,
                 )
                 _ledger_finish(ledger_id, state="completed", message_id=msg_id)
             except SoftTimeLimitExceeded:
@@ -1126,6 +1299,7 @@ def fetch_attachments_and_enqueue(
     effective_mime_types: frozenset[str] | None = None,
     effective_extensions: frozenset[str] | None = None,
     ingestion_prefix: str | None = None,
+    background: bool = False,
 ):
     """
     Extracts attachments from the email and processes only allowed file types.
@@ -1159,7 +1333,7 @@ def fetch_attachments_and_enqueue(
         if part.get_content_maintype() == "multipart":
             continue
 
-        filename = part.get_filename()
+        filename = _decode_attachment_filename(part)
         if filename is None:
             continue
 
@@ -1184,14 +1358,14 @@ def fetch_attachments_and_enqueue(
         safe_filename = os.path.basename(filename.replace("\\", "/"))
         if safe_filename in {"", ".", ".."}:
             safe_filename = "attachment"
-        payload = part.get_payload(decode=True)
+        payload = _decode_attachment_payload(part)
         if payload is None:
             raise ValueError("Attachment payload could not be decoded")
         if ingestion_prefix:
             from app.tasks.imap_intake import prepare_imap_attachment
 
             digest = hashlib.sha256(payload).hexdigest()
-            prepare_imap_attachment(
+            prepare_kwargs = dict(
                 owner_id=owner_id,
                 source_integration_id=source_integration_id,
                 idempotency_key=f"{ingestion_prefix}:{part_index}:{digest}",
@@ -1200,6 +1374,7 @@ def fetch_attachments_and_enqueue(
                 mime_type=mime_type,
                 is_pdf=mime_type == "application/pdf" or is_pdf_by_extension,
             )
+            prepare_imap_attachment(**prepare_kwargs, background=background)
         else:
             # Direct callers also need collision-free paths; scheduled imports
             # always use the durable intake path above.
@@ -1216,6 +1391,93 @@ def fetch_attachments_and_enqueue(
             )
         has_attachment = True
     return has_attachment
+
+
+def _decode_attachment_payload(part):
+    """Return attachment bytes, tolerating common malformed MIME encodings.
+
+    ``email.message.Message.get_payload(decode=True)`` returns ``None`` for
+    malformed base64/quoted-printable bodies and for ``message/rfc822`` parts,
+    even when the original body is still present.  Treating that as a hard
+    ingestion failure caused the same historical message to be retried forever.
+    First use the stdlib decoder, then recover the raw payload using its
+    declared transfer encoding.  Returning raw bytes for an invalid base64
+    body preserves the evidence for downstream conversion instead of silently
+    dropping the attachment.
+    """
+    raw = part.get_payload(decode=False)
+    if raw is None:
+        return None
+    if isinstance(raw, (bytes, bytearray)):
+        return bytes(raw)
+    if isinstance(raw, list):
+        # A message/rfc822 attachment exposes its nested Message as a list.
+        # Serialize the nested message so .eml files remain ingestible.
+        chunks = []
+        for nested in raw:
+            if hasattr(nested, "as_bytes"):
+                chunks.append(nested.as_bytes())
+            elif isinstance(nested, (bytes, bytearray)):
+                chunks.append(bytes(nested))
+        return b"".join(chunks) if chunks else None
+    if not isinstance(raw, str):
+        return None
+
+    transfer_encoding = (part.get("Content-Transfer-Encoding") or "").strip().lower()
+    if transfer_encoding == "base64":
+        try:
+            # Whitespace is valid line wrapping; all remaining characters must
+            # be in the alphabet.  Strict validation avoids silently turning a
+            # malformed body into unrelated binary data.
+            encoded = b"".join(raw.encode("ascii").split())
+            return base64.b64decode(encoded, validate=True)
+        except (binascii.Error, UnicodeEncodeError, ValueError):
+            logger.warning("Malformed base64 attachment %s; preserving raw body", part.get_filename())
+            return raw.rstrip("\r\n").encode("ascii", errors="surrogateescape")
+    elif transfer_encoding in {"quoted-printable", "quopri"}:
+        return quopri.decodestring(raw.encode("ascii", errors="surrogateescape"))
+
+    try:
+        decoded = part.get_payload(decode=True)
+    except (LookupError, ValueError, binascii.Error):
+        decoded = None
+    if isinstance(decoded, bytes):
+        return decoded
+
+    charset = part.get_content_charset() or "utf-8"
+    try:
+        return raw.encode(charset, errors="surrogateescape")
+    except (LookupError, UnicodeEncodeError):
+        return raw.encode("utf-8", errors="replace")
+
+
+def _decode_attachment_filename(part):
+    """Decode RFC 2047/RFC 2231 attachment names without losing fallbacks."""
+    filename = part.get_filename()
+    if filename is None:
+        return None
+    try:
+        return str(make_header(decode_header(filename)))
+    except (LookupError, UnicodeDecodeError, ValueError):
+        logger.warning("Could not decode attachment filename %r; preserving it", filename)
+        return filename
+
+
+def _retry_backoff_ready(attempts, updated_at, *, now=None):
+    """Return whether a failed ledger row is eligible for another attempt."""
+    # Give the first retry a chance immediately; this keeps transient IMAP
+    # fetch failures responsive.  Persistent poison rows are throttled from
+    # their second attempt onward.
+    if not updated_at or not attempts or int(attempts) <= 1:
+        return True
+    now = now or datetime.now(timezone.utc)
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    delay = min(
+        RETRY_BACKOFF_MAX_SECONDS,
+        RETRY_BACKOFF_BASE_SECONDS * (2 ** min(max(int(attempts) - 1, 0), 10)),
+    )
+    return (now - updated_at).total_seconds() >= delay
 
 
 def email_already_has_label(mail, msg_id, label="Ingested"):
