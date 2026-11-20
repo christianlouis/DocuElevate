@@ -81,8 +81,7 @@ class TestCeleryWorkerConfig:
         registered = {name for name in mod.celery.tasks if name in expected}
         assert registered == expected
         assert all(
-            mod.celery.amqp.router.route({}, name)["queue"].name == settings.celery_upload_queue
-            for name in registered
+            mod.celery.amqp.router.route({}, name)["queue"].name == settings.celery_upload_queue for name in registered
         )
 
     def test_backup_queue_defaults_and_accepts_environment_override(self, monkeypatch):
