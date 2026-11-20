@@ -1949,6 +1949,32 @@ class TestFetchAttachmentsOwnerIdPassthrough:
 class TestPullUserIntegrationImap:
     """Tests for _pull_user_integration_imap() multi-tenant IMAP polling."""
 
+    @pytest.mark.parametrize(("global_deadline", "expected_deadline"), [(300, 190), (150, 150)])
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_passes_bounded_deadline_to_each_integration(
+        self, mock_pull, mock_session_factory, global_deadline, expected_deadline
+    ):
+        from app.tasks import imap_tasks
+
+        integ = MagicMock()
+        integ.id = 20
+        integ.owner_id = "owner-budget"
+        integ.config = '{"host": "imap.example.com", "port": 993, "username": "user@test.com"}'
+        integ.credentials = "enc:encrypted"
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [integ]
+        mock_session_factory.return_value = mock_db
+        mock_pull.return_value = True
+
+        with (
+            patch("app.utils.encryption.decrypt_value", return_value='{"password": "secret"}'),
+            patch.object(imap_tasks.time, "monotonic", return_value=100),
+        ):
+            imap_tasks._pull_user_integration_imap(deadline=global_deadline)
+
+        assert mock_pull.call_args.kwargs["deadline"] == expected_deadline
+
     @patch("app.tasks.imap_tasks._get_db_session")
     @patch("app.tasks.imap_tasks.pull_inbox")
     def test_polls_active_imap_integrations(self, mock_pull, mock_session_factory):
