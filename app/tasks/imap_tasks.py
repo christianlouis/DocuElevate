@@ -1146,6 +1146,7 @@ def pull_inbox(
         deleted_any = False
         full_payload_attempts = 0
         deferred_payloads = 0
+        metadata_completed = 0
         historical_payload_uids = {
             uid
             for uid in historical_new_uids
@@ -1181,6 +1182,7 @@ def pull_inbox(
                     finally:
                         db.close()
                 _ledger_finish(ledger_id, state="completed", message_id=f"<imap-uid-{uidvalidity}-{uid}@{mailbox_key}>")
+                metadata_completed += 1
                 continue
             if uid in historical_payload_uids:
                 if historical_admission is None:
@@ -1290,7 +1292,7 @@ def pull_inbox(
             "IMAP poll summary mailbox=%s selected=%d metadata_completed=%d payload_attempts=%d payload_deferred=%d cursor=%d deadline_exhausted=%s elapsed_seconds=%.1f",
             mailbox_key,
             len(selected_uids),
-            len(metadata_safe_uids),
+            metadata_completed,
             full_payload_attempts,
             deferred_payloads,
             cursor,
@@ -1549,12 +1551,6 @@ def find_all_mail_folder(mail):
         "[Gmail]/Tutte le mail",
         "[Gmail]/Tous les messages",
     ]
-    capabilities = get_capabilities(mail)
-    if "XLIST" in capabilities:
-        candidate = find_all_mail_xlist(mail)
-        if candidate:
-            return candidate
-
     # LIST/SPECIAL-USE discovery does not select the potentially million-row
     # All Mail folder.  Prefer the server-advertised \\AllMail flag and only
     # fall back to localized names when a provider does not advertise it.
@@ -1563,13 +1559,30 @@ def find_all_mail_folder(mail):
         if status == "OK":
             for row in rows or []:
                 text = row.decode("utf-8", errors="ignore") if isinstance(row, bytes) else str(row)
-                if "\\ALLMAIL" not in text.upper():
+                flags_match = re.search(r"\(([^)]*)\)", text)
+                flags = flags_match.group(1).upper() if flags_match else ""
+                if "\\ALL" not in flags and "\\ALLMAIL" not in flags:
                     continue
                 match = re.search(r'"([^\"]+)"\s*$', text)
                 if match:
                     return match.group(1)
+    except SoftTimeLimitExceeded:
+        raise
     except Exception:  # noqa: BLE001
         logger.debug("Gmail LIST All Mail discovery unavailable")
+
+    # XLIST is a legacy fallback.  Query capabilities only after LIST so the
+    # normal Gmail path remains one discovery command plus one final SELECT.
+    try:
+        capabilities = get_capabilities(mail)
+    except (TypeError, ValueError):
+        # Lightweight IMAP fakes and a few older servers may not return the
+        # two-item CAPABILITY tuple; continue with the localized-name fallback.
+        capabilities = []
+    if "XLIST" in capabilities:
+        candidate = find_all_mail_xlist(mail)
+        if candidate:
+            return candidate
 
     # Compatibility fallback for older IMAP servers without XLIST or
     # SPECIAL-USE LIST.  This is intentionally last because SELECT is costly.
