@@ -16,9 +16,10 @@ from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord, UserProfile
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import ProviderTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider
+from app.utils.provider_limits import ProviderQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def _resolve_default_language(owner_id: str | None) -> str:
     return settings.default_document_language
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=ProviderTaskWithRetry, bind=True)
 def translate_to_default_language(
     self,
     file_id: int,
@@ -130,6 +131,8 @@ def translate_to_default_language(
         }
 
     except Exception as exc:
+        if isinstance(exc, ProviderQuotaExceeded):
+            raise
         logger.exception(f"[{task_id}] Translation failed for file {file_id}: {exc}")
         log_task_progress(
             task_id,

@@ -416,3 +416,185 @@ def test_quota_autoretry_uses_separate_budget_and_never_shortens_retry_after(mon
         task.retry(exc=ProviderQuotaExceeded("busy", retry_after=30.8), max_retries=3)
     assert retry.call_args.kwargs["max_retries"] == 20
     assert retry.call_args.kwargs["countdown"] == 31
+
+
+def test_provider_capacity_wait_republishes_original_route_without_consuming_retries():
+    from unittest.mock import MagicMock
+
+    from celery.app.task import Context
+    from celery.utils.threads import LocalStack
+
+    from app.utils.provider_limits import ProviderQuotaExceeded
+
+    task = BaseTaskWithRetry()
+    signature = MagicMock()
+    task.signature_from_request = MagicMock(return_value=signature)
+    task.request_stack = LocalStack()
+    task.request_stack.push(
+        Context(
+            id="task-id",
+            retries=20,
+            called_directly=False,
+            is_eager=False,
+            delivery_info={"routing_key": "ocr", "priority": 7},
+        )
+    )
+    try:
+        with pytest.raises(Exception) as raised:
+            task.retry(
+                args=("file.pdf", 12),
+                kwargs={"owner_id": "owner"},
+                exc=ProviderQuotaExceeded("capacity is full", retry_after=30.2),
+                queue="ocr",
+                priority=7,
+            )
+    finally:
+        task.pop_request()
+
+    assert raised.value.__class__.__name__ == "Retry"
+    assert task.signature_from_request.call_args.kwargs["retries"] == 20
+    assert task.signature_from_request.call_args.args[1] == ("file.pdf", 12)
+    assert task.signature_from_request.call_args.args[2] == {"owner_id": "owner"}
+    assert task.signature_from_request.call_args.kwargs["queue"] == "ocr"
+    assert task.signature_from_request.call_args.kwargs["priority"] == 7
+    assert task.signature_from_request.call_args.kwargs["countdown"] == 31
+    signature.apply_async.assert_called_once_with()
+
+
+def test_provider_rate_limit_keeps_finite_retry_policy(monkeypatch):
+    from unittest.mock import patch
+
+    from celery import Celery
+
+    from app.utils.provider_limits import ProviderRateLimited
+
+    task = BaseTaskWithRetry()
+    task.bind(Celery("provider-rate-limit-test", broker="memory://"))
+    with patch("celery.Task.retry") as retry:
+        task.retry(exc=ProviderRateLimited("upstream", retry_after=30), max_retries=3)
+    assert retry.call_args.kwargs["max_retries"] == 20
+
+
+def test_celery_tracer_capacity_wait_at_retry_limit_stays_retry(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from celery import Celery
+    from celery.app.trace import build_tracer
+
+    from app.utils.provider_limits import ProviderQuotaExceeded
+
+    celery_app = Celery("provider-capacity-tracer", broker="memory://")
+
+    @celery_app.task(base=BaseTaskWithRetry, bind=True, name="provider_capacity_probe")
+    def provider_capacity_probe(self):
+        raise ProviderQuotaExceeded("capacity is currently full", retry_after=30)
+
+    signature = MagicMock()
+    provider_capacity_probe.signature_from_request = MagicMock(return_value=signature)
+    tracer = build_tracer(provider_capacity_probe.name, provider_capacity_probe, app=celery_app, eager=False)
+    trace_result = tracer(
+        "task-id",
+        (),
+        {},
+        request={
+            "id": "task-id",
+            "retries": 20,
+            "delivery_info": {"routing_key": "ocr", "priority": 7},
+        },
+    )
+
+    assert trace_result[1].state == "RETRY"
+    assert signature.apply_async.called
+    assert provider_capacity_probe.signature_from_request.call_args.kwargs["retries"] == 20
+
+
+def test_provider_capacity_wait_in_eager_mode_does_not_publish():
+    from unittest.mock import MagicMock
+
+    from celery.app.task import Context
+    from celery.utils.threads import LocalStack
+
+    from app.utils.provider_limits import ProviderQuotaExceeded
+
+    task = BaseTaskWithRetry()
+    signature = MagicMock()
+    task.signature_from_request = MagicMock(return_value=signature)
+    task.request_stack = LocalStack()
+    task.request_stack.push(Context(retries=20, called_directly=False, is_eager=True))
+    try:
+        with pytest.raises(Exception) as raised:
+            task.retry(exc=ProviderQuotaExceeded("capacity is full", retry_after=30))
+    finally:
+        task.pop_request()
+    assert raised.value.__class__.__name__ == "Retry"
+    signature.apply_async.assert_not_called()
+
+
+def test_capacity_publish_failure_requeues_original_delivery():
+    from unittest.mock import MagicMock
+
+    from celery.app.task import Context
+    from celery.exceptions import Reject
+    from celery.utils.threads import LocalStack
+
+    from app.utils.provider_limits import ProviderQuotaExceeded
+
+    task = BaseTaskWithRetry()
+    signature = MagicMock()
+    signature.apply_async.side_effect = RuntimeError("broker unavailable")
+    task.signature_from_request = MagicMock(return_value=signature)
+    task.request_stack = LocalStack()
+    task.request_stack.push(Context(retries=20, called_directly=False, is_eager=False))
+    try:
+        with pytest.raises(Reject) as raised:
+            task.retry(exc=ProviderQuotaExceeded("capacity is full", retry_after=30))
+    finally:
+        task.pop_request()
+    assert raised.value.requeue is True
+
+
+def test_provider_budget_override_does_not_leak_to_next_retry():
+    from unittest.mock import patch
+
+    from celery import Celery
+    from celery.app.task import Context
+    from celery.exceptions import Retry
+    from celery.utils.threads import LocalStack
+
+    from app.utils.provider_limits import ProviderRateLimited
+
+    task = BaseTaskWithRetry()
+    task.bind(Celery("provider-retry-cleanup", broker="memory://"))
+    task.request_stack = LocalStack()
+    task.request_stack.push(Context(retries=0, called_directly=False, is_eager=False))
+    try:
+        with pytest.raises(Retry):
+            task.retry(exc=ProviderRateLimited("upstream", retry_after=30))
+    finally:
+        task.pop_request()
+    assert not hasattr(task, "override_max_retries")
+    assert task.retry_kwargs["max_retries"] == 3
+    with patch("celery.Task.retry") as retry:
+        task.retry(exc=RuntimeError("ordinary failure"))
+    assert retry.call_args.kwargs["max_retries"] is None
+
+
+def test_provider_tasks_ack_late_for_durable_capacity_republication():
+    from app.tasks.compute_embedding import compute_document_embedding
+    from app.tasks.extract_metadata_with_gpt import extract_metadata_with_gpt
+    from app.tasks.knowledge_research import run_knowledge_research
+    from app.tasks.process_with_ocr import process_with_ocr
+    from app.tasks.refine_text_with_gpt import refine_text_with_gpt
+    from app.tasks.translate_to_default_language import translate_to_default_language
+
+    assert all(
+        task.acks_late
+        for task in (
+            compute_document_embedding,
+            extract_metadata_with_gpt,
+            run_knowledge_research,
+            process_with_ocr,
+            refine_text_with_gpt,
+            translate_to_default_language,
+        )
+    )

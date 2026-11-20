@@ -171,7 +171,7 @@ def acquire(
     if ok < 0:
         raise ProviderQuotaExceeded(f"Provider cooldown active for {provider}/{model}", -ok)
     if not ok:
-        raise ProviderQuotaExceeded(f"Provider budget exhausted for {provider}/{model}", 30)
+        raise ProviderQuotaExceeded(f"Provider capacity is currently full for {provider}/{model}", 30)
     return ProviderLease(token, prefix, ttl)
 
 
