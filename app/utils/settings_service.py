@@ -56,6 +56,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "celery_backup_queue": {
+        "category": "Core",
+        "description": "Celery queue consumed by database backup and backup-cleanup workers",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "db_pool_size": {
         "category": "Core",
         "description": (

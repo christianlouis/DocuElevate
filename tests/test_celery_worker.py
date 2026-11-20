@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.config import settings
+from app.config import Settings, settings
 
 
 def _reload_celery_worker():
@@ -51,6 +51,21 @@ class TestCeleryWorkerConfig:
         assert routes["app.tasks.batch_tasks.sync_search_index"]["queue"] == "search_index"
         assert routes is not None
         assert "app.tasks.*" in routes
+
+    def test_backup_tasks_have_exact_route_before_wildcard(self):
+        mod = _reload_celery_worker()
+        routes = mod.celery.conf.task_routes
+        assert routes["app.tasks.backup_tasks.create_backup"]["queue"] == settings.celery_backup_queue
+        assert routes["app.tasks.backup_tasks.cleanup_old_backups"]["queue"] == settings.celery_backup_queue
+
+    def test_backup_queue_defaults_and_accepts_environment_override(self, monkeypatch):
+        monkeypatch.delenv("CELERY_BACKUP_QUEUE", raising=False)
+        default = Settings(_env_file=None, database_url="sqlite://")
+        assert default.celery_backup_queue == "document_processor"
+
+        monkeypatch.setenv("CELERY_BACKUP_QUEUE", "backup_maintenance")
+        overridden = Settings(_env_file=None, database_url="sqlite://")
+        assert overridden.celery_backup_queue == "backup_maintenance"
 
     def test_all_task_imports_successful(self):
         """Test that all task modules are imported without errors."""

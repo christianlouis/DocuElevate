@@ -537,7 +537,11 @@ def _pull_user_integration_imap(*, deadline=None) -> None:
                         source_integration_id=integ.id,
                         gmail_apply_labels=gmail_labels,
                         allowed_categories=allowed_categories,
-                        deadline=min(deadline, time.monotonic() + 60) if deadline else None,
+                        # Gmail All Mail can take several seconds to select and
+                        # search even with bounded commands.  Give one owned
+                        # integration enough time to reach its metadata/payload
+                        # budget while preserving the task-wide deadline.
+                        deadline=min(deadline, time.monotonic() + 90) if deadline else None,
                     )
                     if poll_ok is not True:
                         raise RuntimeError("IMAP poll did not complete successfully")
@@ -885,7 +889,8 @@ def pull_inbox(
     """
     if allowed_categories is None:
         allowed_categories = _resolve_categories_for_profile(None)
-    deadline = deadline or (time.monotonic() + POLL_BUDGET_SECONDS)
+    poll_started = time.monotonic()
+    deadline = deadline or (poll_started + POLL_BUDGET_SECONDS)
     if time.monotonic() >= deadline:
         logger.warning("IMAP poll budget exhausted before connecting to %s", mailbox_key)
         return False
@@ -1133,13 +1138,18 @@ def pull_inbox(
                     "BODYSTRUCTURE fetch unavailable for %s (%s); using full payloads", mailbox_key, type(exc).__name__
                 )
 
-        # Add only proven document-free UIDs from the wider metadata window;
-        # potential attachments remain limited to the normal payload budget.
-        selected_uids.extend(uid for uid in metadata_safe_uids if uid not in selected_uids)
+        # Complete proven document-free UIDs before any BODY.PEEK work. A slow
+        # payload retry must not consume the bounded poll before these cheap,
+        # durable cursor/ledger advances are recorded. The remaining payload
+        # order is unchanged, preserving the history/tail/retry fair rotation.
+        selected_uids = list(metadata_safe_uids) + [uid for uid in selected_uids if uid not in metadata_safe_uids]
         msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
         deleted_any = False
         full_payload_attempts = 0
+        deferred_payloads = 0
+        metadata_completed = 0
+        deadline_exhausted = False
         historical_payload_uids = {
             uid
             for uid in historical_new_uids
@@ -1149,6 +1159,7 @@ def pull_inbox(
 
         for num in msg_numbers:
             if time.monotonic() >= deadline:
+                deadline_exhausted = True
                 break
             uid = int(num)
             if uid in metadata_safe_uids:
@@ -1175,12 +1186,14 @@ def pull_inbox(
                     finally:
                         db.close()
                 _ledger_finish(ledger_id, state="completed", message_id=f"<imap-uid-{uidvalidity}-{uid}@{mailbox_key}>")
+                metadata_completed += 1
                 continue
             if uid in historical_payload_uids:
                 if historical_admission is None:
                     historical_admission = _historical_payload_admission_available()
                 if not historical_admission:
                     logger.info("Historical IMAP payload admission blocked UID %s", uid)
+                    deferred_payloads += 1
                     continue
             if full_payload_attempts >= POLL_BATCH_SIZE:
                 continue
@@ -1279,6 +1292,18 @@ def pull_inbox(
         mail.close()
         mail.logout()
         completed = True
+        logger.info(
+            "IMAP poll summary mailbox=%s selected=%d metadata_completed=%d payload_attempts=%d "
+            "payload_deferred=%d cursor=%d deadline_exhausted=%s elapsed_seconds=%.1f",
+            mailbox_key,
+            len(selected_uids),
+            metadata_completed,
+            full_payload_attempts,
+            deferred_payloads,
+            cursor,
+            deadline_exhausted,
+            time.monotonic() - poll_started,
+        )
         logger.info("Finished processing mailbox %s", mailbox_key)
         return not had_failure
 
@@ -1531,15 +1556,43 @@ def find_all_mail_folder(mail):
         "[Gmail]/Tutte le mail",
         "[Gmail]/Tous les messages",
     ]
-    for candidate in COMMON_ALL_MAIL_NAMES:
-        status, _ = mail.select(f'"{candidate}"', readonly=True)
+    # LIST/SPECIAL-USE discovery does not select the potentially million-row
+    # All Mail folder.  Prefer the server-advertised \\All / \\AllMail flag and only
+    # fall back to localized names when a provider does not advertise it.
+    try:
+        status, rows = mail.list("", "*")
         if status == "OK":
-            return candidate
+            for row in rows or []:
+                text = row.decode("utf-8", errors="ignore") if isinstance(row, bytes) else str(row)
+                match = re.fullmatch(r'\(([^)]*)\)\s+(?:NIL|"(?:\\.|[^"\\])*")\s+"((?:\\.|[^"\\])*)"\s*', text)
+                if match is None:
+                    continue
+                flags = set(match.group(1).upper().split())
+                if flags & {"\\ALL", "\\ALLMAIL"}:
+                    return match.group(2)
+    except SoftTimeLimitExceeded:
+        raise
+    except Exception:  # noqa: BLE001
+        logger.debug("Gmail LIST All Mail discovery unavailable")
 
-    capabilities = get_capabilities(mail)
+    # XLIST is a legacy fallback.  Query capabilities only after LIST so the
+    # normal Gmail path remains one discovery command plus one final SELECT.
+    try:
+        capabilities = get_capabilities(mail)
+    except (TypeError, ValueError):
+        # Lightweight IMAP fakes and a few older servers may not return the
+        # two-item CAPABILITY tuple; continue with the localized-name fallback.
+        capabilities = []
     if "XLIST" in capabilities:
         candidate = find_all_mail_xlist(mail)
         if candidate:
+            return candidate
+
+    # Compatibility fallback for older IMAP servers without XLIST or
+    # SPECIAL-USE LIST.  This is intentionally last because SELECT is costly.
+    for candidate in COMMON_ALL_MAIL_NAMES:
+        status, _ = mail.select(f'"{candidate}"', readonly=True)
+        if status == "OK":
             return candidate
     return None
 

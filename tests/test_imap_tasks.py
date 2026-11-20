@@ -6,6 +6,7 @@ from email.message import EmailMessage
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.tasks.imap_tasks import (
     _decode_attachment_filename,
@@ -467,6 +468,55 @@ class TestFindAllMailFolder:
         result = find_all_mail_folder(mock_mail)
         assert result == "[Gmail]/All Mail"
         mock_xlist.assert_called_once_with(mock_mail)
+        mock_mail.select.assert_not_called()
+
+    def test_uses_list_special_use_before_select_fallback(self):
+        """LIST discovery must avoid selecting a large All Mail folder."""
+        mock_mail = MagicMock()
+        mock_mail.capability.return_value = ("OK", [b"IMAP4REV1"])
+        mock_mail.list.return_value = (
+            "OK",
+            [b'(\\HasNoChildren \\AllMail) "/" "[Gmail]/All Mail"'],
+        )
+
+        result = find_all_mail_folder(mock_mail)
+
+        assert result == "[Gmail]/All Mail"
+        mock_mail.select.assert_not_called()
+
+    def test_list_requires_all_mail_flag_not_similar_name(self):
+        """A folder such as AllTrash must never be selected as the history source."""
+        mock_mail = MagicMock()
+        mock_mail.list.return_value = (
+            "OK",
+            [b'(\\HasNoChildren \\AllTrash) "/" "[Gmail]/All Trash"'],
+        )
+        mock_mail.capability.return_value = ("OK", [b"IMAP4REV1"])
+        mock_mail.select.return_value = ("NO", None)
+
+        assert find_all_mail_folder(mock_mail) is None
+        assert all("All Trash" not in call.args[0] for call in mock_mail.select.call_args_list)
+
+    def test_list_special_use_does_not_require_capability_probe(self):
+        """LIST/SPECIAL-USE is sufficient and avoids an extra capability round trip."""
+        mock_mail = MagicMock()
+        mock_mail.list.return_value = (
+            "OK",
+            [b'(\\HasNoChildren \\All) "/" "[Gmail]/All Mail"'],
+        )
+
+        assert find_all_mail_folder(mock_mail) == "[Gmail]/All Mail"
+        mock_mail.capability.assert_not_called()
+        mock_mail.select.assert_not_called()
+
+    def test_list_soft_limit_is_not_swallowed(self):
+        """Worker time limits must abort discovery instead of falling through to SELECT."""
+        mock_mail = MagicMock()
+        mock_mail.list.side_effect = SoftTimeLimitExceeded()
+
+        with pytest.raises(SoftTimeLimitExceeded):
+            find_all_mail_folder(mock_mail)
+        mock_mail.select.assert_not_called()
 
 
 @pytest.mark.unit
@@ -1898,6 +1948,32 @@ class TestFetchAttachmentsOwnerIdPassthrough:
 @pytest.mark.unit
 class TestPullUserIntegrationImap:
     """Tests for _pull_user_integration_imap() multi-tenant IMAP polling."""
+
+    @pytest.mark.parametrize(("global_deadline", "expected_deadline"), [(300, 190), (150, 150)])
+    @patch("app.tasks.imap_tasks._get_db_session")
+    @patch("app.tasks.imap_tasks.pull_inbox")
+    def test_passes_bounded_deadline_to_each_integration(
+        self, mock_pull, mock_session_factory, global_deadline, expected_deadline
+    ):
+        from app.tasks import imap_tasks
+
+        integ = MagicMock()
+        integ.id = 20
+        integ.owner_id = "owner-budget"
+        integ.config = '{"host": "imap.example.com", "port": 993, "username": "user@test.com"}'
+        integ.credentials = "enc:encrypted"
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.all.return_value = [integ]
+        mock_session_factory.return_value = mock_db
+        mock_pull.return_value = True
+
+        with (
+            patch("app.utils.encryption.decrypt_value", return_value='{"password": "secret"}'),
+            patch.object(imap_tasks.time, "monotonic", return_value=100),
+        ):
+            imap_tasks._pull_user_integration_imap(deadline=global_deadline)
+
+        assert mock_pull.call_args.kwargs["deadline"] == expected_deadline
 
     @patch("app.tasks.imap_tasks._get_db_session")
     @patch("app.tasks.imap_tasks.pull_inbox")
