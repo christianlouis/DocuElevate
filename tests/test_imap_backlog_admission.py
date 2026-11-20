@@ -107,6 +107,30 @@ def test_queue_limit_uses_one_bounded_pipeline_and_blocks_at_limit():
 
 
 @pytest.mark.unit
+def test_queue_limit_includes_custom_upload_queue_and_priority_lanes(monkeypatch):
+    from app.tasks import imap_tasks
+
+    monkeypatch.setattr(imap_tasks.settings, "celery_upload_queue", "upload_delivery")
+    db = MagicMock()
+    db.query.side_effect = [_Query([]), _Query([])]
+    broker = _broker([100] * 10 + [99] * 10)
+    patchers = _start_admission_patches(imap_tasks, db, broker)
+    try:
+        assert imap_tasks._historical_payload_admission_available()
+    finally:
+        _stop(patchers)
+
+    db = MagicMock()
+    db.query.side_effect = [_Query([]), _Query([])]
+    broker = _broker([100] * 10 + [100] * 10)
+    patchers = _start_admission_patches(imap_tasks, db, broker)
+    try:
+        assert not imap_tasks._historical_payload_admission_available()
+    finally:
+        _stop(patchers)
+
+
+@pytest.mark.unit
 def test_disk_or_redis_failure_fails_closed_with_fresh_fakes():
     from app.tasks import imap_tasks
 
