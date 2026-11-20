@@ -68,6 +68,10 @@ celery.conf.task_routes = {
     # Health checks must remain timely while historical documents drain.
     "app.tasks.monitor_stalled_steps.monitor_stalled_steps": {"queue": "upload_maintenance"},
     "app.tasks.uptime_kuma_tasks.ping_uptime_kuma": {"queue": "upload_maintenance"},
+    # Backups may be isolated on a dedicated worker in production. The default
+    # remains document_processor for standalone deployments.
+    "app.tasks.backup_tasks.create_backup": {"queue": settings.celery_backup_queue},
+    "app.tasks.backup_tasks.cleanup_old_backups": {"queue": settings.celery_backup_queue},
     "app.tasks.*": {"queue": "document_processor"},
 }
 

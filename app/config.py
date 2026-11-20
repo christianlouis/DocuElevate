@@ -21,6 +21,13 @@ class Settings(BaseSettings):
         default=None,
         description="Optional Celery result-backend URL; falls back to REDIS_URL.",
     )
+    celery_backup_queue: str = Field(
+        default="document_processor",
+        description=(
+            "Celery queue for database backup and backup-cleanup tasks. "
+            "Defaults to document_processor for standalone compatibility."
+        ),
+    )
 
     @property
     def effective_celery_broker_url(self) -> str:

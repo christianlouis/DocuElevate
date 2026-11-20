@@ -18,6 +18,7 @@ Configuration is primarily done through environment variables specified in a `.e
 | `REDIS_URL`            | Shared Redis URL for caching and as the default Celery route. | `redis://redis:6379/0`         |
 | `CELERY_BROKER_URL`    | Optional dedicated Celery broker URL; falls back to `REDIS_URL`. | unset |
 | `CELERY_RESULT_BACKEND` | Optional dedicated Celery result-backend URL; must resolve to a writable primary and falls back to `REDIS_URL`. | unset |
+| `CELERY_BACKUP_QUEUE` | Celery queue for database backup and cleanup tasks; set this to isolate backups on a dedicated worker. | `document_processor` |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `MEILISEARCH_DELETION_MODE` | Operator-only deletion contract: `managed` (default, fail-closed cleanup) or `never_used` (only with an explicit no-data attestation). | `managed` |
