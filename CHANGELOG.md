@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.3 (2026-11-20)
+
+### Bug Fixes
+
+- **celery**: Isolate uploads on a parallel delivery queue
+  ([`00b6a19`](https://github.com/christianlouis/DocuElevate/commit/00b6a1905e5ab0b5d7d6451a265c0f9432dfeb93))
+
+
 ## v0.196.2 (2026-11-20)
 
 ### Bug Fixes
