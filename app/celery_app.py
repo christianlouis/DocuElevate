@@ -65,6 +65,26 @@ celery.conf.task_routes = {
     "app.tasks.dispatch_uploads.dispatch_upload_item": {"queue": "upload_maintenance"},
     "app.tasks.dispatch_uploads.dispatch_upload_outbox": {"queue": "upload_maintenance"},
     "app.tasks.dispatch_uploads.reconcile_upload_states": {"queue": "upload_maintenance"},
+    # External delivery is isolated from OCR/AI and mailbox intake when a
+    # dedicated upload worker is deployed. Keep this allowlist explicit: the
+    # upload modules contain the actual provider tasks, while send_to_all and
+    # maintenance tasks must remain on their existing queues.
+    "app.tasks.upload_to_dropbox.upload_to_dropbox": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_email.upload_to_email": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_evernote.upload_to_evernote": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_ftp.upload_to_ftp": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_google_drive.upload_to_google_drive": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_icloud.upload_to_icloud": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_nextcloud.upload_to_nextcloud": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_notion.upload_to_notion_global": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_onedrive.upload_to_onedrive": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_paperless.upload_to_paperless": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_s3.upload_to_s3": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_s3_secondary.upload_to_s3_secondary": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_sftp.upload_to_sftp": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_sharepoint.upload_to_sharepoint": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_user_integration.upload_to_user_integration": {"queue": settings.celery_upload_queue},
+    "app.tasks.upload_to_webdav.upload_to_webdav": {"queue": settings.celery_upload_queue},
     # Health checks must remain timely while historical documents drain.
     "app.tasks.monitor_stalled_steps.monitor_stalled_steps": {"queue": "upload_maintenance"},
     "app.tasks.uptime_kuma_tasks.ping_uptime_kuma": {"queue": "upload_maintenance"},

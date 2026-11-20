@@ -67,6 +67,15 @@ class TestCeleryWorkerConfig:
         overridden = Settings(_env_file=None, database_url="sqlite://")
         assert overridden.celery_backup_queue == "backup_maintenance"
 
+    def test_upload_queue_defaults_and_accepts_environment_override(self, monkeypatch):
+        monkeypatch.delenv("CELERY_UPLOAD_QUEUE", raising=False)
+        default = Settings(_env_file=None, database_url="sqlite://")
+        assert default.celery_upload_queue == "document_processor"
+
+        monkeypatch.setenv("CELERY_UPLOAD_QUEUE", "upload_delivery")
+        overridden = Settings(_env_file=None, database_url="sqlite://")
+        assert overridden.celery_upload_queue == "upload_delivery"
+
     def test_all_task_imports_successful(self):
         """Test that all task modules are imported without errors."""
         mod = _reload_celery_worker()

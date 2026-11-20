@@ -1,5 +1,6 @@
 from unittest.mock import MagicMock
 
+from app.config import settings
 from app.scheduler import HeartbeatScheduler
 from app.utils import upload_health
 
@@ -66,6 +67,18 @@ def test_upload_maintenance_tasks_use_dedicated_queue():
     assert routes["app.tasks.dispatch_uploads.dispatch_upload_item"]["queue"] == "upload_maintenance"
     assert routes["app.tasks.dispatch_uploads.dispatch_upload_outbox"]["queue"] == "upload_maintenance"
     assert routes["app.tasks.dispatch_uploads.reconcile_upload_states"]["queue"] == "upload_maintenance"
+
+
+def test_external_upload_tasks_use_configured_upload_queue():
+    from app.celery_app import celery
+
+    upload_routes = {
+        name: route["queue"]
+        for name, route in celery.conf.task_routes.items()
+        if name.startswith("app.tasks.upload_to_")
+    }
+    assert len(upload_routes) == 16
+    assert all(queue == settings.celery_upload_queue for queue in upload_routes.values())
 
 
 def test_document_pipeline_tasks_keep_the_normal_processing_queue():
