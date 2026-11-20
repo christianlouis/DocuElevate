@@ -6,6 +6,7 @@ from email.message import EmailMessage
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.tasks.imap_tasks import (
     _decode_attachment_filename,
@@ -481,6 +482,40 @@ class TestFindAllMailFolder:
         result = find_all_mail_folder(mock_mail)
 
         assert result == "[Gmail]/All Mail"
+        mock_mail.select.assert_not_called()
+
+    def test_list_requires_all_mail_flag_not_similar_name(self):
+        """A folder such as AllTrash must never be selected as the history source."""
+        mock_mail = MagicMock()
+        mock_mail.list.return_value = (
+            "OK",
+            [b'(\\HasNoChildren \\AllTrash) "/" "[Gmail]/All Trash"'],
+        )
+        mock_mail.capability.return_value = ("OK", [b"IMAP4REV1"])
+        mock_mail.select.return_value = ("NO", None)
+
+        assert find_all_mail_folder(mock_mail) is None
+        assert all("All Trash" not in call.args[0] for call in mock_mail.select.call_args_list)
+
+    def test_list_special_use_does_not_require_capability_probe(self):
+        """LIST/SPECIAL-USE is sufficient and avoids an extra capability round trip."""
+        mock_mail = MagicMock()
+        mock_mail.list.return_value = (
+            "OK",
+            [b'(\\HasNoChildren \\All) "/" "[Gmail]/All Mail"'],
+        )
+
+        assert find_all_mail_folder(mock_mail) == "[Gmail]/All Mail"
+        mock_mail.capability.assert_not_called()
+        mock_mail.select.assert_not_called()
+
+    def test_list_soft_limit_is_not_swallowed(self):
+        """Worker time limits must abort discovery instead of falling through to SELECT."""
+        mock_mail = MagicMock()
+        mock_mail.list.side_effect = SoftTimeLimitExceeded()
+
+        with pytest.raises(SoftTimeLimitExceeded):
+            find_all_mail_folder(mock_mail)
         mock_mail.select.assert_not_called()
 
 
