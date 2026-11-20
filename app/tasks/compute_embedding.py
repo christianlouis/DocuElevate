@@ -12,9 +12,10 @@ from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord, IntegrationDirection, IntegrationType, UserIntegration
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import ProviderTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import is_ai_provider_configured
+from app.utils.provider_limits import ProviderQuotaExceeded
 from app.utils.step_manager import update_step_status
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ def _queue_vector_index(file_id: int) -> None:
     index_document_vectors.delay(file_id)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True, name="compute_document_embedding")
+@celery.task(base=ProviderTaskWithRetry, bind=True, name="compute_document_embedding")
 def compute_document_embedding(self, file_id: int) -> dict:
     """Compute and cache the text embedding for a single document.
 
@@ -163,6 +164,8 @@ def compute_document_embedding(self, file_id: int) -> dict:
                 )
                 return {"status": "error", "detail": "Embedding computation returned None"}
         except Exception as exc:
+            if isinstance(exc, ProviderQuotaExceeded):
+                raise
             logger.exception("[%s] Embedding computation failed for file %s: %s", task_id, file_id, exc)
             log_task_progress(
                 task_id,

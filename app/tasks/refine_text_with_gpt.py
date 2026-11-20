@@ -9,14 +9,15 @@ from app.database import SessionLocal
 from app.models import FileRecord
 from app.services.account_deletion import DeletionBlocked, assert_account_active
 from app.services.account_lifecycle_lock import account_lifecycle_lock
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import ProviderTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider
+from app.utils.provider_limits import ProviderQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=ProviderTaskWithRetry, bind=True)
 def refine_text_with_gpt(self, filename: str, raw_text: str, file_id: int | None = None):
     """Refine a current file while coordinating with account deletion."""
     with SessionLocal() as db:
@@ -95,6 +96,8 @@ def _refine(self, filename: str, raw_text: str, file_id: int | None):
 
         return {"filename": filename, "cleaned_text": cleaned_text}
     except Exception as e:
+        if isinstance(e, ProviderQuotaExceeded):
+            raise
         logger.exception(f"[{task_id}] Text refinement failed for {filename}: {e}")
         log_task_progress(
             task_id,

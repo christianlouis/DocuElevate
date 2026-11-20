@@ -268,6 +268,38 @@ class BaseTaskWithRetry(Task):
         countdown is computed via :func:`compute_countdown` using this task's
         :attr:`retry_delays` and :attr:`retry_jitter` settings.
         """
+        # Local provider capacity is a durable wait, not a failed provider
+        # attempt. Keep the retry counter unchanged so repeated waits cannot
+        # exhaust the finite genuine-error retry allowance.
+        from app.utils.provider_limits import ProviderQuotaExceeded
+
+        if isinstance(exc, ProviderQuotaExceeded) and not self.request.called_directly:
+            request = self.request
+            countdown = max(1, math.ceil(float(exc.retry_after)))
+            sig = self.signature_from_request(
+                request,
+                args,
+                kwargs,
+                countdown=countdown,
+                eta=None,
+                retries=request.retries,
+                **options,
+            )
+            retry = Retry(exc=exc, when=countdown, is_eager=request.is_eager, sig=sig)
+            if request.is_eager:
+                if throw:
+                    raise retry
+                return retry
+            try:
+                sig.apply_async()
+            except Exception as publish_exc:
+                # Preserve the source for broker redelivery if publication of
+                # the delayed copy fails.
+                raise Reject(publish_exc, requeue=True)
+            if throw:
+                raise retry
+            return retry
+
         quota_retry = False
         if exc is not None:
             try:
@@ -303,16 +335,35 @@ class BaseTaskWithRetry(Task):
                 countdown,
             )
 
-        return super().retry(
-            args=args,
-            kwargs=kwargs,
-            exc=exc,
-            throw=throw,
-            eta=eta,
-            countdown=countdown,
-            max_retries=max_retries,
-            **options,
-        )
+        # Celery's autoretry wrapper stores its mutable retry kwargs on the
+        # task and ``Task.retry`` stores an ``override_max_retries`` attribute.
+        # Both mutations normally get cleaned up by code after ``retry``
+        # returns, but retry raises ``Retry`` in the normal worker path so that
+        # cleanup is unreachable.  Restore them here so a provider retry does
+        # not leak its larger finite budget into the next task invocation.
+        sentinel = object()
+        previous_override = getattr(self, "override_max_retries", sentinel)
+        previous_retry_max = self.retry_kwargs.get("max_retries", sentinel)
+        try:
+            return super().retry(
+                args=args,
+                kwargs=kwargs,
+                exc=exc,
+                throw=throw,
+                eta=eta,
+                countdown=countdown,
+                max_retries=max_retries,
+                **options,
+            )
+        finally:
+            if previous_override is sentinel:
+                self.__dict__.pop("override_max_retries", None)
+            else:
+                self.override_max_retries = previous_override
+            if previous_retry_max is sentinel:
+                self.retry_kwargs.pop("max_retries", None)
+            else:
+                self.retry_kwargs["max_retries"] = previous_retry_max
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -361,6 +412,13 @@ class OcrTaskWithRetry(BaseTaskWithRetry):
     """
 
     retry_delays: list[int] = [120, 600, 1800]
+    acks_late = True
+
+
+class ProviderTaskWithRetry(BaseTaskWithRetry):
+    """Retry policy for tasks that reserve shared AI-provider capacity."""
+
+    acks_late = True
 
 
 class UploadTaskWithRetry(BaseTaskWithRetry):

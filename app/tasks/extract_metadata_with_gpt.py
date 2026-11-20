@@ -11,7 +11,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord
 from app.tasks.embed_metadata_into_pdf import embed_metadata_into_pdf
-from app.tasks.retry_config import BaseTaskWithRetry
+from app.tasks.retry_config import ProviderTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider, is_ai_provider_configured
 from app.utils.filename_utils import VALID_FILENAME_RE
@@ -77,7 +77,7 @@ def extract_json_from_text(text):
     return None
 
 
-@celery.task(base=BaseTaskWithRetry, bind=True)
+@celery.task(base=ProviderTaskWithRetry, bind=True)
 def extract_metadata_with_gpt(self, filename: str, cleaned_text: str, file_id: int = None):
     """
     Uses OpenAI to classify document metadata.

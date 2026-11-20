@@ -13,6 +13,7 @@ from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress
 from app.utils.provider_limits import (
+    ProviderQuotaExceeded,
     ProviderRateLimited,
     acquire,
     record_cooldown,
@@ -228,6 +229,8 @@ def process_with_azure_document_intelligence(self, filename: str, file_id: int =
 
         return {"file": filename, "searchable_pdf": searchable_pdf_path, "cleaned_text": extracted_text}
     except Exception as e:
+        if isinstance(e, ProviderQuotaExceeded):
+            raise
         status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
         if status == 429:
             retry_after = retry_after_from_exception(e)

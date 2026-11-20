@@ -26,7 +26,7 @@ from app.tasks.retry_config import OcrTaskWithRetry
 from app.tasks.rotate_pdf_pages import rotate_pdf_pages
 from app.utils import log_task_progress, remove_nul_bytes
 from app.utils.ocr_provider import OCRResult, embed_text_layer, get_ocr_providers, merge_ocr_results
-from app.utils.provider_limits import ProviderQuotaError
+from app.utils.provider_limits import ProviderQuotaError, ProviderQuotaExceeded
 from app.utils.text_quality import TextSource, check_text_quality, compare_text_quality
 
 logger = logging.getLogger(__name__)
@@ -197,6 +197,10 @@ def process_with_ocr(
                 provider_errors.append(exc)
 
         if not results:
+            quota_errors = [exc for exc in provider_errors if isinstance(exc, ProviderQuotaError)]
+            capacity_errors = [exc for exc in quota_errors if isinstance(exc, ProviderQuotaExceeded)]
+            if capacity_errors:
+                raise capacity_errors[0]
             error_summary = "; ".join(errors)
             log_task_progress(
                 task_id,
@@ -206,7 +210,6 @@ def process_with_ocr(
                 file_id=file_id,
                 detail=error_summary,
             )
-            quota_errors = [exc for exc in provider_errors if isinstance(exc, ProviderQuotaError)]
             if quota_errors:
                 raise quota_errors[0]
             raise RuntimeError(f"All OCR providers failed for {filename}: {error_summary}")
@@ -417,6 +420,8 @@ def process_with_ocr(
         }
 
     except Exception as exc:
+        if isinstance(exc, ProviderQuotaExceeded):
+            raise
         if index_only and source_task_id:
             from app.tasks.vector_index import _set_source_state
 

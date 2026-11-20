@@ -15,6 +15,8 @@ from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord, KnowledgeResearchJob
+from app.tasks.retry_config import ProviderTaskWithRetry
+from app.utils.provider_limits import ProviderQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +264,8 @@ def _chat_completion_with_retry(provider: Any, **kwargs: Any) -> str:
         try:
             return cast(str, provider.chat_completion(**kwargs))
         except Exception as exc:
+            if isinstance(exc, ProviderQuotaExceeded):
+                raise
             if attempt == 2:
                 raise
             logger.warning(
@@ -757,6 +761,7 @@ def _synthesize(
 
 
 @celery.task(
+    base=ProviderTaskWithRetry,
     bind=True,
     name="app.tasks.knowledge_research.run_knowledge_research",
     soft_time_limit=_RESEARCH_SAFETY_SECONDS,
@@ -921,6 +926,8 @@ def run_knowledge_research(self: Any, job_id: str) -> dict[str, Any]:
                 logger.exception("Could not persist terminal database failure for research job %s", job_id)
             return {"state": "failed", "error": str(exc)}
         except Exception as exc:
+            if isinstance(exc, ProviderQuotaExceeded):
+                raise
             logger.exception("Knowledge research job %s failed: %s", job_id, exc)
             db.rollback()
             job = db.query(KnowledgeResearchJob).filter(KnowledgeResearchJob.id == job_id).first()
