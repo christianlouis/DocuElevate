@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.6 (2026-11-20)
+
+### Bug Fixes
+
+- Keep provider capacity waits pending without exhausting retries
+  ([#1332](https://github.com/christianlouis/DocuElevate/pull/1332),
+  [`bb29cb1`](https://github.com/christianlouis/DocuElevate/commit/bb29cb1be52910da3c5c9a93cfc6f9b05e06684e))
+
+
 ## v0.196.5 (2026-11-20)
 
 ### Bug Fixes
