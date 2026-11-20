@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Testing
+
+- Model Celery retry in database disconnect regression
+  ([#1333](https://github.com/christianlouis/DocuElevate/pull/1333),
+  [`b6947f6`](https://github.com/christianlouis/DocuElevate/commit/b6947f612235f51fab9279021eed89b7a44a5f6a))
+
+
 ## v0.196.6 (2026-11-20)
 
 ### Bug Fixes
