@@ -20,9 +20,16 @@ Configuration is primarily done through environment variables specified in a `.e
 | `CELERY_RESULT_BACKEND` | Optional dedicated Celery result-backend URL; must resolve to a writable primary and falls back to `REDIS_URL`. | unset |
 | `CELERY_BACKUP_QUEUE` | Celery queue for database backup and cleanup tasks; set this to isolate backups on a dedicated worker. | `document_processor` |
 | `CELERY_UPLOAD_QUEUE` | Celery queue for external document delivery; set this to `upload_delivery` when a dedicated upload worker is deployed. | `document_processor` |
+| `UPLOAD_DESTINATION_CONCURRENCY` | Maximum simultaneous uploads per concrete destination across workers; production compose default is 3, zero disables the gate. | `0` |
+| `UPLOAD_DESTINATION_LEASE_SECONDS` | Crash-recovery Redis lease TTL; it is kept above the upload hard time limit. | `1200` |
 | `WORKDIR`              | Working directory for the application.                  | `/workdir`                     |
 | `GOTENBERG_URL`        | Gotenberg PDF processing URL.                           | `http://gotenberg:3000`        |
 | `MEILISEARCH_DELETION_MODE` | Operator-only deletion contract: `managed` (default, fail-closed cleanup) or `never_used` (only with an explicit no-data attestation). | `managed` |
+
+External upload tasks use a 15-minute soft time limit and a 16-minute hard time limit; the
+dedicated worker's 20-minute shutdown grace period lets active tasks finish cleanly. Late
+acknowledgement preserves the source for redelivery when retry publication fails. Provider
+operations remain at-least-once: an ambiguous provider result is not an exactly-once guarantee.
 | `EXTERNAL_HOSTNAME`    | The external hostname for the application.             | `docuelevate.example.com`      |
 | `PUBLIC_BASE_URL`      | Full public base URL including scheme (e.g., `https://docuelevate.example.com`). When set, overrides auto-detected URLs used for OAuth redirect URIs. **Required when your reverse proxy does not forward `X-Forwarded-Proto` headers.** | *(not set)* |
 | `DEPLOYMENT_LABEL`     | Optional label shown during onboarding so users can distinguish installations. | *(empty)* |

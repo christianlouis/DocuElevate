@@ -1334,6 +1334,11 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         if integration is None:
             error_msg = f"UserIntegration {integration_id} not found"
             logger.error("[%s] %s", task_id, error_msg)
+            # Release the lookup connection before progress logging opens its
+            # own session.  The task lifecycle wrapper already holds one
+            # session, so keeping this one open can exhaust a small worker
+            # pool on this error path.
+            db.close()
             log_task_progress(
                 task_id, f"upload_to_user_integration_{integration_id}", "failure", error_msg, file_id=file_id
             )
