@@ -54,8 +54,13 @@ def test_research_retries_transient_database_disconnect():
         run_knowledge_research.run("job-1")
 
     session.invalidate.assert_called_once_with()
-    assert retry.call_args.kwargs["countdown"] == 1
-    assert retry.call_args.kwargs["max_retries"] == 2
+    # ProviderTaskWithRetry's autoretry wrapper sees the test sentinel raised
+    # by the patched retry and invokes retry once more.  Assert the task's
+    # explicit database retry request, rather than the wrapper's sentinel
+    # retry, so the finite DB policy remains observable.
+    first_retry = retry.call_args_list[0]
+    assert first_retry.kwargs["countdown"] == 1
+    assert first_retry.kwargs["max_retries"] == 2
 
 
 def test_candidate_retrieval_pages_qualified_matches_per_scope():
