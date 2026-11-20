@@ -1138,9 +1138,11 @@ def pull_inbox(
                     "BODYSTRUCTURE fetch unavailable for %s (%s); using full payloads", mailbox_key, type(exc).__name__
                 )
 
-        # Add only proven document-free UIDs from the wider metadata window;
-        # potential attachments remain limited to the normal payload budget.
-        selected_uids.extend(uid for uid in metadata_safe_uids if uid not in selected_uids)
+        # Complete proven document-free UIDs before any BODY.PEEK work. A slow
+        # payload retry must not consume the bounded poll before these cheap,
+        # durable cursor/ledger advances are recorded. The remaining payload
+        # order is unchanged, preserving the history/tail/retry fair rotation.
+        selected_uids = list(metadata_safe_uids) + [uid for uid in selected_uids if uid not in metadata_safe_uids]
         msg_numbers = [str(uid).encode() for uid in selected_uids]
         had_failure = False
         deleted_any = False
