@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.2 (2026-11-20)
+
+### Bug Fixes
+
+- **mail**: Keep large Gmail catch-up and document processing moving
+  ([#1328](https://github.com/christianlouis/DocuElevate/pull/1328),
+  [`ff6f856`](https://github.com/christianlouis/DocuElevate/commit/ff6f856bf91536b6b2ce3d78f8c83821a415ee47))
+
+
 ## v0.196.1 (2026-11-19)
 
 ### Bug Fixes
