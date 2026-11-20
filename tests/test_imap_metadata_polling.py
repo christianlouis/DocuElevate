@@ -110,6 +110,58 @@ def test_metadata_fetch_can_expire_budget_before_processing_loop(db_session, cap
 
 
 @pytest.mark.unit
+def test_metadata_safe_uid_is_not_starved_by_slow_payload_batch(db_session):
+    """A safe UID outside the payload batch must complete before the budget ends."""
+    from app.models import ImapMessageLedger
+    from app.tasks import imap_tasks
+
+    factory = sessionmaker(bind=db_session.get_bind())
+    mail = _mail_for_uids(list(range(1, 52)))
+    payload_uids: list[int] = []
+
+    def imap_command(command, *args):
+        if command == "search":
+            return "OK", [b" ".join(str(uid).encode() for uid in range(1, 52))]
+        if command == "fetch" and args[1] == "(UID BODYSTRUCTURE)":
+            return "OK", [
+                *[
+                    f'{uid} (UID {uid} BODYSTRUCTURE ("APPLICATION" "PDF" NIL NIL NIL "BASE64" 12))'.encode()
+                    for uid in range(1, 51)
+                ],
+                b'51 (UID 51 BODYSTRUCTURE ("TEXT" "PLAIN" NIL NIL NIL "7BIT" 12 1))',
+            ]
+        if command == "fetch" and args[1] == "(BODY.PEEK[])":
+            uid = int(args[0])
+            payload_uids.append(uid)
+            elapsed[0] += 1
+            return "OK", [(f"{uid} FETCH (BODY[])").encode(), _raw_message(uid)]
+        raise AssertionError(f"unexpected IMAP command: {command} {args}")
+
+    mail.uid.side_effect = imap_command
+    elapsed = [0]
+
+    def monotonic():
+        return elapsed[0]
+
+    with (
+        patch.object(imap_tasks, "_get_db_session", factory),
+        patch.object(imap_tasks, "find_all_mail_folder", return_value="INBOX"),
+        patch.object(imap_tasks.imaplib, "IMAP4_SSL", return_value=mail),
+        patch.object(imap_tasks, "is_private_ip", return_value=False),
+        patch.object(imap_tasks, "_historical_payload_admission_available", return_value=True),
+        patch.object(imap_tasks, "fetch_attachments_and_enqueue", return_value=False),
+        patch.object(imap_tasks.settings, "imap_readonly_mode", False),
+        patch.object(imap_tasks, "POLL_BATCH_SIZE", 50),
+        patch.object(imap_tasks.time, "monotonic", side_effect=monotonic),
+    ):
+        imap_tasks.pull_inbox("test", "imap.example.com", 993, "user", "pw", True, False, deadline=10)
+
+    assert payload_uids
+    with factory() as db:
+        assert db.query(ImapMessageLedger).filter_by(uid=51, state="completed").count() == 1
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "metadata_item",
     [
