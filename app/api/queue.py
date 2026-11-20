@@ -26,13 +26,12 @@ MAX_ARGS_DISPLAY_LENGTH = 200
 
 
 def _queue_names_for_monitoring() -> list[str]:
-    """Return visible Celery queues, including priority lanes for uploads."""
+    """Return visible Celery queues, including every priority lane."""
     base_names = ["document_processor", "default", "celery", settings.celery_upload_queue]
     names: list[str] = []
     for queue_name in dict.fromkeys(base_names):
         names.append(queue_name)
-        if queue_name == settings.celery_upload_queue:
-            names.extend(f"{queue_name}\x06\x16{priority}" for priority in range(1, 10))
+        names.extend(f"{queue_name}\x06\x16{priority}" for priority in range(1, 10))
     return names
 
 
@@ -225,7 +224,7 @@ def get_queue_stats(db: Session = Depends(get_db)) -> dict[str, Any]:
     # 1. Redis queue lengths
     queue_lengths: dict[str, int] = {}
     try:
-        redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.effective_celery_broker_url, decode_responses=True)
         for queue_name in _queue_names_for_monitoring():
             queue_lengths[queue_name] = _get_redis_queue_length(redis_client, queue_name)
         redis_client.close()
@@ -259,7 +258,7 @@ def get_pending_count(db: Session = Depends(get_db)) -> dict[str, int]:
 
     # Redis queue lengths
     try:
-        redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.effective_celery_broker_url, decode_responses=True)
         for queue_name in _queue_names_for_monitoring():
             total_pending += _get_redis_queue_length(redis_client, queue_name)
         redis_client.close()
