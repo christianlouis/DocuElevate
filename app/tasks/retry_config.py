@@ -424,8 +424,8 @@ class UploadTaskWithRetry(BaseTaskWithRetry):
             try:
                 sig.apply_async()
             except Exception as publish_exc:
-                # The original message is late-acked and is still the only
-                # durable copy when publication of the delayed retry fails.
+                # Late acknowledgement preserves the source for redelivery
+                # when publication of the delayed retry fails.
                 raise Reject(publish_exc, requeue=True)
             if throw:
                 raise retry

@@ -152,7 +152,7 @@ services:
 
   upload-delivery-worker:
     <<: *docuelevate-service
-    stop_grace_period: 10m
+    stop_grace_period: 20m
     command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_UPLOAD_WORKER_CONCURRENCY:-8}", "--prefetch-multiplier=1", "--hostname=upload-delivery@%h", "-Q", "${CELERY_UPLOAD_QUEUE:-upload_delivery}"]
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.celery_app inspect ping --destination=upload-delivery@$$HOSTNAME --timeout=5"]
