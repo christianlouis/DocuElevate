@@ -1147,6 +1147,7 @@ def pull_inbox(
         full_payload_attempts = 0
         deferred_payloads = 0
         metadata_completed = 0
+        deadline_exhausted = False
         historical_payload_uids = {
             uid
             for uid in historical_new_uids
@@ -1156,6 +1157,7 @@ def pull_inbox(
 
         for num in msg_numbers:
             if time.monotonic() >= deadline:
+                deadline_exhausted = True
                 break
             uid = int(num)
             if uid in metadata_safe_uids:
@@ -1289,14 +1291,15 @@ def pull_inbox(
         mail.logout()
         completed = True
         logger.info(
-            "IMAP poll summary mailbox=%s selected=%d metadata_completed=%d payload_attempts=%d payload_deferred=%d cursor=%d deadline_exhausted=%s elapsed_seconds=%.1f",
+            "IMAP poll summary mailbox=%s selected=%d metadata_completed=%d payload_attempts=%d "
+            "payload_deferred=%d cursor=%d deadline_exhausted=%s elapsed_seconds=%.1f",
             mailbox_key,
             len(selected_uids),
             metadata_completed,
             full_payload_attempts,
             deferred_payloads,
             cursor,
-            time.monotonic() >= deadline,
+            deadline_exhausted,
             time.monotonic() - poll_started,
         )
         logger.info("Finished processing mailbox %s", mailbox_key)
@@ -1552,20 +1555,19 @@ def find_all_mail_folder(mail):
         "[Gmail]/Tous les messages",
     ]
     # LIST/SPECIAL-USE discovery does not select the potentially million-row
-    # All Mail folder.  Prefer the server-advertised \\AllMail flag and only
+    # All Mail folder.  Prefer the server-advertised \\All / \\AllMail flag and only
     # fall back to localized names when a provider does not advertise it.
     try:
         status, rows = mail.list("", "*")
         if status == "OK":
             for row in rows or []:
                 text = row.decode("utf-8", errors="ignore") if isinstance(row, bytes) else str(row)
-                flags_match = re.search(r"\(([^)]*)\)", text)
-                flags = flags_match.group(1).upper() if flags_match else ""
-                if "\\ALL" not in flags and "\\ALLMAIL" not in flags:
+                match = re.fullmatch(r'\(([^)]*)\)\s+(?:NIL|"(?:\\.|[^"\\])*")\s+"((?:\\.|[^"\\])*)"\s*', text)
+                if match is None:
                     continue
-                match = re.search(r'"([^\"]+)"\s*$', text)
-                if match:
-                    return match.group(1)
+                flags = set(match.group(1).upper().split())
+                if flags & {"\\ALL", "\\ALLMAIL"}:
+                    return match.group(2)
     except SoftTimeLimitExceeded:
         raise
     except Exception:  # noqa: BLE001
