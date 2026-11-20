@@ -527,7 +527,7 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
 
     import requests as _requests
 
-    from app.tasks.upload_to_paperless import normalize_metadata_value
+    from app.tasks.upload_to_paperless import _is_duplicate_error, normalize_metadata_value
 
     host = (cfg.get("host") or "").rstrip("/")
     api_token = creds.get("api_token") or ""
@@ -577,7 +577,14 @@ def _upload_paperless(file_path: str, cfg: dict[str, Any], creds: dict[str, Any]
                     doc_id = info.get("related_document")
                     break
                 elif status == "FAILURE":
-                    raise RuntimeError(f"Paperless processing failed: {info.get('result')}")
+                    result_message = info.get("result")
+                    if _is_duplicate_error(result_message):
+                        # Paperless has already rejected/retained this document as
+                        # a duplicate.  This is a terminal provider outcome: do
+                        # not turn it into another upload claim or Celery retry.
+                        logger.info("[%s] Paperless reported an existing document; upload skipped", task_id)
+                        return {"status": "Skipped", "reason": "already_exists", "provider": "paperless"}
+                    raise RuntimeError("Paperless processing failed")
         except RuntimeError:
             raise
         except Exception as poll_exc:
@@ -1423,18 +1430,24 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
                 integ.last_error = None
                 db.commit()
 
+        result_status = result.get("status") if isinstance(result, dict) else None
+        if result_status == "Skipped":
+            progress_status = "skipped"
+            progress_message = f"Skipped upload to {itype} '{int_name}': document already exists"
+        else:
+            progress_status = "success"
+            progress_message = f"Uploaded to {itype} '{int_name}': {filename}"
+            if (
+                isinstance(result, dict)
+                and result.get("delivery_mode")
+                and isinstance(result.get("message_size_bytes"), int)
+            ):
+                progress_message += f" ({result['delivery_mode']}, {result['message_size_bytes']} bytes)"
         log_task_progress(
             task_id,
             f"upload_to_user_integration_{integration_id}",
-            "success",
-            f"Uploaded to {itype} '{int_name}': {filename}"
-            + (
-                f" ({result.get('delivery_mode')}, {result.get('message_size_bytes')} bytes)"
-                if isinstance(result, dict)
-                and result.get("delivery_mode")
-                and isinstance(result.get("message_size_bytes"), int)
-                else ""
-            ),
+            progress_status,
+            progress_message,
             file_id=file_id,
         )
         return result
