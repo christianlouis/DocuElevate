@@ -467,6 +467,21 @@ class TestFindAllMailFolder:
         result = find_all_mail_folder(mock_mail)
         assert result == "[Gmail]/All Mail"
         mock_xlist.assert_called_once_with(mock_mail)
+        mock_mail.select.assert_not_called()
+
+    def test_uses_list_special_use_before_select_fallback(self):
+        """LIST discovery must avoid selecting a large All Mail folder."""
+        mock_mail = MagicMock()
+        mock_mail.capability.return_value = ("OK", [b"IMAP4REV1"])
+        mock_mail.list.return_value = (
+            "OK",
+            [b'(\\HasNoChildren \\AllMail) "/" "[Gmail]/All Mail"'],
+        )
+
+        result = find_all_mail_folder(mock_mail)
+
+        assert result == "[Gmail]/All Mail"
+        mock_mail.select.assert_not_called()
 
 
 @pytest.mark.unit
