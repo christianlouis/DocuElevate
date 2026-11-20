@@ -28,6 +28,13 @@ class Settings(BaseSettings):
             "Defaults to document_processor for standalone compatibility."
         ),
     )
+    celery_upload_queue: str = Field(
+        default="document_processor",
+        description=(
+            "Celery queue for external document-upload tasks. "
+            "Defaults to document_processor for standalone compatibility."
+        ),
+    )
 
     @property
     def effective_celery_broker_url(self) -> str:

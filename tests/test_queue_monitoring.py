@@ -28,6 +28,45 @@ class TestGetRedisQueueLength:
         assert _get_redis_queue_length(mock_redis, "default") == 0
 
 
+@pytest.mark.parametrize("queue_name", ["document_processor", "default", "celery"])
+def test_monitoring_queue_names_deduplicate_legacy_upload_queue(monkeypatch, queue_name):
+    from app.api.queue import _queue_names_for_monitoring
+
+    monkeypatch.setattr("app.api.queue.settings.celery_upload_queue", queue_name)
+    names = _queue_names_for_monitoring()
+    assert names.count(queue_name) == 1
+    assert f"{queue_name}\x06\x169" in names
+
+
+def test_monitoring_queue_names_include_custom_upload_priority_lanes(monkeypatch):
+    from app.api.queue import _queue_names_for_monitoring
+
+    monkeypatch.setattr("app.api.queue.settings.celery_upload_queue", "upload_delivery")
+    names = _queue_names_for_monitoring()
+    assert names.count("upload_delivery") == 1
+    assert "upload_delivery\x06\x161" in names
+    assert "upload_delivery\x06\x169" in names
+
+
+@pytest.mark.integration
+@patch("app.api.queue.redis.Redis")
+def test_pending_count_sums_fixed_document_and_upload_priority_lanes(mock_redis_cls, client, monkeypatch):
+    monkeypatch.setattr("app.api.queue.settings.celery_upload_queue", "upload_delivery")
+    lengths = {
+        "document_processor\x06\x166": 7,
+        "upload_delivery\x06\x166": 11,
+        "default": 2,
+    }
+    mock_redis_instance = MagicMock()
+    mock_redis_instance.llen.side_effect = lambda queue_name: lengths.get(queue_name, 0)
+    mock_redis_cls.from_url.return_value = mock_redis_instance
+
+    response = client.get("/api/queue/pending-count")
+
+    assert response.status_code == 200
+    assert response.json() == {"total_pending": 20}
+
+
 @pytest.mark.unit
 class TestGetCeleryInspectStats:
     """Tests for the _get_celery_inspect_stats helper."""
@@ -213,17 +252,16 @@ class TestPendingCountEndpoint:
         db_session.commit()
 
         mock_redis_instance = MagicMock()
-        mock_redis_instance.llen.side_effect = [2, 3, 5]
+        mock_redis_instance.llen.return_value = 1
         mock_redis_cls.from_url.return_value = mock_redis_instance
 
         response = client.get("/api/queue/pending-count")
         assert response.status_code == 200
-        assert response.json() == {"total_pending": 11}
-        assert mock_redis_instance.llen.call_args_list == [
-            (("document_processor",),),
-            (("default",),),
-            (("celery",),),
-        ]
+        from app.api.queue import _queue_names_for_monitoring
+
+        queue_names = _queue_names_for_monitoring()
+        assert response.json() == {"total_pending": len(queue_names) + 1}
+        assert [call.args[0] for call in mock_redis_instance.llen.call_args_list] == queue_names
         mock_redis_instance.close.assert_called_once()
 
     @patch("app.api.queue.redis.Redis")

@@ -64,6 +64,14 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "celery_upload_queue": {
+        "category": "Core",
+        "description": "Celery queue consumed by external document-upload workers",
+        "type": "string",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+    },
     "db_pool_size": {
         "category": "Core",
         "description": (

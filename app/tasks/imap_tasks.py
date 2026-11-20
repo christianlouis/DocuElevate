@@ -181,9 +181,11 @@ def _historical_payload_admission_available() -> bool:
             decode_responses=True,
         )
         try:
-            queue_names = ["document_processor"] + [
-                f"document_processor\x06\x16{priority}" for priority in range(1, 10)
-            ]
+            queue_bases = dict.fromkeys(("document_processor", settings.celery_upload_queue))
+            queue_names = []
+            for queue_name in queue_bases:
+                queue_names.append(queue_name)
+                queue_names.extend(f"{queue_name}\x06\x16{priority}" for priority in range(1, 10))
             with broker.pipeline(transaction=False) as pipeline:
                 for queue_name in queue_names:
                     pipeline.llen(queue_name)
