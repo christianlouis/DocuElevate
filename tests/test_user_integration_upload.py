@@ -80,6 +80,16 @@ class TestUploadToUserIntegration:
         mock_session_local.return_value.__enter__.return_value = mock_db
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
+        progress_calls = 0
+
+        def assert_lookup_session_released(*_args, **_kwargs):
+            nonlocal progress_calls
+            progress_calls += 1
+            if progress_calls == 2:
+                assert mock_db.close.called
+
+        mock_log_progress.side_effect = assert_lookup_session_released
+
         with pytest.raises(ValueError, match="not found"):
             _run_upload_task(str(test_file), integration_id=99)
 
