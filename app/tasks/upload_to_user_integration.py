@@ -1437,8 +1437,10 @@ def upload_to_user_integration(self, file_path: str, integration_id: int, file_i
         else:
             progress_status = "success"
             progress_message = f"Uploaded to {itype} '{int_name}': {filename}"
-            if isinstance(result, dict) and result.get("delivery_mode") and isinstance(
-                result.get("message_size_bytes"), int
+            if (
+                isinstance(result, dict)
+                and result.get("delivery_mode")
+                and isinstance(result.get("message_size_bytes"), int)
             ):
                 progress_message += f" ({result['delivery_mode']}, {result['message_size_bytes']} bytes)"
         log_task_progress(
