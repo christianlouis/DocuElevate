@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from celery.exceptions import Retry
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -48,12 +49,13 @@ def test_research_retries_transient_database_disconnect():
 
     with (
         patch("app.tasks.knowledge_research.SessionLocal", return_value=session_context),
-        patch.object(run_knowledge_research, "retry", side_effect=RuntimeError("retry scheduled")) as retry,
-        pytest.raises(RuntimeError, match="retry scheduled"),
+        patch.object(run_knowledge_research, "retry", side_effect=Retry("retry scheduled")) as retry,
+        pytest.raises(Retry, match="retry scheduled"),
     ):
         run_knowledge_research.run("job-1")
 
     session.invalidate.assert_called_once_with()
+    retry.assert_called_once()
     assert retry.call_args.kwargs["countdown"] == 1
     assert retry.call_args.kwargs["max_retries"] == 2
 
