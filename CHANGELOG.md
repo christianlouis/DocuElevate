@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.4 (2026-11-20)
+
+### Bug Fixes
+
+- **uploads**: Bound parallel delivery per destination
+  ([#1330](https://github.com/christianlouis/DocuElevate/pull/1330),
+  [`e517117`](https://github.com/christianlouis/DocuElevate/commit/e5171170ded819fa1f5a368d78ae1b9eda36d424))
+
+
 ## v0.196.3 (2026-11-20)
 
 ### Bug Fixes
