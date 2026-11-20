@@ -373,6 +373,33 @@ class TestTaskTypeAssignment:
         assert isinstance(process_document, BaseTaskWithRetry)
 
 
+def test_upload_retry_signature_preserves_delivery_queue_and_priority():
+    from app.tasks.upload_to_s3 import upload_to_s3
+
+    task = upload_to_s3
+    task.push_request(
+        id="retry-id",
+        args=("/workdir/file.pdf",),
+        kwargs={},
+        retries=1,
+        called_directly=False,
+        is_eager=False,
+        delivery_info={
+            "exchange": "",
+            "routing_key": "upload_delivery",
+            "priority": 9,
+        },
+    )
+    try:
+        signature = task.signature_from_request(task.request, countdown=300)
+    finally:
+        task.pop_request()
+
+    assert signature.options["queue"] == "upload_delivery"
+    assert signature.options["priority"] == 9
+    assert signature.options["countdown"] == 300
+
+
 def test_quota_autoretry_uses_separate_budget_and_never_shortens_retry_after(monkeypatch):
     from unittest.mock import patch
 

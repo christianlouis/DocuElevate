@@ -58,6 +58,33 @@ class TestCeleryWorkerConfig:
         assert routes["app.tasks.backup_tasks.create_backup"]["queue"] == settings.celery_backup_queue
         assert routes["app.tasks.backup_tasks.cleanup_old_backups"]["queue"] == settings.celery_backup_queue
 
+    def test_registered_external_upload_tasks_have_upload_routes(self):
+        mod = _reload_celery_worker()
+        expected = {
+            "app.tasks.upload_to_dropbox.upload_to_dropbox",
+            "app.tasks.upload_to_email.upload_to_email",
+            "app.tasks.upload_to_evernote.upload_to_evernote",
+            "app.tasks.upload_to_ftp.upload_to_ftp",
+            "app.tasks.upload_to_google_drive.upload_to_google_drive",
+            "app.tasks.upload_to_icloud.upload_to_icloud",
+            "app.tasks.upload_to_nextcloud.upload_to_nextcloud",
+            "app.tasks.upload_to_notion.upload_to_notion_global",
+            "app.tasks.upload_to_onedrive.upload_to_onedrive",
+            "app.tasks.upload_to_paperless.upload_to_paperless",
+            "app.tasks.upload_to_s3.upload_to_s3",
+            "app.tasks.upload_to_s3_secondary.upload_to_s3_secondary",
+            "app.tasks.upload_to_sftp.upload_to_sftp",
+            "app.tasks.upload_to_sharepoint.upload_to_sharepoint",
+            "app.tasks.upload_to_user_integration.upload_to_user_integration",
+            "app.tasks.upload_to_webdav.upload_to_webdav",
+        }
+        registered = {name for name in mod.celery.tasks if name in expected}
+        assert registered == expected
+        assert all(
+            mod.celery.amqp.router.route({}, name)["queue"].name == settings.celery_upload_queue
+            for name in registered
+        )
+
     def test_backup_queue_defaults_and_accepts_environment_override(self, monkeypatch):
         monkeypatch.delenv("CELERY_BACKUP_QUEUE", raising=False)
         default = Settings(_env_file=None, database_url="sqlite://")
