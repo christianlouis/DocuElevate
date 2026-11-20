@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.5 (2026-11-20)
+
+### Bug Fixes
+
+- **uploads**: Stop retrying Paperless duplicate deliveries
+  ([#1331](https://github.com/christianlouis/DocuElevate/pull/1331),
+  [`fb5d934`](https://github.com/christianlouis/DocuElevate/commit/fb5d9347518041f124f32e7563e80fa81cf04de4))
+
+
 ## v0.196.4 (2026-11-20)
 
 ### Bug Fixes
