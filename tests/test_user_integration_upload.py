@@ -205,6 +205,82 @@ class TestUploadToUserIntegration:
         assert integration.last_used_at is not None
         assert integration.last_error is None
 
+    @patch("time.sleep")
+    @patch("requests.get")
+    @patch("requests.post")
+    def test_paperless_duplicate_is_terminal_skipped(self, mock_post, mock_get, mock_sleep, tmp_path):
+        """Paperless duplicate outcomes do not become another upload retry."""
+        from app.tasks.upload_to_user_integration import _upload_paperless
+
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+        post_response = MagicMock()
+        post_response.text = '"paperless-task"'
+        mock_post.return_value = post_response
+        poll_response = MagicMock()
+        poll_response.json.return_value = [{"status": "FAILURE", "result": "Not consuming duplicate document"}]
+        mock_get.return_value = poll_response
+
+        result = _upload_paperless(
+            str(test_file),
+            {"host": "https://paperless.example"},
+            {"api_token": "token"},
+            "task-id",
+        )
+
+        assert result == {"status": "Skipped", "reason": "already_exists", "provider": "paperless"}
+        mock_post.assert_called_once()
+        mock_sleep.assert_called_once()
+
+    @patch("time.sleep")
+    @patch("requests.get")
+    @patch("requests.post")
+    def test_paperless_nonduplicate_failure_is_still_retryable(self, mock_post, mock_get, mock_sleep, tmp_path):
+        """Provider failures other than duplicates still escape for task retry handling."""
+        from app.tasks.upload_to_user_integration import _upload_paperless
+
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+        post_response = MagicMock()
+        post_response.text = '"paperless-task"'
+        mock_post.return_value = post_response
+        poll_response = MagicMock()
+        poll_response.json.return_value = [{"status": "FAILURE", "result": "OCR backend unavailable"}]
+        mock_get.return_value = poll_response
+
+        with pytest.raises(RuntimeError, match="Paperless processing failed"):
+            _upload_paperless(
+                str(test_file),
+                {"host": "https://paperless.example"},
+                {"api_token": "token"},
+                "task-id",
+            )
+
+    @patch("app.tasks.upload_to_user_integration.log_task_progress")
+    @patch("app.tasks.upload_to_user_integration.SessionLocal")
+    def test_skipped_result_records_skipped_progress_without_error(
+        self, mock_session_local, mock_log_progress, tmp_path
+    ):
+        """Terminal provider skips remain distinct from successful uploads."""
+        test_file = tmp_path / "doc.pdf"
+        test_file.write_bytes(b"PDF content")
+
+        from app.models import IntegrationType
+        from app.tasks.upload_to_user_integration import _UPLOAD_HANDLERS
+
+        integration = _make_integration(int_id=41, int_type=IntegrationType.PAPERLESS)
+        mock_db = MagicMock()
+        mock_session_local.return_value.__enter__.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.first.return_value = integration
+        mock_handler = MagicMock(return_value={"status": "Skipped", "reason": "already_exists"})
+
+        with patch.dict(_UPLOAD_HANDLERS, {IntegrationType.PAPERLESS: mock_handler}):
+            result = _run_upload_task(str(test_file), integration_id=41, file_id=10)
+
+        assert result["status"] == "Skipped"
+        assert integration.last_error is None
+        assert any(call.args[2] == "skipped" for call in mock_log_progress.call_args_list)
+
     @patch("app.tasks.upload_to_user_integration.log_task_progress")
     @patch("app.tasks.upload_to_user_integration.SessionLocal")
     def test_persists_error_and_reraises_on_failure(self, mock_session_local, mock_log_progress, tmp_path):
