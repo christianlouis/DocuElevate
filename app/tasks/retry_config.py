@@ -24,6 +24,7 @@ import random
 from typing import Any
 
 from celery import Task
+from celery.exceptions import Reject, Retry
 
 logger = logging.getLogger(__name__)
 
@@ -369,5 +370,81 @@ class UploadTaskWithRetry(BaseTaskWithRetry):
     appropriate for most transient upload failures (network blips, rate
     limits, temporary service outages).
     """
+
+    # The lease TTL is deliberately longer than these bounds.  A worker loss
+    # therefore releases capacity by expiry without allowing an active upload
+    # to be admitted twice.
+    soft_time_limit = 900
+    time_limit = 960
+    acks_late = True
+
+    def _upload_destination_key(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> str:
+        import inspect
+
+        try:
+            bound = inspect.signature(self.run).bind_partial(*args, **kwargs)
+            integration_id = bound.arguments.get("integration_id")
+        except (TypeError, ValueError):
+            integration_id = None
+        if integration_id is not None:
+            return f"user-integration:{integration_id}"
+        return f"task:{self.name}"
+
+    def retry(self, *args: Any, **kwargs: Any) -> Any:
+        """Delay capacity waits without consuming provider-failure retries."""
+        exc = kwargs.get("exc")
+        from app.utils.upload_concurrency import UploadDestinationCapacityError
+
+        if isinstance(exc, UploadDestinationCapacityError):
+            request = self.request
+            if request.called_directly:
+                raise exc
+            retry_args = kwargs.pop("args", None)
+            retry_kwargs = kwargs.pop("kwargs", None)
+            throw = kwargs.pop("throw", True)
+            kwargs.pop("exc", None)
+            kwargs.pop("countdown", None)
+            kwargs.pop("eta", None)
+            kwargs.pop("max_retries", None)
+            countdown = max(30, int(exc.retry_after))
+            sig = self.signature_from_request(
+                request,
+                retry_args,
+                retry_kwargs,
+                countdown=countdown,
+                eta=None,
+                retries=request.retries,
+                **kwargs,
+            )
+            retry = Retry(exc=exc, when=countdown, is_eager=request.is_eager, sig=sig)
+            if request.is_eager:
+                if throw:
+                    raise retry
+                return retry
+            try:
+                sig.apply_async()
+            except Exception as publish_exc:
+                # The original message is late-acked and is still the only
+                # durable copy when publication of the delayed retry fails.
+                raise Reject(publish_exc, requeue=True)
+            if throw:
+                raise retry
+            return retry
+        return super().retry(*args, **kwargs)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        from app.utils.upload_concurrency import UploadDestinationCapacityError, acquire, release
+
+        try:
+            lease = acquire(self._upload_destination_key(args, kwargs))
+        except UploadDestinationCapacityError as exc:
+            # __call__ runs outside Celery's autoretry wrapper. Route capacity
+            # waits through the same request so they are delayed and do not
+            # consume provider-failure retries.
+            raise self.retry(args=args, kwargs=kwargs, exc=exc)
+        try:
+            return super().__call__(*args, **kwargs)
+        finally:
+            release(lease)
 
     # Inherits DEFAULT_RETRY_DELAYS via retry_delays = None.

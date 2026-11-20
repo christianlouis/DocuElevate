@@ -15,6 +15,8 @@ x-docuelevate-service: &docuelevate-service
     CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
     CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     CELERY_UPLOAD_QUEUE: ${CELERY_UPLOAD_QUEUE:-upload_delivery}
+    UPLOAD_DESTINATION_CONCURRENCY: ${UPLOAD_DESTINATION_CONCURRENCY:-3}
+    UPLOAD_DESTINATION_LEASE_SECONDS: ${UPLOAD_DESTINATION_LEASE_SECONDS:-1200}
     GOTENBERG_URL: http://gotenberg:3000
     MEILISEARCH_URL: http://meilisearch:7700
     MEILISEARCH_INDEX_NAME: documents
@@ -151,7 +153,7 @@ services:
   upload-delivery-worker:
     <<: *docuelevate-service
     stop_grace_period: 10m
-    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=4", "--prefetch-multiplier=1", "--hostname=upload-delivery@%h", "-Q", "${CELERY_UPLOAD_QUEUE:-upload_delivery}"]
+    command: ["celery", "-A", "app.celery_worker", "worker", "--loglevel=info", "--concurrency=${DOCUELEVATE_UPLOAD_WORKER_CONCURRENCY:-8}", "--prefetch-multiplier=1", "--hostname=upload-delivery@%h", "-Q", "${CELERY_UPLOAD_QUEUE:-upload_delivery}"]
     healthcheck:
       test: ["CMD-SHELL", "celery -A app.celery_app inspect ping --destination=upload-delivery@$$HOSTNAME --timeout=5"]
       interval: 15s

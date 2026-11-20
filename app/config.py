@@ -35,6 +35,18 @@ class Settings(BaseSettings):
             "Defaults to document_processor for standalone compatibility."
         ),
     )
+    upload_destination_concurrency: int = Field(
+        default=0,
+        ge=0,
+        le=128,
+        description="Maximum concurrent uploads per destination; zero disables distributed admission.",
+    )
+    upload_destination_lease_seconds: int = Field(
+        default=1200,
+        ge=1200,
+        le=7200,
+        description="Redis lease TTL for one upload destination slot; must exceed the upload hard deadline.",
+    )
 
     @property
     def effective_celery_broker_url(self) -> str:

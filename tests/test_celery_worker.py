@@ -83,6 +83,11 @@ class TestCeleryWorkerConfig:
         assert all(
             mod.celery.amqp.router.route({}, name)["queue"].name == settings.celery_upload_queue for name in registered
         )
+        for name in registered:
+            task = mod.celery.tasks[name]
+            assert task.soft_time_limit == 900
+            assert task.time_limit == 960
+            assert task.acks_late is True
 
     def test_backup_queue_defaults_and_accepts_environment_override(self, monkeypatch):
         monkeypatch.delenv("CELERY_BACKUP_QUEUE", raising=False)

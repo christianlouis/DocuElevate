@@ -72,6 +72,26 @@ SETTING_METADATA = {
         "required": False,
         "restart_required": True,
     },
+    "upload_destination_concurrency": {
+        "category": "Core",
+        "description": "Maximum concurrent uploads per concrete destination; zero disables distributed admission",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "min": 0,
+        "max": 128,
+    },
+    "upload_destination_lease_seconds": {
+        "category": "Core",
+        "description": "Crash-recovery lease TTL for one upload destination slot; must exceed the upload hard deadline",
+        "type": "integer",
+        "sensitive": False,
+        "required": False,
+        "restart_required": True,
+        "min": 1200,
+        "max": 7200,
+    },
     "db_pool_size": {
         "category": "Core",
         "description": (
