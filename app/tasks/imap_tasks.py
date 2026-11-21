@@ -859,6 +859,19 @@ def _historical_cursor_target(historical_uids, durable_uids, cursor):
     return target
 
 
+def _pump_pipeline_account(account_ref):
+    """Reconcile durable downloads independently of mailbox connectivity."""
+    from app.imap_pipeline import publish_candidate_batches
+
+    for lane in ("new", "backlog"):
+        try:
+            publish_candidate_batches(account_ref, lane)
+        except SoftTimeLimitExceeded:
+            raise
+        except Exception as exc:
+            logger.warning("IMAP candidate publication deferred lane=%s: %s", lane, type(exc).__name__)
+
+
 def pull_inbox(
     mailbox_key,
     host,
@@ -889,6 +902,10 @@ def pull_inbox(
                   ``["pdf", "office", "images"]``).  ``None`` falls back to the
                   global ``settings.imap_attachment_filter`` mapping.
     """
+    account_ref = str(mailbox_key)
+    pipeline_enabled = settings.imap_pipeline_enabled is True
+    if pipeline_enabled:
+        _pump_pipeline_account(account_ref)
     if allowed_categories is None:
         allowed_categories = _resolve_categories_for_profile(None)
     poll_started = time.monotonic()
@@ -930,13 +947,18 @@ def pull_inbox(
                 selected_folder = all_mail_folder
                 select_status, select_data = mail.select(
                     f'"{all_mail_folder}"',
-                    readonly=settings.imap_readonly_mode or not (delete_after_process or gmail_apply_labels),
+                    readonly=pipeline_enabled
+                    or settings.imap_readonly_mode
+                    or not (delete_after_process or gmail_apply_labels),
                 )
             else:
                 logger.warning("Gmail All Mail folder not found, falling back to INBOX.")
                 selected_folder = "INBOX"
                 select_status, select_data = mail.select(
-                    "INBOX", readonly=settings.imap_readonly_mode or not (delete_after_process or gmail_apply_labels)
+                    "INBOX",
+                    readonly=pipeline_enabled
+                    or settings.imap_readonly_mode
+                    or not (delete_after_process or gmail_apply_labels),
                 )
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
@@ -946,7 +968,7 @@ def pull_inbox(
             # Read-only INBOX/ALL scan: do not depend on Seen state or dates.
             selected_folder = "INBOX"
             select_status, select_data = mail.select(
-                "INBOX", readonly=settings.imap_readonly_mode or not delete_after_process
+                "INBOX", readonly=pipeline_enabled or settings.imap_readonly_mode or not delete_after_process
             )
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
@@ -990,6 +1012,28 @@ def pull_inbox(
             mail.close()
             mail.logout()
             return False
+        if pipeline_enabled:
+            from app.imap_pipeline import recover_legacy_candidates, scan_lane_windows
+
+            pipeline_result = scan_lane_windows(
+                mail,
+                account_ref=account_ref,
+                owner_key=owner_key,
+                mailbox_key=mailbox_key,
+                uidvalidity=uidvalidity,
+                folder=selected_folder,
+                deadline=deadline,
+                legacy_last_uid=int(cursor or 0),
+                uidnext=uidnext,
+            )
+            recover_legacy_candidates(account_ref, owner_key, mailbox_key, uidvalidity)
+            logger.info("IMAP pipeline metadata scan %s: %s", mailbox_key, pipeline_result)
+            try:
+                mail.close()
+            finally:
+                mail.logout()
+            completed = True
+            return True
         window_end = min(window_start + UID_SCAN_WINDOW - 1, 4294967295)
         window_end = min(window_end, uidnext - 1)
         if window_start > window_end:
@@ -1317,6 +1361,8 @@ def pull_inbox(
     finally:
         if mail is not None and not completed:
             _shutdown_imap_connection(mail)
+        if pipeline_enabled:
+            _pump_pipeline_account(account_ref)
 
 
 def fetch_attachments_and_enqueue(

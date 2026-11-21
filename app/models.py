@@ -313,6 +313,9 @@ class ImapMessageLedger(Base):
             name="uq_imap_ledger_owner_mailbox_uid",
         ),
         Index("ix_imap_ledger_state", "owner_key", "mailbox_key", "state"),
+        Index("ix_imap_ledger_outbox_claim", "account_ref", "lane", "discovery_state", "next_download_at", "id"),
+        Index("ix_imap_ledger_lease_expiry", "download_lease_expires_at"),
+        Index("ix_imap_ledger_downloaded_at", "downloaded_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -325,6 +328,46 @@ class ImapMessageLedger(Base):
     attempts = Column(Integer, nullable=False, default=0, server_default="0")
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    # Additive fields used by the lane-separated metadata/download pipeline.
+    lane = Column(String(16), nullable=False, default="backlog", server_default="backlog", index=True)
+    account_ref = Column(String(255), nullable=True, index=True)
+    discovery_state = Column(String(24), nullable=False, default="discovered", server_default="discovered")
+    is_candidate = Column(Boolean, nullable=False, default=False, server_default="0", index=True)
+    download_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    download_lease_token = Column(String(64), nullable=True, index=True)
+    download_lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    download_task_id = Column(String(255), nullable=True, index=True)
+    download_started_at = Column(DateTime(timezone=True), nullable=True)
+    downloaded_at = Column(DateTime(timezone=True), nullable=True)
+    next_download_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    scanned_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    metadata_json = Column(Text, nullable=True)
+
+
+class ImapPipelineCursor(Base):
+    """Independent durable cursor/high-water mark for one IMAP pipeline lane."""
+
+    __tablename__ = "imap_pipeline_cursors"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_key",
+            "mailbox_key",
+            "uidvalidity",
+            "lane",
+            name="uq_imap_pipeline_cursor_identity",
+        ),
+        Index("ix_imap_pipeline_cursor_lane", "mailbox_key", "lane"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    owner_key = Column(String(255), nullable=False)
+    mailbox_key = Column(String(255), nullable=False)
+    uidvalidity = Column(String(255), nullable=False)
+    lane = Column(String(16), nullable=False)
+    last_uid = Column(BigInteger, nullable=False, default=0, server_default="0")
+    highwater_uid = Column(BigInteger, nullable=True)
+    initialized = Column(Boolean, nullable=False, default=False, server_default="0")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
