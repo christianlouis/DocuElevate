@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## Unreleased
+
+### Documentation
+
+- Clarify IMAP pipeline recovery modes
+  ([`9129290`](https://github.com/christianlouis/DocuElevate/commit/9129290edbae18c6ee12f82fd62473a2ba825ced))
+
+
 ## v0.197.0 (2026-11-21)
 
 ### Features
