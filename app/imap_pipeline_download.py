@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from celery.signals import worker_shutdown
+from celery.signals import worker_process_init, worker_process_shutdown
 from sqlalchemy import and_, update
 
 from app.config import settings
@@ -46,6 +46,8 @@ MIN_WORKDIR_FREE_BYTES = 5 * 1024**3
 DOWNLOAD_LEASE_SECONDS = 900
 DOWNLOAD_SOFT_DEADLINE_SECONDS = 180
 DOWNLOAD_HARD_DEADLINE_SECONDS = 270
+MAX_CACHED_CONNECTIONS = 8
+CONNECTION_CLEANUP_INTERVAL_SECONDS = 30
 
 
 @dataclass
@@ -56,10 +58,13 @@ class _CachedConnection:
     uidvalidity: str
     created_at: float
     last_used_at: float
+    in_use: bool = False
 
 
 _CONNECTION_CACHE: dict[str, _CachedConnection] = {}
 _CONNECTION_CACHE_LOCK = threading.Lock()
+_CONNECTION_CLEANUP_STOP = threading.Event()
+_CONNECTION_CLEANUP_THREAD: threading.Thread | None = None
 
 
 def _connection_fingerprint(account: dict[str, Any], readonly: bool) -> str:
@@ -89,8 +94,51 @@ def _close_all_cached_connections(*_args, **_kwargs) -> None:
         _close_connection(entry)
 
 
-atexit.register(_close_all_cached_connections)
-worker_shutdown.connect(_close_all_cached_connections, weak=False)
+def _expire_idle_connections(now: float | None = None) -> None:
+    """Evict expired idle connections without holding the cache lock on close."""
+    now = time.monotonic() if now is None else now
+    stale: list[_CachedConnection] = []
+    with _CONNECTION_CACHE_LOCK:
+        for key, entry in list(_CONNECTION_CACHE.items()):
+            if entry.in_use:
+                continue
+            if (
+                now - entry.created_at >= int(settings.imap_pipeline_connection_ttl_seconds)
+                or now - entry.last_used_at >= int(settings.imap_pipeline_connection_idle_seconds)
+            ):
+                _CONNECTION_CACHE.pop(key, None)
+                stale.append(entry)
+    for entry in stale:
+        _close_connection(entry)
+
+
+def _connection_cleanup_loop() -> None:
+    while not _CONNECTION_CLEANUP_STOP.wait(CONNECTION_CLEANUP_INTERVAL_SECONDS):
+        _expire_idle_connections()
+
+
+def _start_connection_cleanup(*_args, **_kwargs) -> None:
+    global _CONNECTION_CLEANUP_THREAD
+    with _CONNECTION_CACHE_LOCK:
+        if _CONNECTION_CLEANUP_THREAD is not None and _CONNECTION_CLEANUP_THREAD.is_alive():
+            return
+        _CONNECTION_CLEANUP_STOP.clear()
+        _CONNECTION_CLEANUP_THREAD = threading.Thread(
+            target=_connection_cleanup_loop, name="imap-connection-cleanup", daemon=True
+        )
+        _CONNECTION_CLEANUP_THREAD.start()
+
+
+def _stop_connection_cleanup(*_args, **_kwargs) -> None:
+    global _CONNECTION_CLEANUP_THREAD
+    _CONNECTION_CLEANUP_STOP.set()
+    _close_all_cached_connections()
+    _CONNECTION_CLEANUP_THREAD = None
+
+
+atexit.register(_stop_connection_cleanup)
+worker_process_init.connect(_start_connection_cleanup, weak=False)
+worker_process_shutdown.connect(_stop_connection_cleanup, weak=False)
 
 
 def _touch_cached_connection(cache_key: str, mail: imaplib.IMAP4 | None) -> None:
@@ -100,6 +148,7 @@ def _touch_cached_connection(cache_key: str, mail: imaplib.IMAP4 | None) -> None
         entry = _CONNECTION_CACHE.get(cache_key)
         if entry is not None and entry.mail is mail:
             entry.last_used_at = time.monotonic()
+            entry.in_use = False
 
 
 def _discard_cached_connection(cache_key: str, mail: imaplib.IMAP4 | None = None) -> None:
@@ -115,6 +164,7 @@ def _open_or_reuse_connection(
     account_ref: str, account: dict[str, Any], readonly: bool
 ) -> tuple[imaplib.IMAP4, str, str, str, bool]:
     """Return a bounded-lifetime connection and selected mailbox identity."""
+    _start_connection_cleanup()
     now = time.monotonic()
     fingerprint = _connection_fingerprint(account, readonly)
     cache_key = account_ref
@@ -130,15 +180,39 @@ def _open_or_reuse_connection(
             entry = None
         else:
             stale_entry = None
+        if entry is not None:
+            entry.in_use = True
     if stale_entry is not None:
         _close_connection(stale_entry)
     if entry is not None:
         try:
-            entry.mail.noop()
+            noop_result = entry.mail.noop()
+            if isinstance(noop_result, tuple):
+                noop_status = noop_result[0] if noop_result else None
+                if isinstance(noop_status, bytes):
+                    noop_status = noop_status.decode(errors="replace")
+                if str(noop_status).upper() != "OK":
+                    raise imaplib.IMAP4.error("cached IMAP connection is not ready")
+            if str(getattr(entry.mail, "state", "SELECTED")).upper() == "CLOSED":
+                raise imaplib.IMAP4.error("cached IMAP connection is closed")
+            closed_response = entry.mail.response("CLOSED")
+            if isinstance(closed_response, tuple) and closed_response:
+                closed_status = closed_response[0]
+                if isinstance(closed_status, bytes):
+                    closed_status = closed_status.decode(errors="replace")
+                if str(closed_status).upper() == "CLOSED":
+                    raise imaplib.IMAP4.error("cached IMAP mailbox was deselected")
             response = entry.mail.response("UIDVALIDITY")
             values = response[1] if isinstance(response, tuple) and len(response) > 1 else None
-            if values and str(values[0]).strip("b'") != str(entry.uidvalidity):
-                raise imaplib.IMAP4.error("cached mailbox identity changed")
+            if values and values[0] is not None:
+                raw_uidvalidity = values[0]
+                if isinstance(raw_uidvalidity, bytes):
+                    raw_uidvalidity = raw_uidvalidity.decode("ascii", errors="replace")
+                current_uidvalidity = str(raw_uidvalidity).strip()
+                if not current_uidvalidity.isdigit():
+                    raise imaplib.IMAP4.error("cached mailbox identity is malformed")
+                if current_uidvalidity != str(entry.uidvalidity):
+                    raise imaplib.IMAP4.error("cached mailbox identity changed")
             return entry.mail, entry.folder, entry.uidvalidity, cache_key, True
         except Exception:
             _discard_cached_connection(cache_key, entry.mail)
@@ -157,9 +231,17 @@ def _open_or_reuse_connection(
         if status != "OK":
             raise imaplib.IMAP4.error("mailbox select failed")
         uidvalidity = _extract_uidvalidity(mail, select_data)
-        entry = _CachedConnection(mail, fingerprint, folder, uidvalidity, now, now)
+        entry = _CachedConnection(mail, fingerprint, folder, uidvalidity, now, now, True)
+        evicted: _CachedConnection | None = None
         with _CONNECTION_CACHE_LOCK:
+            if cache_key not in _CONNECTION_CACHE and len(_CONNECTION_CACHE) >= MAX_CACHED_CONNECTIONS:
+                idle = [candidate for candidate in _CONNECTION_CACHE.items() if not candidate[1].in_use]
+                if idle:
+                    evict_key, evicted = min(idle, key=lambda item: item[1].last_used_at)
+                    _CONNECTION_CACHE.pop(evict_key, None)
             _CONNECTION_CACHE[cache_key] = entry
+        if evicted is not None:
+            _close_connection(evicted)
         return mail, folder, uidvalidity, cache_key, False
     except Exception:
         _shutdown_imap_connection(mail)
