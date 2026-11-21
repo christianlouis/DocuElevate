@@ -2514,7 +2514,7 @@ SETTING_METADATA = {
     },
     "imap_pipeline_download_batch_size": {
         "category": "IMAP",
-        "description": "Maximum number of attachments claimed by one download task (default: 25)",
+        "description": "Maximum number of candidate mails claimed by one download task (default: 25)",
         "type": "integer",
         "sensitive": False,
         "required": False,
@@ -2522,7 +2522,7 @@ SETTING_METADATA = {
     },
     "imap_pipeline_download_workers": {
         "category": "IMAP",
-        "description": "Number of download workers: one new-mail worker and two historical backlog workers (default: 3)",
+        "description": "Planned download worker count; deploy one new-mail and two backlog workers separately (default: 3)",
         "type": "integer",
         "sensitive": False,
         "required": False,
