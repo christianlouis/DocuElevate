@@ -313,6 +313,9 @@ class ImapMessageLedger(Base):
             name="uq_imap_ledger_owner_mailbox_uid",
         ),
         Index("ix_imap_ledger_state", "owner_key", "mailbox_key", "state"),
+        Index("ix_imap_ledger_outbox_claim", "account_ref", "lane", "discovery_state", "next_download_at", "id"),
+        Index("ix_imap_ledger_lease_expiry", "download_lease_expires_at"),
+        Index("ix_imap_ledger_downloaded_at", "downloaded_at"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -334,6 +337,11 @@ class ImapMessageLedger(Base):
     download_attempts = Column(Integer, nullable=False, default=0, server_default="0")
     download_lease_token = Column(String(64), nullable=True, index=True)
     download_lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    download_task_id = Column(String(255), nullable=True, index=True)
+    download_started_at = Column(DateTime(timezone=True), nullable=True)
+    downloaded_at = Column(DateTime(timezone=True), nullable=True)
+    next_download_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    scanned_at = Column(DateTime(timezone=True), nullable=True, index=True)
     metadata_json = Column(Text, nullable=True)
 
 

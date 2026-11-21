@@ -7,12 +7,9 @@ idempotent, bounded follow-up operation and can be recovered by a later tick.
 
 from __future__ import annotations
 
-import imaplib
-import json
 import logging
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
@@ -33,23 +30,10 @@ QUEUE_DOWNLOAD_BACKLOG = "imap_download_backlog"
 _METRICS_PREFIX = "docuelevate:imap:pipeline:"
 
 
-@dataclass(frozen=True)
-class ImapAccountConfig:
-    account_ref: str
-    host: str
-    port: int
-    username: str
-    password: str
-    use_ssl: bool = True
-    owner_id: str | None = None
-    source_integration_id: int | None = None
-    delete_after_process: bool = False
-
-
-def classify_bodystructure(item: object) -> tuple[int | None, bool, bytes | None]:
-    """Return ``(uid, proven_no_document, structure)`` without fetching a body."""
+def classify_bodystructure(item: object) -> tuple[int | None, bool]:
+    """Return ``(uid, proven_no_document)`` without fetching a body."""
     uid, structure = metadata_uid_and_structure(item)
-    return uid, bool(structure and bodystructure_proves_no_named_attachment(structure)), structure
+    return uid, bool(structure and bodystructure_proves_no_named_attachment(structure))
 
 
 def _metric_key(account_ref: str) -> str:
@@ -95,21 +79,34 @@ def commit_metadata_batch(*, account_ref: str, owner_key: str, mailbox_key: str,
     with SessionLocal() as db:
         cursor = _cursor(db, owner_key, mailbox_key, uidvalidity, lane)
         candidate_count = 0
+        uids = [int(item["uid"]) for item in examined]
+        existing = {}
+        if uids:
+            existing = {int(row.uid): row for row in db.query(ImapMessageLedger).filter(
+                ImapMessageLedger.owner_key == owner_key,
+                ImapMessageLedger.mailbox_key == mailbox_key,
+                ImapMessageLedger.uidvalidity == str(uidvalidity),
+                ImapMessageLedger.uid.in_(uids),
+            ).all()}
+        scanned_at = datetime.now(timezone.utc)
         for item in examined:
             uid = int(item["uid"])
             candidate = bool(item.get("candidate"))
-            row = db.query(ImapMessageLedger).filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), uid=uid).one_or_none()
+            row = existing.get(uid)
             if row is None:
                 row = ImapMessageLedger(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), uid=uid, lane=lane, account_ref=account_ref)
                 db.add(row)
-            elif row.state in {"completed", "vanished"}:
+            elif row.state in {"completed", "vanished"} or row.discovery_state in {"claimed", "download_claimed", "downloading", "downloaded", "retry_wait", "download_failed"}:
                 continue
-            row.lane, row.account_ref, row.discovery_state, row.is_candidate = lane, account_ref, "completed", candidate
-            row.metadata_json = json.dumps({"structure": item.get("structure")}) if item.get("structure") else None
+            row.lane, row.account_ref, row.discovery_state, row.is_candidate = lane, account_ref, "ready", candidate
+            row.scanned_at = scanned_at
+            if not candidate:
+                row.discovery_state = "completed"
+                row.state = "completed"
             if candidate:
                 candidate_count += 1
         cursor.last_uid = max(int(cursor.last_uid or 0), int(last_uid))
-        if highwater_uid is not None:
+        if highwater_uid is not None and cursor.highwater_uid is None:
             cursor.highwater_uid = int(highwater_uid)
         cursor.initialized = True
         db.commit()
@@ -135,11 +132,13 @@ def scan_lane_windows(mail, *, account_ref: str, owner_key: str, mailbox_key: st
             fresh.initialized = True
         db.commit()
         backlog_start = int(back.last_uid or 0) + 1
-        fresh_start = max(int(fresh.last_uid or highwater) + 1, highwater + 1)
+        backlog_end = int(back.highwater_uid or highwater)
+        fresh_start = int(fresh.last_uid or 0) + 1
+        # Values are copied before the session closes; SQLAlchemy may expire ORM rows on commit.
+        fresh_end = highwater
     totals = {"backlog_scanned": 0, "backlog_candidates": 0, "new_scanned": 0, "new_candidates": 0}
     # Fresh lane is intentionally first; backlog remains independently resumable.
-    backlog_end = int(back.highwater_uid or highwater)
-    for lane, initial_position, end in ((LANE_NEW, fresh_start, highwater), (LANE_BACKLOG, backlog_start, backlog_end)):
+    for lane, initial_position, end in ((LANE_NEW, fresh_start, fresh_end), (LANE_BACKLOG, backlog_start, backlog_end)):
         position = initial_position
         while position <= end and time.monotonic() < deadline:
             stop = min(position + settings.imap_pipeline_metadata_batch_size - 1, end)
@@ -147,35 +146,29 @@ def scan_lane_windows(mail, *, account_ref: str, owner_key: str, mailbox_key: st
             if status != "OK":
                 break
             uids = [int(value) for value in (data[0] or b"").split() if position <= int(value) <= stop]
-            if uids:
-                result = discover_metadata_batch(mail, account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, uids=uids, highwater_uid=highwater)
-                totals[f"{lane}_scanned"] += result["scanned"]
-                totals[f"{lane}_candidates"] += result["candidates"]
-            # Advance over the complete UID window, including vanished UIDs.
-            with SessionLocal() as db:
-                row = _cursor(db, owner_key, mailbox_key, uidvalidity, lane)
-                row.last_uid = stop
-                db.commit()
+            result = discover_metadata_batch(mail, account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, uids=uids, last_uid=stop)
+            totals[f"{lane}_scanned"] += result["scanned"]
+            totals[f"{lane}_candidates"] += result["candidates"]
             position = stop + 1
     return totals
 
 
-def discover_metadata_batch(mail, *, account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str, uids: list[int], highwater_uid: int | None = None) -> dict[str, int]:
+def discover_metadata_batch(mail, *, account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str, uids: list[int], highwater_uid: int | None = None, last_uid: int | None = None) -> dict[str, int]:
     """Fetch BODYSTRUCTURE for a bounded UID batch and durably classify all UIDs."""
     if not uids:
-        return {"scanned": 0, "candidates": 0, "last_uid": 0}
+        return commit_metadata_batch(account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, examined=[], last_uid=int(last_uid or 0), highwater_uid=highwater_uid)
     status, data = mail.uid("fetch", ",".join(str(uid) for uid in sorted(uids)), "(UID BODYSTRUCTURE)")
-    parsed: dict[int, tuple[bool, str | None]] = {}
+    parsed: dict[int, bool] = {}
     if status == "OK":
         for item in data or []:
-            parsed_uid, proven, structure = classify_bodystructure(item)
+            parsed_uid, proven = classify_bodystructure(item)
             if parsed_uid is not None:
-                parsed[parsed_uid] = (proven, structure.decode("ascii", "replace") if structure else None)
+                parsed[parsed_uid] = proven
     examined: list[dict] = []
     for uid in uids:
-        proven, structure = parsed.get(int(uid), (False, None))
-        examined.append({"uid": int(uid), "candidate": not proven, "structure": structure})
-    return commit_metadata_batch(account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, examined=examined, last_uid=max(uids or [0]), highwater_uid=highwater_uid)
+        proven = parsed.get(int(uid), False)
+        examined.append({"uid": int(uid), "candidate": not proven})
+    return commit_metadata_batch(account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, examined=examined, last_uid=int(last_uid if last_uid is not None else max(uids or [0])), highwater_uid=highwater_uid)
 
 
 def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -> tuple[str, list[int]]:
@@ -201,22 +194,6 @@ def publish_candidate_batches(account_ref: str, lane: str = LANE_BACKLOG, limit:
     return len(uids)
 
 
-@shared_task(name="app.imap_pipeline.discover_imap_metadata")
-def discover_imap_metadata(account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str, uids: list[int], highwater_uid: int | None = None) -> dict[str, int]:
-    """Execution-time credential lookup plus metadata-only discovery."""
-    cfg = resolve_account_config(account_ref)
-    mail = imaplib.IMAP4_SSL(cfg.host, cfg.port) if cfg.use_ssl else imaplib.IMAP4(cfg.host, cfg.port)
-    try:
-        mail.login(cfg.username, cfg.password)
-        mail.select(mailbox_key)
-        return discover_metadata_batch(mail, account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, uids=uids, highwater_uid=highwater_uid)
-    finally:
-        try:
-            mail.logout()
-        except Exception as exc:  # best-effort logout
-            logger.debug("IMAP logout failed: %s", type(exc).__name__)
-
-
 def recover_legacy_candidates(account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, limit: int = 500) -> int:
     """Adopt old nonterminal ledger rows into the candidate outbox once."""
     with SessionLocal() as db:
@@ -227,31 +204,9 @@ def recover_legacy_candidates(account_ref: str, owner_key: str, mailbox_key: str
         return len(rows)
 
 
-@shared_task(bind=True, name="app.imap_pipeline.download_imap_batch", acks_late=True, reject_on_worker_lost=True)
+@shared_task(bind=True, name="app.imap_pipeline.download_imap_batch", acks_late=True, reject_on_worker_lost=True, soft_time_limit=240, time_limit=270)
 def download_imap_batch(self, account_ref: str, lane: str, ledger_ids: list[int], claim_token: str) -> dict[str, int]:
     """Thin compatibility wrapper around the dedicated download worker."""
     from app.imap_pipeline_download import download_claimed_batch
 
     return download_claimed_batch(account_ref, lane, ledger_ids, claim_token)
-
-
-def resolve_account_config(account_ref: str) -> ImapAccountConfig:
-    """Resolve credentials at execution time from the existing account tables."""
-    from app.models import UserImapAccount, UserIntegration
-    from app.utils.encryption import decrypt_value
-
-    kind, _, raw_id = account_ref.partition("_")
-    with SessionLocal() as db:
-        if kind == "user":
-            # account refs are user_<owner>_<account-id>; use the final id so
-            # owner identifiers containing underscores remain unambiguous.
-            account_id = int(raw_id.rsplit("_", 1)[-1])
-            row = db.query(UserImapAccount).filter(UserImapAccount.id == account_id, UserImapAccount.is_active.is_(True)).one()
-            return ImapAccountConfig(account_ref, row.host, int(row.port or 993), row.username, decrypt_value(row.password), bool(row.use_ssl), str(row.owner_id), None, bool(row.delete_after_process))
-        if kind == "integration":
-            integration_id = int(raw_id.rsplit("_", 1)[-1])
-            row = db.query(UserIntegration).filter(UserIntegration.id == integration_id, UserIntegration.is_active.is_(True)).one()
-            config = json.loads(row.config or "{}")
-            creds = json.loads(decrypt_value(row.credentials) or "{}")
-            return ImapAccountConfig(account_ref, config["host"], int(config.get("port", 993)), config["username"], creds["password"], bool(config.get("use_ssl", True)), str(row.owner_id), integration_id, bool(config.get("delete_after_process", False)))
-    raise ValueError(f"unknown IMAP account reference: {account_ref}")

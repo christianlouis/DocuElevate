@@ -931,13 +931,13 @@ def pull_inbox(
                 selected_folder = all_mail_folder
                 select_status, select_data = mail.select(
                     f'"{all_mail_folder}"',
-                    readonly=settings.imap_readonly_mode or not (delete_after_process or gmail_apply_labels),
+                    readonly=settings.imap_readonly_mode or settings.imap_pipeline_enabled or not (delete_after_process or gmail_apply_labels),
                 )
             else:
                 logger.warning("Gmail All Mail folder not found, falling back to INBOX.")
                 selected_folder = "INBOX"
                 select_status, select_data = mail.select(
-                    "INBOX", readonly=settings.imap_readonly_mode or not (delete_after_process or gmail_apply_labels)
+                    "INBOX", readonly=settings.imap_readonly_mode or settings.imap_pipeline_enabled or not (delete_after_process or gmail_apply_labels)
                 )
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
@@ -947,7 +947,7 @@ def pull_inbox(
             # Read-only INBOX/ALL scan: do not depend on Seen state or dates.
             selected_folder = "INBOX"
             select_status, select_data = mail.select(
-                "INBOX", readonly=settings.imap_readonly_mode or not delete_after_process
+                "INBOX", readonly=settings.imap_readonly_mode or settings.imap_pipeline_enabled or not delete_after_process
             )
             if select_status != "OK":
                 logger.warning("Mailbox %s select failed. Status=%s", mailbox_key, select_status)
@@ -994,13 +994,6 @@ def pull_inbox(
         if settings.imap_pipeline_enabled:
             from app.imap_pipeline import publish_candidate_batches, recover_legacy_candidates, scan_lane_windows
 
-            db = _get_db_session()
-            try:
-                legacy_cursor = db.query(ImapScanCursor).filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity)).first()
-                legacy_last_uid = int(legacy_cursor.last_uid) if legacy_cursor else 0
-            finally:
-                db.close()
-
             pipeline_result = scan_lane_windows(
                 mail,
                 account_ref=account_ref,
@@ -1009,16 +1002,25 @@ def pull_inbox(
                 uidvalidity=uidvalidity,
                 folder=selected_folder,
                 deadline=deadline,
-                legacy_last_uid=legacy_last_uid,
+                legacy_last_uid=int(cursor or 0),
                 uidnext=uidnext,
             )
             recover_legacy_candidates(account_ref, owner_key, mailbox_key, uidvalidity)
             # Reconcile committed candidates on every poll, including an
             # empty/new-mail-free poll; broker publication is bounded and
             # recoverable from the database claim state.
-            publish_candidate_batches.delay(account_ref, "new")
-            publish_candidate_batches.delay(account_ref, "backlog")
+            # Publication is a bounded DB-backed reconciliation. Run it in the
+            # polling process so no unconsumed metadata-only queue can strand rows.
+            for lane in ("new", "backlog"):
+                try:
+                    publish_candidate_batches(account_ref, lane)
+                except Exception:  # publication is recoverable on the next poll
+                    logger.exception("Candidate publication failed for %s lane=%s", account_ref, lane)
             logger.info("IMAP pipeline metadata scan %s: %s", mailbox_key, pipeline_result)
+            try:
+                mail.close()
+            finally:
+                mail.logout()
             completed = True
             return True
         window_end = min(window_start + UID_SCAN_WINDOW - 1, 4294967295)
