@@ -9,6 +9,7 @@ Covers:
 """
 
 from unittest.mock import MagicMock, patch
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -216,6 +217,86 @@ class TestTranslateToDefaultLanguageTask:
             result = _resolve_default_language("test-user-lang")
 
         assert result == "de"
+
+    @pytest.mark.unit
+    def test_split_translation_text_is_lossless_and_ordered(self):
+        from app.tasks.translate_to_default_language import _split_translation_text
+
+        source = "First paragraph.\n\nSecond paragraph with words.\nThird line."
+        chunks = _split_translation_text(source, max_chars=20)
+
+        assert len(chunks) > 1
+        assert "".join(chunks) == source
+        assert all(len(chunk) <= 20 for chunk in chunks)
+
+    @pytest.mark.unit
+    def test_translation_resumes_after_mid_chunk_failure(self, db_session, file_with_ocr):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        source = "one two three four five six seven eight nine ten eleven twelve"
+        file_with_ocr.ocr_text = source
+        db_session.commit()
+        provider = MagicMock()
+        provider.chat_completion.side_effect = ["EINS", RuntimeError("temporary")]
+        with patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider), patch(
+            "app.tasks.translate_to_default_language._split_translation_text",
+            return_value=["one ", "two ", "three ", "four "],
+        ), patch("app.tasks.translate_to_default_language.SessionLocal") as session_cls:
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=db_session)
+            ctx.__exit__ = MagicMock(return_value=False)
+            session_cls.return_value = ctx
+            with pytest.raises(RuntimeError):
+                translate_to_default_language.run(file_with_ocr.id, source, "de")
+
+            checkpoint = json.loads(file_with_ocr.translation_checkpoint)
+            assert checkpoint["translated_chunks"][0] == "EINS "
+            provider.chat_completion.side_effect = ["ZWEI", "DREI", "VIER"]
+            result = translate_to_default_language.run(file_with_ocr.id, source, "de")
+
+        assert result["status"] == "success"
+        assert provider.chat_completion.call_count == 5
+        db_session.refresh(file_with_ocr)
+        assert file_with_ocr.default_language_text == "EINS ZWEI DREI VIER "
+        assert json.loads(file_with_ocr.translation_checkpoint)["completed"] is True
+
+    @pytest.mark.unit
+    def test_translation_fingerprint_changes_for_inputs_and_provider(self):
+        from app.tasks.translate_to_default_language import _translation_fingerprint
+
+        base = _translation_fingerprint("text", "de", "en", "openai", "gpt-4o-mini")
+        assert base != _translation_fingerprint("changed", "de", "en", "openai", "gpt-4o-mini")
+        assert base != _translation_fingerprint("text", "fr", "en", "openai", "gpt-4o-mini")
+        assert base != _translation_fingerprint("text", "de", "en", "litellm", "gpt-4o-mini")
+        assert base != _translation_fingerprint("text", "de", "en", "openai", "other-model")
+
+    @pytest.mark.unit
+    def test_split_translation_text_never_exceeds_limit_at_boundary(self):
+        from app.tasks.translate_to_default_language import _split_translation_text
+
+        source = "123456789\n"
+        chunks = _split_translation_text(source, max_chars=10)
+        assert all(len(chunk) <= 10 for chunk in chunks)
+        assert "".join(chunks) == source
+
+    @pytest.mark.unit
+    def test_empty_chunk_response_preserves_previous_translation(self, db_session, file_with_translation):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        provider = MagicMock()
+        provider.chat_completion.return_value = ""
+        with patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider), patch(
+            "app.tasks.translate_to_default_language.SessionLocal"
+        ) as session_cls:
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=db_session)
+            ctx.__exit__ = MagicMock(return_value=False)
+            session_cls.return_value = ctx
+            with pytest.raises(ValueError):
+                translate_to_default_language.run(file_with_translation.id, file_with_translation.ocr_text, "fr")
+
+        db_session.refresh(file_with_translation)
+        assert file_with_translation.default_language_text == "This is a test document in French."
 
 
 # ---------------------------------------------------------------------------
