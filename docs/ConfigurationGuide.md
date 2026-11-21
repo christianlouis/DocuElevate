@@ -428,6 +428,24 @@ IMAP socket operations time out after 30 seconds. The polling task has a 240-sec
 
 Polling uses the dedicated `imap_polling` queue; attachment processing uses `document_processor`. Workers consuming both queues must share the same durable `WORKDIR` volume, including `imap-staging`, and the same database. Apply database migrations before starting the new poller. The former `processed_mails.json` cache is no longer used to decide which messages to ingest. A legacy `imap_lock=locked` without an expiry is recovered atomically on the next poll.
 
+#### Separate discovery and download workers
+
+Set `IMAP_PIPELINE_ENABLED=true` after applying migration 074 to enable metadata-only discovery. The existing `imap_polling` worker scans `UID BODYSTRUCTURE` in bounded batches without downloading message bodies. It records classifications and cursor progress together in the database. Historical scanning has a fixed initial boundary; a separate new-mail cursor covers subsequent arrivals without skipping older new arrivals.
+
+Download candidates remain in the database until successfully handed to the durable attachment intake. Redis carries bounded batches of candidate IDs, never mailbox passwords. Expired claims can be republished after a worker restart or Redis loss; duplicate deliveries must acquire the database claim before downloading. The existing attachment intake supplies the final idempotent document handoff.
+
+Run one worker consuming `imap_download_new` and two workers consuming `imap_download_backlog`, each with concurrency 1. Keep these queues separate from `imap_polling` and `document_processor`, and mount the same persistent `WORKDIR` on all workers. Downloads may build a processing backlog; discovery does not wait for OCR or AI capacity. Downloads pause when persistent storage falls below the reserved free-space threshold.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `IMAP_PIPELINE_ENABLED` | `false` | Enable separate discovery and downloads after migrations and consumers are ready. |
+| `IMAP_PIPELINE_METADATA_BATCH_SIZE` | `750` | Maximum metadata batch size. |
+| `IMAP_PIPELINE_DOWNLOAD_BATCH_SIZE` | `25` | Maximum candidate IDs per download task. |
+| `IMAP_PIPELINE_LEASE_SECONDS` | `900` | Claim recovery interval; minimum 300 seconds, exceeding the download task's hard limit. |
+| `IMAP_PIPELINE_TARGET_SCAN_PER_HOUR` | `7200` | Operational scan-rate goal, not a throttle or throughput guarantee. |
+
+Monitor historical and new-mail scan rates, candidates waiting for download, active claims, retry waits, and completed downloads separately from document processing. A scanned message can still have a pending attachment download. For a one-week catch-up, divide remaining messages by 168 to obtain the minimum hourly scan rate, then verify the observed rate after deployment. OCR completion may take longer.
+
 #### System-Level IMAP Configuration
 
 | **Variable**                  | **Description**                                              | **Example**       |

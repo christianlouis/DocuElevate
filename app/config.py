@@ -793,7 +793,7 @@ class Settings(BaseSettings):
     imap_pipeline_metadata_batch_size: int = Field(default=750, ge=50, le=5000)
     imap_pipeline_download_batch_size: int = Field(default=25, ge=1, le=100)
     imap_pipeline_download_workers: int = Field(default=3, ge=1, le=3)
-    imap_pipeline_lease_seconds: int = Field(default=900, ge=60, le=7200)
+    imap_pipeline_lease_seconds: int = Field(default=900, ge=300, le=7200)
     imap_pipeline_target_scan_per_hour: int = Field(default=7200, ge=6000)
 
     # Google Drive settings
