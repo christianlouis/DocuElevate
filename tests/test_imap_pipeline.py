@@ -83,6 +83,94 @@ def test_initial_backlog_then_new_arrival_uses_fixed_boundary(pipeline_session):
 
 
 @pytest.mark.unit
+def test_empty_initial_mailbox_keeps_zero_boundary_and_new_mail_stays_fresh(pipeline_session):
+    db_session = pipeline_session
+    mail = FakeMail([])
+    initial = scan_lane_windows(
+        mail,
+        account_ref="a",
+        owner_key="o",
+        mailbox_key="m",
+        uidvalidity="7",
+        folder="INBOX",
+        deadline=10**9,
+        uidnext=1,
+    )
+    assert initial == {"backlog_scanned": 0, "backlog_candidates": 0, "new_scanned": 0, "new_candidates": 0}
+
+    mail.present.append(1)
+    next_run = scan_lane_windows(
+        mail,
+        account_ref="a",
+        owner_key="o",
+        mailbox_key="m",
+        uidvalidity="7",
+        folder="INBOX",
+        deadline=10**9,
+        uidnext=2,
+    )
+    assert next_run["new_scanned"] == 1
+    assert next_run["backlog_scanned"] == 0
+    assert mail.searches == ["1:1"]
+    assert db_session.query(ImapMessageLedger).one().lane == LANE_NEW
+
+
+@pytest.mark.unit
+def test_metadata_windows_preserve_every_uid_and_cursor(pipeline_session, monkeypatch):
+    db_session = pipeline_session
+    monkeypatch.setattr("app.imap_pipeline.settings.imap_pipeline_metadata_batch_size", 100)
+    mail = FakeMail(list(range(1, 1002)))
+    result = scan_lane_windows(
+        mail,
+        account_ref="a",
+        owner_key="o",
+        mailbox_key="m",
+        uidvalidity="7",
+        folder="INBOX",
+        deadline=10**9,
+        uidnext=1002,
+    )
+    assert result["backlog_scanned"] == 1001
+    assert result["new_scanned"] == 0
+    assert db_session.query(ImapMessageLedger).count() == 1001
+    cursor = db_session.query(ImapPipelineCursor).filter_by(lane=LANE_BACKLOG).one()
+    assert cursor.last_uid == 1001
+
+
+@pytest.mark.unit
+def test_metadata_commit_failure_rolls_back_cursor_and_ledger(pipeline_session, monkeypatch):
+    db_session = pipeline_session
+
+    class FailingCommitSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def __getattr__(self, name):
+            return getattr(db_session, name)
+
+        def commit(self):
+            db_session.rollback()
+            raise RuntimeError("injected commit failure")
+
+    monkeypatch.setattr("app.imap_pipeline.SessionLocal", FailingCommitSession)
+    with pytest.raises(RuntimeError, match="injected commit failure"):
+        commit_metadata_batch(
+            account_ref="a",
+            owner_key="o",
+            mailbox_key="m",
+            uidvalidity="7",
+            lane=LANE_BACKLOG,
+            examined=[{"uid": 1, "candidate": True}],
+            last_uid=1,
+        )
+    assert db_session.query(ImapMessageLedger).count() == 0
+    assert db_session.query(ImapPipelineCursor).count() == 0
+
+
+@pytest.mark.unit
 def test_no_document_is_terminal_and_candidate_has_no_raw_structure(pipeline_session):
     db_session = pipeline_session
     commit_metadata_batch(
