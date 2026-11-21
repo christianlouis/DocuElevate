@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.196.7 (2026-11-21)
+
+### Bug Fixes
+
+- Chunk long default-language translations
+  ([`245f873`](https://github.com/christianlouis/DocuElevate/commit/245f873e0b6b9b484a28fbc480dbd1709cfd48f5))
+
+- Fence translation checkpoints and validate durable recovery
+  ([`64d54f0`](https://github.com/christianlouis/DocuElevate/commit/64d54f0943d08a8749d3bb871afc07e97cd44f20))
+
+### Documentation
+
+- **changelog**: Update changelog [skip ci]
+  ([`e677d85`](https://github.com/christianlouis/DocuElevate/commit/e677d85a009d8e928d9afa265140a225ee65f64b))
+
+### Testing
+
+- Model Celery retry in database disconnect regression
+  ([#1333](https://github.com/christianlouis/DocuElevate/pull/1333),
+  [`b6947f6`](https://github.com/christianlouis/DocuElevate/commit/b6947f612235f51fab9279021eed89b7a44a5f6a))
+
+
 ## Unreleased
 
 ### Testing
