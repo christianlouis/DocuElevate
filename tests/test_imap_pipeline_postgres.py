@@ -5,6 +5,7 @@ import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 from alembic.migration import MigrationContext
@@ -92,7 +93,16 @@ def test_two_real_publishers_are_disjoint_and_backlog_capped(monkeypatch):
 
         monkeypatch.setattr(imap_pipeline, "SessionLocal", Session)
         monkeypatch.setattr(imap_pipeline.settings, "imap_pipeline_download_batch_size", 2)
-        monkeypatch.setattr(imap_pipeline.download_imap_batch, "apply_async", publish)
+        # ``download_imap_batch`` is a Celery ``shared_task`` proxy.  Patching
+        # its bound method is thread-sensitive: each worker can resolve the
+        # proxy against a different Celery app and accidentally publish to the
+        # default localhost broker.  Replace the module-level task with a
+        # concrete fake so every publisher thread calls the same capture.
+        monkeypatch.setattr(
+            imap_pipeline,
+            "download_imap_batch",
+            SimpleNamespace(apply_async=publish),
+        )
 
         def run():
             barrier.wait()
