@@ -4,6 +4,7 @@ import importlib.util
 import os
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from alembic.migration import MigrationContext
@@ -24,9 +25,13 @@ def _db():
 
     @event.listens_for(engine, "connect")
     def _search_path(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute(f'SET search_path TO "{schema}"')
-        cursor.close()
+        previous = dbapi_connection.autocommit
+        dbapi_connection.autocommit = True
+        try:
+            with dbapi_connection.cursor() as cursor:
+                cursor.execute(f'SET search_path TO "{schema}"')
+        finally:
+            dbapi_connection.autocommit = previous
 
     return engine, schema, sessionmaker(bind=engine, expire_on_commit=False)
 
@@ -52,12 +57,22 @@ def _seed(Session, count=5):
     from app.models import ImapMessageLedger
 
     with Session() as db:
-        db.add_all([
-            ImapMessageLedger(owner_key="owner", mailbox_key="mailbox", uidvalidity="7", uid=uid,
-                              account_ref="acct", lane="backlog", state="pending",
-                              discovery_state="ready", is_candidate=True)
-            for uid in range(1, count + 1)
-        ])
+        db.add_all(
+            [
+                ImapMessageLedger(
+                    owner_key="owner",
+                    mailbox_key="mailbox",
+                    uidvalidity="7",
+                    uid=uid,
+                    account_ref="acct",
+                    lane="backlog",
+                    state="pending",
+                    discovery_state="ready",
+                    is_candidate=True,
+                )
+                for uid in range(1, count + 1)
+            ]
+        )
         db.commit()
 
 
@@ -76,19 +91,20 @@ def test_two_real_publishers_are_disjoint_and_backlog_capped(monkeypatch):
             return object()
 
         monkeypatch.setattr(imap_pipeline, "SessionLocal", Session)
+        monkeypatch.setattr(imap_pipeline.settings, "imap_pipeline_download_batch_size", 2)
         monkeypatch.setattr(imap_pipeline.download_imap_batch, "apply_async", publish)
 
         def run():
             barrier.wait()
             imap_pipeline.publish_candidate_batches.run("acct", "backlog")
 
-        threads = [threading.Thread(target=run) for _ in range(2)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(run) for _ in range(2)]
+            for future in futures:
+                future.result(timeout=10)
 
-        assert len(published) <= 2
+        assert len(published) == 2
+        assert sum(len(ids) for _task_id, ids, _queue in published) == 4
         assert len({task_id for task_id, _ids, _queue in published}) == len(published)
         ids = [item for _task_id, item, _queue in published]
         assert len(set().union(*map(set, ids))) == sum(len(item) for item in ids)
@@ -116,12 +132,11 @@ def test_same_claim_token_has_one_real_execution_winner(monkeypatch):
                 barrier.wait()
                 winners.append(bool(imap_pipeline_download._claim_rows(db, "acct", "backlog", ids, token)))
 
-        threads = [threading.Thread(target=execute) for _ in range(2)]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-        assert winners.count(True) == 1
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(execute) for _ in range(2)]
+            for future in futures:
+                future.result(timeout=10)
+        assert sorted(winners) == [False, True]
     finally:
         _cleanup(engine, schema)
 
@@ -150,16 +165,24 @@ def test_migration_upgrade_downgrade_upgrade_preserves_rows():
     engine, schema, _Session = _db()
     try:
         with engine.begin() as conn:
-            conn.execute(text("""CREATE TABLE imap_message_ledger (
+            conn.execute(
+                text("""CREATE TABLE imap_message_ledger (
                 id SERIAL PRIMARY KEY, owner_key VARCHAR(255) NOT NULL,
                 mailbox_key VARCHAR(255) NOT NULL, uidvalidity VARCHAR(255) NOT NULL,
                 uid BIGINT NOT NULL, state VARCHAR(32) NOT NULL DEFAULT 'pending',
                 attempts INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                UNIQUE(owner_key, mailbox_key, uidvalidity, uid))"""))
-            conn.execute(text("INSERT INTO imap_message_ledger(owner_key,mailbox_key,uidvalidity,uid,state) VALUES ('o','m','7',1,'completed'),('o','m','7',2,'pending')"))
-            module_path = os.path.join(os.path.dirname(__file__), "..", "migrations", "versions", "074_imap_discovery_download_pipeline.py")
+                UNIQUE(owner_key, mailbox_key, uidvalidity, uid))""")
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO imap_message_ledger(owner_key,mailbox_key,uidvalidity,uid,state) VALUES ('o','m','7',1,'completed'),('o','m','7',2,'pending')"
+                )
+            )
+            module_path = os.path.join(
+                os.path.dirname(__file__), "..", "migrations", "versions", "074_imap_discovery_download_pipeline.py"
+            )
             spec = importlib.util.spec_from_file_location("migration074", module_path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
@@ -168,9 +191,25 @@ def test_migration_upgrade_downgrade_upgrade_preserves_rows():
             module.upgrade()
             columns = {column["name"] for column in inspect(conn).get_columns("imap_message_ledger")}
             assert {"lane", "discovery_state", "next_download_at", "scanned_at"}.issubset(columns)
-            assert conn.execute(text("SELECT count(*) FROM imap_message_ledger")).scalar() == 2
+            assert conn.execute(
+                text("SELECT uid, state, lane, discovery_state, is_candidate FROM imap_message_ledger ORDER BY uid")
+            ).all() == [
+                (1, "completed", "backlog", "discovered", False),
+                (2, "pending", "backlog", "discovered", False),
+            ]
+            assert {"ix_imap_ledger_outbox_claim", "ix_imap_ledger_lease_expiry"}.issubset(
+                {index["name"] for index in inspect(conn).get_indexes("imap_message_ledger")}
+            )
             module.downgrade()
             module.upgrade()
-            assert conn.execute(text("SELECT count(*) FROM imap_message_ledger")).scalar() == 2
+            assert conn.execute(
+                text("SELECT uid, state, lane, discovery_state, is_candidate FROM imap_message_ledger ORDER BY uid")
+            ).all() == [
+                (1, "completed", "backlog", "discovered", False),
+                (2, "pending", "backlog", "discovered", False),
+            ]
+            assert {"ix_imap_ledger_outbox_claim", "ix_imap_ledger_lease_expiry"}.issubset(
+                {index["name"] for index in inspect(conn).get_indexes("imap_message_ledger")}
+            )
     finally:
         _cleanup(engine, schema)

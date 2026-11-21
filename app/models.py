@@ -351,7 +351,10 @@ class ImapPipelineCursor(Base):
     __tablename__ = "imap_pipeline_cursors"
     __table_args__ = (
         UniqueConstraint(
-            "owner_key", "mailbox_key", "uidvalidity", "lane",
+            "owner_key",
+            "mailbox_key",
+            "uidvalidity",
+            "lane",
             name="uq_imap_pipeline_cursor_identity",
         ),
         Index("ix_imap_pipeline_cursor_lane", "mailbox_key", "lane"),
