@@ -217,7 +217,7 @@ def scan_lane_windows(
             fresh.initialized = True
         db.commit()
         backlog_start = int(back.last_uid or 0) + 1
-        backlog_end = int(back.highwater_uid or highwater)
+        backlog_end = int(back.highwater_uid if back.highwater_uid is not None else highwater)
         fresh_start = int(fresh.last_uid or 0) + 1
         # Values are copied before the session closes; SQLAlchemy may expire ORM rows on commit.
         fresh_end = highwater
