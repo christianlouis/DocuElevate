@@ -8,16 +8,20 @@ helper.
 
 from __future__ import annotations
 
+import atexit
 import email
 import hashlib
 import imaplib
 import json
 import logging
 import shutil
+import threading
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from celery.signals import worker_shutdown
 from sqlalchemy import and_, update
 
 from app.config import settings
@@ -42,6 +46,124 @@ MIN_WORKDIR_FREE_BYTES = 5 * 1024**3
 DOWNLOAD_LEASE_SECONDS = 900
 DOWNLOAD_SOFT_DEADLINE_SECONDS = 180
 DOWNLOAD_HARD_DEADLINE_SECONDS = 270
+
+
+@dataclass
+class _CachedConnection:
+    mail: imaplib.IMAP4
+    fingerprint: str
+    folder: str
+    uidvalidity: str
+    created_at: float
+    last_used_at: float
+
+
+_CONNECTION_CACHE: dict[str, _CachedConnection] = {}
+_CONNECTION_CACHE_LOCK = threading.Lock()
+
+
+def _connection_fingerprint(account: dict[str, Any], readonly: bool) -> str:
+    # Keep credentials out of logs and cache keys while invalidating reuse when
+    # the current password or mailbox settings change.
+    secret = hashlib.sha256(str(account.get("password") or "").encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(
+            [account.get("host"), account.get("port"), account.get("username"), secret, account.get("use_ssl", True), readonly],
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+
+
+def _close_connection(entry: _CachedConnection) -> None:
+    try:
+        _shutdown_imap_connection(entry.mail)
+    except Exception:  # noqa: BLE001
+        logger.debug("Failed to close cached IMAP connection", exc_info=True)
+
+
+def _close_all_cached_connections(*_args, **_kwargs) -> None:
+    with _CONNECTION_CACHE_LOCK:
+        entries = list(_CONNECTION_CACHE.values())
+        _CONNECTION_CACHE.clear()
+    for entry in entries:
+        _close_connection(entry)
+
+
+atexit.register(_close_all_cached_connections)
+worker_shutdown.connect(_close_all_cached_connections, weak=False)
+
+
+def _touch_cached_connection(cache_key: str, mail: imaplib.IMAP4 | None) -> None:
+    if mail is None:
+        return
+    with _CONNECTION_CACHE_LOCK:
+        entry = _CONNECTION_CACHE.get(cache_key)
+        if entry is not None and entry.mail is mail:
+            entry.last_used_at = time.monotonic()
+
+
+def _discard_cached_connection(cache_key: str, mail: imaplib.IMAP4 | None = None) -> None:
+    with _CONNECTION_CACHE_LOCK:
+        entry = _CONNECTION_CACHE.get(cache_key)
+        if entry is None or (mail is not None and entry.mail is not mail):
+            return
+        _CONNECTION_CACHE.pop(cache_key, None)
+    _close_connection(entry)
+
+
+def _open_or_reuse_connection(
+    account_ref: str, account: dict[str, Any], readonly: bool
+) -> tuple[imaplib.IMAP4, str, str, str, bool]:
+    """Return a bounded-lifetime connection and selected mailbox identity."""
+    now = time.monotonic()
+    fingerprint = _connection_fingerprint(account, readonly)
+    cache_key = account_ref
+    with _CONNECTION_CACHE_LOCK:
+        entry = _CONNECTION_CACHE.get(cache_key)
+        if entry and (
+            entry.fingerprint != fingerprint
+            or now - entry.created_at >= int(settings.imap_pipeline_connection_ttl_seconds)
+            or now - entry.last_used_at >= int(settings.imap_pipeline_connection_idle_seconds)
+        ):
+            _CONNECTION_CACHE.pop(cache_key, None)
+            stale_entry = entry
+            entry = None
+        else:
+            stale_entry = None
+    if stale_entry is not None:
+        _close_connection(stale_entry)
+    if entry is not None:
+        try:
+            entry.mail.noop()
+            response = entry.mail.response("UIDVALIDITY")
+            values = response[1] if isinstance(response, tuple) and len(response) > 1 else None
+            if values and str(values[0]).strip("b'") != str(entry.uidvalidity):
+                raise imaplib.IMAP4.error("cached mailbox identity changed")
+            return entry.mail, entry.folder, entry.uidvalidity, cache_key, True
+        except Exception:
+            _discard_cached_connection(cache_key, entry.mail)
+
+    host, port = str(account["host"]), int(account.get("port") or 993)
+    mail = (
+        imaplib.IMAP4_SSL(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+        if account.get("use_ssl", True)
+        else imaplib.IMAP4(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
+    )
+    try:
+        mail.login(account["username"], account["password"])
+        folder = find_all_mail_folder(mail) if "gmail" in host.lower() else "INBOX"
+        folder = folder or "INBOX"
+        status, select_data = mail.select(f'"{folder}"' if "gmail" in host.lower() else folder, readonly=readonly)
+        if status != "OK":
+            raise imaplib.IMAP4.error("mailbox select failed")
+        uidvalidity = _extract_uidvalidity(mail, select_data)
+        entry = _CachedConnection(mail, fingerprint, folder, uidvalidity, now, now)
+        with _CONNECTION_CACHE_LOCK:
+            _CONNECTION_CACHE[cache_key] = entry
+        return mail, folder, uidvalidity, cache_key, False
+    except Exception:
+        _shutdown_imap_connection(mail)
+        raise
 
 
 def _utcnow() -> datetime:
@@ -273,9 +395,16 @@ def download_claimed_batch(
     if not ledger_ids or not claim_token:
         return stats
     mail = None
+    cache_key = account_ref
+    keep_connection = False
     rows: list[ImapMessageLedger] = []
     deleted_any = False
     source_ready = False
+    connection_reused = False
+    setup_seconds = 0.0
+    fetch_seconds = 0.0
+    handoff_seconds = 0.0
+    connection_broken = False
     started = time.monotonic()
     deadline = started + DOWNLOAD_SOFT_DEADLINE_SECONDS
     db = SessionLocal()
@@ -306,30 +435,25 @@ def download_claimed_batch(
                 _finish_fenced(db, row, claim_token, "retry_wait", error_type="OwnerInactive")
             stats["deferred"] = len(rows)
             return stats
-        host, port = str(account["host"]), int(account.get("port") or 993)
+        host = str(account["host"])
         if is_private_ip(host):
             raise RuntimeError("IMAP host rejected")
-        mail = (
-            imaplib.IMAP4_SSL(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
-            if account.get("use_ssl", True)
-            else imaplib.IMAP4(host, port, timeout=IMAP_SOCKET_TIMEOUT_SECONDS)
-        )
-        mail.login(account["username"], account["password"])
-        folder = find_all_mail_folder(mail) if "gmail" in host.lower() else "INBOX"
-        folder = folder or "INBOX"
         is_gmail = "gmail" in host.lower()
         gmail_labels = bool(account.get("gmail_apply_labels", True))
         readonly = bool(
             settings.imap_readonly_mode or not (account.get("delete_after_process") or (is_gmail and gmail_labels))
         )
-        status, select_data = mail.select(f'"{folder}"' if is_gmail else folder, readonly=readonly)
-        if status != "OK":
-            raise RuntimeError("mailbox select failed")
-        uidvalidity = _extract_uidvalidity(mail, select_data)
+        setup_started = time.monotonic()
+        mail, folder, uidvalidity, cache_key, connection_reused = _open_or_reuse_connection(account_ref, account, readonly)
+        setup_seconds = time.monotonic() - setup_started
+        keep_connection = True
+        port = int(account.get("port") or 993)
         expected_key = _mailbox_key(account.get("owner_id"), host, port, account["username"], folder)
         if uidvalidity == "unknown" or any(
             row.mailbox_key != expected_key or str(row.uidvalidity) != str(uidvalidity) for row in rows
         ):
+            _discard_cached_connection(cache_key, mail)
+            keep_connection = False
             for row in rows:
                 _finish_fenced(db, row, claim_token, "retry_wait", error_type="MailboxIdentityChanged")
             stats["deferred"] = len(rows)
@@ -338,6 +462,10 @@ def download_claimed_batch(
         mime_types, extensions = get_allowed_types_for_categories(categories)
         source_ready = True
         for row in rows:
+            if connection_broken:
+                if _finish_fenced(db, row, claim_token, "retry_wait", error_type="ConnectionLost"):
+                    stats["deferred"] = int(stats["deferred"]) + 1
+                continue
             if time.monotonic() >= deadline or time.monotonic() - started >= DOWNLOAD_HARD_DEADLINE_SECONDS:
                 if _finish_fenced(db, row, claim_token, "retry_wait", error_type="DownloadDeadline"):
                     stats["deferred"] = int(stats["deferred"]) + 1
@@ -347,7 +475,9 @@ def download_claimed_batch(
                     stats["deferred"] = int(stats["deferred"]) + 1
                 continue
             try:
+                fetch_started = time.monotonic()
                 fetch_status, data = mail.uid("fetch", str(row.uid), "(BODY.PEEK[])")
+                fetch_seconds += time.monotonic() - fetch_started
                 raw = next((item[1] for item in data or [] if isinstance(item, tuple) and len(item) > 1), None)
                 if fetch_status != "OK" or not raw:
                     search_status, search_data = mail.uid("search", None, "UID", f"{row.uid}:{row.uid}")
@@ -384,6 +514,7 @@ def download_claimed_batch(
                     continue
                 message = email.message_from_bytes(raw)
                 msg_id = message.get("Message-ID") or f"<imap-uid-{uidvalidity}-{row.uid}@{row.mailbox_key}>"
+                handoff_started = time.monotonic()
                 accepted = fetch_attachments_and_enqueue(
                     message,
                     owner_id=account.get("owner_id"),
@@ -393,6 +524,7 @@ def download_claimed_batch(
                     ingestion_prefix=f"{row.owner_key}:{row.mailbox_key}:{row.uidvalidity}:{row.uid}",
                     background=lane == "backlog",
                 )
+                handoff_seconds += time.monotonic() - handoff_started
                 if accepted and not settings.imap_readonly_mode:
                     if is_gmail and gmail_labels:
                         mark_as_processed_with_star(mail, str(row.uid).encode())
@@ -405,6 +537,10 @@ def download_claimed_batch(
                 else:
                     stats["deferred"] = int(stats["deferred"]) + 1
             except Exception as exc:  # noqa: BLE001
+                if isinstance(exc, (OSError, EOFError, TimeoutError, imaplib.IMAP4.error, BrokenPipeError)):
+                    _discard_cached_connection(cache_key, mail)
+                    keep_connection = False
+                    connection_broken = True
                 if _finish_fenced(db, row, claim_token, "retry_wait", error_type=type(exc).__name__):
                     stats["failed"] = int(stats["failed"]) + 1
                 else:
@@ -414,15 +550,34 @@ def download_claimed_batch(
                 mail.expunge()
             except Exception as exc:  # noqa: BLE001
                 logger.warning("IMAP expunge failed: %s", type(exc).__name__)
+        logger.info(
+            "IMAP download batch account=%s lane=%s rows=%d downloaded=%d failed=%d deferred=%d "
+            "connection_reused=%s setup_seconds=%.3f fetch_seconds=%.3f handoff_seconds=%.3f",
+            account_ref,
+            lane,
+            len(rows),
+            stats["downloaded"],
+            stats["failed"],
+            stats["deferred"],
+            connection_reused,
+            setup_seconds,
+            fetch_seconds,
+            handoff_seconds,
+        )
         return stats
     except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, (OSError, EOFError, TimeoutError, imaplib.IMAP4.error, BrokenPipeError)):
+            _discard_cached_connection(cache_key, mail)
+            keep_connection = False
         for row in rows:
             if _finish_fenced(db, row, claim_token, "retry_wait", error_type=type(exc).__name__):
                 stats["failed"] = int(stats["failed"]) + 1
         return stats
     finally:
-        if mail is not None:
+        if mail is not None and not keep_connection:
             _shutdown_imap_connection(mail)
+        elif keep_connection:
+            _touch_cached_connection(cache_key, mail)
         db.close()
         # An unavailable source or full disk must wait for the next poll;
         # immediately refilling would churn through the entire candidate

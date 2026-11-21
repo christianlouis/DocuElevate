@@ -434,7 +434,7 @@ Set `IMAP_PIPELINE_ENABLED=true` after applying migration 074 to enable metadata
 
 Download candidates remain in the database until successfully handed to the durable attachment intake. Redis carries bounded batches of candidate IDs, never mailbox passwords. Expired claims can be republished after a worker restart or Redis loss; duplicate deliveries must acquire the database claim before downloading. The existing attachment intake supplies the final idempotent document handoff.
 
-Run one worker consuming `imap_download_new` and two workers consuming `imap_download_backlog`, each with concurrency 1. Keep these queues separate from `imap_polling` and `document_processor`, and mount the same persistent `WORKDIR` on all workers. Downloads may build a processing backlog; discovery does not wait for OCR or AI capacity. Downloads pause when persistent storage falls below the reserved free-space threshold.
+Run one worker consuming `imap_download_new` and four workers consuming `imap_download_backlog`, each with concurrency 1. Keep these queues separate from `imap_polling` and `document_processor`, and mount the same persistent `WORKDIR` on all workers. Each worker reuses a bounded IMAP session (credential/identity fenced, finite TTL and idle timeout); socket or protocol failures discard the session. Downloads may build a processing backlog; discovery does not wait for OCR or AI capacity. Downloads pause when persistent storage falls below the reserved free-space threshold.
 
 | Variable | Default | Purpose |
 |---|---|---|

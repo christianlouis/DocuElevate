@@ -304,7 +304,7 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
     now = datetime.now(timezone.utc)
     token = uuid.uuid4().hex
     batch_limit = min(int(limit or settings.imap_pipeline_download_batch_size), 100)
-    max_active = 1 if lane == LANE_NEW else 2
+    max_active = 1 if lane == LANE_NEW else int(settings.imap_pipeline_backlog_active_batches)
     with SessionLocal() as db:
         # Serialize the active-count check with claims for this account/lane.
         # PostgreSQL's advisory transaction lock scopes the lock to this exact
@@ -372,7 +372,7 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
 
 @shared_task(name="app.imap_pipeline.publish_candidate_batches")
 def publish_candidate_batches(account_ref: str, lane: str = LANE_BACKLOG, limit: int | None = None) -> int:
-    max_batches = 1 if lane == LANE_NEW else 2
+    max_batches = 1 if lane == LANE_NEW else int(settings.imap_pipeline_backlog_active_batches)
     if limit is not None:
         max_batches = min(max_batches, max(1, int(limit)))
     published = 0
