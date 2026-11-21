@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.197.0 (2026-11-21)
+
+### Features
+
+- **imap**: Separate durable mailbox discovery and download lanes
+  ([#1336](https://github.com/christianlouis/DocuElevate/pull/1336),
+  [`2dd43ec`](https://github.com/christianlouis/DocuElevate/commit/2dd43ec43cc8e1d2f73dda5272321332bfd719ee))
+
+
 ## v0.196.7 (2026-11-21)
 
 ### Bug Fixes
