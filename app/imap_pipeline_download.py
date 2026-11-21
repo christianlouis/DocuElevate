@@ -73,7 +73,14 @@ def _connection_fingerprint(account: dict[str, Any], readonly: bool) -> str:
     secret = hashlib.sha256(str(account.get("password") or "").encode()).hexdigest()
     return hashlib.sha256(
         json.dumps(
-            [account.get("host"), account.get("port"), account.get("username"), secret, account.get("use_ssl", True), readonly],
+            [
+                account.get("host"),
+                account.get("port"),
+                account.get("username"),
+                secret,
+                account.get("use_ssl", True),
+                readonly,
+            ],
             sort_keys=True,
         ).encode()
     ).hexdigest()
@@ -102,10 +109,9 @@ def _expire_idle_connections(now: float | None = None) -> None:
         for key, entry in list(_CONNECTION_CACHE.items()):
             if entry.in_use:
                 continue
-            if (
-                now - entry.created_at >= int(settings.imap_pipeline_connection_ttl_seconds)
-                or now - entry.last_used_at >= int(settings.imap_pipeline_connection_idle_seconds)
-            ):
+            if now - entry.created_at >= int(
+                settings.imap_pipeline_connection_ttl_seconds
+            ) or now - entry.last_used_at >= int(settings.imap_pipeline_connection_idle_seconds):
                 _CONNECTION_CACHE.pop(key, None)
                 stale.append(entry)
     for entry in stale:
@@ -532,7 +538,9 @@ def download_claimed_batch(
             settings.imap_readonly_mode or not (account.get("delete_after_process") or (is_gmail and gmail_labels))
         )
         setup_started = time.monotonic()
-        mail, folder, uidvalidity, cache_key, connection_reused = _open_or_reuse_connection(account_ref, account, readonly)
+        mail, folder, uidvalidity, cache_key, connection_reused = _open_or_reuse_connection(
+            account_ref, account, readonly
+        )
         setup_seconds = time.monotonic() - setup_started
         keep_connection = True
         port = int(account.get("port") or 993)

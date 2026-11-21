@@ -17,6 +17,7 @@ def test_backlog_publisher_fills_four_slots_but_new_lane_stays_single(monkeypatc
         "download_imap_batch",
         SimpleNamespace(apply_async=lambda **kwargs: published.append(kwargs)),
     )
+
     class FakeSession:
         def __enter__(self):
             return self
