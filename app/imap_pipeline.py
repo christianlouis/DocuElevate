@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from app.config import settings
 from app.database import SessionLocal
@@ -41,28 +41,43 @@ def _metric_key(account_ref: str) -> str:
 
 
 def record_metrics(account_ref: str, lane: str, *, scanned: int = 0, candidates: int = 0, **extra) -> None:
-    """Increment safe operational counters; failures never stop discovery."""
-    try:
-        import redis
+    """Keep metrics in the ledger; Redis is not the source of truth.
 
-        values = {f"{lane}_{name}": int(value) for name, value in {"scanned": scanned, "candidates": candidates, **extra}.items() if value}
-        if values:
-            client = redis.StrictRedis.from_url(settings.redis_url, decode_responses=True)
-            client.hset(_metric_key(account_ref), "updated_at", int(time.time()))
-            for key, value in values.items():
-                client.hincrby(_metric_key(account_ref), key, value)
-    except Exception:  # pragma: no cover - metrics are best effort
-        return
+    ``scanned_at`` is written by the scanner transaction.  This hook remains
+    for compatibility with older callers and deliberately does not maintain
+    cumulative Redis counters, which become false after a restart or replay.
+    """
+    logger.debug("IMAP pipeline batch account=%s lane=%s scanned=%s candidates=%s", account_ref, lane, scanned, candidates)
 
 
 def pipeline_snapshot(account_ref: str) -> dict[str, int | str]:
-    """Read a monitoring-safe snapshot without exposing account credentials."""
+    """Read durable lane gauges and recent rates from PostgreSQL."""
+    states = {"ready": 0, "claimed": 0, "downloading": 0, "retry_wait": 0, "completed": 0, "vanished": 0, "permanent_failure": 0}
     try:
-        import redis
-
-        return redis.StrictRedis.from_url(settings.redis_url, decode_responses=True).hgetall(_metric_key(account_ref))
-    except Exception:
-        return {}
+        with SessionLocal() as db:
+            rows = db.query(ImapMessageLedger.lane, ImapMessageLedger.discovery_state, func.count(ImapMessageLedger.id)).filter(ImapMessageLedger.account_ref == account_ref).group_by(ImapMessageLedger.lane, ImapMessageLedger.discovery_state).all()
+            result: dict[str, int | str] = {"account_ref": account_ref, "status": "ok"}
+            for lane, state, count in rows:
+                result[f"{lane}_{state}"] = int(count)
+                if state in states:
+                    states[state] += int(count)
+            result.update({f"total_{key}": value for key, value in states.items()})
+            scanned_col = getattr(ImapMessageLedger, "scanned_at", None)
+            if scanned_col is not None:
+                from datetime import datetime, timedelta, timezone
+                result["scanned_last_hour"] = int(db.query(func.count(ImapMessageLedger.id)).filter(ImapMessageLedger.account_ref == account_ref, scanned_col >= datetime.now(timezone.utc) - timedelta(hours=1)).scalar() or 0)
+            else:
+                result["scanned_last_hour"] = 0
+            downloaded_col = getattr(ImapMessageLedger, "downloaded_at", None)
+            if downloaded_col is not None:
+                from datetime import datetime, timedelta, timezone
+                result["downloaded_last_hour"] = int(db.query(func.count(ImapMessageLedger.id)).filter(ImapMessageLedger.account_ref == account_ref, downloaded_col >= datetime.now(timezone.utc) - timedelta(hours=1)).scalar() or 0)
+            else:
+                result["downloaded_last_hour"] = 0
+            return result
+    except Exception as exc:
+        logger.warning("Unable to read IMAP pipeline snapshot: %s", type(exc).__name__)
+        return {"account_ref": account_ref, "status": "unknown", "error": type(exc).__name__}
 
 
 def _cursor(db, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str) -> ImapPipelineCursor:
@@ -172,14 +187,53 @@ def discover_metadata_batch(mail, *, account_ref: str, owner_key: str, mailbox_k
 
 
 def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -> tuple[str, list[int]]:
-    """Claim bounded candidates with a fencing token; expired claims are reclaimable."""
+    """Claim one bounded, identity-homogeneous download batch.
+
+    Claims are durable in the database.  An expired claim is eligible again,
+    while terminal rows can never be reactivated.  ``SKIP LOCKED`` lets a
+    second publisher make progress without waiting behind a running claim.
+    """
     now = datetime.now(timezone.utc)
     token = uuid.uuid4().hex
+    batch_limit = min(int(limit or settings.imap_pipeline_download_batch_size), 100)
+    max_active = 1 if lane == LANE_NEW else 2
     with SessionLocal() as db:
-        rows = db.query(ImapMessageLedger).filter(ImapMessageLedger.account_ref == account_ref, ImapMessageLedger.lane == lane, ImapMessageLedger.is_candidate.is_(True), or_(ImapMessageLedger.discovery_state == "completed", ImapMessageLedger.download_lease_expires_at < now)).order_by(ImapMessageLedger.uid).limit(limit or settings.imap_pipeline_download_batch_size).with_for_update().all()
+        active = db.query(func.count(func.distinct(ImapMessageLedger.download_lease_token))).filter(
+            ImapMessageLedger.account_ref == account_ref,
+            ImapMessageLedger.lane == lane,
+            ImapMessageLedger.discovery_state.in_(("claimed", "downloading", "download_claimed")),
+            ImapMessageLedger.download_lease_expires_at > now,
+        ).scalar() or 0
+        if int(active) >= max_active:
+            return token, []
+        eligible = or_(
+            ImapMessageLedger.discovery_state.in_(("ready", "completed", "candidate")),
+            ImapMessageLedger.discovery_state == "retry_wait",
+            ImapMessageLedger.download_lease_expires_at <= now,
+        )
+        query = db.query(ImapMessageLedger).filter(
+            ImapMessageLedger.account_ref == account_ref,
+            ImapMessageLedger.lane == lane,
+            ImapMessageLedger.is_candidate.is_(True),
+            ImapMessageLedger.state.notin_(("completed", "vanished")),
+            ImapMessageLedger.discovery_state.notin_(("vanished", "permanent_failure")),
+            eligible,
+        ).order_by(ImapMessageLedger.uid).with_for_update(skip_locked=True)
+        candidates = query.limit(batch_limit).all()
+        if not candidates:
+            return token, []
+        # A task must have one owner/mailbox/UIDVALIDITY identity.  Do not
+        # combine rows from two accounts or epochs in one IMAP session.
+        identity = (candidates[0].owner_key, candidates[0].mailbox_key, str(candidates[0].uidvalidity))
+        rows = [row for row in candidates if (row.owner_key, row.mailbox_key, str(row.uidvalidity)) == identity]
         expires = now + timedelta(seconds=settings.imap_pipeline_lease_seconds)
+        task_id = uuid.uuid4().hex
         for row in rows:
-            row.discovery_state, row.download_lease_token, row.download_lease_expires_at = "download_claimed", token, expires
+            row.discovery_state, row.download_lease_token, row.download_lease_expires_at = "claimed", token, expires
+            if hasattr(row, "download_task_id"):
+                row.download_task_id = task_id
+            if hasattr(row, "download_started_at"):
+                row.download_started_at = None
             row.download_attempts = (row.download_attempts or 0) + 1
         db.commit()
         return token, [int(row.id) for row in rows]
@@ -187,11 +241,28 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
 
 @shared_task(name="app.imap_pipeline.publish_candidate_batches")
 def publish_candidate_batches(account_ref: str, lane: str = LANE_BACKLOG, limit: int | None = None) -> int:
-    token, uids = claim_candidates(account_ref=account_ref, lane=lane, limit=limit)
-    if not uids:
+    token, ledger_ids = claim_candidates(account_ref=account_ref, lane=lane, limit=limit)
+    if not ledger_ids:
         return 0
-    download_imap_batch.apply_async(args=[account_ref, lane, uids, token], queue=QUEUE_DOWNLOAD_NEW if lane == LANE_NEW else QUEUE_DOWNLOAD_BACKLOG, priority=0 if lane == LANE_NEW else 5)
-    return len(uids)
+    task_id = token
+    with SessionLocal() as db:
+        row = db.query(ImapMessageLedger).filter(ImapMessageLedger.id == ledger_ids[0], ImapMessageLedger.download_lease_token == token).one_or_none()
+        if row is not None and getattr(row, "download_task_id", None):
+            task_id = row.download_task_id
+    try:
+        download_imap_batch.apply_async(
+            args=[account_ref, lane, ledger_ids, token],
+            task_id=task_id,
+            queue=QUEUE_DOWNLOAD_NEW if lane == LANE_NEW else QUEUE_DOWNLOAD_BACKLOG,
+            priority=0 if lane == LANE_NEW else 5,
+            expires=settings.imap_pipeline_lease_seconds,
+        )
+    except Exception as exc:
+        # The claim remains fenced until lease expiry.  This handles an
+        # ambiguous broker failure without immediately publishing a duplicate.
+        logger.warning("IMAP download publish failed account=%s lane=%s: %s", account_ref, lane, type(exc).__name__)
+        return 0
+    return len(ledger_ids)
 
 
 def recover_legacy_candidates(account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, limit: int = 500) -> int:
