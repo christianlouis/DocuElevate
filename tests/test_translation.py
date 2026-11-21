@@ -8,6 +8,7 @@ Covers:
 - _resolve_default_language helper
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -153,6 +154,7 @@ class TestTranslateToDefaultLanguageTask:
             mock_ctx = MagicMock()
             mock_ctx.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.__exit__ = MagicMock(return_value=False)
+            mock_ctx.get_bind.return_value = db_session.get_bind()
             mock_session_cls.return_value = mock_ctx
 
             task = translate_to_default_language
@@ -184,6 +186,7 @@ class TestTranslateToDefaultLanguageTask:
             mock_ctx = MagicMock()
             mock_ctx.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.__exit__ = MagicMock(return_value=False)
+            mock_ctx.get_bind.return_value = db_session.get_bind()
             mock_session_cls.return_value = mock_ctx
 
             result = translate_to_default_language.apply(
@@ -211,11 +214,365 @@ class TestTranslateToDefaultLanguageTask:
             mock_ctx = MagicMock()
             mock_ctx.__enter__ = MagicMock(return_value=db_session)
             mock_ctx.__exit__ = MagicMock(return_value=False)
+            mock_ctx.get_bind.return_value = db_session.get_bind()
             mock_session_cls.return_value = mock_ctx
 
             result = _resolve_default_language("test-user-lang")
 
         assert result == "de"
+
+    @pytest.mark.unit
+    def test_split_translation_text_is_lossless_and_ordered(self):
+        from app.tasks.translate_to_default_language import _split_translation_text
+
+        source = "First paragraph.\n\nSecond paragraph with words.\nThird line."
+        chunks = _split_translation_text(source, max_chars=20)
+
+        assert len(chunks) > 1
+        assert "".join(chunks) == source
+        assert all(len(chunk) <= 20 for chunk in chunks)
+
+    @pytest.mark.unit
+    def test_translation_resumes_after_mid_chunk_failure(self, db_session, file_with_ocr):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        source = "one two three four five six seven eight nine ten eleven twelve"
+        file_with_ocr.ocr_text = source
+        db_session.commit()
+        provider = MagicMock()
+        provider.chat_completion.side_effect = ["EINS", RuntimeError("temporary")]
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch(
+                "app.tasks.translate_to_default_language._split_translation_text",
+                return_value=["one ", "two ", "three ", "four "],
+            ),
+            patch("app.tasks.translate_to_default_language.SessionLocal") as session_cls,
+        ):
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=db_session)
+            ctx.__exit__ = MagicMock(return_value=False)
+            ctx.get_bind.return_value = db_session.get_bind()
+            session_cls.return_value = ctx
+            with pytest.raises(RuntimeError):
+                translate_to_default_language.run(file_with_ocr.id, source, "de")
+
+            db_session.refresh(file_with_ocr)
+            checkpoint = json.loads(file_with_ocr.translation_checkpoint)
+            assert checkpoint["translated_chunks"][0] == "EINS "
+            provider.chat_completion.side_effect = ["ZWEI", "DREI", "VIER"]
+            result = translate_to_default_language.run(file_with_ocr.id, source, "de")
+
+        assert result["status"] == "success"
+        assert provider.chat_completion.call_count == 5
+        db_session.refresh(file_with_ocr)
+        assert file_with_ocr.default_language_text == "EINS ZWEI DREI VIER "
+        assert json.loads(file_with_ocr.translation_checkpoint)["completed"] is True
+
+    @pytest.mark.unit
+    def test_translation_fingerprint_changes_for_inputs_and_provider(self):
+        from app.tasks.translate_to_default_language import _translation_fingerprint
+
+        base = _translation_fingerprint("text", "de", "en", "openai", "gpt-4o-mini")
+        assert base != _translation_fingerprint("changed", "de", "en", "openai", "gpt-4o-mini")
+        assert base != _translation_fingerprint("text", "fr", "en", "openai", "gpt-4o-mini")
+        assert base != _translation_fingerprint("text", "de", "en", "litellm", "gpt-4o-mini")
+        assert base != _translation_fingerprint("text", "de", "en", "openai", "other-model")
+
+    @pytest.mark.unit
+    def test_split_translation_text_never_exceeds_limit_at_boundary(self):
+        from app.tasks.translate_to_default_language import _split_translation_text
+
+        source = "123456789\n"
+        chunks = _split_translation_text(source, max_chars=10)
+        assert all(len(chunk) <= 10 for chunk in chunks)
+        assert "".join(chunks) == source
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("source", ["\t \n", "😀" * 40, "x" * 121])
+    def test_splitter_is_lossless_and_bounded_for_unicode_and_whitespace(self, source):
+        from app.tasks.translate_to_default_language import _split_translation_text
+
+        chunks = _split_translation_text(source, max_chars=12)
+        assert "".join(chunks) == source
+        assert all(len(chunk) <= 12 for chunk in chunks)
+
+    @pytest.mark.unit
+    def test_whitespace_only_chunk_does_not_call_provider(self, db_session, file_with_ocr):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        file_with_ocr.ocr_text = "   \n\t"
+        db_session.commit()
+        provider = MagicMock()
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+        ):
+            result = translate_to_default_language.run(file_with_ocr.id, file_with_ocr.ocr_text, "de")
+        assert result["status"] == "success"
+        provider.chat_completion.assert_not_called()
+
+    @pytest.mark.unit
+    def test_completed_checkpoint_redelivery_is_cached_without_provider(self, db_session, file_with_translation):
+        from app.tasks.translate_to_default_language import (
+            _translation_fingerprint,
+            translate_to_default_language,
+        )
+
+        source = file_with_translation.ocr_text
+        file_id = file_with_translation.id
+        fingerprint = _translation_fingerprint(source, "fr", "en", "openai", "gpt-4o-mini")
+        file_with_translation.translation_checkpoint = json.dumps(
+            {
+                "version": "1",
+                "fingerprint": fingerprint,
+                "chunk_count": 1,
+                "translated_chunks": [],
+                "completed": True,
+            }
+        )
+        db_session.commit()
+        provider = MagicMock()
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+            patch("app.tasks.translate_to_default_language.log_task_progress") as progress,
+        ):
+            result = translate_to_default_language.run(file_with_translation.id, source, "fr")
+        assert result["status"] == "success"
+        provider.chat_completion.assert_not_called()
+        assert [call.args[2] for call in progress.call_args_list] == ["success"]
+
+    def test_busy_file_defers_before_any_provider_call(self, db_session, file_with_ocr):
+        from app.services.translation_file_lock import translation_file_lock
+        from app.tasks.translate_to_default_language import translate_to_default_language
+        from app.utils.provider_limits import ProviderQuotaExceeded
+
+        source, file_id = file_with_ocr.ocr_text, file_with_ocr.id
+        with (
+            translation_file_lock(db_session, file_id),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+            patch("app.tasks.translate_to_default_language.get_ai_provider") as provider,
+            patch("app.tasks.translate_to_default_language.log_task_progress") as progress,
+        ):
+            with pytest.raises(ProviderQuotaExceeded):
+                translate_to_default_language.run(file_id, source, "de")
+        provider.assert_not_called()
+        progress.assert_not_called()
+
+    def test_changed_target_resets_partial_checkpoint_but_keeps_previous_final(self, db_session, file_with_translation):
+        from sqlalchemy.orm import sessionmaker
+
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        source, file_id = file_with_translation.ocr_text, file_with_translation.id
+        old_final = file_with_translation.default_language_text
+        file_with_translation.translation_checkpoint = json.dumps(
+            {"fingerprint": "previous-target", "chunk_count": 1, "translated_chunks": ["partial"], "completed": False}
+        )
+        db_session.commit()
+        provider = MagicMock()
+        provider.chat_completion.side_effect = RuntimeError("transient provider failure")
+        session_factory = sessionmaker(bind=db_session.get_bind())
+        with (
+            patch("app.tasks.translate_to_default_language.SessionLocal", side_effect=session_factory),
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language._resolve_default_language", return_value="de"),
+            patch("app.tasks.translate_to_default_language.log_task_progress"),
+        ):
+            with pytest.raises(RuntimeError, match="transient provider failure"):
+                translate_to_default_language.run(file_id, source, "fr")
+            db_session.refresh(file_with_translation)
+            assert file_with_translation.default_language_text == old_final
+            assert file_with_translation.default_language_code == "en"
+            checkpoint = json.loads(file_with_translation.translation_checkpoint)
+            assert checkpoint["fingerprint"] != "previous-target"
+            assert checkpoint["translated_chunks"] == []
+            db_session.commit()
+            provider.chat_completion.side_effect = None
+            provider.chat_completion.return_value = "Neue deutsche Übersetzung"
+            assert translate_to_default_language.run(file_id, source, "fr")["status"] == "success"
+        db_session.refresh(file_with_translation)
+        assert file_with_translation.default_language_text == "Neue deutsche Übersetzung"
+        assert file_with_translation.default_language_code == "de"
+
+    def test_no_lock_connection_transaction_spans_provider_call(self, db_session, file_with_ocr):
+        from contextlib import contextmanager
+
+        from sqlalchemy.orm import Session
+
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        source, file_id = file_with_ocr.ocr_text, file_with_ocr.id
+        bind = db_session.get_bind()
+        db_session.commit()
+        provider = MagicMock()
+
+        @contextmanager
+        def bound_lock(*_):
+            with bind.connect() as connection:
+
+                def translate(**_):
+                    assert not connection.in_transaction()
+                    return "translated"
+
+                provider.chat_completion.side_effect = translate
+                yield lambda: Session(bind=connection)
+
+        with (
+            patch("app.tasks.translate_to_default_language.translation_file_lock", side_effect=bound_lock),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.log_task_progress"),
+        ):
+            assert translate_to_default_language.run(file_id, source, "de")["status"] == "success"
+        provider.chat_completion.assert_called_once()
+
+    @pytest.mark.unit
+    def test_completed_marker_without_output_is_not_cached(self, db_session, file_with_translation):
+        from app.tasks.translate_to_default_language import _translation_fingerprint, translate_to_default_language
+
+        source = file_with_translation.ocr_text
+        file_with_translation.default_language_text = None
+        file_with_translation.default_language_code = None
+        file_with_translation.translation_checkpoint = json.dumps(
+            {
+                "version": "1",
+                "fingerprint": _translation_fingerprint(source, "fr", "en", "openai", "gpt-4o-mini"),
+                "chunk_count": 1,
+                "translated_chunks": [],
+                "completed": True,
+            }
+        )
+        db_session.commit()
+        provider = MagicMock()
+        provider.chat_completion.return_value = "translated"
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+        ):
+            result = translate_to_default_language.run(file_with_translation.id, source, "fr")
+        assert result["status"] == "success"
+        provider.chat_completion.assert_called_once()
+
+    @pytest.mark.unit
+    def test_empty_chunk_response_preserves_previous_translation(self, db_session, file_with_translation):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        provider = MagicMock()
+        provider.chat_completion.return_value = ""
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.SessionLocal") as session_cls,
+        ):
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=db_session)
+            ctx.__exit__ = MagicMock(return_value=False)
+            ctx.get_bind.return_value = db_session.get_bind()
+            session_cls.return_value = ctx
+            with pytest.raises(ValueError):
+                translate_to_default_language.run(file_with_translation.id, file_with_translation.ocr_text, "fr")
+
+        db_session.refresh(file_with_translation)
+        assert file_with_translation.default_language_text == "This is a test document in French."
+
+    @pytest.mark.unit
+    def test_stale_source_is_skipped_without_provider_call(self, db_session, file_with_ocr):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        provider = MagicMock()
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.SessionLocal") as session_cls,
+        ):
+            ctx = MagicMock()
+            ctx.__enter__ = MagicMock(return_value=db_session)
+            ctx.__exit__ = MagicMock(return_value=False)
+            ctx.get_bind.return_value = db_session.get_bind()
+            session_cls.return_value = ctx
+            result = translate_to_default_language.run(file_with_ocr.id, "stale queued text", "de")
+        assert result == {"status": "skipped", "reason": "source_changed"}
+        provider.chat_completion.assert_not_called()
+
+    @pytest.mark.unit
+    def test_busy_file_defers_before_provider_call(self, file_with_ocr):
+        from app.services.translation_file_lock import TranslationFileBusy
+        from app.tasks.translate_to_default_language import translate_to_default_language
+        from app.utils.provider_limits import ProviderQuotaExceeded
+
+        provider = MagicMock()
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch(
+                "app.tasks.translate_to_default_language.translation_file_lock",
+                side_effect=TranslationFileBusy("busy"),
+            ),
+            pytest.raises(ProviderQuotaExceeded) as exc_info,
+        ):
+            translate_to_default_language.run(file_with_ocr.id, file_with_ocr.ocr_text, "de")
+        assert "busy" in str(exc_info.value)
+        provider.chat_completion.assert_not_called()
+
+    @pytest.mark.unit
+    def test_quota_after_first_chunk_resumes_only_remaining(self, db_session, file_with_ocr):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+        from app.utils.provider_limits import ProviderQuotaExceeded
+
+        source = "one two three four"
+        file_with_ocr.ocr_text = source
+        db_session.commit()
+        provider = MagicMock()
+        provider.chat_completion.side_effect = ["ONE", ProviderQuotaExceeded("quota", retry_after=2)]
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch(
+                "app.tasks.translate_to_default_language._split_translation_text",
+                return_value=["one ", "two ", "three "],
+            ),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+        ):
+            with pytest.raises(ProviderQuotaExceeded):
+                translate_to_default_language.run(file_with_ocr.id, source, "de")
+        checkpoint_owner = db_session.get(type(file_with_ocr), file_with_ocr.id)
+        assert json.loads(checkpoint_owner.translation_checkpoint)["translated_chunks"][0] == "ONE "
+        provider.chat_completion.side_effect = ["TWO", "THREE"]
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch(
+                "app.tasks.translate_to_default_language._split_translation_text",
+                return_value=["one ", "two ", "three "],
+            ),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+        ):
+            result = translate_to_default_language.run(file_with_ocr.id, source, "de")
+        assert result["status"] == "success"
+        assert provider.chat_completion.call_count == 4
+
+    @pytest.mark.unit
+    def test_source_change_during_provider_skips_without_final_overwrite(self, db_session, file_with_translation):
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        source = file_with_translation.ocr_text
+        file_id = file_with_translation.id
+        provider = MagicMock()
+
+        def mutate_source(*_args, **_kwargs):
+            db_session.query(type(file_with_translation)).filter_by(id=file_id).update(
+                {"ocr_text": "new authoritative source"}, synchronize_session=False
+            )
+            db_session.commit()
+            return "translated"
+
+        provider.chat_completion.side_effect = mutate_source
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language._split_translation_text", return_value=[source]),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+        ):
+            result = translate_to_default_language.run(file_id, source, "fr")
+        assert result == {"status": "skipped", "reason": "source_changed"}
+        final_record = db_session.get(type(file_with_translation), file_id)
+        assert final_record.default_language_text == "This is a test document in French."
 
 
 # ---------------------------------------------------------------------------

@@ -10,18 +10,96 @@ Other ad-hoc translations are generated on the fly via the ``/api/files/{id}/tra
 endpoint and are NOT persisted.
 """
 
+import hashlib
+import json
 import logging
+import re
+from typing import Any
 
 from app.celery_app import celery
 from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord, UserProfile
+from app.services.translation_file_lock import TranslationFileBusy, translation_file_lock
 from app.tasks.retry_config import ProviderTaskWithRetry
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider
 from app.utils.provider_limits import ProviderQuotaExceeded
 
 logger = logging.getLogger(__name__)
+
+TRANSLATION_CHECKPOINT_VERSION = "1"
+TRANSLATION_CHUNK_MAX_CHARS = 12_000
+
+
+class _TranslationSourceChanged(Exception):
+    """The queued source no longer matches the authoritative document text."""
+
+
+def _split_translation_text(text: str, max_chars: int = TRANSLATION_CHUNK_MAX_CHARS) -> list[str]:
+    """Split text losslessly, preferring paragraph/line/word boundaries."""
+    if not text:
+        return []
+    if max_chars < 1:
+        raise ValueError("max_chars must be positive")
+    chunks: list[str] = []
+    offset = 0
+    while offset < len(text):
+        end = min(offset + max_chars, len(text))
+        if end < len(text):
+            boundary = max(text.rfind("\n\n", offset + 1, end + 1), text.rfind("\n", offset + 1, end + 1))
+            if boundary <= offset:
+                boundary = text.rfind(" ", offset + 1, end + 1)
+            if boundary > offset:
+                separator_length = 2 if text.startswith("\n\n", boundary) else 1
+                end = min(boundary + separator_length, offset + max_chars)
+        chunks.append(text[offset:end])
+        offset = end
+    if "".join(chunks) != text:
+        raise RuntimeError("translation splitter lost source text")
+    return chunks
+
+
+def _preserve_chunk_boundaries(source: str, translated: str) -> str:
+    """Keep source whitespace at chunk edges when a provider trims it."""
+    if not translated:
+        return translated
+    leading = re.match(r"\s*", source).group(0)
+    trailing = re.search(r"\s*$", source).group(0)
+    body = translated.strip()
+    if not body:
+        raise ValueError("AI provider returned an empty translation chunk")
+    return leading + body + trailing
+
+
+def _translation_fingerprint(text: str, source: str, target: str, provider: str, model: str) -> str:
+    payload = "\x1f".join((TRANSLATION_CHECKPOINT_VERSION, source, target, provider, model, text))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _checkpoint_for(
+    record: FileRecord, fingerprint: str, chunks: list[str], *, allow_reset: bool = True
+) -> dict[str, Any]:
+    try:
+        current = json.loads(record.translation_checkpoint or "")
+    except (TypeError, ValueError):
+        current = None
+    if (
+        isinstance(current, dict)
+        and current.get("fingerprint") == fingerprint
+        and current.get("chunk_count") == len(chunks)
+        and isinstance(current.get("translated_chunks"), list)
+    ):
+        return current
+    if not allow_reset:
+        raise RuntimeError("Translation checkpoint changed while translation was in progress")
+    return {
+        "version": TRANSLATION_CHECKPOINT_VERSION,
+        "fingerprint": fingerprint,
+        "chunk_count": len(chunks),
+        "translated_chunks": [],
+        "completed": False,
+    }
 
 
 def _resolve_default_language(owner_id: str | None) -> str:
@@ -75,46 +153,137 @@ def translate_to_default_language(
         )
         return {"status": "skipped", "reason": "already_in_target_language"}
 
-    logger.info(f"[{task_id}] Translating document {file_id} from '{detected_language}' to '{target_language}'")
-    log_task_progress(
-        task_id,
-        "translate_to_default_language",
-        "in_progress",
-        f"Translating from {detected_language} to {target_language}",
-        file_id=file_id,
-    )
+    if not extracted_text:
+        log_task_progress(
+            task_id,
+            "translate_to_default_language",
+            "skipped",
+            "No extracted text to translate",
+            file_id=file_id,
+        )
+        return {"status": "skipped", "reason": "empty_source_text"}
 
+    lock_db = None
+    lock_context = None
+    lock_acquired = False
+    lock_session_factory = None
     try:
-        provider = get_ai_provider()
         model = settings.ai_model or settings.openai_model
-        translated_text = provider.chat_completion(
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        f"You are a professional translator. Translate the following text "
-                        f"from {detected_language} to {target_language}. "
-                        f"Preserve the original formatting, paragraph structure, and meaning. "
-                        f"Do not add any commentary or explanation — output ONLY the translated text."
-                    ),
-                },
-                {"role": "user", "content": extracted_text},
-            ],
-            model=model,
-            temperature=0.3,
+        chunks = _split_translation_text(extracted_text)
+        fingerprint = _translation_fingerprint(
+            extracted_text, detected_language, target_language, settings.ai_provider, model
+        )
+        lock_db = SessionLocal()
+        lock_context = translation_file_lock(lock_db, file_id)
+        lock_session_factory = lock_context.__enter__()
+        lock_acquired = True
+        provider = get_ai_provider()
+        early_result = None
+        with lock_session_factory() as db:
+            record = db.query(FileRecord).filter_by(id=file_id).with_for_update().first()
+            if not record:
+                raise RuntimeError(f"FileRecord {file_id} disappeared during translation")
+            if record.ocr_text != extracted_text:
+                raise _TranslationSourceChanged
+            checkpoint = _checkpoint_for(record, fingerprint, chunks)
+            if (
+                checkpoint.get("completed")
+                and record.default_language_code == target_language
+                and record.default_language_text
+            ):
+                early_result = {
+                    "status": "success",
+                    "target_language": target_language,
+                    "translated_length": len(record.default_language_text),
+                }
+            if early_result is None:
+                checkpoint["completed"] = False
+                record.translation_checkpoint = json.dumps(checkpoint, ensure_ascii=False, separators=(",", ":"))
+                db.commit()
+
+        if early_result is not None:
+            log_task_progress(
+                task_id, "translate_to_default_language", "success", "Cached translation reused", file_id=file_id
+            )
+            return early_result
+
+        logger.info(f"[{task_id}] Translating document {file_id} from '{detected_language}' to '{target_language}'")
+        log_task_progress(
+            task_id,
+            "translate_to_default_language",
+            "in_progress",
+            f"Translating from {detected_language} to {target_language}",
+            file_id=file_id,
         )
 
-        # Persist the translation.
-        with SessionLocal() as db:
-            record = db.query(FileRecord).filter_by(id=file_id).first()
-            if record:
-                record.default_language_text = translated_text
-                record.default_language_code = target_language
-                record.detected_language = detected_language
-                db.commit()
-                logger.info(
-                    f"[{task_id}] Stored default-language translation ({len(translated_text)} chars) for file {file_id}"
+        translated_chunks = list(checkpoint["translated_chunks"])
+        if len(translated_chunks) > len(chunks):
+            translated_chunks = []
+        translated_chunks.extend([None] * (len(chunks) - len(translated_chunks)))
+        for index, chunk in enumerate(chunks):
+            if isinstance(translated_chunks[index], str) and translated_chunks[index]:
+                continue
+            if not chunk.strip():
+                translated_chunk = chunk
+            else:
+                translated_chunk = provider.chat_completion(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                f"You are a professional translator. Translate the following text "
+                                f"from {detected_language} to {target_language}. "
+                                f"Preserve the original formatting, paragraph structure, and meaning. "
+                                f"Do not add any commentary or explanation — output ONLY the translated text."
+                            ),
+                        },
+                        {"role": "user", "content": chunk},
+                    ],
+                    model=model,
+                    temperature=0.3,
                 )
+            if chunk.strip() and (not isinstance(translated_chunk, str) or not translated_chunk):
+                raise ValueError(f"AI provider returned empty translation chunk {index + 1}")
+            if chunk.strip():
+                translated_chunk = _preserve_chunk_boundaries(chunk, translated_chunk)
+            translated_chunks[index] = translated_chunk
+            with lock_session_factory() as db:
+                record = db.query(FileRecord).filter_by(id=file_id).with_for_update().first()
+                if not record:
+                    raise RuntimeError(f"FileRecord {file_id} disappeared during translation")
+                if record.ocr_text != extracted_text:
+                    raise _TranslationSourceChanged
+                current = _checkpoint_for(record, fingerprint, chunks, allow_reset=False)
+                completed = list(current["translated_chunks"])
+                completed.extend([None] * (len(chunks) - len(completed)))
+                completed[index] = translated_chunk
+                current["translated_chunks"] = completed
+                record.translation_checkpoint = json.dumps(current, ensure_ascii=False, separators=(",", ":"))
+                db.commit()
+
+        translated_text = "".join(translated_chunks)
+
+        # Persist the translation.
+        with lock_session_factory() as db:
+            record = db.query(FileRecord).filter_by(id=file_id).with_for_update().first()
+            if not record:
+                raise RuntimeError(f"FileRecord {file_id} disappeared during translation")
+            if record.ocr_text != extracted_text:
+                raise _TranslationSourceChanged
+            current = _checkpoint_for(record, fingerprint, chunks, allow_reset=False)
+            completed = current.get("translated_chunks", [])
+            if len(completed) != len(chunks) or any(not isinstance(chunk, str) or not chunk for chunk in completed):
+                raise RuntimeError("Translation checkpoint is incomplete")
+            record.default_language_text = translated_text
+            record.default_language_code = target_language
+            record.detected_language = detected_language
+            current["translated_chunks"] = []
+            current["completed"] = True
+            record.translation_checkpoint = json.dumps(current, ensure_ascii=False, separators=(",", ":"))
+            db.commit()
+            logger.info(
+                f"[{task_id}] Stored default-language translation ({len(translated_text)} chars) for file {file_id}"
+            )
 
         log_task_progress(
             task_id,
@@ -130,7 +299,19 @@ def translate_to_default_language(
             "translated_length": len(translated_text),
         }
 
+    except _TranslationSourceChanged:
+        # Logging has its own DB session; release the row transaction first.
+        log_task_progress(
+            task_id,
+            "translate_to_default_language",
+            "skipped",
+            "Source text changed since task was queued",
+            file_id=file_id,
+        )
+        return {"status": "skipped", "reason": "source_changed"}
     except Exception as exc:
+        if isinstance(exc, TranslationFileBusy):
+            raise ProviderQuotaExceeded("Local translation capacity is busy", retry_after=30) from exc
         if isinstance(exc, ProviderQuotaExceeded):
             raise
         logger.exception(f"[{task_id}] Translation failed for file {file_id}: {exc}")
@@ -142,3 +323,8 @@ def translate_to_default_language(
             file_id=file_id,
         )
         raise
+    finally:
+        if lock_acquired and lock_context is not None:
+            lock_context.__exit__(None, None, None)
+        if lock_db is not None:
+            lock_db.close()

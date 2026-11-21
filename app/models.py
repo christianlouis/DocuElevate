@@ -241,6 +241,11 @@ class FileRecord(Base):
     # ISO 639-1 code of the default-language translation stored above (e.g. "en").
     default_language_code = Column(String(10), nullable=True)
 
+    # Durable, private checkpoint for long default-language translations.  The
+    # JSON value contains only chunk metadata and completed translated chunks;
+    # default_language_text remains NULL until every chunk has succeeded.
+    translation_checkpoint = Column(Text, nullable=True)
+
     # Timestamp when we inserted this record
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
