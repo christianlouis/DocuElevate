@@ -437,7 +437,9 @@ def recover_legacy_candidates(
     soft_time_limit=240,
     time_limit=270,
 )
-def download_imap_batch(self, account_ref: str, lane: str, ledger_ids: list[int], claim_token: str) -> dict[str, int]:
+def download_imap_batch(
+    self, account_ref: str, lane: str, ledger_ids: list[int], claim_token: str
+) -> dict[str, int | str]:
     """Thin compatibility wrapper around the dedicated download worker."""
     from app.imap_pipeline_download import download_claimed_batch
 

@@ -81,6 +81,7 @@ def test_inactive_source_is_deferred_before_connect(monkeypatch):
     monkeypatch.setattr(downloader, "_finish_fenced", fake_finish)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: True)
     monkeypatch.setattr(downloader, "_account_from_ref", lambda *args: None)
+    monkeypatch.setattr(downloader, "_refill_lane", lambda *args: pytest.fail("source failure must not refill"))
     monkeypatch.setattr(downloader.imaplib, "IMAP4_SSL", lambda *args, **kwargs: pytest.fail("network"))
 
     result = downloader.download_claimed_batch("user_owner_9", "new-mail", [1], "token")
@@ -141,6 +142,7 @@ def test_timeout_rows_remain_retryable(monkeypatch):
     monkeypatch.setattr(downloader, "_finish_fenced", fake_finish)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: True)
     monkeypatch.setattr(downloader, "_account_from_ref", lambda *args: None)
+    monkeypatch.setattr(downloader, "_refill_lane", lambda *args: pytest.fail("source failure must not refill"))
     result = downloader.download_claimed_batch("imap1", "backlog", [1], "token")
     assert candidate.download_lease_token is None
     assert result["deferred"] == 1

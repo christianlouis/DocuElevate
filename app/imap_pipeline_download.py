@@ -275,6 +275,7 @@ def download_claimed_batch(
     mail = None
     rows: list[ImapMessageLedger] = []
     deleted_any = False
+    source_ready = False
     started = time.monotonic()
     deadline = started + DOWNLOAD_SOFT_DEADLINE_SECONDS
     db = SessionLocal()
@@ -335,6 +336,7 @@ def download_claimed_batch(
             return stats
         categories = _resolve_categories_for_profile(account.get("profile_id"))
         mime_types, extensions = get_allowed_types_for_categories(categories)
+        source_ready = True
         for row in rows:
             if time.monotonic() >= deadline or time.monotonic() - started >= DOWNLOAD_HARD_DEADLINE_SECONDS:
                 if _finish_fenced(db, row, claim_token, "retry_wait", error_type="DownloadDeadline"):
@@ -422,5 +424,8 @@ def download_claimed_batch(
         if mail is not None:
             _shutdown_imap_connection(mail)
         db.close()
-        if rows:
+        # An unavailable source or full disk must wait for the next poll;
+        # immediately refilling would churn through the entire candidate
+        # backlog with repeated connection/storage failures.
+        if rows and source_ready and _free_space_ok():
             _refill_lane(account_ref, lane)

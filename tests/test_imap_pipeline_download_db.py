@@ -163,6 +163,8 @@ def test_download_batch_marks_success_and_retryable_failure(monkeypatch):
     )
     monkeypatch.setattr(downloader, "_extract_uidvalidity", lambda *_: "7")
     accepted = []
+    refills = []
+    monkeypatch.setattr(downloader, "_refill_lane", lambda *args: refills.append(args))
 
     def enqueue(*args, **kwargs):
         accepted.append(kwargs["ingestion_prefix"])
@@ -188,6 +190,7 @@ def test_download_batch_marks_success_and_retryable_failure(monkeypatch):
     monkeypatch.setattr(downloader, "_mailbox_key", lambda *_: "mailbox")
     result = downloader.download_claimed_batch("imap1", "backlog", ids, "fence")
     assert result["downloaded"] == 1
+    assert refills == [("imap1", "backlog")]
     verify = Session()
     states = [verify.get(ImapMessageLedger, row_id) for row_id in ids]
     assert states[0].state == "completed"
@@ -205,11 +208,14 @@ def test_disk_pause_is_durable_and_does_not_connect(monkeypatch):
     seed.close()
     monkeypatch.setattr(downloader, "SessionLocal", Session)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: False)
+    refills = []
+    monkeypatch.setattr(downloader, "_refill_lane", lambda *args: refills.append(args))
     monkeypatch.setattr(
         downloader.imaplib, "IMAP4_SSL", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("network"))
     )
     result = downloader.download_claimed_batch("imap1", "backlog", [row_id], "fence")
     assert result["deferred"] == 1
+    assert refills == []
     verify = Session()
     persisted = verify.get(ImapMessageLedger, row_id)
     assert persisted.state == "retry_wait"
