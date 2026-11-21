@@ -182,6 +182,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Verify IMAP pipeline database contract
+        env:
+          IMAP_PIPELINE_TEST_DATABASE_URL: postgresql://docuelevate_test:docuelevate_test@127.0.0.1:5432/docuelevate_test
+        run: >
+          pytest tests/test_imap_pipeline_postgres.py
+          tests/test_settings.py::TestSettingsService::test_all_config_settings_have_metadata
+          -q --no-cov --timeout=60
+
       - name: Run Tests
         env:
           IMAP_PIPELINE_TEST_DATABASE_URL: postgresql://docuelevate_test:docuelevate_test@127.0.0.1:5432/docuelevate_test
