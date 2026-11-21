@@ -54,17 +54,21 @@ def test_connection_cache_reuses_with_noop_and_invalidates_credentials(monkeypat
         def __init__(self):
             self.noops = 0
             self.closed = 0
+            self.state = "SELECTED"
+            self.select_calls = 0
 
         def login(self, *_args):
             pass
 
         def noop(self):
             self.noops += 1
+            return "OK", []
 
         def response(self, _name):
             return (_name, [None])
 
         def select(self, *_args, **_kwargs):
+            self.select_calls += 1
             return "OK", {"UIDVALIDITY": [b"7"]}
 
         def shutdown(self):
@@ -84,6 +88,7 @@ def test_connection_cache_reuses_with_noop_and_invalidates_credentials(monkeypat
     assert first[0] is second[0]
     assert second[4] is True
     assert len(created) == 1 and created[0].noops == 1
+    assert created[0].select_calls == 1
     changed = {**account, "password": "rotated"}
     third = downloader._open_or_reuse_connection("acct", changed, True)
     assert third[0] is not first[0]
@@ -96,6 +101,8 @@ def test_connection_cache_idle_cleanup_skips_borrowed_and_closes_idle(monkeypatc
     closed = []
 
     class Mail:
+        state = "SELECTED"
+
         def login(self, *_args):
             pass
 
@@ -121,22 +128,24 @@ def test_connection_cache_idle_cleanup_skips_borrowed_and_closes_idle(monkeypatc
     assert closed == [mail]
 
 
-@pytest.mark.parametrize("noop_result", [("NO", [b"not ready"]), ("BAD", [b"closed"])])
-def test_connection_cache_reconnects_when_noop_rejects(monkeypatch, noop_result):
+@pytest.mark.parametrize(
+    "bad_state,closed_response", [("AUTH", ("UIDVALIDITY", [None])), ("SELECTED", ("CLOSED", [b""]))]
+)
+def test_connection_cache_reconnects_when_state_is_not_selected(monkeypatch, bad_state, closed_response):
     downloader._close_all_cached_connections()
     created = []
 
     class Mail:
-        state = "SELECTED"
+        state = bad_state
 
         def login(self, *_args):
             pass
 
         def noop(self):
-            return noop_result if len(created) == 1 else ("OK", [b"done"])
+            return "OK", []
 
         def response(self, _name):
-            return "OK", [b"7"]
+            return closed_response if _name == "CLOSED" else ("UIDVALIDITY", [None])
 
         def select(self, *_args, **_kwargs):
             return "OK", {"UIDVALIDITY": [b"7"]}
@@ -163,6 +172,8 @@ def test_connection_cache_reconnects_on_malformed_or_changed_uidvalidity(monkeyp
     created = []
 
     class Mail:
+        state = "SELECTED"
+
         def login(self, *_args):
             pass
 

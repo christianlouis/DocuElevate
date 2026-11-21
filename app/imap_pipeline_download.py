@@ -199,8 +199,8 @@ def _open_or_reuse_connection(
                     noop_status = noop_status.decode(errors="replace")
                 if str(noop_status).upper() != "OK":
                     raise imaplib.IMAP4.error("cached IMAP connection is not ready")
-            if str(getattr(entry.mail, "state", "SELECTED")).upper() == "CLOSED":
-                raise imaplib.IMAP4.error("cached IMAP connection is closed")
+            if str(getattr(entry.mail, "state", "")).upper() != "SELECTED":
+                raise imaplib.IMAP4.error("cached IMAP connection is not selected")
             closed_response = entry.mail.response("CLOSED")
             if (
                 isinstance(closed_response, tuple)
