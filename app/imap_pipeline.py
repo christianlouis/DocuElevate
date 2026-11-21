@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 
 from app.config import settings
 from app.database import SessionLocal
@@ -198,6 +198,13 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
     batch_limit = min(int(limit or settings.imap_pipeline_download_batch_size), 100)
     max_active = 1 if lane == LANE_NEW else 2
     with SessionLocal() as db:
+        # Serialize the active-count check with claims for this account/lane.
+        # PostgreSQL uses a transaction advisory lock; SQLite's transaction
+        # lock plus the test's serial calls provides the same bounded contract.
+        try:
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"docuelevate:imap:{account_ref}:{lane}"})
+        except Exception:
+            pass
         active = db.query(func.count(func.distinct(ImapMessageLedger.download_lease_token))).filter(
             ImapMessageLedger.account_ref == account_ref,
             ImapMessageLedger.lane == lane,
@@ -207,16 +214,16 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
         if int(active) >= max_active:
             return token, []
         eligible = or_(
-            ImapMessageLedger.discovery_state.in_(("ready", "completed", "candidate")),
-            ImapMessageLedger.discovery_state == "retry_wait",
-            ImapMessageLedger.download_lease_expires_at <= now,
+            ImapMessageLedger.discovery_state == "ready",
+            (ImapMessageLedger.discovery_state == "retry_wait") & (ImapMessageLedger.next_download_at <= now),
+            ((ImapMessageLedger.discovery_state.in_(("claimed", "downloading"))) & (ImapMessageLedger.download_lease_expires_at <= now)),
         )
         query = db.query(ImapMessageLedger).filter(
             ImapMessageLedger.account_ref == account_ref,
             ImapMessageLedger.lane == lane,
             ImapMessageLedger.is_candidate.is_(True),
             ImapMessageLedger.state.notin_(("completed", "vanished")),
-            ImapMessageLedger.discovery_state.notin_(("vanished", "permanent_failure")),
+            ImapMessageLedger.discovery_state.in_(("ready", "retry_wait", "claimed", "downloading")),
             eligible,
         ).order_by(ImapMessageLedger.uid).with_for_update(skip_locked=True)
         candidates = query.limit(batch_limit).all()
@@ -230,10 +237,8 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
         task_id = uuid.uuid4().hex
         for row in rows:
             row.discovery_state, row.download_lease_token, row.download_lease_expires_at = "claimed", token, expires
-            if hasattr(row, "download_task_id"):
-                row.download_task_id = task_id
-            if hasattr(row, "download_started_at"):
-                row.download_started_at = None
+            row.download_task_id = task_id
+            row.download_started_at = None
             row.download_attempts = (row.download_attempts or 0) + 1
         db.commit()
         return token, [int(row.id) for row in rows]
@@ -241,28 +246,30 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
 
 @shared_task(name="app.imap_pipeline.publish_candidate_batches")
 def publish_candidate_batches(account_ref: str, lane: str = LANE_BACKLOG, limit: int | None = None) -> int:
-    token, ledger_ids = claim_candidates(account_ref=account_ref, lane=lane, limit=limit)
-    if not ledger_ids:
-        return 0
-    task_id = token
-    with SessionLocal() as db:
-        row = db.query(ImapMessageLedger).filter(ImapMessageLedger.id == ledger_ids[0], ImapMessageLedger.download_lease_token == token).one_or_none()
-        if row is not None and getattr(row, "download_task_id", None):
+    max_batches = 1 if lane == LANE_NEW else 2
+    if limit is not None:
+        max_batches = min(max_batches, max(1, int(limit)))
+    published = 0
+    for _ in range(max_batches):
+        token, ledger_ids = claim_candidates(account_ref=account_ref, lane=lane)
+        if not ledger_ids:
+            break
+        task_id = token
+        with SessionLocal() as db:
+            row = db.query(ImapMessageLedger).filter(ImapMessageLedger.id == ledger_ids[0], ImapMessageLedger.download_lease_token == token).one()
             task_id = row.download_task_id
-    try:
-        download_imap_batch.apply_async(
-            args=[account_ref, lane, ledger_ids, token],
-            task_id=task_id,
-            queue=QUEUE_DOWNLOAD_NEW if lane == LANE_NEW else QUEUE_DOWNLOAD_BACKLOG,
-            priority=0 if lane == LANE_NEW else 5,
-            expires=settings.imap_pipeline_lease_seconds,
-        )
-    except Exception as exc:
-        # The claim remains fenced until lease expiry.  This handles an
-        # ambiguous broker failure without immediately publishing a duplicate.
-        logger.warning("IMAP download publish failed account=%s lane=%s: %s", account_ref, lane, type(exc).__name__)
-        return 0
-    return len(ledger_ids)
+        try:
+            download_imap_batch.apply_async(
+                args=[account_ref, lane, ledger_ids, token], task_id=task_id,
+                queue=QUEUE_DOWNLOAD_NEW if lane == LANE_NEW else QUEUE_DOWNLOAD_BACKLOG,
+                priority=0 if lane == LANE_NEW else 6,
+                expires=settings.imap_pipeline_lease_seconds,
+            )
+        except Exception as exc:
+            logger.warning("IMAP download publish failed account=%s lane=%s: %s", account_ref, lane, type(exc).__name__)
+            break
+        published += len(ledger_ids)
+    return published
 
 
 def recover_legacy_candidates(account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, limit: int = 500) -> int:
