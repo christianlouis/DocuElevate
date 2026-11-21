@@ -155,6 +155,14 @@ jobs:
         image: rabbitmq:3-management
         ports: ["5672:5672", "15672:15672"]
         options: --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 10s --health-timeout 5s --health-retries 5
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: docuelevate_test
+          POSTGRES_PASSWORD: docuelevate_test
+          POSTGRES_DB: docuelevate_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U docuelevate_test -d docuelevate_test" --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -175,6 +183,8 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run Tests
+        env:
+          IMAP_PIPELINE_TEST_DATABASE_URL: postgresql://docuelevate_test:docuelevate_test@127.0.0.1:5432/docuelevate_test
         run: >
           pytest tests/ -v --timeout=300
           --cov=app --cov-report=xml:coverage.xml
