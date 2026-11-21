@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
@@ -38,31 +39,36 @@ def translation_file_lock(db, file_id: int):
             acquired = connection.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": lock_id}).scalar()
             if not acquired:
                 raise TranslationFileBusy(f"translation file {file_id} is already being processed")
+            connection.commit()
             try:
-                yield
+
+                def session_factory():
+                    if connection.closed or connection.invalidated:
+                        raise RuntimeError("translation lock connection is no longer usable")
+                    return Session(bind=connection)
+
+                yield session_factory
             finally:
-                connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_id})
+                if not connection.closed and not connection.invalidated:
+                    connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_id})
     elif dialect == "sqlite":
         with _guard:
             lock = _locks.setdefault(key, threading.Lock())
         if not lock.acquire(blocking=False):
             raise TranslationFileBusy(f"translation file {file_id} is already being processed")
-        directory = Path(settings.workdir) / ".translation-file-locks"
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:
+            directory = Path(settings.workdir) / ".translation-file-locks"
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             with (directory / key).open("a+b") as handle:
                 try:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError as exc:
                     raise TranslationFileBusy(f"translation file {file_id} is already being processed") from exc
                 try:
-                    yield
+                    yield lambda: Session(bind=db.get_bind())
                 finally:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
         finally:
             lock.release()
-    elif not isinstance(dialect, str):
-        # Unit tests replace SessionLocal with a lightweight context mock.
-        yield
     else:
         raise RuntimeError(f"translation file locking unsupported for database dialect {dialect}")
