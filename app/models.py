@@ -326,6 +326,38 @@ class ImapMessageLedger(Base):
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    # Additive fields used by the lane-separated metadata/download pipeline.
+    lane = Column(String(16), nullable=False, default="backlog", server_default="backlog", index=True)
+    account_ref = Column(String(255), nullable=True, index=True)
+    discovery_state = Column(String(24), nullable=False, default="discovered", server_default="discovered")
+    is_candidate = Column(Boolean, nullable=False, default=False, server_default="0", index=True)
+    download_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    download_lease_token = Column(String(64), nullable=True, index=True)
+    download_lease_expires_at = Column(DateTime(timezone=True), nullable=True)
+    metadata_json = Column(Text, nullable=True)
+
+
+class ImapPipelineCursor(Base):
+    """Independent durable cursor/high-water mark for one IMAP pipeline lane."""
+
+    __tablename__ = "imap_pipeline_cursors"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_key", "mailbox_key", "uidvalidity", "lane",
+            name="uq_imap_pipeline_cursor_identity",
+        ),
+        Index("ix_imap_pipeline_cursor_lane", "mailbox_key", "lane"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    owner_key = Column(String(255), nullable=False)
+    mailbox_key = Column(String(255), nullable=False)
+    uidvalidity = Column(String(255), nullable=False)
+    lane = Column(String(16), nullable=False)
+    last_uid = Column(BigInteger, nullable=False, default=0, server_default="0")
+    highwater_uid = Column(BigInteger, nullable=True)
+    initialized = Column(Boolean, nullable=False, default=False, server_default="0")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class ImapScanCursor(Base):

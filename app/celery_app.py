@@ -57,6 +57,9 @@ celery.conf.broker_transport_options = {
 celery.conf.task_default_queue = "document_processor"
 celery.conf.task_routes = {
     "app.tasks.imap_tasks.pull_all_inboxes": {"queue": "imap_polling"},
+    "app.imap_pipeline.discover_imap_metadata": {"queue": "imap_metadata"},
+    "app.imap_pipeline.publish_candidate_batches": {"queue": "imap_metadata"},
+    "app.imap_pipeline.download_imap_batch": {"queue": "imap_download_backlog"},
     "app.tasks.knowledge_research.run_knowledge_research": {"queue": "knowledge_research"},
     "app.tasks.batch_tasks.sync_search_index": {"queue": "search_index"},
     # The dispatcher only publishes durable outbox entries.  It must not wait
