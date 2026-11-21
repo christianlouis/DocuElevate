@@ -792,7 +792,10 @@ class Settings(BaseSettings):
     imap_pipeline_enabled: bool = False
     imap_pipeline_metadata_batch_size: int = Field(default=750, ge=50, le=5000)
     imap_pipeline_download_batch_size: int = Field(default=25, ge=1, le=100)
-    imap_pipeline_download_workers: int = Field(default=3, ge=1, le=3)
+    imap_pipeline_download_workers: int = Field(default=5, ge=1, le=8)
+    imap_pipeline_backlog_active_batches: int = Field(default=4, ge=1, le=8)
+    imap_pipeline_connection_ttl_seconds: int = Field(default=900, ge=60, le=7200)
+    imap_pipeline_connection_idle_seconds: int = Field(default=300, ge=30, le=3600)
     imap_pipeline_lease_seconds: int = Field(default=900, ge=300, le=7200)
     imap_pipeline_target_scan_per_hour: int = Field(default=7200, ge=6000)
 
