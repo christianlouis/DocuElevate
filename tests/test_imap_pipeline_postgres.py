@@ -83,7 +83,7 @@ def test_two_real_publishers_are_disjoint_and_backlog_capped(monkeypatch):
     engine, schema, Session = _db()
     try:
         _create_tables(engine)
-        _seed(Session)
+        _seed(Session, count=10)
         published = []
         barrier = threading.Barrier(2)
 
@@ -93,6 +93,7 @@ def test_two_real_publishers_are_disjoint_and_backlog_capped(monkeypatch):
 
         monkeypatch.setattr(imap_pipeline, "SessionLocal", Session)
         monkeypatch.setattr(imap_pipeline.settings, "imap_pipeline_download_batch_size", 2)
+        monkeypatch.setattr(imap_pipeline.settings, "imap_pipeline_backlog_active_batches", 4)
         # ``download_imap_batch`` is a Celery ``shared_task`` proxy.  Patching
         # its bound method is thread-sensitive: each worker can resolve the
         # proxy against a different Celery app and accidentally publish to the
@@ -113,8 +114,8 @@ def test_two_real_publishers_are_disjoint_and_backlog_capped(monkeypatch):
             for future in futures:
                 future.result(timeout=10)
 
-        assert len(published) == 2
-        assert sum(len(ids) for _task_id, ids, _queue in published) == 4
+        assert len(published) == 4
+        assert sum(len(ids) for _task_id, ids, _queue in published) == 8
         assert len({task_id for task_id, _ids, _queue in published}) == len(published)
         ids = [item for _task_id, item, _queue in published]
         assert len(set().union(*map(set, ids))) == sum(len(item) for item in ids)

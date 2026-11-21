@@ -196,7 +196,13 @@ def _open_or_reuse_connection(
             if str(getattr(entry.mail, "state", "SELECTED")).upper() == "CLOSED":
                 raise imaplib.IMAP4.error("cached IMAP connection is closed")
             closed_response = entry.mail.response("CLOSED")
-            if isinstance(closed_response, tuple) and closed_response:
+            if (
+                isinstance(closed_response, tuple)
+                and len(closed_response) > 1
+                and closed_response[0]
+                and closed_response[1]
+                and closed_response[1][0] is not None
+            ):
                 closed_status = closed_response[0]
                 if isinstance(closed_status, bytes):
                     closed_status = closed_status.decode(errors="replace")

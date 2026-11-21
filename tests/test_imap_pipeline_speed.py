@@ -61,7 +61,7 @@ def test_connection_cache_reuses_with_noop_and_invalidates_credentials(monkeypat
             self.noops += 1
 
         def response(self, _name):
-            return None
+            return (_name, [None])
 
         def select(self, *_args, **_kwargs):
             return "OK", {"UIDVALIDITY": [b"7"]}
