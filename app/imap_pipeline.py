@@ -203,8 +203,8 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
         # lock plus the test's serial calls provides the same bounded contract.
         try:
             db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"docuelevate:imap:{account_ref}:{lane}"})
-        except Exception:
-            pass
+        except Exception as exc:  # SQLite has no advisory-lock function.
+            logger.debug("IMAP claim advisory lock unavailable: %s", type(exc).__name__)
         active = db.query(func.count(func.distinct(ImapMessageLedger.download_lease_token))).filter(
             ImapMessageLedger.account_ref == account_ref,
             ImapMessageLedger.lane == lane,
