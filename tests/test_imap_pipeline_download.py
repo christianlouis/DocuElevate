@@ -14,6 +14,19 @@ class FakeDB:
         pass
 
 
+@pytest.fixture(autouse=True)
+def isolated_refill(monkeypatch):
+    monkeypatch.setattr(downloader, "_refill_lane", lambda *_: None)
+
+
+def fake_finish(_db, candidate, _token, outcome, **_kwargs):
+    candidate.download_lease_token = None
+    candidate.download_lease_expires_at = None
+    candidate.state = "completed" if outcome == "completed" else outcome
+    candidate.discovery_state = outcome
+    return True
+
+
 def row(**overrides):
     values = dict(
         id=1,
@@ -22,7 +35,9 @@ def row(**overrides):
         uidvalidity="7",
         uid=42,
         state="pending",
+        discovery_state="downloading",
         is_candidate=True,
+        download_attempts=1,
         download_lease_token="token",
         download_lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         message_id=None,
@@ -48,13 +63,14 @@ def test_disk_pause_releases_claim_without_network(monkeypatch):
     candidate = row()
     monkeypatch.setattr(downloader, "SessionLocal", FakeDB)
     monkeypatch.setattr(downloader, "_claim_rows", lambda *args: [candidate])
+    monkeypatch.setattr(downloader, "_finish_fenced", fake_finish)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: False)
     monkeypatch.setattr(downloader.imaplib, "IMAP4_SSL", lambda *args, **kwargs: pytest.fail("network"))
 
     result = downloader.download_claimed_batch("imap1", "backlog", [1], "token")
 
     assert result["deferred"] == 1
-    assert candidate.state == "pending"
+    assert candidate.state == "retry_wait"
     assert candidate.download_lease_token is None
 
 
@@ -62,6 +78,7 @@ def test_inactive_source_is_deferred_before_connect(monkeypatch):
     candidate = row()
     monkeypatch.setattr(downloader, "SessionLocal", FakeDB)
     monkeypatch.setattr(downloader, "_claim_rows", lambda *args: [candidate])
+    monkeypatch.setattr(downloader, "_finish_fenced", fake_finish)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: True)
     monkeypatch.setattr(downloader, "_account_from_ref", lambda *args: None)
     monkeypatch.setattr(downloader.imaplib, "IMAP4_SSL", lambda *args, **kwargs: pytest.fail("network"))
@@ -69,18 +86,27 @@ def test_inactive_source_is_deferred_before_connect(monkeypatch):
     result = downloader.download_claimed_batch("user_owner_9", "new-mail", [1], "token")
 
     assert result["deferred"] == 1
-    assert candidate.state == "deferred"
+    assert candidate.state == "retry_wait"
 
 
 def test_uidvalidity_mismatch_does_not_fetch_payload(monkeypatch):
     candidate = row(mailbox_key="expected", uidvalidity="8")
     monkeypatch.setattr(downloader, "SessionLocal", FakeDB)
     monkeypatch.setattr(downloader, "_claim_rows", lambda *args: [candidate])
+    monkeypatch.setattr(downloader, "_finish_fenced", fake_finish)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: True)
     monkeypatch.setattr(
         downloader,
         "_account_from_ref",
-        lambda *args: {"owner_id": "owner", "host": "imap.example", "port": 993, "username": "u", "password": "p", "use_ssl": True, "profile_id": None},
+        lambda *args: {
+            "owner_id": "owner",
+            "host": "imap.example",
+            "port": 993,
+            "username": "u",
+            "password": "p",
+            "use_ssl": True,
+            "profile_id": None,
+        },
     )
 
     class Mail:
@@ -96,6 +122,7 @@ def test_uidvalidity_mismatch_does_not_fetch_payload(monkeypatch):
     monkeypatch.setattr(downloader, "is_private_ip", lambda _: False)
     monkeypatch.setattr(downloader.imaplib, "IMAP4_SSL", lambda *args, **kwargs: Mail())
     monkeypatch.setattr(downloader, "find_all_mail_folder", lambda _mail: "INBOX")
+    monkeypatch.setattr(downloader, "_owner_is_active", lambda *_: True)
 
     result = downloader.download_claimed_batch("imap1", "new-mail", [1], "token")
 
@@ -111,6 +138,7 @@ def test_timeout_rows_remain_retryable(monkeypatch):
     candidate = row()
     monkeypatch.setattr(downloader, "SessionLocal", FakeDB)
     monkeypatch.setattr(downloader, "_claim_rows", lambda *args: [candidate])
+    monkeypatch.setattr(downloader, "_finish_fenced", fake_finish)
     monkeypatch.setattr(downloader, "_free_space_ok", lambda: True)
     monkeypatch.setattr(downloader, "_account_from_ref", lambda *args: None)
     result = downloader.download_claimed_batch("imap1", "backlog", [1], "token")

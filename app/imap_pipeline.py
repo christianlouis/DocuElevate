@@ -24,20 +24,14 @@ logger = logging.getLogger(__name__)
 
 LANE_NEW = "new"
 LANE_BACKLOG = "backlog"
-QUEUE_METADATA = "imap_metadata"
 QUEUE_DOWNLOAD_NEW = "imap_download_new"
 QUEUE_DOWNLOAD_BACKLOG = "imap_download_backlog"
-_METRICS_PREFIX = "docuelevate:imap:pipeline:"
 
 
 def classify_bodystructure(item: object) -> tuple[int | None, bool]:
     """Return ``(uid, proven_no_document)`` without fetching a body."""
     uid, structure = metadata_uid_and_structure(item)
     return uid, bool(structure and bodystructure_proves_no_named_attachment(structure))
-
-
-def _metric_key(account_ref: str) -> str:
-    return f"{_METRICS_PREFIX}{account_ref}"
 
 
 def record_metrics(account_ref: str, lane: str, *, scanned: int = 0, candidates: int = 0, **extra) -> None:
@@ -47,33 +41,65 @@ def record_metrics(account_ref: str, lane: str, *, scanned: int = 0, candidates:
     for compatibility with older callers and deliberately does not maintain
     cumulative Redis counters, which become false after a restart or replay.
     """
-    logger.debug("IMAP pipeline batch account=%s lane=%s scanned=%s candidates=%s", account_ref, lane, scanned, candidates)
+    logger.debug(
+        "IMAP pipeline batch account=%s lane=%s scanned=%s candidates=%s", account_ref, lane, scanned, candidates
+    )
 
 
 def pipeline_snapshot(account_ref: str) -> dict[str, int | str]:
     """Read durable lane gauges and recent rates from PostgreSQL."""
-    states = {"ready": 0, "claimed": 0, "downloading": 0, "retry_wait": 0, "completed": 0, "vanished": 0, "permanent_failure": 0}
+    states = ("ready", "claimed", "downloading", "retry_wait", "completed", "vanished", "permanent_failure")
+    lanes = (LANE_NEW, LANE_BACKLOG)
     try:
         with SessionLocal() as db:
-            rows = db.query(ImapMessageLedger.lane, ImapMessageLedger.discovery_state, func.count(ImapMessageLedger.id)).filter(ImapMessageLedger.account_ref == account_ref).group_by(ImapMessageLedger.lane, ImapMessageLedger.discovery_state).all()
             result: dict[str, int | str] = {"account_ref": account_ref, "status": "ok"}
+            for lane in lanes:
+                for state in states:
+                    result[f"{lane}_{state}"] = 0
+                result[f"{lane}_scanned_last_hour"] = 0
+                result[f"{lane}_downloaded_last_hour"] = 0
+            rows = (
+                db.query(
+                    ImapMessageLedger.lane,
+                    ImapMessageLedger.discovery_state,
+                    func.count(ImapMessageLedger.id),
+                )
+                .filter(ImapMessageLedger.account_ref == account_ref)
+                .group_by(
+                    ImapMessageLedger.lane,
+                    ImapMessageLedger.discovery_state,
+                )
+                .all()
+            )
             for lane, state, count in rows:
-                result[f"{lane}_{state}"] = int(count)
-                if state in states:
-                    states[state] += int(count)
-            result.update({f"total_{key}": value for key, value in states.items()})
-            scanned_col = getattr(ImapMessageLedger, "scanned_at", None)
-            if scanned_col is not None:
-                from datetime import datetime, timedelta, timezone
-                result["scanned_last_hour"] = int(db.query(func.count(ImapMessageLedger.id)).filter(ImapMessageLedger.account_ref == account_ref, scanned_col >= datetime.now(timezone.utc) - timedelta(hours=1)).scalar() or 0)
-            else:
-                result["scanned_last_hour"] = 0
-            downloaded_col = getattr(ImapMessageLedger, "downloaded_at", None)
-            if downloaded_col is not None:
-                from datetime import datetime, timedelta, timezone
-                result["downloaded_last_hour"] = int(db.query(func.count(ImapMessageLedger.id)).filter(ImapMessageLedger.account_ref == account_ref, downloaded_col >= datetime.now(timezone.utc) - timedelta(hours=1)).scalar() or 0)
-            else:
-                result["downloaded_last_hour"] = 0
+                if lane in lanes and state in states:
+                    result[f"{lane}_{state}"] = int(count)
+            since = datetime.now(timezone.utc) - timedelta(hours=1)
+            for lane in lanes:
+                result[f"{lane}_scanned_last_hour"] = int(
+                    db.query(func.count(ImapMessageLedger.id))
+                    .filter(
+                        ImapMessageLedger.account_ref == account_ref,
+                        ImapMessageLedger.lane == lane,
+                        ImapMessageLedger.scanned_at >= since,
+                    )
+                    .scalar()
+                    or 0
+                )
+                result[f"{lane}_downloaded_last_hour"] = int(
+                    db.query(func.count(ImapMessageLedger.id))
+                    .filter(
+                        ImapMessageLedger.account_ref == account_ref,
+                        ImapMessageLedger.lane == lane,
+                        ImapMessageLedger.downloaded_at >= since,
+                    )
+                    .scalar()
+                    or 0
+                )
+            for state in states:
+                result[f"total_{state}"] = sum(int(result[f"{lane}_{state}"]) for lane in lanes)
+            result["scanned_last_hour"] = sum(int(result[f"{lane}_scanned_last_hour"]) for lane in lanes)
+            result["downloaded_last_hour"] = sum(int(result[f"{lane}_downloaded_last_hour"]) for lane in lanes)
             return result
     except Exception as exc:
         logger.warning("Unable to read IMAP pipeline snapshot: %s", type(exc).__name__)
@@ -81,7 +107,11 @@ def pipeline_snapshot(account_ref: str) -> dict[str, int | str]:
 
 
 def _cursor(db, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str) -> ImapPipelineCursor:
-    row = db.query(ImapPipelineCursor).filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), lane=lane).one_or_none()
+    row = (
+        db.query(ImapPipelineCursor)
+        .filter_by(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), lane=lane)
+        .one_or_none()
+    )
     if row is None:
         row = ImapPipelineCursor(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), lane=lane)
         db.add(row)
@@ -89,7 +119,17 @@ def _cursor(db, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str) -
     return row
 
 
-def commit_metadata_batch(*, account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str, examined: list[dict], last_uid: int, highwater_uid: int | None = None) -> dict[str, int]:
+def commit_metadata_batch(
+    *,
+    account_ref: str,
+    owner_key: str,
+    mailbox_key: str,
+    uidvalidity: str,
+    lane: str,
+    examined: list[dict],
+    last_uid: int,
+    highwater_uid: int | None = None,
+) -> dict[str, int]:
     """Atomically record every examined UID and advance its lane cursor."""
     with SessionLocal() as db:
         cursor = _cursor(db, owner_key, mailbox_key, uidvalidity, lane)
@@ -97,21 +137,40 @@ def commit_metadata_batch(*, account_ref: str, owner_key: str, mailbox_key: str,
         uids = [int(item["uid"]) for item in examined]
         existing = {}
         if uids:
-            existing = {int(row.uid): row for row in db.query(ImapMessageLedger).filter(
-                ImapMessageLedger.owner_key == owner_key,
-                ImapMessageLedger.mailbox_key == mailbox_key,
-                ImapMessageLedger.uidvalidity == str(uidvalidity),
-                ImapMessageLedger.uid.in_(uids),
-            ).all()}
+            existing = {
+                int(row.uid): row
+                for row in db.query(ImapMessageLedger)
+                .filter(
+                    ImapMessageLedger.owner_key == owner_key,
+                    ImapMessageLedger.mailbox_key == mailbox_key,
+                    ImapMessageLedger.uidvalidity == str(uidvalidity),
+                    ImapMessageLedger.uid.in_(uids),
+                )
+                .all()
+            }
         scanned_at = datetime.now(timezone.utc)
         for item in examined:
             uid = int(item["uid"])
             candidate = bool(item.get("candidate"))
             row = existing.get(uid)
             if row is None:
-                row = ImapMessageLedger(owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=str(uidvalidity), uid=uid, lane=lane, account_ref=account_ref)
+                row = ImapMessageLedger(
+                    owner_key=owner_key,
+                    mailbox_key=mailbox_key,
+                    uidvalidity=str(uidvalidity),
+                    uid=uid,
+                    lane=lane,
+                    account_ref=account_ref,
+                )
                 db.add(row)
-            elif row.state in {"completed", "vanished"} or row.discovery_state in {"claimed", "download_claimed", "downloading", "downloaded", "retry_wait", "download_failed"}:
+            elif row.state in {"completed", "vanished"} or row.discovery_state in {
+                "claimed",
+                "download_claimed",
+                "downloading",
+                "downloaded",
+                "retry_wait",
+                "download_failed",
+            }:
                 continue
             row.lane, row.account_ref, row.discovery_state, row.is_candidate = lane, account_ref, "ready", candidate
             row.scanned_at = scanned_at
@@ -129,7 +188,18 @@ def commit_metadata_batch(*, account_ref: str, owner_key: str, mailbox_key: str,
     return {"scanned": len(examined), "candidates": candidate_count, "last_uid": int(last_uid)}
 
 
-def scan_lane_windows(mail, *, account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, folder: str, deadline: float, legacy_last_uid: int = 0, uidnext: int | None = None) -> dict[str, int]:
+def scan_lane_windows(
+    mail,
+    *,
+    account_ref: str,
+    owner_key: str,
+    mailbox_key: str,
+    uidvalidity: str,
+    folder: str,
+    deadline: float,
+    legacy_last_uid: int = 0,
+    uidnext: int | None = None,
+) -> dict[str, int]:
     """Advance backlog and fresh cursors with bounded SEARCH/FETCH windows."""
     if uidnext is None:
         uidnext = int(mail.response("UIDNEXT")[1][0])
@@ -161,17 +231,46 @@ def scan_lane_windows(mail, *, account_ref: str, owner_key: str, mailbox_key: st
             if status != "OK":
                 break
             uids = [int(value) for value in (data[0] or b"").split() if position <= int(value) <= stop]
-            result = discover_metadata_batch(mail, account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, uids=uids, last_uid=stop)
+            result = discover_metadata_batch(
+                mail,
+                account_ref=account_ref,
+                owner_key=owner_key,
+                mailbox_key=mailbox_key,
+                uidvalidity=uidvalidity,
+                lane=lane,
+                uids=uids,
+                last_uid=stop,
+            )
             totals[f"{lane}_scanned"] += result["scanned"]
             totals[f"{lane}_candidates"] += result["candidates"]
             position = stop + 1
     return totals
 
 
-def discover_metadata_batch(mail, *, account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, lane: str, uids: list[int], highwater_uid: int | None = None, last_uid: int | None = None) -> dict[str, int]:
+def discover_metadata_batch(
+    mail,
+    *,
+    account_ref: str,
+    owner_key: str,
+    mailbox_key: str,
+    uidvalidity: str,
+    lane: str,
+    uids: list[int],
+    highwater_uid: int | None = None,
+    last_uid: int | None = None,
+) -> dict[str, int]:
     """Fetch BODYSTRUCTURE for a bounded UID batch and durably classify all UIDs."""
     if not uids:
-        return commit_metadata_batch(account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, examined=[], last_uid=int(last_uid or 0), highwater_uid=highwater_uid)
+        return commit_metadata_batch(
+            account_ref=account_ref,
+            owner_key=owner_key,
+            mailbox_key=mailbox_key,
+            uidvalidity=uidvalidity,
+            lane=lane,
+            examined=[],
+            last_uid=int(last_uid or 0),
+            highwater_uid=highwater_uid,
+        )
     status, data = mail.uid("fetch", ",".join(str(uid) for uid in sorted(uids)), "(UID BODYSTRUCTURE)")
     parsed: dict[int, bool] = {}
     if status == "OK":
@@ -183,7 +282,16 @@ def discover_metadata_batch(mail, *, account_ref: str, owner_key: str, mailbox_k
     for uid in uids:
         proven = parsed.get(int(uid), False)
         examined.append({"uid": int(uid), "candidate": not proven})
-    return commit_metadata_batch(account_ref=account_ref, owner_key=owner_key, mailbox_key=mailbox_key, uidvalidity=uidvalidity, lane=lane, examined=examined, last_uid=int(last_uid if last_uid is not None else max(uids or [0])), highwater_uid=highwater_uid)
+    return commit_metadata_batch(
+        account_ref=account_ref,
+        owner_key=owner_key,
+        mailbox_key=mailbox_key,
+        uidvalidity=uidvalidity,
+        lane=lane,
+        examined=examined,
+        last_uid=int(last_uid if last_uid is not None else max(uids or [0])),
+        highwater_uid=highwater_uid,
+    )
 
 
 def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -> tuple[str, list[int]]:
@@ -199,33 +307,51 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
     max_active = 1 if lane == LANE_NEW else 2
     with SessionLocal() as db:
         # Serialize the active-count check with claims for this account/lane.
-        # PostgreSQL uses a transaction advisory lock; SQLite's transaction
-        # lock plus the test's serial calls provides the same bounded contract.
-        try:
-            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"docuelevate:imap:{account_ref}:{lane}"})
-        except Exception as exc:  # SQLite has no advisory-lock function.
-            logger.debug("IMAP claim advisory lock unavailable: %s", type(exc).__name__)
-        active = db.query(func.count(func.distinct(ImapMessageLedger.download_lease_token))).filter(
-            ImapMessageLedger.account_ref == account_ref,
-            ImapMessageLedger.lane == lane,
-            ImapMessageLedger.discovery_state.in_(("claimed", "downloading", "download_claimed")),
-            ImapMessageLedger.download_lease_expires_at > now,
-        ).scalar() or 0
+        # PostgreSQL's advisory transaction lock scopes the lock to this exact
+        # outbox lane. SQLite has no row/advisory locks; BEGIN IMMEDIATE is its
+        # equivalent writer serialization. A lock failure propagates: falling
+        # through after a failed statement would use an aborted transaction.
+        dialect = db.get_bind().dialect.name
+        if dialect == "postgresql":
+            db.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"docuelevate:imap:{account_ref}:{lane}"}
+            )
+        elif dialect == "sqlite":
+            db.execute(text("BEGIN IMMEDIATE"))
+        active = (
+            db.query(func.count(func.distinct(ImapMessageLedger.download_lease_token)))
+            .filter(
+                ImapMessageLedger.account_ref == account_ref,
+                ImapMessageLedger.lane == lane,
+                ImapMessageLedger.discovery_state.in_(("claimed", "downloading", "download_claimed")),
+                ImapMessageLedger.download_lease_expires_at > now,
+            )
+            .scalar()
+            or 0
+        )
         if int(active) >= max_active:
             return token, []
         eligible = or_(
             ImapMessageLedger.discovery_state == "ready",
             (ImapMessageLedger.discovery_state == "retry_wait") & (ImapMessageLedger.next_download_at <= now),
-            ((ImapMessageLedger.discovery_state.in_(("claimed", "downloading"))) & (ImapMessageLedger.download_lease_expires_at <= now)),
+            (
+                (ImapMessageLedger.discovery_state.in_(("claimed", "downloading")))
+                & (ImapMessageLedger.download_lease_expires_at <= now)
+            ),
         )
-        query = db.query(ImapMessageLedger).filter(
-            ImapMessageLedger.account_ref == account_ref,
-            ImapMessageLedger.lane == lane,
-            ImapMessageLedger.is_candidate.is_(True),
-            ImapMessageLedger.state.notin_(("completed", "vanished")),
-            ImapMessageLedger.discovery_state.in_(("ready", "retry_wait", "claimed", "downloading")),
-            eligible,
-        ).order_by(ImapMessageLedger.uid).with_for_update(skip_locked=True)
+        query = (
+            db.query(ImapMessageLedger)
+            .filter(
+                ImapMessageLedger.account_ref == account_ref,
+                ImapMessageLedger.lane == lane,
+                ImapMessageLedger.is_candidate.is_(True),
+                ImapMessageLedger.state.notin_(("completed", "vanished")),
+                ImapMessageLedger.discovery_state.in_(("ready", "retry_wait", "claimed", "downloading")),
+                eligible,
+            )
+            .order_by(ImapMessageLedger.uid)
+            .with_for_update(skip_locked=True)
+        )
         candidates = query.limit(batch_limit).all()
         if not candidates:
             return token, []
@@ -256,14 +382,20 @@ def publish_candidate_batches(account_ref: str, lane: str = LANE_BACKLOG, limit:
             break
         task_id = token
         with SessionLocal() as db:
-            row = db.query(ImapMessageLedger).filter(ImapMessageLedger.id == ledger_ids[0], ImapMessageLedger.download_lease_token == token).one()
+            row = (
+                db.query(ImapMessageLedger)
+                .filter(ImapMessageLedger.id == ledger_ids[0], ImapMessageLedger.download_lease_token == token)
+                .one()
+            )
             task_id = row.download_task_id
         try:
             download_imap_batch.apply_async(
-                args=[account_ref, lane, ledger_ids, token], task_id=task_id,
+                args=[account_ref, lane, ledger_ids, token],
+                task_id=task_id,
                 queue=QUEUE_DOWNLOAD_NEW if lane == LANE_NEW else QUEUE_DOWNLOAD_BACKLOG,
                 priority=0 if lane == LANE_NEW else 6,
                 expires=settings.imap_pipeline_lease_seconds,
+                retry=False,
             )
         except Exception as exc:
             logger.warning("IMAP download publish failed account=%s lane=%s: %s", account_ref, lane, type(exc).__name__)
@@ -272,17 +404,39 @@ def publish_candidate_batches(account_ref: str, lane: str = LANE_BACKLOG, limit:
     return published
 
 
-def recover_legacy_candidates(account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, limit: int = 500) -> int:
+def recover_legacy_candidates(
+    account_ref: str, owner_key: str, mailbox_key: str, uidvalidity: str, limit: int = 500
+) -> int:
     """Adopt old nonterminal ledger rows into the candidate outbox once."""
     with SessionLocal() as db:
-        rows = db.query(ImapMessageLedger).filter(ImapMessageLedger.owner_key == owner_key, ImapMessageLedger.mailbox_key == mailbox_key, ImapMessageLedger.uidvalidity == str(uidvalidity), ImapMessageLedger.account_ref.is_(None), ImapMessageLedger.state.notin_(("completed", "vanished"))).limit(limit).with_for_update().all()
+        rows = (
+            db.query(ImapMessageLedger)
+            .filter(
+                ImapMessageLedger.owner_key == owner_key,
+                ImapMessageLedger.mailbox_key == mailbox_key,
+                ImapMessageLedger.uidvalidity == str(uidvalidity),
+                ImapMessageLedger.account_ref.is_(None),
+                ImapMessageLedger.state.notin_(("completed", "vanished")),
+            )
+            .limit(limit)
+            .with_for_update()
+            .all()
+        )
         for row in rows:
-            row.account_ref, row.lane, row.is_candidate, row.discovery_state = account_ref, LANE_BACKLOG, True, "completed"
+            row.account_ref, row.lane, row.is_candidate, row.discovery_state = account_ref, LANE_BACKLOG, True, "ready"
+            row.next_download_at = None
         db.commit()
         return len(rows)
 
 
-@shared_task(bind=True, name="app.imap_pipeline.download_imap_batch", acks_late=True, reject_on_worker_lost=True, soft_time_limit=240, time_limit=270)
+@shared_task(
+    bind=True,
+    name="app.imap_pipeline.download_imap_batch",
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=240,
+    time_limit=270,
+)
 def download_imap_batch(self, account_ref: str, lane: str, ledger_ids: list[int], claim_token: str) -> dict[str, int]:
     """Thin compatibility wrapper around the dedicated download worker."""
     from app.imap_pipeline_download import download_claimed_batch
