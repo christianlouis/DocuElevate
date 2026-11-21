@@ -4,7 +4,8 @@ Polling covers the selected mailbox regardless of message age or read state.
 Gmail uses All Mail; other providers use INBOX. UIDVALIDITY and a durable UID
 ledger identify messages. The historical cursor advances only past messages
 that have a durable ledger entry. Historical work, recent arrivals and retries
-share the polling budget so one class cannot monopolize it.
+share the metadata polling budget so one class cannot monopolize scanning;
+enabled-pipeline downloads run in their separate fresh/backlog worker lanes.
 
 ## Operating modes
 
@@ -50,8 +51,10 @@ scan counts: they measure different phases.
   IMAP intakes, 2,000 waiting document jobs, or less than 5 GiB free in the
   workdir. Unknown capacity fails closed. In enabled mode, metadata scanning
   has no document/OCR queue gate; retain the 5 GiB workdir safety threshold for
-  download staging. A deferred historical message gets no ledger entry and
-  cannot be skipped by the cursor.
+  download staging. In legacy mode only, a deferred historical message gets no
+  ledger entry and cannot be skipped by the cursor. In enabled mode, the
+  durable candidate remains in the ledger and can be retried without rolling
+  the metadata cursor back.
 - Historical attachments and their child tasks use priority 6. New mail keeps
   priority 0. Historical IMAP work does not age into the urgent queue.
 
@@ -91,9 +94,11 @@ downloaded counts, active consumers for both download queues, and unfinished
 intakes across a graceful restart. Use the same account, mailbox, and
 UIDVALIDITY epoch for both snapshots; reject any duplicate-intake increase.
 Verify that a current scan reaches the fresh lane and the document pipeline.
-A candidate is merely durable metadata classification; `downloaded` means an
-accepted attachment was staged and handed off. It does not mean OCR, AI, or
-destination processing has finished.
+A candidate is merely durable metadata classification. `downloaded` means the
+full message was fetched and inspected; qualifying attachments, if any, were
+durably handed off. Intake counts measure accepted attachments, so downloaded
+messages and created intakes are not expected to match. Neither means OCR, AI,
+or destination processing has finished.
 
 Historical candidates may remain pending by design. Acceptance measures stable
 scan throughput and durable download handoff, not a zero backlog gauge. Do not
