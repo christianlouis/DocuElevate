@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.198.0 (2026-11-21)
+
+### Features
+
+- **imap**: Accelerate historical downloads with four slots and session reuse
+  ([#1338](https://github.com/christianlouis/DocuElevate/pull/1338),
+  [`b17e4cf`](https://github.com/christianlouis/DocuElevate/commit/b17e4cf46dd3f287678bdbf46fffe71c7e86735f))
+
+
 ## v0.197.1 (2026-11-21)
 
 ### Bug Fixes
