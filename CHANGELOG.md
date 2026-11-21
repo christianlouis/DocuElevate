@@ -10,6 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.197.1 (2026-11-21)
+
+### Bug Fixes
+
+- **mobile**: Patch shell-quote CVE-2026-102422
+  ([#1335](https://github.com/christianlouis/DocuElevate/pull/1335),
+  [`2beba5c`](https://github.com/christianlouis/DocuElevate/commit/2beba5cd6d1d7709425f8952560fb29e81eebb7e))
+
+### Documentation
+
+- Clarify IMAP pipeline recovery modes
+  ([`9129290`](https://github.com/christianlouis/DocuElevate/commit/9129290edbae18c6ee12f82fd62473a2ba825ced))
+
+- **changelog**: Update changelog [skip ci]
+  ([`a9af579`](https://github.com/christianlouis/DocuElevate/commit/a9af5792639d3c9bc2d38a41283328e105ab8af7))
+
+
 ## Unreleased
 
 ### Documentation
