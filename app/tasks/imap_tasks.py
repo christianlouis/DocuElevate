@@ -889,6 +889,7 @@ def pull_inbox(
                   ``["pdf", "office", "images"]``).  ``None`` falls back to the
                   global ``settings.imap_attachment_filter`` mapping.
     """
+    account_ref = str(mailbox_key)
     if allowed_categories is None:
         allowed_categories = _resolve_categories_for_profile(None)
     poll_started = time.monotonic()
@@ -990,6 +991,36 @@ def pull_inbox(
             mail.close()
             mail.logout()
             return False
+        if settings.imap_pipeline_enabled:
+            from app.imap_pipeline import publish_candidate_batches, recover_legacy_candidates, scan_lane_windows
+
+            db = _get_db_session()
+            try:
+                legacy_cursor = db.query(ImapScanCursor).filter_by(mailbox_key=account_hash, uidvalidity=str(uidvalidity)).first()
+                legacy_last_uid = int(legacy_cursor.last_uid) if legacy_cursor else 0
+            finally:
+                db.close()
+
+            pipeline_result = scan_lane_windows(
+                mail,
+                account_ref=account_ref,
+                owner_key=owner_key,
+                mailbox_key=mailbox_key,
+                uidvalidity=uidvalidity,
+                folder=selected_folder,
+                deadline=deadline,
+                legacy_last_uid=legacy_last_uid,
+                uidnext=uidnext,
+            )
+            recover_legacy_candidates(account_ref, owner_key, mailbox_key, uidvalidity)
+            # Reconcile committed candidates on every poll, including an
+            # empty/new-mail-free poll; broker publication is bounded and
+            # recoverable from the database claim state.
+            publish_candidate_batches.delay(account_ref, "new")
+            publish_candidate_batches.delay(account_ref, "backlog")
+            logger.info("IMAP pipeline metadata scan %s: %s", mailbox_key, pipeline_result)
+            completed = True
+            return True
         window_end = min(window_start + UID_SCAN_WINDOW - 1, 4294967295)
         window_end = min(window_end, uidnext - 1)
         if window_start > window_end:
