@@ -230,6 +230,24 @@ Conductor, and Signal are currently planning-track names because their former
 - [ ] Tribe membership, invitations, delegated routing administration, and explicit shared-intake UI (#1146)
 - Production hardening building blocks (CI/CD, security docs, deployment guides)
 
+### Hosted SaaS Product Track
+
+DocuElevate can become a hosted Personal/Team service on top of the existing
+processing pipeline and personal-integration model. The hosted offer is a
+provider-operated service, not a rebranding of the self-hosted deployment.
+
+- **Umbrella:** [#1297](https://github.com/christianlouis/DocuElevate/issues/1297) defines the hosted service contract, measurable entitlements, usage records, release channels, SLOs, support boundaries, and launch evidence.
+- **Launch gate:** do not market hosted multi-customer isolation until [#199](https://github.com/christianlouis/DocuElevate/issues/199), [#1134](https://github.com/christianlouis/DocuElevate/issues/1134), [#1151](https://github.com/christianlouis/DocuElevate/issues/1151), and the tenant/Tribe privacy work ([#1142](https://github.com/christianlouis/DocuElevate/issues/1142), [#1146](https://github.com/christianlouis/DocuElevate/issues/1146), [#1147](https://github.com/christianlouis/DocuElevate/issues/1147)) are accepted with browser/API/worker evidence.
+- **Connector gate:** [#1040](https://github.com/christianlouis/DocuElevate/issues/1040) provides the common OAuth folder-picker and reconnect contract; user grants remain encrypted and user/Tribe scoped.
+- **Commercial gate:** [#884](https://github.com/christianlouis/DocuElevate/issues/884) provides tenant-scoped quotas and usage/billing hooks. Stripe UI alone is not the hosted entitlement contract.
+- **Trust gate:** [#1082](https://github.com/christianlouis/DocuElevate/issues/1082) and [#882](https://github.com/christianlouis/DocuElevate/issues/882) cover the retrieval and audit contracts required for a supportable service; [#883](https://github.com/christianlouis/DocuElevate/issues/883) remains the enterprise SSO path.
+- **Product boundary:** hosted Personal/Team packaging is the first commercial slice. Enterprise SSO, durable eventing ([#894](https://github.com/christianlouis/DocuElevate/issues/894)), SCIM, compliance evidence, and multi-region operations remain later gates and must not be implied by the first launch.
+- **Release alignment:** the current `v0.191.x` line remains the incremental product release line. The hosted SaaS MVP is tracked under GitHub milestone `v1.0.0 - Enterprise Edition`; [#1298](https://github.com/christianlouis/DocuElevate/issues/1298) owns the release-readiness checklist. No SaaS launch release is cut until the umbrella acceptance criteria and launch gates have evidence. Once accepted, publish the hosted offer as a separately named GitHub release with its own notes and support boundary.
+
+The detailed product boundary, package proposal, and acceptance criteria live in
+[`docs/SaaSProductProposal.md`](docs/SaaSProductProposal.md). This track
+organizes existing implementation issues; it does not duplicate their scope.
+
 ## Feature Landscape (Themes)
 
 ### 1) Search & Discovery
