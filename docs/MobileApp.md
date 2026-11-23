@@ -98,18 +98,25 @@ The `ios.buildNumber` and `android.versionCode` values in `app.json` serve as th
 The mobile app uses the server's existing OAuth2/SSO setup:
 
 1. User enters the DocuElevate server URL on the login screen.
-2. The app opens `<server>/login?mobile=1&redirect_uri=docuelevate://callback` in the **system browser** (Safari / Chrome Custom Tabs).
-3. The server stores `docuelevate://callback` in the browser session and presents the login page.
+2. The app probes `GET <server>/api/mobile/whoami` without credentials. A JSON `401` or `403` is treated as mobile API support; a `404` stops before the browser opens. A successful response must contain a user profile, avoiding HTML proxy login pages.
+3. The app opens `<server>/login?mobile=1&redirect_uri=docuelevate://callback` in the **system browser** (Safari / Chrome Custom Tabs).
 4. The user authenticates via SSO or local credentials.
 5. After successful authentication the server mints a long-lived API token and redirects the browser to `docuelevate://callback?token=<token>`.
-6. `WebBrowser.openAuthSessionAsync` intercepts the `docuelevate://` deep link and returns the URL to the app.
-7. The app extracts the token from the URL and stores it securely in the device's keychain (`expo-secure-store`).
+6. `WebBrowser.openAuthSessionAsync` intercepts the `docuelevate://` deep link; the app validates its target and stores the token securely in the device's keychain (`expo-secure-store`).
 
 > **Security note:** The `redirect_uri` is validated server-side; only URIs with the `docuelevate://` custom scheme (production) or the `exp://` scheme (Expo Go development) are accepted, preventing open-redirect attacks.
+
+If the callback returns without a token, the app reports an incomplete mobile login and does not attempt to reuse a browser session cookie. Update the server if this persists; the mobile flow requires the token-bearing callback.
 
 ### Testing in Expo Go
 
 When developing with **Expo Go** the app does not have the `docuelevate://` custom URL scheme registered.  The auth flow adapts automatically:
+
+### iOS Share Extension
+
+The standalone iOS build includes a native DocuElevate share target (`org.docuelevate.mobile.share`). From Files, Mail, Safari, or Photos, share a PDF, attachment, selected text, or URL and choose DocuElevate. Mail text and selected text are rendered into uniquely named, wrapped and paginated PDFs; PDF attachments remain PDFs. The extension stages at most 10 items (50 MB per item, 100 MB total), preserves share-sheet order, and uploads only after the user presses **Upload** to the direct HTTPS `/api/ui-upload` endpoint. Raw `.eml`/`message/rfc822` files are intentionally rejected before upload; share the mail text, share a PDF attachment, or print the mail as PDF and retry. Selecting more than 10 files can be cancelled by iOS before the extension launches because the Share Extension activation limit is 10. A share completes only after a queued response with a task ID or a duplicate receipt; redirects are refused.
+
+The app synchronizes the active server URL, API token, and owner ID into a shared iOS Keychain access group while retaining its default Keychain group for Expo SecureStore. The extension has no access to app storage, browser cookies, UserDefaults, or files for credentials. Sign-out, failed session restoration, and changing server clear the shared record. Retrying failed items rereads the shared credential and stops if the server or account has changed. Cancelling removes staged multipart and temporary files. Expo Go and Android continue to use the existing app-only authentication flow; a development build is required to test the iOS share target.
 
 1. `Linking.createURL('callback')` returns an `exp://` URI pointing at the local dev server (e.g. `exp://192.168.1.5:8081/--/callback`).
 2. This URI is sent to the server as `redirect_uri`; the server accepts it alongside the production `docuelevate://` scheme.
@@ -188,18 +195,18 @@ curl -X DELETE -H "Authorization: Bearer <token>" https://your-server/api/mobile
 
 ### Share Sheet (iOS) / Share Intent (Android)
 
-The app registers itself as a share target so any file can be sent directly to DocuElevate from another app:
+The native iOS Share Extension is the primary iOS share path; Android continues to use its share intents:
 
 1. Open a file in Files, Mail, Safari, or any other app.
 2. Tap the **Share** button (iOS) or **Share** (Android).
 3. Find and tap **DocuElevate** in the share sheet.
-4. The file is immediately uploaded and queued for processing.
+4. On iOS, review the staged items and press **Upload**. The extension reports success only after a queued task receipt or duplicate receipt. Android continues through the app upload flow.
 
 > **Note:** The app must be installed on the device for it to appear in the share sheet.
 
-#### iOS implementation
+#### iOS fallback: Open With and deep links
 
-`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`.  This tells iOS that DocuElevate can open common document types, making it visible in the share sheet without overriding system defaults.  When the user selects DocuElevate, iOS opens the app with a URL via `application:openURL:options:`.
+`app.json` declares `CFBundleDocumentTypes` (with `LSHandlerRank: Alternate`) inside the iOS `infoPlist`. This supports the fallback Open With/deep-link path; it is not the native Share Extension implementation. When the user opens a matching file with that fallback, iOS opens the main app with a URL via `application:openURL:options:`.
 
 The URL may arrive as a standard `file://` path **or** under the app's custom `docuelevate://` scheme (e.g. `docuelevate://private/var/mobile/Library/…/file.pdf`).  The root layout detects the custom-scheme form and rewrites it to a `file://` URL before forwarding it to the Upload screen through `ShareContext`.
 
@@ -223,11 +230,9 @@ Shared files may reference paths outside the app's sandbox or use security-scope
 - **`UploadScreen`** uses `expo-file-system` (`FileSystem.copyAsync`) to copy any `file://` URI that is outside the app's cache/documents directory to a local cache path before uploading.  This ensures the file is readable regardless of its origin.
 - **MIME type inference**: Both `+not-found.tsx` and the `Linking` handler in `_layout.tsx` infer the MIME type from the file extension (e.g. `.pdf` → `application/pdf`) so the server receives a correct `Content-Type` instead of `application/octet-stream`.
 
-##### iOS Action / Share Extension (future enhancement)
+##### Native extension boundary
 
-Apps like DeepL ("Translate in DeepL") and Microsoft Word ("Convert to Word") appear as **Action Extensions** in the iOS share sheet — a system-level feature that requires a separate Xcode target built with Swift or Objective-C.  A proper Action Extension runs in its own process and must share authentication credentials with the main app via an iOS **App Group** (shared keychain / shared container).
-
-This level of iOS-native integration is a planned future enhancement.  Until it is available, the recommended workflow is the current one: tap **Share → DocuElevate** (the app appears in the "Open With" row of the share sheet via `CFBundleDocumentTypes`).
+The native share extension is the primary standalone iOS path and runs in its own process with the scoped shared Keychain record described above. Expo Go supports the development deep-link fallback, but it does not include or validate the native share extension; use a development or production native build for share-extension testing.
 
 #### Android implementation
 

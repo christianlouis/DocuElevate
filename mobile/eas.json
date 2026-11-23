@@ -15,6 +15,18 @@
         "image": "macos-sequoia-15.5-xcode-26.0"
       }
     },
+    "simulator-test": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "node": "20.19.4",
+      "env": {
+        "NODE_NO_WARNINGS": "1"
+      },
+      "ios": {
+        "simulator": true,
+        "image": "macos-sequoia-15.5-xcode-26.0"
+      }
+    },
     "preview": {
       "distribution": "internal",
       "node": "20.19.4",
