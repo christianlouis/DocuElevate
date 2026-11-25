@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- version list -->
 
+## v0.198.1 (2026-11-25)
+
+### Bug Fixes
+
+- Defer document processing safely during database outages
+  ([#1339](https://github.com/christianlouis/DocuElevate/pull/1339),
+  [`78b11a6`](https://github.com/christianlouis/DocuElevate/commit/78b11a6daa8ebc178ef1f26c57238743e87a92bf))
+
+
 ## v0.198.0 (2026-11-21)
 
 ### Features
