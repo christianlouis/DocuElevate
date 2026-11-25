@@ -21,7 +21,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import FileRecord, UserProfile
 from app.services.translation_file_lock import TranslationFileBusy, translation_file_lock
-from app.tasks.retry_config import ProviderTaskWithRetry
+from app.tasks.retry_config import ProviderTaskWithRetry, is_transient_database_error
 from app.utils import log_task_progress
 from app.utils.ai_provider import get_ai_provider
 from app.utils.provider_limits import ProviderQuotaExceeded
@@ -313,6 +313,10 @@ def translate_to_default_language(
         if isinstance(exc, TranslationFileBusy):
             raise ProviderQuotaExceeded("Local translation capacity is busy", retry_after=30) from exc
         if isinstance(exc, ProviderQuotaExceeded):
+            raise
+        # Leave transient database errors to the shared Celery retry policy;
+        # do not record terminal progress while the task is being republished.
+        if is_transient_database_error(exc):
             raise
         logger.exception(f"[{task_id}] Translation failed for file {file_id}: {exc}")
         log_task_progress(

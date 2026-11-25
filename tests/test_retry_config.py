@@ -5,6 +5,7 @@ settings-level overrides for the Celery retry base classes.
 """
 
 from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -20,7 +21,9 @@ from app.tasks.retry_config import (
     compute_countdown,
     mark_bulk_processing,
     mark_bulk_terminal_failure,
+    is_transient_database_error,
 )
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 # ---------------------------------------------------------------------------
 # compute_countdown
@@ -115,6 +118,18 @@ class TestParseDelayString:
 def test_default_retry_delays_values():
     """DEFAULT_RETRY_DELAYS must be [60, 300, 900] as per the spec."""
     assert DEFAULT_RETRY_DELAYS == [60, 300, 900]
+
+
+@pytest.mark.unit
+def test_database_error_classification_is_transient_only_for_retryable_failures():
+    exhausted = OperationalError("connect", {}, SimpleNamespace(sqlstate="53300"))
+    deadlock = OperationalError("deadlock", {}, SimpleNamespace(sqlstate="40P01"))
+    malformed = ProgrammingError("bad sql", {}, SimpleNamespace(sqlstate="42601"))
+
+    assert is_transient_database_error(exhausted)
+    assert is_transient_database_error(deadlock)
+    assert is_transient_database_error(Exception("upload failed: remaining connection slots are reserved"))
+    assert not is_transient_database_error(malformed)
 
 
 @pytest.mark.requires_db
@@ -528,6 +543,145 @@ def test_provider_capacity_wait_in_eager_mode_does_not_publish():
         task.pop_request()
     assert raised.value.__class__.__name__ == "Retry"
     signature.apply_async.assert_not_called()
+
+
+def test_database_failure_republishes_without_consuming_retry_budget():
+    from unittest.mock import MagicMock
+
+    from celery.app.task import Context
+    from celery.utils.threads import LocalStack
+
+    task = BaseTaskWithRetry()
+    signature = MagicMock()
+    task.signature_from_request = MagicMock(return_value=signature)
+    task.request_stack = LocalStack()
+    task.request_stack.push(
+        Context(
+            id="task-id",
+            retries=20,
+            called_directly=False,
+            is_eager=False,
+            delivery_info={"routing_key": "document_processing", "priority": 5},
+        )
+    )
+    error = OperationalError("connection slots exhausted", {}, SimpleNamespace(sqlstate="53300"))
+    try:
+        with pytest.raises(Exception) as raised:
+            task.retry(
+                args=("/workdir/file.pdf",),
+                kwargs={"file_id": 42},
+                exc=error,
+                max_retries=3,
+                queue="document_processing",
+            )
+    finally:
+        task.pop_request()
+
+    assert raised.value.__class__.__name__ == "Retry"
+    assert task.signature_from_request.call_args.kwargs["retries"] == 20
+    assert task.signature_from_request.call_args.kwargs["countdown"] >= 1
+    assert task.signature_from_request.call_args.kwargs["queue"] == "document_processing"
+    signature.apply_async.assert_called_once_with()
+
+
+def test_celery_database_retry_does_not_run_terminal_failure_hook():
+    from unittest.mock import MagicMock, patch
+
+    from celery import Celery
+    from celery.app.trace import build_tracer
+
+    celery_app = Celery("database-retry-tracer", broker="memory://")
+
+    @celery_app.task(base=BaseTaskWithRetry, bind=True, name="database_retry_probe")
+    def database_retry_probe(self):
+        raise OperationalError("connection slots exhausted", {}, SimpleNamespace(sqlstate="53300"))
+
+    signature = MagicMock()
+    database_retry_probe.signature_from_request = MagicMock(return_value=signature)
+    tracer = build_tracer(database_retry_probe.name, database_retry_probe, app=celery_app, eager=False)
+    with (
+        patch("app.tasks.retry_config.mark_bulk_terminal_failure") as terminal,
+        patch("app.utils.notification.notify_celery_failure") as notify_admin,
+        patch("app.utils.user_notification.notify_user_document_failed") as notify_user,
+    ):
+        trace_result = tracer(
+            "task-id",
+            (),
+            {},
+            request={"id": "task-id", "retries": 20, "delivery_info": {"routing_key": "document_processing"}},
+        )
+
+    assert trace_result[1].state == "RETRY"
+    assert signature.apply_async.called
+    terminal.assert_not_called()
+    notify_admin.assert_not_called()
+    notify_user.assert_not_called()
+
+
+def test_database_failure_before_task_body_uses_retry_path():
+    from unittest.mock import MagicMock, patch
+
+    from celery import Celery
+    from celery.app.task import Context
+    from celery.exceptions import Retry
+    from celery.utils.threads import LocalStack
+
+    class ProbeTask(BaseTaskWithRetry):
+        def run(self, file_path, file_id=None):
+            raise AssertionError("task body must not run")
+
+    task = ProbeTask()
+    task.bind(Celery("database-guard-retry", broker="memory://"))
+    task.request_stack = LocalStack()
+    task.request_stack.push(Context(id="task-id", retries=20, called_directly=False, is_eager=True))
+    db_error = OperationalError("connection slots exhausted", {}, SimpleNamespace(sqlstate="53300"))
+    retry = MagicMock(side_effect=Retry(exc=db_error))
+    task.retry = retry
+    try:
+        with patch("app.database.SessionLocal", side_effect=db_error), pytest.raises(Retry):
+            task("/workdir/file.pdf", file_id=42)
+    finally:
+        task.pop_request()
+
+    retry.assert_called_once()
+    assert retry.call_args.kwargs["args"] == ("/workdir/file.pdf",)
+    assert retry.call_args.kwargs["kwargs"] == {"file_id": 42}
+    assert retry.call_args.kwargs["exc"] is db_error
+
+
+def test_lifecycle_guard_rolls_back_before_entering_document_task():
+    from contextlib import nullcontext
+    from unittest.mock import MagicMock, patch
+
+    from celery import Celery
+    from celery.app.task import Context
+    from celery.utils.threads import LocalStack
+
+    observed = []
+
+    class ProbeTask(BaseTaskWithRetry):
+        def run(self, file_path, file_id=None):
+            observed.append(db.rollback.call_count)
+            return "ok"
+
+    task = ProbeTask()
+    task.bind(Celery("lifecycle-rollback", broker="memory://"))
+    task.request_stack = LocalStack()
+    task.request_stack.push(Context(id="task-id", called_directly=True, is_eager=True))
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(owner_id="owner")
+    try:
+        with (
+            patch("app.database.SessionLocal", return_value=nullcontext(db)),
+            patch("app.services.account_lifecycle_lock.account_lifecycle_lock", return_value=nullcontext()),
+            patch("app.services.account_deletion.deletion_blocked", return_value=False),
+        ):
+            assert task("/workdir/file.pdf", file_id=42) == "ok"
+    finally:
+        task.pop_request()
+
+    assert observed == [1]
+    db.rollback.assert_called_once()
 
 
 def test_capacity_publish_failure_requeues_original_delivery():
