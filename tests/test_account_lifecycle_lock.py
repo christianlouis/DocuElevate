@@ -195,23 +195,43 @@ def test_postgres_failed_unlock_invalidates_connection(monkeypatch):
 
 @pytest.mark.skipif(not POSTGRES_URL, reason="IMAP_PIPELINE_TEST_DATABASE_URL is not configured")
 def test_postgres_lifecycle_lock_is_autocommit_and_released():
+    import hashlib
+
     from sqlalchemy import create_engine, text
 
     import app.services.account_lifecycle_lock as lifecycle
 
     engine = create_engine(POSTGRES_URL)
     factory = sessionmaker(bind=engine)
+    lock_id = int.from_bytes(hashlib.sha256(b"integration-owner").digest()[:8], "big", signed=True)
+    lock_bits = lock_id & ((1 << 64) - 1)
+    classid, objid = lock_bits >> 32, lock_bits & 0xFFFFFFFF
     try:
         with factory() as db:
             with account_lifecycle_lock(db, "integration-owner"):
                 with engine.connect() as observer:
-                    granted = observer.execute(
-                        text("SELECT bool_or(granted) FROM pg_locks WHERE locktype='advisory'")
-                    ).scalar()
-                    assert granted is True
-                dedicated = lifecycle._dedicated_pg_engine(db.get_bind())
-                with dedicated.connect() as connection:
-                    assert connection.execute(text("SELECT txid_current_if_assigned()")).scalar() is None
+                    holder = observer.execute(
+                        text(
+                            "SELECT pid FROM pg_locks "
+                            "WHERE locktype='advisory' AND granted "
+                            "AND classid=:classid AND objid=:objid"
+                        ),
+                        {"classid": classid, "objid": objid},
+                    ).scalar_one()
+                    state, xact_start = observer.execute(
+                        text("SELECT state, xact_start FROM pg_stat_activity WHERE pid=:pid"), {"pid": holder}
+                    ).one()
+                    assert state == "idle"
+                    assert xact_start is None
+            with engine.connect() as observer:
+                assert observer.execute(
+                    text(
+                        "SELECT count(*) FROM pg_locks "
+                        "WHERE locktype='advisory' AND granted "
+                        "AND classid=:classid AND objid=:objid"
+                    ),
+                    {"classid": classid, "objid": objid},
+                ).scalar_one() == 0
     finally:
         lifecycle._pg_engines.pop(engine, None)
         engine.dispose()
