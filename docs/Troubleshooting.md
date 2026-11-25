@@ -298,6 +298,16 @@ See the [CLI Guide](CLIGuide.md) for detailed usage.
 
 ## Performance Issues
 
+### IMAP backlog stalls while PostgreSQL connections are exhausted
+
+IMAP publishers use a transaction-scoped advisory lock per account and lane.
+A busy lane is skipped rather than waited on indefinitely, so a stale worker
+cannot pin a database connection while another publisher is active. Database
+errors from the late-acknowledged download task are raised for Celery
+redelivery; they are not converted into a successful acknowledgement or a
+terminal file failure. Check the IMAP ledger's `retry_wait` rows and PostgreSQL
+idle transactions before retrying a deployment.
+
 ### Symptoms
 - Slow document processing
 - High memory usage

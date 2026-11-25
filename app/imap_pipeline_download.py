@@ -23,6 +23,7 @@ from typing import Any
 
 from celery.signals import worker_process_init, worker_process_shutdown
 from sqlalchemy import and_, update
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.database import SessionLocal
@@ -662,6 +663,14 @@ def download_claimed_batch(
         )
         return stats
     except Exception as exc:  # noqa: BLE001
+        # A database outage must leave the late-acked task unacknowledged so
+        # Celery can redeliver it. Returning a normal result here would ACK a
+        # batch whose durable fence was not advanced; the lease expiry/poller
+        # then becomes the only recovery path and repeated failures can lose
+        # progress behind the retry budget.
+        if isinstance(exc, SQLAlchemyError):
+            db.rollback()
+            raise
         if isinstance(exc, (OSError, EOFError, TimeoutError, imaplib.IMAP4.error, BrokenPipeError)):
             _discard_cached_connection(cache_key, mail)
             keep_connection = False
