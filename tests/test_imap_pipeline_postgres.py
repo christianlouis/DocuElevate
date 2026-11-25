@@ -3,6 +3,7 @@
 import importlib.util
 import os
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
@@ -120,6 +121,34 @@ def test_two_real_publishers_are_disjoint_and_backlog_capped(monkeypatch):
         ids = [item for _task_id, item, _queue in published]
         assert len(set().union(*map(set, ids))) == sum(len(item) for item in ids)
         assert all(queue == "imap_download_backlog" for _task_id, _ids, queue in published)
+    finally:
+        _cleanup(engine, schema)
+
+
+def test_claim_skips_busy_advisory_lock_without_waiting(monkeypatch):
+    from app import imap_pipeline
+
+    engine, schema, Session = _db()
+    try:
+        _create_tables(engine)
+        _seed(Session, count=1)
+        monkeypatch.setattr(imap_pipeline, "SessionLocal", Session)
+        key = "docuelevate:imap:acct:backlog"
+        blocker = engine.connect()
+        blocker.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
+        try:
+            started = time.monotonic()
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                token, ids = pool.submit(
+                    imap_pipeline.claim_candidates, account_ref="acct", lane="backlog"
+                ).result(timeout=2)
+            assert time.monotonic() - started < 1
+            assert token and ids == []
+        finally:
+            blocker.rollback()
+            blocker.close()
+        _token, claimed = imap_pipeline.claim_candidates(account_ref="acct", lane="backlog")
+        assert claimed
     finally:
         _cleanup(engine, schema)
 

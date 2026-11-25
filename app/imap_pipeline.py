@@ -309,13 +309,17 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
         # Serialize the active-count check with claims for this account/lane.
         # PostgreSQL's advisory transaction lock scopes the lock to this exact
         # outbox lane. SQLite has no row/advisory locks; BEGIN IMMEDIATE is its
-        # equivalent writer serialization. A lock failure propagates: falling
-        # through after a failed statement would use an aborted transaction.
+        # equivalent writer serialization. Do not wait for a PostgreSQL
+        # advisory lock: a stale transaction must not pin a pool connection.
         dialect = db.get_bind().dialect.name
         if dialect == "postgresql":
-            db.execute(
-                text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"docuelevate:imap:{account_ref}:{lane}"}
-            )
+            acquired = db.execute(
+                text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"),
+                {"key": f"docuelevate:imap:{account_ref}:{lane}"},
+            ).scalar()
+            if not acquired:
+                db.rollback()
+                return token, []
         elif dialect == "sqlite":
             db.execute(text("BEGIN IMMEDIATE"))
         active = (
