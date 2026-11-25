@@ -308,6 +308,10 @@ redelivery; they are not converted into a successful acknowledgement or a
 terminal file failure. Check the IMAP ledger's `retry_wait` rows and PostgreSQL
 idle transactions before retrying a deployment.
 
+Account lifecycle locks use dedicated PostgreSQL connections in autocommit
+mode. The session-level lock remains held until the lifecycle context exits,
+while the connection is kept outside the application's normal pool.
+
 ### Symptoms
 - Slow document processing
 - High memory usage
