@@ -139,9 +139,9 @@ def test_claim_skips_busy_advisory_lock_without_waiting(monkeypatch):
         try:
             started = time.monotonic()
             with ThreadPoolExecutor(max_workers=1) as pool:
-                token, ids = pool.submit(
-                    imap_pipeline.claim_candidates, account_ref="acct", lane="backlog"
-                ).result(timeout=2)
+                token, ids = pool.submit(imap_pipeline.claim_candidates, account_ref="acct", lane="backlog").result(
+                    timeout=2
+                )
             assert time.monotonic() - started < 1
             assert token and ids == []
         finally:

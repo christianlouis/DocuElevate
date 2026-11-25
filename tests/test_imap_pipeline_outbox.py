@@ -123,6 +123,7 @@ def test_download_task_retries_database_failure_without_ack(monkeypatch):
         pass
 
     failure = OperationalError("remaining connection slots are reserved", {}, ConnectionError())
+
     def retry(**kwargs):
         assert kwargs["countdown"] == 60
         raise RetryRequested

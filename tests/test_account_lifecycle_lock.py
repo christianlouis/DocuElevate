@@ -224,14 +224,17 @@ def test_postgres_lifecycle_lock_is_autocommit_and_released():
                     assert state == "idle"
                     assert xact_start is None
             with engine.connect() as observer:
-                assert observer.execute(
-                    text(
-                        "SELECT count(*) FROM pg_locks "
-                        "WHERE locktype='advisory' AND granted "
-                        "AND classid=:classid AND objid=:objid"
-                    ),
-                    {"classid": classid, "objid": objid},
-                ).scalar_one() == 0
+                assert (
+                    observer.execute(
+                        text(
+                            "SELECT count(*) FROM pg_locks "
+                            "WHERE locktype='advisory' AND granted "
+                            "AND classid=:classid AND objid=:objid"
+                        ),
+                        {"classid": classid, "objid": objid},
+                    ).scalar_one()
+                    == 0
+                )
     finally:
         lifecycle._pg_engines.pop(engine, None)
         engine.dispose()
