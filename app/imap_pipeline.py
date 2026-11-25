@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
 from sqlalchemy import func, or_, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.database import SessionLocal
@@ -447,4 +448,10 @@ def download_imap_batch(
     """Thin compatibility wrapper around the dedicated download worker."""
     from app.imap_pipeline_download import download_claimed_batch
 
-    return download_claimed_batch(account_ref, lane, ledger_ids, claim_token)
+    try:
+        return download_claimed_batch(account_ref, lane, ledger_ids, claim_token)
+    except SQLAlchemyError as exc:
+        # Celery acknowledges ordinary task failures by default, even with
+        # acks_late. Explicitly retry database outages without a finite retry
+        # budget so a transient outage cannot ACK or abandon a durable claim.
+        raise self.retry(exc=exc, countdown=60, max_retries=None)
