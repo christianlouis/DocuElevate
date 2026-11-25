@@ -329,6 +329,12 @@ Account lifecycle locks use dedicated PostgreSQL connections in autocommit
 mode. The session-level lock remains held until the lifecycle context exits,
 while the connection is kept outside the application's normal pool.
 
+PostgreSQL transport failures that occur before a SQLSTATE exists (for
+example, connection refusal, DNS failure, or a network reset) are deferred for
+retry without consuming the task's finite failure budget. Authentication,
+`pg_hba.conf`, and SQL-syntax errors remain non-transient and require fixing
+the database configuration or query.
+
 ### Symptoms
 - Slow document processing
 - High memory usage

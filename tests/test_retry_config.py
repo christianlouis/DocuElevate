@@ -8,6 +8,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import psycopg
 import pytest
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -130,6 +131,44 @@ def test_database_error_classification_is_transient_only_for_retryable_failures(
     assert is_transient_database_error(deadlock)
     assert is_transient_database_error(Exception("upload failed: remaining connection slots are reserved"))
     assert not is_transient_database_error(malformed)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "message",
+    [
+        "connection failed: Connection refused",
+        "could not translate host name 'db' to address: Temporary failure in name resolution",
+        "connection timed out",
+        "server closed the connection unexpectedly",
+    ],
+)
+def test_psycopg_transport_failures_without_sqlstate_are_transient(message):
+    original = psycopg.OperationalError(message)
+    error = OperationalError("connect", {}, original)
+
+    assert is_transient_database_error(error)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "message",
+    [
+        "password authentication failed for user 'docuelevate'",
+        "no pg_hba.conf entry for host '10.0.0.1'",
+        "syntax error at or near 'SELECT'",
+    ],
+)
+def test_psycopg_non_transport_failures_are_not_transient(message):
+    original = psycopg.OperationalError(message)
+    error = OperationalError("connect", {}, original)
+
+    assert not is_transient_database_error(error)
+
+
+@pytest.mark.unit
+def test_generic_connection_refused_text_is_not_transient():
+    assert not is_transient_database_error(Exception("connection refused"))
 
 
 @pytest.mark.requires_db
@@ -724,9 +763,11 @@ def test_lifecycle_guard_rolls_back_before_entering_document_task():
     db.rollback.assert_called_once()
 
 
-def test_capacity_publish_failure_requeues_original_delivery():
+@pytest.mark.parametrize("error_kind", ["provider_capacity", "database_transport"])
+def test_capacity_publish_failure_requeues_original_delivery(error_kind):
     from unittest.mock import MagicMock
 
+    from celery import Celery
     from celery.app.task import Context
     from celery.exceptions import Reject
     from celery.utils.threads import LocalStack
@@ -734,17 +775,29 @@ def test_capacity_publish_failure_requeues_original_delivery():
     from app.utils.provider_limits import ProviderQuotaExceeded
 
     task = BaseTaskWithRetry()
+    task.bind(Celery("durable-republish", broker="memory://"))
     signature = MagicMock()
     signature.apply_async.side_effect = RuntimeError("broker unavailable")
     task.signature_from_request = MagicMock(return_value=signature)
     task.request_stack = LocalStack()
     task.request_stack.push(Context(retries=20, called_directly=False, is_eager=False))
+    original_args = ("/workdir/file.pdf",)
+    original_kwargs = {"file_id": 42}
+    if error_kind == "provider_capacity":
+        error = ProviderQuotaExceeded("capacity is full", retry_after=30)
+    else:
+        error = OperationalError("connect", {}, psycopg.OperationalError("connection refused"))
     try:
         with pytest.raises(Reject) as raised:
-            task.retry(exc=ProviderQuotaExceeded("capacity is full", retry_after=30))
+            task.retry(exc=error, args=original_args, kwargs=original_kwargs)
     finally:
         task.pop_request()
     assert raised.value.requeue is True
+    assert task.acks_late is True
+    request, args, kwargs = task.signature_from_request.call_args.args[:3]
+    assert request.retries == 20
+    assert args == original_args
+    assert kwargs == original_kwargs
 
 
 def test_provider_budget_override_does_not_leak_to_next_retry():

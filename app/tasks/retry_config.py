@@ -48,6 +48,43 @@ _TRANSIENT_POSTGRES_CODES = {
     "53300",  # too_many_connections
 }
 
+# libpq reports failures that happen before PostgreSQL can send a SQLSTATE
+# (refused sockets, DNS failures, and network interruptions) as a bare driver
+# OperationalError.  Keep this list limited to transport wording and require
+# the actual psycopg driver exception so an arbitrary application error saying
+# "connection refused" is not retried forever.
+_TRANSIENT_CONNECTION_MARKERS = (
+    "connection refused",
+    "connection timed out",
+    "could not translate host name",
+    "could not resolve host name",
+    "temporary failure in name resolution",
+    "name or service not known",
+    "nodename nor servname provided",
+    "network is unreachable",
+    "connection reset by peer",
+    "server closed the connection unexpectedly",
+    "connection aborted",
+    "broken pipe",
+)
+
+
+def _is_psycopg_transport_failure(error: sqlalchemy_exc.DBAPIError) -> bool:
+    """Recognize driver-level connection failures without a SQLSTATE."""
+    original = getattr(error, "orig", None)
+    if original is None:
+        return False
+    original_type = type(original)
+    if not original_type.__module__.startswith(("psycopg", "psycopg2")):
+        return False
+    if original_type.__name__ != "OperationalError":
+        return False
+    code = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    if code:
+        return False
+    message = str(original).lower()
+    return any(marker in message for marker in _TRANSIENT_CONNECTION_MARKERS)
+
 
 def is_transient_database_error(error: BaseException) -> bool:
     """Return whether a database error is safe to retry without abandoning work."""
@@ -75,6 +112,8 @@ def is_transient_database_error(error: BaseException) -> bool:
             return True
         if isinstance(current, sqlalchemy_exc.DBAPIError):
             if current.connection_invalidated:
+                return True
+            if _is_psycopg_transport_failure(current):
                 return True
             orig = getattr(current, "orig", None)
             code = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
@@ -219,6 +258,11 @@ class BaseTaskWithRetry(Task):
 
     #: Retry on any exception raised inside the task body.
     autoretry_for = (Exception,)
+
+    #: Keep the original delivery unacknowledged while a retry is published.
+    #: This is required for tasks using the base directly; specialized task
+    #: policies inherit the same durable redelivery behavior.
+    acks_late = True
 
     #: Maximum number of retry attempts.
     max_retries: int = 3
