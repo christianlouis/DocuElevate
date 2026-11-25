@@ -124,7 +124,6 @@ def test_download_task_retries_database_failure_without_ack(monkeypatch):
 
     failure = OperationalError("database unavailable", {}, ConnectionError())
     def retry(**kwargs):
-        assert kwargs["max_retries"] is None
         assert kwargs["countdown"] == 60
         raise RetryRequested
 
@@ -133,6 +132,7 @@ def test_download_task_retries_database_failure_without_ack(monkeypatch):
         lambda *_args: (_ for _ in ()).throw(failure),
     )
     monkeypatch.setattr(imap_pipeline.download_imap_batch, "retry", retry)
+    assert imap_pipeline.download_imap_batch.max_retries is None
     with pytest.raises(RetryRequested):
         imap_pipeline.download_imap_batch.run("acct", "backlog", [1], "token")
 
