@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
 
 from app.models import FileRecord, UserProfile
 
@@ -195,6 +196,26 @@ class TestTranslateToDefaultLanguageTask:
 
         assert result["status"] == "skipped"
         mock_provider_fn.assert_not_called()
+
+    @pytest.mark.unit
+    def test_transient_database_failure_is_not_recorded_as_terminal_failure(self, db_session, file_with_ocr):
+        """A temporary PostgreSQL outage is retried, not written as terminal failure progress."""
+        from app.tasks.translate_to_default_language import translate_to_default_language
+
+        provider = MagicMock()
+        provider.chat_completion.side_effect = OperationalError(
+            "connection slots exhausted", {}, MagicMock(sqlstate="53300")
+        )
+        with (
+            patch("app.tasks.translate_to_default_language.get_ai_provider", return_value=provider),
+            patch("app.tasks.translate_to_default_language.SessionLocal", return_value=db_session),
+            patch("app.tasks.translate_to_default_language.log_task_progress") as progress,
+        ):
+            with pytest.raises(OperationalError):
+                translate_to_default_language.run(file_with_ocr.id, file_with_ocr.ocr_text, "de")
+
+        failure_calls = [call for call in progress.call_args_list if len(call.args) > 2 and call.args[2] == "failure"]
+        assert failure_calls == []
 
     @pytest.mark.unit
     def test_resolve_default_language_global(self):

@@ -2,11 +2,15 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from app import imap_pipeline_download as downloader
 
 
 class FakeDB:
+    def rollback(self):
+        pass
+
     def commit(self):
         pass
 
@@ -57,6 +61,18 @@ def test_stale_or_duplicate_claim_has_no_network_side_effect(monkeypatch):
 
     assert result["deferred"] == 1
     assert calls == []
+
+
+def test_database_failure_is_redelivered_instead_of_acknowledged(monkeypatch):
+    monkeypatch.setattr(downloader, "SessionLocal", FakeDB)
+    monkeypatch.setattr(
+        downloader,
+        "_claim_rows",
+        lambda *_args: (_ for _ in ()).throw(OperationalError("db unavailable", {}, ConnectionError())),
+    )
+
+    with pytest.raises(OperationalError):
+        downloader.download_claimed_batch("imap1", "backlog", [1], "token")
 
 
 def test_disk_pause_releases_claim_without_network(monkeypatch):

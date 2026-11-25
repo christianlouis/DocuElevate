@@ -25,8 +25,102 @@ from typing import Any
 
 from celery import Task
 from celery.exceptions import Reject, Retry
+from sqlalchemy import exc as sqlalchemy_exc
 
 logger = logging.getLogger(__name__)
+
+
+# PostgreSQL errors that mean the transaction/connection must be retried after
+# the database has recovered.  These are deliberately narrower than every
+# OperationalError so malformed SQL and other deterministic task failures keep
+# the normal finite retry/terminal-failure policy.
+_TRANSIENT_POSTGRES_CODES = {
+    "08000",  # connection_exception
+    "08003",  # connection_does_not_exist
+    "08006",  # connection_failure
+    "57P01",  # admin_shutdown
+    "57P02",  # crash_shutdown
+    "57P03",  # cannot_connect_now
+    "25P03",  # idle_in_transaction_session_timeout
+    "40001",  # serialization_failure
+    "40P01",  # deadlock_detected
+    "55P03",  # lock_not_available / lock timeout
+    "53300",  # too_many_connections
+}
+
+# libpq reports failures that happen before PostgreSQL can send a SQLSTATE
+# (refused sockets, DNS failures, and network interruptions) as a bare driver
+# OperationalError.  Keep this list limited to transport wording and require
+# the actual psycopg driver exception so an arbitrary application error saying
+# "connection refused" is not retried forever.
+_TRANSIENT_CONNECTION_MARKERS = (
+    "connection refused",
+    "connection timed out",
+    "could not translate host name",
+    "could not resolve host name",
+    "temporary failure in name resolution",
+    "name or service not known",
+    "nodename nor servname provided",
+    "network is unreachable",
+    "connection reset by peer",
+    "server closed the connection unexpectedly",
+    "connection aborted",
+    "broken pipe",
+)
+
+
+def _is_psycopg_transport_failure(error: sqlalchemy_exc.DBAPIError) -> bool:
+    """Recognize driver-level connection failures without a SQLSTATE."""
+    original = getattr(error, "orig", None)
+    if original is None:
+        return False
+    original_type = type(original)
+    if not original_type.__module__.startswith(("psycopg", "psycopg2")):
+        return False
+    if original_type.__name__ != "OperationalError":
+        return False
+    code = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    if code:
+        return False
+    message = str(original).lower()
+    return any(marker in message for marker in _TRANSIENT_CONNECTION_MARKERS)
+
+
+def is_transient_database_error(error: BaseException) -> bool:
+    """Return whether a database error is safe to retry without abandoning work."""
+    current: BaseException | None = error
+    visited: set[int] = set()
+    while current is not None:
+        if id(current) in visited:
+            break
+        visited.add(id(current))
+        message = str(current).lower()
+        if any(
+            marker in message
+            for marker in (
+                "remaining connection slots are reserved",
+                "too many clients already",
+                "deadlock detected",
+                "could not serialize access",
+                "lock timeout",
+            )
+        ):
+            return True
+        if isinstance(current, sqlalchemy_exc.TimeoutError):
+            return True
+        if isinstance(current, sqlalchemy_exc.DisconnectionError):
+            return True
+        if isinstance(current, sqlalchemy_exc.DBAPIError):
+            if current.connection_invalidated:
+                return True
+            if _is_psycopg_transport_failure(current):
+                return True
+            orig = getattr(current, "orig", None)
+            code = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+            if code in _TRANSIENT_POSTGRES_CODES or (isinstance(code, str) and code.startswith("08")):
+                return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def mark_bulk_processing(file_id: int | None) -> None:
@@ -165,6 +259,11 @@ class BaseTaskWithRetry(Task):
     #: Retry on any exception raised inside the task body.
     autoretry_for = (Exception,)
 
+    #: Keep the original delivery unacknowledged while a retry is published.
+    #: This is required for tasks using the base directly; specialized task
+    #: policies inherit the same durable redelivery behavior.
+    acks_late = True
+
     #: Maximum number of retry attempts.
     max_retries: int = 3
 
@@ -223,33 +322,51 @@ class BaseTaskWithRetry(Task):
         from app.services.account_deletion import deletion_blocked
         from app.services.account_lifecycle_lock import account_lifecycle_lock
 
-        with SessionLocal() as db:
-            file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
-            if file_id and not file_record:
-                return {"status": "skipped", "reason": "file_not_found"}
-            if file_record and explicit_owner and file_record.owner_id != explicit_owner:
-                return {"status": "skipped", "reason": "owner_mismatch"}
-            owner = file_record.owner_id if file_record else explicit_owner
-            # New process_document invocations may use the configured default owner.
-            if not owner and "owner_id" in signature.parameters and not file_id:
-                owner = settings.default_owner_id
-            if not owner:
-                if not settings.multi_user_enabled:
-                    return super().__call__(*args, **kwargs)
-                return {"status": "skipped", "reason": "owner_unavailable"}
-            with account_lifecycle_lock(db, owner):
-                # The deletion could have fenced the owner while this task waited.
-                db.expire_all()
-                if deletion_blocked(db, owner):
-                    return {"status": "skipped", "reason": "account_deletion"}
-                if (
-                    file_id
-                    and not db.query(FileRecord.id)
-                    .filter(FileRecord.id == file_id, FileRecord.owner_id == owner)
-                    .first()
-                ):
+        try:
+            with SessionLocal() as db:
+                file_record = db.query(FileRecord).filter(FileRecord.id == file_id).first() if file_id else None
+                if file_id and not file_record:
                     return {"status": "skipped", "reason": "file_not_found"}
-                return super().__call__(*args, **kwargs)
+                if file_record and explicit_owner and file_record.owner_id != explicit_owner:
+                    return {"status": "skipped", "reason": "owner_mismatch"}
+                owner = file_record.owner_id if file_record else explicit_owner
+                # New process_document invocations may use the configured default owner.
+                if not owner and "owner_id" in signature.parameters and not file_id:
+                    owner = settings.default_owner_id
+                if not owner:
+                    if not settings.multi_user_enabled:
+                        db.rollback()
+                        return super().__call__(*args, **kwargs)
+                    return {"status": "skipped", "reason": "owner_unavailable"}
+                with account_lifecycle_lock(db, owner):
+                    # The deletion could have fenced the owner while this task waited.
+                    db.expire_all()
+                    if deletion_blocked(db, owner):
+                        return {"status": "skipped", "reason": "account_deletion"}
+                    if (
+                        file_id
+                        and not db.query(FileRecord.id)
+                        .filter(FileRecord.id == file_id, FileRecord.owner_id == owner)
+                        .first()
+                    ):
+                        return {"status": "skipped", "reason": "file_not_found"}
+                    # The lifecycle lock uses its own dedicated connection.
+                    # End this read transaction before running the document
+                    # work so a worker cannot hold an idle transaction for the
+                    # duration of OCR/upload processing.
+                    db.rollback()
+                    return super().__call__(*args, **kwargs)
+        except (Retry, Reject):
+            # Celery's autoretry wrapper may already have republished a body
+            # failure. Never classify its chained DB exception a second time.
+            raise
+        except Exception as exc:
+            # This guard runs before Celery's autoretry wrapper.  A pool or
+            # account-lock failure here must follow the same durable retry path
+            # as a DB failure raised by the task body.
+            if is_transient_database_error(exc):
+                raise self.retry(args=args, kwargs=kwargs, exc=exc)
+            raise
 
     def retry(
         self,
@@ -268,6 +385,47 @@ class BaseTaskWithRetry(Task):
         countdown is computed via :func:`compute_countdown` using this task's
         :attr:`retry_delays` and :attr:`retry_jitter` settings.
         """
+        # A database outage must not consume the finite document retry budget.
+        # Republish the original delivery with the same retry count so the
+        # source file remains queued until the transaction can complete.
+        if exc is not None and is_transient_database_error(exc) and not self.request.called_directly:
+            request = self.request
+            countdown = max(
+                1,
+                math.ceil(
+                    float(getattr(exc, "retry_after", 60))
+                    if getattr(exc, "retry_after", None) is not None
+                    else compute_countdown(
+                        retries=0,
+                        base_delays=self._effective_retry_delays(),
+                        jitter=self.retry_jitter,
+                    )
+                ),
+            )
+            sig = self.signature_from_request(
+                request,
+                args,
+                kwargs,
+                countdown=countdown,
+                eta=None,
+                retries=request.retries,
+                **options,
+            )
+            retry = Retry(exc=exc, when=countdown, is_eager=request.is_eager, sig=sig)
+            if request.is_eager:
+                if throw:
+                    raise retry
+                return retry
+            try:
+                sig.apply_async()
+            except Exception as publish_exc:
+                # Late acknowledgement must requeue the original file if the
+                # delayed retry could not be published.
+                raise Reject(publish_exc, requeue=True)
+            if throw:
+                raise retry
+            return retry
+
         # Local provider capacity is a durable wait, not a failed provider
         # attempt. Keep the retry counter unchanged so repeated waits cannot
         # exhaust the finite genuine-error retry allowance.

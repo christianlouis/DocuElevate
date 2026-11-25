@@ -14,13 +14,16 @@ from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
 from sqlalchemy import func, or_, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import ImapMessageLedger, ImapPipelineCursor
+from app.tasks.retry_config import BaseTaskWithRetry, is_transient_database_error
 from app.utils.imap_bodystructure import bodystructure_proves_no_named_attachment, metadata_uid_and_structure
 
 logger = logging.getLogger(__name__)
+
 
 LANE_NEW = "new"
 LANE_BACKLOG = "backlog"
@@ -309,13 +312,17 @@ def claim_candidates(*, account_ref: str, lane: str, limit: int | None = None) -
         # Serialize the active-count check with claims for this account/lane.
         # PostgreSQL's advisory transaction lock scopes the lock to this exact
         # outbox lane. SQLite has no row/advisory locks; BEGIN IMMEDIATE is its
-        # equivalent writer serialization. A lock failure propagates: falling
-        # through after a failed statement would use an aborted transaction.
+        # equivalent writer serialization. Do not wait for a PostgreSQL
+        # advisory lock: a stale transaction must not pin a pool connection.
         dialect = db.get_bind().dialect.name
         if dialect == "postgresql":
-            db.execute(
-                text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": f"docuelevate:imap:{account_ref}:{lane}"}
-            )
+            acquired = db.execute(
+                text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"),
+                {"key": f"docuelevate:imap:{account_ref}:{lane}"},
+            ).scalar()
+            if not acquired:
+                db.rollback()
+                return token, []
         elif dialect == "sqlite":
             db.execute(text("BEGIN IMMEDIATE"))
         active = (
@@ -431,6 +438,8 @@ def recover_legacy_candidates(
 
 @shared_task(
     bind=True,
+    base=BaseTaskWithRetry,
+    autoretry_for=(),
     name="app.imap_pipeline.download_imap_batch",
     acks_late=True,
     reject_on_worker_lost=True,
@@ -443,4 +452,12 @@ def download_imap_batch(
     """Thin compatibility wrapper around the dedicated download worker."""
     from app.imap_pipeline_download import download_claimed_batch
 
-    return download_claimed_batch(account_ref, lane, ledger_ids, claim_token)
+    try:
+        return download_claimed_batch(account_ref, lane, ledger_ids, claim_token)
+    except SQLAlchemyError as exc:
+        # Celery acknowledges ordinary task failures by default, even with
+        # acks_late. Explicitly retry database outages without a finite retry
+        # budget so a transient outage cannot ACK or abandon a durable claim.
+        if is_transient_database_error(exc):
+            raise self.retry(exc=exc, countdown=60)
+        raise

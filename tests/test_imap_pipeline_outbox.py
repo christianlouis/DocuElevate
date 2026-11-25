@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 pytestmark = pytest.mark.unit
@@ -113,6 +114,29 @@ def test_broker_failure_keeps_fenced_claim(db_session):
     with factory() as db:
         row = db.query(ImapMessageLedger).one()
         assert row.discovery_state == "claimed" and row.download_lease_token
+
+
+def test_download_task_retries_database_failure_without_ack(monkeypatch):
+    from app import imap_pipeline
+
+    class RetryRequested(Exception):
+        pass
+
+    failure = OperationalError("remaining connection slots are reserved", {}, ConnectionError())
+
+    def retry(**kwargs):
+        assert kwargs["countdown"] == 60
+        raise RetryRequested
+
+    monkeypatch.setattr(
+        "app.imap_pipeline_download.download_claimed_batch",
+        lambda *_args: (_ for _ in ()).throw(failure),
+    )
+    monkeypatch.setattr(imap_pipeline.download_imap_batch, "retry", retry)
+    assert imap_pipeline.download_imap_batch.autoretry_for == ()
+    assert isinstance(imap_pipeline.download_imap_batch, imap_pipeline.BaseTaskWithRetry)
+    with pytest.raises(RetryRequested):
+        imap_pipeline.download_imap_batch.run("acct", "backlog", [1], "token")
 
 
 def test_snapshot_database_failure_is_explicit(monkeypatch):

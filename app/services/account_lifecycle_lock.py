@@ -28,7 +28,12 @@ def _dedicated_pg_engine(bind):
     # Locks must not exhaust the application's bounded connection pool.
     with _registry_guard:
         if bind not in _pg_engines:
-            _pg_engines[bind] = create_engine(bind.url, creator=bind.pool._creator, poolclass=NullPool)
+            _pg_engines[bind] = create_engine(
+                bind.url,
+                creator=bind.pool._creator,
+                poolclass=NullPool,
+                isolation_level="AUTOCOMMIT",
+            )
         return _pg_engines[bind]
 
 
