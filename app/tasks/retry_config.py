@@ -35,6 +35,13 @@ logger = logging.getLogger(__name__)
 # OperationalError so malformed SQL and other deterministic task failures keep
 # the normal finite retry/terminal-failure policy.
 _TRANSIENT_POSTGRES_CODES = {
+    "08000",  # connection_exception
+    "08003",  # connection_does_not_exist
+    "08006",  # connection_failure
+    "57P01",  # admin_shutdown
+    "57P02",  # crash_shutdown
+    "57P03",  # cannot_connect_now
+    "25P03",  # idle_in_transaction_session_timeout
     "40001",  # serialization_failure
     "40P01",  # deadlock_detected
     "55P03",  # lock_not_available / lock timeout
@@ -45,7 +52,11 @@ _TRANSIENT_POSTGRES_CODES = {
 def is_transient_database_error(error: BaseException) -> bool:
     """Return whether a database error is safe to retry without abandoning work."""
     current: BaseException | None = error
+    visited: set[int] = set()
     while current is not None:
+        if id(current) in visited:
+            break
+        visited.add(id(current))
         message = str(current).lower()
         if any(
             marker in message
@@ -67,7 +78,7 @@ def is_transient_database_error(error: BaseException) -> bool:
                 return True
             orig = getattr(current, "orig", None)
             code = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
-            if code in _TRANSIENT_POSTGRES_CODES:
+            if code in _TRANSIENT_POSTGRES_CODES or (isinstance(code, str) and code.startswith("08")):
                 return True
         current = current.__cause__ or current.__context__
     return False
@@ -301,6 +312,10 @@ class BaseTaskWithRetry(Task):
                     # duration of OCR/upload processing.
                     db.rollback()
                     return super().__call__(*args, **kwargs)
+        except (Retry, Reject):
+            # Celery's autoretry wrapper may already have republished a body
+            # failure. Never classify its chained DB exception a second time.
+            raise
         except Exception as exc:
             # This guard runs before Celery's autoretry wrapper.  A pool or
             # account-lock failure here must follow the same durable retry path

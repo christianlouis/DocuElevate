@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.models import FileRecord, UploadBatch, UploadCapacity, UploadItem
 from app.tasks import dispatch_uploads
@@ -19,11 +20,10 @@ from app.tasks.retry_config import (
     UploadTaskWithRetry,
     _parse_delay_string,
     compute_countdown,
+    is_transient_database_error,
     mark_bulk_processing,
     mark_bulk_terminal_failure,
-    is_transient_database_error,
 )
-from sqlalchemy.exc import OperationalError, ProgrammingError
 
 # ---------------------------------------------------------------------------
 # compute_countdown
@@ -582,6 +582,46 @@ def test_database_failure_republishes_without_consuming_retry_budget():
     assert task.signature_from_request.call_args.kwargs["countdown"] >= 1
     assert task.signature_from_request.call_args.kwargs["queue"] == "document_processing"
     signature.apply_async.assert_called_once_with()
+
+
+def test_database_failure_in_guard_is_republished_exactly_once_at_retry_limit():
+    """A DB failure crossing the pre-body guard is not double-republished."""
+    from unittest.mock import MagicMock, patch
+
+    from celery import Celery
+    from celery.app.trace import build_tracer
+
+    celery_app = Celery("database-guard-tracer", broker="memory://")
+
+    class ProbeTask(BaseTaskWithRetry):
+        def run(self, file_path, file_id=None):
+            raise OperationalError("connection slots exhausted", {}, SimpleNamespace(sqlstate="53300"))
+
+    probe = ProbeTask()
+    probe.bind(celery_app)
+    probe.name = "database_guard_probe"
+    signature = MagicMock()
+    probe.signature_from_request = MagicMock(return_value=signature)
+    tracer = build_tracer(probe.name, probe, app=celery_app, eager=False)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(owner_id="owner")
+    with (
+        patch("app.database.SessionLocal", return_value=nullcontext(db)),
+        patch("app.services.account_lifecycle_lock.account_lifecycle_lock", return_value=nullcontext()),
+        patch("app.services.account_deletion.deletion_blocked", return_value=False),
+        patch("app.tasks.retry_config.mark_bulk_terminal_failure") as terminal,
+    ):
+        trace_result = tracer(
+            "task-id",
+            ("/workdir/file.pdf",),
+            {"file_id": 42},
+            request={"id": "task-id", "retries": 20, "delivery_info": {"routing_key": "document_processing"}},
+        )
+
+    assert trace_result[1].state == "RETRY"
+    signature.apply_async.assert_called_once_with()
+    assert probe.signature_from_request.call_args.kwargs["retries"] == 20
+    terminal.assert_not_called()
 
 
 def test_celery_database_retry_does_not_run_terminal_failure_hook():
