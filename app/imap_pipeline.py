@@ -14,20 +14,16 @@ from datetime import datetime, timedelta, timezone
 
 from celery import shared_task
 from sqlalchemy import func, or_, text
-from sqlalchemy.exc import DBAPIError, DisconnectionError, OperationalError, SQLAlchemyError, TimeoutError as SATimeoutError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models import ImapMessageLedger, ImapPipelineCursor
+from app.tasks.retry_config import BaseTaskWithRetry, is_transient_database_error
 from app.utils.imap_bodystructure import bodystructure_proves_no_named_attachment, metadata_uid_and_structure
 
 logger = logging.getLogger(__name__)
 
-
-def _is_transient_db_error(exc: BaseException) -> bool:
-    return isinstance(exc, (DisconnectionError, OperationalError, SATimeoutError)) or (
-        isinstance(exc, DBAPIError) and exc.connection_invalidated
-    )
 
 LANE_NEW = "new"
 LANE_BACKLOG = "backlog"
@@ -442,10 +438,11 @@ def recover_legacy_candidates(
 
 @shared_task(
     bind=True,
+    base=BaseTaskWithRetry,
+    autoretry_for=(),
     name="app.imap_pipeline.download_imap_batch",
     acks_late=True,
     reject_on_worker_lost=True,
-    max_retries=None,
     soft_time_limit=240,
     time_limit=270,
 )
@@ -461,8 +458,6 @@ def download_imap_batch(
         # Celery acknowledges ordinary task failures by default, even with
         # acks_late. Explicitly retry database outages without a finite retry
         # budget so a transient outage cannot ACK or abandon a durable claim.
-        if _is_transient_db_error(exc):
-            # ``max_retries=None`` on retry() falls back to the task's own
-            # finite default. Set the task policy explicitly below instead.
+        if is_transient_database_error(exc):
             raise self.retry(exc=exc, countdown=60)
         raise

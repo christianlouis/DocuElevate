@@ -1,5 +1,7 @@
+import os
 import threading
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -8,6 +10,8 @@ from app.models import AccountDeletionTombstone, FileRecord, Tenant, Tribe
 from app.services.account_deletion import tombstone_key
 from app.services.account_lifecycle_lock import account_lifecycle_lock
 from app.tasks.retry_config import BaseTaskWithRetry
+
+POSTGRES_URL = os.environ.get("IMAP_PIPELINE_TEST_DATABASE_URL")
 
 
 def test_exclusive_waits_for_active_shared_task(tmp_path, monkeypatch):
@@ -187,6 +191,30 @@ def test_postgres_failed_unlock_invalidates_connection(monkeypatch):
         with account_lifecycle_lock(db, "alice", exclusive=True):
             pass
     connection.invalidate.assert_called_once()
+
+
+@pytest.mark.skipif(not POSTGRES_URL, reason="IMAP_PIPELINE_TEST_DATABASE_URL is not configured")
+def test_postgres_lifecycle_lock_is_autocommit_and_released():
+    from sqlalchemy import create_engine, text
+
+    import app.services.account_lifecycle_lock as lifecycle
+
+    engine = create_engine(POSTGRES_URL)
+    factory = sessionmaker(bind=engine)
+    try:
+        with factory() as db:
+            with account_lifecycle_lock(db, "integration-owner"):
+                with engine.connect() as observer:
+                    granted = observer.execute(
+                        text("SELECT bool_or(granted) FROM pg_locks WHERE locktype='advisory'")
+                    ).scalar()
+                    assert granted is True
+                dedicated = lifecycle._dedicated_pg_engine(db.get_bind())
+                with dedicated.connect() as connection:
+                    assert connection.execute(text("SELECT txid_current_if_assigned()")).scalar() is None
+    finally:
+        lifecycle._pg_engines.pop(engine, None)
+        engine.dispose()
 
 
 def test_async_postgres_releases_connections_while_waiting(monkeypatch):
