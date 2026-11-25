@@ -76,6 +76,23 @@ Install from the current `requirements.txt`, which pins `filelock==3.20.3` to re
 4. **Check upload quota**
    If multi-user mode and subscriptions are enabled, verify the user hasn't exceeded their daily upload limit (`DEFAULT_DAILY_UPLOAD_LIMIT`).
 
+### Database Connection Errors During Processing
+
+#### Symptoms
+- Worker logs report `remaining connection slots are reserved`, deadlocks, lock timeouts, or serialization failures.
+- A document remains queued or processing instead of being marked failed.
+
+#### Expected behavior and checks
+Transient PostgreSQL connection and transaction errors are deferred and retried later without consuming the normal document retry budget. The original task delivery and source file are preserved; deterministic document, credential, and provider errors still use the normal finite retry policy.
+
+1. Check worker and database logs for the SQLSTATE or connection-pool error:
+   ```bash
+   docker compose logs worker | grep -Ei "connection slots|deadlock|serialization|lock timeout"
+   docker compose logs db | tail -n 100
+   ```
+2. Check PostgreSQL connection usage and idle transactions. Resolve the connection pressure or blocking transaction before forcing a document retry.
+3. Do not delete or move the source file while the task is queued for a database retry. Once the database recovers, Celery republishes the original delivery automatically.
+
 ### OCR or Text Extraction Issues
 
 #### Symptoms
