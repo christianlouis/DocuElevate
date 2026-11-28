@@ -641,6 +641,46 @@ def test_websocket_capacity_uses_browser_origin_and_session_auth(client, db_sess
     assert len(closed) >= 2
 
 
+def test_websocket_database_work_runs_off_the_event_loop(client, db_session, monkeypatch):
+    """Blocking DB calls on the event loop freeze the API (and its liveness probe)."""
+    import threading
+
+    from app.api import bulk_upload
+
+    loop_thread = []
+    db_threads = []
+
+    class SessionProxy:
+        def __init__(self):
+            db_threads.append(threading.get_ident())
+            self._db = db_session
+
+        def __getattr__(self, name):
+            return getattr(self._db, name)
+
+        def close(self):
+            pass
+
+    batch_id = _batch(client, "queue-owner:websocket-threadpool")
+    monkeypatch.setattr(bulk_upload, "SessionLocal", SessionProxy)
+    original_accept = bulk_upload.WebSocket.accept
+
+    async def accept(self, *args, **kwargs):
+        loop_thread.append(threading.get_ident())
+        return await original_accept(self, *args, **kwargs)
+
+    monkeypatch.setattr(bulk_upload.WebSocket, "accept", accept)
+    with client.websocket_connect(
+        f"ws://localhost/api/uploads/events?batch_id={batch_id}", headers={"origin": "http://localhost"}
+    ) as socket:
+        assert socket.receive_json()["type"] == "capacity"
+        assert socket.receive_json()["type"] == "snapshot"
+        socket.send_text("capacity")
+        assert socket.receive_json()["type"] == "capacity"
+    assert loop_thread and db_threads
+    assert loop_thread[0] not in db_threads
+
+
 def test_batches_are_scoped_to_authenticated_principal(client, monkeypatch):
     from app.api import bulk_upload
 
