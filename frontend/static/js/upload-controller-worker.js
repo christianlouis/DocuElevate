@@ -159,14 +159,20 @@ function dedup(items) {
   if (config.enableDeduplication === false) { items.forEach(item => { if (item.duplicateOf !== undefined) { delete item.duplicateOf; remember(item); } }); return changed; }
   const groups = new Map();
   for (const item of items) {
-    if (item.duplicateOf !== undefined) { delete item.duplicateOf; remember(item); }
-    if (!item.sha256 || item.state === 'failed') continue;
+    if (!item.sha256 || item.state === 'failed') {
+      if (item.duplicateOf !== undefined) { delete item.duplicateOf; remember(item); }
+      continue;
+    }
     if (!groups.has(item.sha256)) groups.set(item.sha256, []);
     groups.get(item.sha256).push(item);
   }
   for (const group of groups.values()) {
     const leader = group.find(item => item.fileId) || group.find(item => item.file);
-    if (!leader) continue;
+    if (leader?.duplicateOf !== undefined) { delete leader.duplicateOf; remember(leader); }
+    if (!leader) {
+      for (const item of group) if (item.duplicateOf !== undefined) { delete item.duplicateOf; remember(item); }
+      continue;
+    }
     for (const item of group) if (item !== leader) {
       if (item.duplicateOf !== leader.key) { item.duplicateOf = leader.key; remember(item); }
       if (leader.fileId && (item.fileId !== leader.fileId || item.state !== 'duplicate')) { item.fileId = leader.fileId; item.state = 'duplicate'; remember(item); }
@@ -405,59 +411,98 @@ async function processBatch(items, value = context()) {
   if (!current(value)) return;
   let deferred = false;
   running.add(batchId); phase = 'Upload wird vorbereitet'; pausedReason = ''; connectCapacity(batchId);
+  const preparingWindow = Math.min(WINDOW, Math.max(2, Number(config.concurrency || 3) * 2));
+  const active = new Map();
+  const prepared = new Set();
+  const failures = new Map();
+  let preparation;
+  let offset = 0;
+  async function prepare(group, offset) {
+  phase = 'Dateien werden geprüft';
+  for (const item of group.filter(item => item.file && !item.fileId)) {
+    try {
+      if (!validClientId(item.key)) throw new Error('Ungültiger lokaler Eintrag. Bitte entfernen und die Datei erneut auswählen.');
+      const result = await inspectFile(item);
+      if (!validSha256(result.sha256)) throw new Error('Datei konnte nicht sicher geprüft werden');
+      item.sha256 = result.sha256; item.mime = result.mime;
+    }
+    catch (error) { if (!currentItem(value, item)) break; item.state = 'failed'; item.errorCode = 'file_inspection_failed'; item.error = error.message || String(error); status(item.error); }
+  }
+  if (!current(value)) return;
+  const dirty = new Set([...group, ...dedup(queue)]);
+  if (!current(value)) return;
+  const check = group.filter(item => item.state === 'queued' && item.file && validSha256(item.sha256) && !item.duplicateOf);
+  if (check.length) {
+    phase = 'Server prüft Dateien';
+    const requestKey = `batch:${batchId}:${value.epoch}:${offset}`, controller = beginRequest(requestKey);
+    let result;
+    try { result = await api('/api/uploads/preflight', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id: batchId, files: check.map(item => ({ client_id: item.key, sha256: item.sha256, size: item.size, mime: item.mime })) }) }); }
+    finally { endRequest(requestKey, controller); }
+    if (!current(value)) return;
+    for (const entry of result.files || []) { const item = check.find(candidate => candidate.key === entry.client_id); if (item && entry.state === 'duplicate') { item.state = 'duplicate'; item.fileId = entry.file_id; } }
+  }
+  if (!current(value)) return;
+  for (const item of dedup(queue)) dirty.add(item);
+  await persist([...dirty], value);
+  }
+
   try {
-    for (let offset = 0; offset < items.length && current(value); offset += WINDOW) {
-      const group = items.slice(offset, offset + WINDOW);
-      phase = 'Dateien werden geprüft';
-      for (const item of group.filter(item => item.file && !item.fileId)) {
-        try {
-          if (!validClientId(item.key)) throw new Error('Ungültiger lokaler Eintrag. Bitte entfernen und die Datei erneut auswählen.');
-          const result = await inspectFile(item);
-          if (!validSha256(result.sha256)) throw new Error('Datei konnte nicht sicher geprüft werden');
-          item.sha256 = result.sha256; item.mime = result.mime;
-        }
-        catch (error) { if (!currentItem(value, item)) break; item.state = 'failed'; item.errorCode = 'file_inspection_failed'; item.error = error.message || String(error); status(item.error); }
+    while (current(value)) {
+      if (!preparation && offset < items.length && prepared.size < preparingWindow) {
+        const group = items.slice(offset, offset + preparingWindow);
+        preparation = prepare(group, offset).then(() => ({ group }), error => ({ error }));
+        offset += group.length;
       }
-      if (!current(value)) break;
-      await persist(dedup(queue), value);
-      if (!current(value)) break;
-      const check = group.filter(item => item.state === 'queued' && item.file && validSha256(item.sha256) && !item.duplicateOf);
-      if (check.length) {
-        phase = 'Server prüft Dateien';
-        const requestKey = `batch:${batchId}:${value.epoch}:${offset}`, controller = beginRequest(requestKey);
-        let result;
-        try { result = await api('/api/uploads/preflight', { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch_id: batchId, files: check.map(item => ({ client_id: item.key, sha256: item.sha256, size: item.size, mime: item.mime })) }) }); }
-        finally { endRequest(requestKey, controller); }
+      if (prepared.size) {
+        const capacity = capacities.get(batchId) || await readCapacity(batchId);
+        if (!capacities.has(batchId)) capacities.set(batchId, capacity);
         if (!current(value)) break;
-        for (const entry of result.files || []) { const item = check.find(candidate => candidate.key === entry.client_id); if (item && entry.state === 'duplicate') { item.state = 'duplicate'; item.fileId = entry.file_id; } }
-      }
-      if (!current(value)) break;
-      await persist([...new Set([...group, ...dedup(queue)])], value);
-      let noProgress = 0;
-      for (; current(value);) {
-        const pushedCapacity = capacities.get(batchId);
-        const capacity = pushedCapacity || await readCapacity(batchId);
-        if (!current(value)) break;
-        capacities.set(batchId, capacity); rememberCapacity(batchId, capacity, pushedCapacity ? 'WebSocket' : 'Server');
-        const selected = selectReady(group, capacity);
-        if (!selected.length) { if (!group.some(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf && validSha256(item.sha256))) break; capacities.delete(batchId); phase = 'pausiert'; pausedReason = 'Server meldet keine freie Upload-Kapazität'; status('Server pausiert die Uploads – warte auf Kapazität…'); await wait(2000); continue; }
-        const pendingBefore = group.filter(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf).length;
-        phase = 'Dateien werden übertragen'; pausedReason = '';
-        const results = await Promise.all(selected.map(item => send(item, value))); if (!current(value)) break; await persist([...new Set([...group, ...dedup(queue)])], value);
-        const pendingAfter = group.filter(item => item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf).length;
-        if (results.some(Boolean) || pendingAfter < pendingBefore) { noProgress = 0; continue; }
-        noProgress += 1;
-        if (noProgress >= 3) {
-          deferred = true; phase = 'pausiert'; pausedReason = 'Upload wird in einem anderen Tab ausgeführt oder die lokale Queue ist veraltet';
-          status('Upload wartet auf den Abgleich mit einem anderen Tab.');
-          scheduleBatchRetry(batchId, value);
-          break;
+        let bytes = capacity.max_bytes ?? Infinity;
+        for (const item of active.keys()) bytes -= item.size;
+        const slots = Math.min(capacity.slots, Number(config.concurrency || 3)) - active.size;
+        for (const item of selectReady(prepared, { slots, max_bytes: bytes })) {
+          phase = 'Dateien werden übertragen'; pausedReason = '';
+          prepared.delete(item);
+          active.set(item, send(item, value).then(sent => ({ item, sent }), error => ({ error })));
         }
-        await wait(1000);
+        for (const item of prepared) {
+          if (!currentItem(value, item) || item.state !== 'queued' || item.fileId || item.duplicateOf) prepared.delete(item);
+        }
       }
-      if (current(value)) status('Upload-Queue wird verarbeitet.');
+      const events = [...active.values()];
+      if (preparation) events.push(preparation);
+      if (!events.length) {
+        if (!prepared.size && offset >= items.length) break;
+        if (prepared.size) {
+          capacities.delete(batchId);
+          phase = 'pausiert'; pausedReason = 'Server meldet keine freie Upload-Kapazität';
+          status('Server pausiert die Uploads – warte auf Kapazität…');
+          await wait(2000);
+        }
+        continue;
+      }
+      const event = await Promise.race(events);
+      if (!current(value)) break;
+      if (event.error) throw event.error;
+      if (event.group) {
+        preparation = null;
+        for (const item of event.group) {
+          if (item.state === 'queued' && item.file && !item.fileId && !item.duplicateOf) prepared.add(item);
+        }
+      } else {
+        active.delete(event.item);
+        if (event.sent) {
+          await persist(dedup(queue.filter(item => item.sha256 === event.item.sha256)), value);
+        } else if (currentItem(value, event.item) && event.item.state === 'queued' && event.item.file && !event.item.fileId && !event.item.duplicateOf) {
+          const count = (failures.get(event.item) || 0) + 1;
+          failures.set(event.item, count);
+          if (count < 3) prepared.add(event.item);
+          else deferred = true;
+        }
+      }
     }
   } finally {
+    await Promise.all([...active.values(), preparation]);
     running.delete(batchId);
     if (!current(value)) return;
     phase = 'wartet auf weitere Dateien'; const socket = sockets.get(batchId); if (socket) { clearInterval(socket._heartbeat); socket.close(); } sockets.delete(batchId); status('Upload-Queue aktualisiert.');

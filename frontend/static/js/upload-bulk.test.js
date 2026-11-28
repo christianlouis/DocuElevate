@@ -1021,3 +1021,44 @@ test('every upload entry script parses before browser event handlers run', () =>
     assert.doesNotThrow(() => new vm.Script(fs.readFileSync(require('node:path').join(__dirname, file), 'utf8'), {filename: file}));
   }
 });
+
+test('a stalled transfer leaves other slots available across preflight windows', async () => {
+  let releaseSlow, reachedLast;
+  const slow = new Promise(resolve => { releaseSlow = resolve; });
+  const last = new Promise(resolve => { reachedLast = resolve; });
+  const items = Array.from({ length: 9 }, (_, index) => ({
+    key: 'item-' + index, batchId: 'stream', file: { index }, size: 1, state: 'queued'
+  }));
+  let inFlight = 0, peak = 0;
+  const { api, worker } = controller({
+    FormData: class { append(key, value) { this[key] = value; } },
+    fetch: async (url, options) => {
+      let payload = {};
+      if (url.includes('/capacity')) payload = { slots: 2, max_bytes: 2 };
+      if (url.endsWith('/files')) {
+        peak = Math.max(peak, ++inFlight);
+        const key = options.body.client_id;
+        if (key === 'item-0') await slow;
+        if (key === 'item-8') reachedLast();
+        inFlight--;
+        payload = { file_id: key, state: 'accepted' };
+      }
+      return { ok: true, status: 200, json: async () => payload };
+    }
+  });
+  worker.inspectUploadFile = async ({ file }) => ({ sha256: String(file.index).repeat(64), mime: 'text/plain' });
+  api.state().queue.push(...items);
+  const processing = api.processBatch(items);
+  let timer;
+  try {
+    await Promise.race([last, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('last upload waited for stalled transfer')), 2500);
+    })]);
+  } finally {
+    clearTimeout(timer);
+    releaseSlow();
+    await processing;
+  }
+  assert.equal(peak, 2);
+  assert.ok(items.every(item => item.state === 'accepted'));
+});
