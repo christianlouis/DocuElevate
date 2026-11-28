@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.intake import _authenticate_intake
 from app.config import settings
@@ -497,6 +498,43 @@ def get_batch(
     return _snapshot(db, _batch(db, batch_id, principal), cursor, limit)
 
 
+def _event_payloads(batch_id: str, principal: str) -> list[dict[str, Any]]:
+    """Build the capacity and snapshot messages for one websocket status tick.
+
+    Runs synchronously (blocking DB and filesystem calls) and is therefore
+    always executed in the threadpool by :func:`events`.  Each call uses a
+    fresh session so capacity changes are visible under MySQL repeatable-read
+    too, and the connection is returned before the handler awaits the client.
+    """
+    db = SessionLocal()
+    try:
+        current = _batch(db, batch_id, principal)
+        ledger = _capacity(db)
+        available = _available_capacity(ledger)
+        capacity_payload = {
+            "type": "capacity",
+            "batch_id": batch_id,
+            "slots": _capacity_slots(available),
+            "max_bytes": available,
+            "used_bytes": ledger.reserved_bytes,
+            "retry_after": 30 if not available else 0,
+        }
+        snapshot = _snapshot(db, current, None, 100)
+        db.rollback()
+        return [capacity_payload, {"type": "snapshot", **snapshot}]
+    finally:
+        db.close()
+
+
+def _check_batch_access(batch_id: str, principal: str) -> None:
+    db = SessionLocal()
+    try:
+        _batch(db, batch_id, principal)
+        db.rollback()
+    finally:
+        db.close()
+
+
 @router.websocket("/events")
 async def events(websocket: WebSocket):
     origin, host = websocket.headers.get("origin"), websocket.headers.get("host")
@@ -511,65 +549,35 @@ async def events(websocket: WebSocket):
         return
     intake_secret = websocket.headers.get("x-docuelevate-intake-secret")
     request_scope = {**websocket.scope, "type": "http"}
-    try:
+
+    def authenticate() -> str:
         principal, _ = _principal(Request(request_scope), intake_secret)
-    except HTTPException:
-        await websocket.close(code=1008)
-        return
-    db = SessionLocal()
+        return principal
+
+    # All database work below is synchronous.  Running it on the event loop
+    # freezes the whole API process whenever the connection pool is
+    # exhausted (pool_timeout defaults to 30s), which makes the liveness
+    # probe time out and gets the pod killed in the middle of uploads.
     try:
-        _batch(db, batch_id, principal)
-        # Do not retain the SQLAlchemy transaction/connection while awaiting
-        # the browser heartbeat.  This endpoint may have thousands of tabs.
-        db.rollback()
-        db.close()
+        try:
+            principal = await run_in_threadpool(authenticate)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+        await run_in_threadpool(_check_batch_access, batch_id, principal)
         await websocket.accept()
-        db = SessionLocal()
-        current = _batch(db, batch_id, principal)
-        ledger = _capacity(db)
-        available = _available_capacity(ledger)
-        initial_capacity = {
-            "type": "capacity",
-            "batch_id": batch_id,
-            "slots": _capacity_slots(available),
-            "max_bytes": available,
-            "used_bytes": ledger.reserved_bytes,
-            "retry_after": 30 if not available else 0,
-        }
-        initial_snapshot = _snapshot(db, current, None, 100)
-        db.rollback()
-        db.close()
-        await websocket.send_json(initial_capacity)
-        await websocket.send_json({"type": "snapshot", **initial_snapshot})
+        for payload in await run_in_threadpool(_event_payloads, batch_id, principal):
+            await websocket.send_json(payload)
         while True:
             await websocket.receive_text()
             # Re-authenticate on every heartbeat so revoked sessions or intake
             # credentials cannot keep a status channel alive indefinitely.
             try:
-                principal, _ = _principal(Request(request_scope), intake_secret)
+                principal = await run_in_threadpool(authenticate)
             except HTTPException:
                 await websocket.close(code=1008)
                 return
-            # Fresh session/read transaction for every status response so
-            # capacity changes are visible under MySQL repeatable-read too.
-            db = SessionLocal()
-            current = _batch(db, batch_id, principal)
-            ledger = _capacity(db)
-            available = _available_capacity(ledger)
-            capacity_payload = {
-                "type": "capacity",
-                "batch_id": batch_id,
-                "slots": _capacity_slots(available),
-                "max_bytes": available,
-                "used_bytes": ledger.reserved_bytes,
-                "retry_after": 30 if not available else 0,
-            }
-            snapshot = _snapshot(db, current, None, 100)
-            db.rollback()
-            db.close()
-            await websocket.send_json(capacity_payload)
-            await websocket.send_json({"type": "snapshot", **snapshot})
+            for payload in await run_in_threadpool(_event_payloads, batch_id, principal):
+                await websocket.send_json(payload)
     except (WebSocketDisconnect, HTTPException):
         return
-    finally:
-        db.close()
